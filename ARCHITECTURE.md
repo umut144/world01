@@ -124,6 +124,8 @@ Client presentation state is never gameplay authority.
 
 The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. Resizing remains disabled until aspect-preserving viewport or letterbox behavior is implemented explicitly.
 
+The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
+
 ## Input-to-simulation flow
 
 ```text

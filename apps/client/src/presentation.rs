@@ -16,21 +16,30 @@ impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
         configure_client(app, self.tick_duration);
         app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
+            .init_state::<ClientScreen>()
             .insert_resource(ClientSession {
                 client_id: self.client_id,
                 selected: None,
                 joining: false,
             })
             .add_systems(Startup, setup_selection)
+            .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(
                 Update,
                 (
-                    handle_selection_click,
+                    handle_selection_click.run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
-                    render_new_players,
+                    render_new_players.run_if(in_state(ClientScreen::InGame)),
                 ),
             );
     }
+}
+
+#[derive(States, Debug, Clone, Copy, Default, Eq, PartialEq, Hash)]
+enum ClientScreen {
+    #[default]
+    CharacterSelection,
+    InGame,
 }
 
 fn collect_movement_input(
@@ -131,9 +140,9 @@ fn handle_selection_click(
     mouse: Res<ButtonInput<MouseButton>>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut session: ResMut<ClientSession>,
+    mut next_screen: ResMut<NextState<ClientScreen>>,
     mut panels: Query<(&SelectionPanel, &mut Sprite), Without<ConfirmButton>>,
     mut button: Single<&mut Sprite, (With<ConfirmButton>, Without<SelectionPanel>)>,
-    selection_visuals: Query<Entity, With<SelectionVisual>>,
     mut commands: Commands,
 ) -> Result {
     if session.joining || !mouse.just_pressed(MouseButton::Left) {
@@ -155,10 +164,8 @@ fn handle_selection_click(
     {
         connect_client(&mut commands, session.client_id, character)?;
         session.joining = true;
-        for entity in &selection_visuals {
-            commands.entity(entity).despawn();
-        }
         spawn_standard_room(&mut commands);
+        next_screen.set(ClientScreen::InGame);
         return Ok(());
     }
 
@@ -171,6 +178,15 @@ fn handle_selection_click(
         Color::srgb(0.18, 0.19, 0.22)
     };
     Ok(())
+}
+
+fn cleanup_selection(
+    selection_visuals: Query<Entity, With<SelectionVisual>>,
+    mut commands: Commands,
+) {
+    for entity in &selection_visuals {
+        commands.entity(entity).despawn();
+    }
 }
 
 fn spawn_standard_room(commands: &mut Commands) {
