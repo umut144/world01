@@ -197,6 +197,7 @@ pub fn connect_client(
             PeerAddr(SERVER_ADDR),
             Link::new(None),
             ReplicationReceiver,
+            PredictionManager::default(),
             PendingJoin(character),
             NetcodeClient::new(authentication, client::NetcodeConfig::default())?,
             UdpIo::default(),
@@ -374,6 +375,25 @@ fn report_client_disconnected(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::world::CommandQueue;
+
+    #[test]
+    fn connected_client_initializes_prediction_context() {
+        let mut app = App::new();
+        app.add_plugins(bevy::state::app::StatesPlugin);
+        configure_client(&mut app, Duration::from_secs_f64(1.0 / 60.0));
+
+        let mut queue = CommandQueue::default();
+        let client = {
+            let mut commands = Commands::new(&mut queue, app.world());
+            connect_client(&mut commands, 1, CharacterKind::Wizard)
+                .expect("client configuration should be valid")
+        };
+        queue.apply(app.world_mut());
+
+        assert!(app.world().entity(client).contains::<PredictionManager>());
+        assert!(app.world().entity(client).contains::<InputTimelineConfig>());
+    }
 
     #[test]
     fn registry_accepts_five_unique_clients_and_rejects_sixth() {
