@@ -24,6 +24,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let remote_interpolation_ratio = design
+        .network
+        .validated_remote_interpolation_ratio()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "remote interpolation ratio must be finite and greater than zero",
+            )
+        })?;
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -40,6 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins(ClientPresentationPlugin {
         client_id,
         tick_duration,
+        remote_interpolation_ratio,
     });
     app.run();
     Ok(())

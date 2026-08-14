@@ -15,6 +15,7 @@ const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
     pub tick_duration: std::time::Duration,
+    pub remote_interpolation_ratio: f32,
 }
 
 impl Plugin for ClientPresentationPlugin {
@@ -24,6 +25,7 @@ impl Plugin for ClientPresentationPlugin {
             .init_state::<ClientScreen>()
             .insert_resource(ClientSession {
                 client_id: self.client_id,
+                remote_interpolation_ratio: self.remote_interpolation_ratio,
                 selected: None,
                 joining: false,
             })
@@ -76,6 +78,7 @@ fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -
 #[derive(Resource)]
 struct ClientSession {
     client_id: u64,
+    remote_interpolation_ratio: f32,
     selected: Option<CharacterKind>,
     joining: bool,
 }
@@ -378,7 +381,12 @@ fn join_selected_character(
         return Ok(());
     };
 
-    connect_client(commands, session.client_id, character)?;
+    connect_client(
+        commands,
+        session.client_id,
+        character,
+        session.remote_interpolation_ratio,
+    )?;
     session.joining = true;
     spawn_standard_room(commands);
     next_screen.set(ClientScreen::InGame);

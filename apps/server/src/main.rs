@@ -14,6 +14,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let snapshot_interval = design
+        .network
+        .snapshot_interval_for(design.simulation)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "snapshot send rate must be positive and an integer divisor of the simulation tick rate",
+            )
+        })?;
 
     let mut app = App::new();
     app.add_plugins((
@@ -27,7 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         FixedUpdate,
         move_players.after(ServerNetworkSet::PrepareSimulation),
     );
-    configure_server(&mut app, tick_duration);
+    configure_server(&mut app, tick_duration, snapshot_interval);
     app.run();
     Ok(())
 }

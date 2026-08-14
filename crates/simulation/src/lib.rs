@@ -77,7 +77,7 @@ fn normalized_intent(intent: MovementIntent) -> Vec2 {
 mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
-    use game01_configs::{MovementConfig, SimulationConfig, load_embedded};
+    use game01_configs::{MovementConfig, NetworkConfig, SimulationConfig, load_embedded};
 
     const EPSILON: f32 = 0.000_01;
 
@@ -157,6 +157,10 @@ mod tests {
             simulation: SimulationConfig {
                 ticks_per_second: 0,
             },
+            network: NetworkConfig {
+                snapshot_send_hz: 30,
+                remote_interpolation_ratio: 1.0,
+            },
             movement: MovementConfig {
                 speed_meters_per_second: 4.0,
             },
@@ -164,6 +168,10 @@ mod tests {
         let negative_speed = DesignConfig {
             simulation: SimulationConfig {
                 ticks_per_second: 60,
+            },
+            network: NetworkConfig {
+                snapshot_send_hz: 30,
+                remote_interpolation_ratio: 1.0,
             },
             movement: MovementConfig {
                 speed_meters_per_second: -1.0,

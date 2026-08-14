@@ -380,6 +380,18 @@ Acceptance: local fixed-tick movement is visually continuous between simulation 
 
 Acceptance: server authority, client prediction, input ticks, and snapshot tick metadata advance at one shared 60 Hz cadence; one simulated second still moves a character exactly four meters.
 
+### Phase 7 — joint snapshot-rate and buffer tuning
+
+- The simulation, native input, and prediction/reconciliation timelines remain at 60 Hz.
+- Two explicitly requested design parameters are added under `[network]`: `snapshot_send_hz = 30` and `remote_interpolation_ratio = 1.0`.
+- `ReplicationMetadata` uses the independent 33.33 ms snapshot interval, so continuously changed replicated state can publish at up to 30 snapshots per second rather than 60.
+- The server accepts only a positive snapshot rate that is an integer divisor of, and no greater than, the simulation rate. This keeps publication cadence deterministic and evenly aligned with simulation ticks.
+- Each client link receives an explicit Lightyear `InterpolationConfig` with ratio 1.0. Lightyear's fixed one-simulation-tick safety margin and dynamic measured-jitter margin remain unchanged.
+- At 60 Hz simulation and negligible jitter, the expected remote presentation offset is approximately one 33.33 ms send interval plus one 16.67 ms safety tick, or roughly 50 ms.
+- Lowering the sender-dependent rate reduces position/snapshot traffic substantially, but does not imply that total network traffic is reduced by exactly 50 percent.
+
+Acceptance: authoritative simulation and owned-player response retain their 60 Hz behavior, while remote state publishes at 30 Hz and uses a 1.0-interval interpolation buffer without removing Lightyear's adaptive jitter protection.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.

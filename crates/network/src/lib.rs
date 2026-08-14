@@ -13,6 +13,7 @@ use bevy::{
 use game01_world_data::{
     CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
 };
+use lightyear::interpolation::timeline::InterpolationConfig;
 use lightyear::prediction::correction::PreviousVisual;
 use lightyear::{connection::client::Disconnecting, netcode::Key};
 use lightyear::{prelude::server::ServerUdpIo, prelude::*};
@@ -113,10 +114,10 @@ enum Admission {
     Full,
 }
 
-pub fn configure_server(app: &mut App, tick_duration: Duration) {
+pub fn configure_server(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
     app.add_plugins(ServerPlugins { tick_duration })
         .add_plugins(NativeInputPlugin::<MovementIntent>::default())
-        .insert_resource(ReplicationMetadata::new(tick_duration))
+        .insert_resource(ReplicationMetadata::new(snapshot_interval))
         .init_resource::<ConnectionRegistry>()
         .init_resource::<NextPlayerId>()
         .register_game_protocol()
@@ -222,6 +223,7 @@ pub fn connect_client(
     commands: &mut Commands,
     client_id: u64,
     character: CharacterKind,
+    remote_interpolation_ratio: f32,
 ) -> Result<Entity> {
     let authentication = Authentication::Manual {
         server_addr: SERVER_ADDR,
@@ -237,6 +239,7 @@ pub fn connect_client(
             Link::new(None),
             ReplicationReceiver,
             PredictionManager::default(),
+            InterpolationConfig::default().with_send_interval_ratio(remote_interpolation_ratio),
             PendingJoin(character),
             NetcodeClient::new(authentication, client::NetcodeConfig::default())?,
             UdpIo::default(),
@@ -426,13 +429,20 @@ mod tests {
         let mut queue = CommandQueue::default();
         let client = {
             let mut commands = Commands::new(&mut queue, app.world());
-            connect_client(&mut commands, 1, CharacterKind::Wizard)
+            connect_client(&mut commands, 1, CharacterKind::Wizard, 1.0)
                 .expect("client configuration should be valid")
         };
         queue.apply(app.world_mut());
 
         assert!(app.world().entity(client).contains::<PredictionManager>());
         assert!(app.world().entity(client).contains::<InputTimelineConfig>());
+        assert_eq!(
+            app.world()
+                .entity(client)
+                .get::<InterpolationConfig>()
+                .map(|config| config.send_interval_ratio),
+            Some(1.0)
+        );
     }
 
     #[test]
@@ -482,11 +492,12 @@ mod tests {
     #[test]
     fn dedicated_server_protocol_updates_without_client_timeline() {
         let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
+        let snapshot_interval = Duration::from_secs_f64(1.0 / 30.0);
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin));
         app.add_plugins(ServerPlugins { tick_duration })
             .add_plugins(NativeInputPlugin::<MovementIntent>::default())
-            .insert_resource(ReplicationMetadata::new(tick_duration))
+            .insert_resource(ReplicationMetadata::new(snapshot_interval))
             .register_game_protocol();
 
         app.finish();
