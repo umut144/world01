@@ -2,9 +2,9 @@
 
 use std::{error::Error, fmt};
 
-use bevy::prelude::{Query, Res, Resource, Transform, Vec2};
+use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::MovementIntent;
+use game01_world_data::{MovementIntent, Position};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -57,14 +57,11 @@ impl fmt::Display for MovementConfigError {
 
 impl Error for MovementConfigError {}
 
-pub fn move_players(
-    step: Res<MovementStep>,
-    mut players: Query<(&MovementIntent, &mut Transform)>,
-) {
-    for (intent, mut transform) in &mut players {
+pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent, &mut Position)>) {
+    for (intent, mut position) in &mut players {
         let displacement = step.displacement(*intent);
-        transform.translation.x += displacement.x;
-        transform.translation.y += displacement.y;
+        position.x += displacement.x;
+        position.y += displacement.y;
     }
 }
 
@@ -135,23 +132,23 @@ mod tests {
     }
 
     #[test]
-    fn movement_system_updates_transform() {
+    fn movement_system_updates_authoritative_position() {
         let mut app = App::new();
         app.insert_resource(movement_step())
             .add_systems(Update, move_players);
         let player = app
             .world_mut()
-            .spawn((MovementIntent::new(-1.0, 0.0), Transform::default()))
+            .spawn((MovementIntent::new(-1.0, 0.0), Position::ZERO))
             .id();
 
         app.update();
 
-        let transform = app
+        let position = app
             .world()
-            .get::<Transform>(player)
-            .expect("spawned test player has a Transform");
-        assert!((transform.translation.x + 4.0 / 30.0).abs() < EPSILON);
-        assert_eq!(transform.translation.y, 0.0);
+            .get::<Position>(player)
+            .expect("spawned test player has a Position");
+        assert!((position.x + 4.0 / 30.0).abs() < EPSILON);
+        assert_eq!(position.y, 0.0);
     }
 
     #[test]

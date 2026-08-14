@@ -10,7 +10,9 @@ use bevy::{
     log::{info, warn},
     prelude::*,
 };
-use game01_world_data::{CharacterKind, MovementIntent, PlayerId, PlayerOwner, SelectedCharacter};
+use game01_world_data::{
+    CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
+};
 use lightyear::{
     connection::client::Disconnecting,
     netcode::Key,
@@ -157,7 +159,7 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerId>().replicate_once();
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
-        self.component::<Transform>().replicate();
+        self.component::<Position>().replicate();
         self
     }
 }
@@ -309,7 +311,7 @@ fn handle_join_requests(
             SelectedCharacter(request.character),
             MovementIntent::ZERO,
             InputAge::default(),
-            Transform::from_xyz(spawn.x, spawn.y, 0.0),
+            Position::new(spawn.x, spawn.y),
             Replicate::to_clients(NetworkTarget::All),
         ));
         info!(?connection, player_id, owner, character = ?request.character, "authoritative player spawned");

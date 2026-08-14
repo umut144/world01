@@ -58,6 +58,20 @@ pub struct SpawnPoint {
 }
 
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl Position {
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 pub struct MovementIntent {
     pub x: f32,
     pub y: f32,

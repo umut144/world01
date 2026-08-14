@@ -26,13 +26,14 @@ This is the technical source of truth for architecture, dependency direction, te
 
 - The dedicated server is authoritative over gameplay state.
 - Clients send character selection and movement intent, never authoritative positions.
-- The server validates joins, owns player entities, runs simulation, and mutates authoritative player `Transform`s.
-- The server replicates entity lifecycle, character identity, ownership data, and Transform snapshots to clients.
+- The server validates joins, owns player entities, runs simulation, and mutates authoritative player `Position`s.
+- The server replicates entity lifecycle, character identity, ownership data, and Position snapshots to clients.
+- Bevy `Transform` is presentation state derived from `Position` on graphical clients; it is neither authoritative nor replicated.
 - A client may control only the player entity assigned to its connection.
 - Disconnecting removes the server-owned player and replicates its despawn.
 - A later-joining client must receive the already existing replicated players.
 - Prediction and Reconciliation are explicitly excluded from the first slice.
-- Snapshot interpolation is an optional isolated presentation improvement only after basic replication works; it is not part of first-slice acceptance.
+- Prediction, reconciliation, snapshot interpolation, and render interpolation enter in later phases of Slice 2; Phase 1 only establishes their required state boundary.
 
 ## Dependency and responsibility boundaries
 
@@ -46,9 +47,10 @@ Owns shared protocol-neutral domain data:
 - player identity, selected character, and ownership markers;
 - standard-room and spawn data;
 - movement intent data passed into simulation;
+- authoritative two-dimensional `Position` in meters;
 - replicated gameplay components that are not transport-specific.
 
-For the first movement slice, `Transform` is the only required movement-state component. Identity, selection, and ownership components do not count as additional movement-state modeling.
+Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1 supersedes that choice with the protocol-neutral `Position`; graphical transforms no longer belong to shared world state.
 
 Implemented shared Phase 2 data uses transport-neutral scalar identifiers and coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`, `StandardRoom`, `SpawnPoint`, and `MovementIntent`. Network-specific connection types stay outside `world_data`.
 
@@ -74,11 +76,11 @@ Owns transport-, input-device-, and presentation-independent game rules:
 - does not send or receive network messages;
 - does not render, animate, play audio, or manage UI.
 
-The initial implementation may mutate Transform directly. A mass/velocity movement model will be required soon and does not need to follow real-world physics. Keep the simulation interface and network/input flow suitable for adding explicit velocity and mass without rewriting those outer layers.
+The simulation mutates protocol-neutral `Position`, never presentation `Transform`. A mass/velocity movement model will be required soon and does not need to follow real-world physics. Keep the simulation interface and network/input flow suitable for adding explicit velocity and mass without rewriting those outer layers.
 
 Collision is not required in the first slice, including room-boundary collision.
 
-Phase 2 movement is represented by `MovementStep`, constructed from the typed design configuration. It supplies explicit speed and step duration to the simulation system, clamps intent to unit length, rejects non-finite intent, and directly updates `Transform` without owning fixed-tick scheduling.
+Movement is represented by `MovementStep`, constructed from the typed design configuration. It supplies explicit speed and step duration to the simulation system, clamps intent to unit length, rejects non-finite intent, and directly updates `Position` without owning fixed-tick scheduling.
 
 ### `network`
 
@@ -89,13 +91,13 @@ Owns Lightyear-specific concerns:
 - connection-to-player ownership mapping;
 - reliable character-selection/join messages;
 - ordered/current movement-intent delivery;
-- spawn, despawn, component, and Transform replication.
+- spawn, despawn, component, and Position replication.
 
 Networking transports intent and replicated state; it does not own movement rules.
 
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
-Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, chooses one of five separated spawn positions, and replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Transform`, entity spawn, and despawn to all clients. Snapshot publication currently follows the configured 30 Hz Lightyear tick.
+Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses one of five separated spawn positions. Slice 2 Phase 1 now replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and despawn to all clients. Snapshot publication currently follows the configured 30 Hz Lightyear tick.
 
 ### `server`
 
@@ -120,6 +122,7 @@ Owns non-authoritative local interaction and presentation:
 - keyboard input collection and conversion to movement intent;
 - rendering provisional characters and the standard room;
 - presenting replicated server state.
+- deriving visible Bevy `Transform`s from replicated or later predicted/interpolated `Position`s.
 
 Client presentation state is never gameplay authority.
 
@@ -149,12 +152,12 @@ server input/ownership mapping
         │  explicit simulation input
         ▼
 simulation system
-        │  authoritative Transform mutation
+        │  authoritative Position mutation
         ▼
-Lightyear snapshot replication
+Lightyear Position replication
         │
         ▼
-all client presentations
+client presentation derives Transform
 ```
 
 The fixed tick loop schedules and supplies simulation inputs. Game rules must not be embedded in the loop, input adapter, or network handler.
@@ -299,6 +302,18 @@ RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev
 8. Stop the server. Clients must report or otherwise reflect disconnection without crashing. Close the remaining client processes manually.
 
 Expected server evidence includes connection, authoritative spawn, disconnect, and reconnect log entries for the corresponding identities. A failed item should be recorded with the responsible client ID, selected character, observed windows, and relevant server log line before implementation is changed.
+
+## Second-slice implementation phases
+
+### Phase 1 — authoritative state and presentation boundary
+
+- `world_data::Position` is the sole authoritative two-dimensional player location in meters.
+- The server spawns `Position`; simulation mutates it; Lightyear replicates it.
+- The headless simulation and network state no longer require or replicate Bevy `Transform`.
+- The graphical client creates a presentation `Transform` when a replicated player becomes renderable and synchronizes its x/y translation from `Position` during `Update`.
+- Input transport, prediction, interpolation, and the 30 Hz tick rate remain unchanged in this phase so later effects can be evaluated independently.
+
+Acceptance: synchronized movement still follows the server, while simulation and replicated world state contain no presentation transform authority.
 
 ## Open technical decisions
 

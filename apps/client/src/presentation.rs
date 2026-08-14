@@ -1,6 +1,6 @@
 use bevy::{camera::ScalingMode, prelude::*};
 use game01_network::{ClientMovementInput, configure_client, connect_client};
-use game01_world_data::{CharacterKind, MovementIntent, SelectedCharacter};
+use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -33,6 +33,7 @@ impl Plugin for ClientPresentationPlugin {
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
                     render_new_players.run_if(in_state(ClientScreen::InGame)),
+                    sync_rendered_positions.run_if(in_state(ClientScreen::InGame)),
                 ),
             );
     }
@@ -391,14 +392,27 @@ fn spawn_standard_room(commands: &mut Commands) {
 
 fn render_new_players(
     mut commands: Commands,
-    players: Query<(Entity, &SelectedCharacter), Without<RenderedCharacter>>,
+    players: Query<(Entity, &SelectedCharacter, &Position), Without<RenderedCharacter>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    for (entity, character) in &players {
+    for (entity, character, position) in &players {
         let mut player = commands.entity(entity);
-        player.insert((RenderedCharacter, Visibility::default()));
+        player.insert((
+            RenderedCharacter,
+            Visibility::default(),
+            Transform::from_xyz(position.x, position.y, 0.0),
+        ));
         attach_character_visual(&mut player, &mut meshes, &mut materials, character.0);
+    }
+}
+
+fn sync_rendered_positions(
+    mut players: Query<(&Position, &mut Transform), With<RenderedCharacter>>,
+) {
+    for (position, mut transform) in &mut players {
+        transform.translation.x = position.x;
+        transform.translation.y = position.y;
     }
 }
 
@@ -600,5 +614,28 @@ mod tests {
     fn keyboard_selection_starts_at_directional_edge() {
         assert_eq!(adjacent_character(None, 1), CharacterKind::Wizard);
         assert_eq!(adjacent_character(None, -1), CharacterKind::Glavier);
+    }
+
+    #[test]
+    fn presentation_sync_only_derives_translation_from_position() {
+        let mut app = App::new();
+        app.add_systems(Update, sync_rendered_positions);
+        let entity = app
+            .world_mut()
+            .spawn((
+                Position::new(2.5, -1.25),
+                Transform::from_xyz(9.0, 8.0, 3.0).with_scale(Vec3::splat(1.5)),
+                RenderedCharacter,
+            ))
+            .id();
+
+        app.update();
+
+        let transform = app
+            .world()
+            .get::<Transform>(entity)
+            .expect("rendered entity retains its presentation Transform");
+        assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
+        assert_eq!(transform.scale, Vec3::splat(1.5));
     }
 }
