@@ -1,4 +1,4 @@
-use bevy::{camera::ScalingMode, prelude::*, window::PrimaryWindow};
+use bevy::{camera::ScalingMode, prelude::*};
 use game01_network::{ClientMovementInput, configure_client, connect_client};
 use game01_world_data::{CharacterKind, MovementIntent, SelectedCharacter};
 
@@ -67,7 +67,7 @@ struct ClientSession {
 struct SelectionVisual;
 
 #[derive(Component)]
-struct SelectionPanel(CharacterKind);
+struct SelectionButton(CharacterKind);
 
 #[derive(Component)]
 struct ConfirmButton;
@@ -93,90 +93,146 @@ fn setup_selection(
     let selection_center_y = (VIEWPORT_HEIGHT_METERS - SELECTION_HEIGHT_METERS) * 0.5;
     for (index, character) in CharacterKind::ALL.into_iter().enumerate() {
         let x = -VIEWPORT_WIDTH_METERS * 0.5 + PANEL_WIDTH_METERS * (index as f32 + 0.5);
-        commands.spawn((
-            Sprite::from_color(
-                panel_color(character, false),
-                Vec2::new(PANEL_WIDTH_METERS - 0.04, SELECTION_HEIGHT_METERS),
-            ),
-            Transform::from_xyz(x, selection_center_y, -5.0),
-            SelectionPanel(character),
-            SelectionVisual,
-        ));
-
         let mut root = commands.spawn((
             Transform::from_xyz(x, selection_center_y + 0.25, 0.0).with_scale(Vec3::splat(1.35)),
             Visibility::default(),
             SelectionVisual,
         ));
         attach_character_visual(&mut root, &mut meshes, &mut materials, character);
-
-        commands.spawn((
-            Text2d::new(character.label()),
-            TextFont::from_font_size(30.0),
-            TextColor(Color::WHITE),
-            TextLayout::justify(Justify::Center),
-            Transform::from_xyz(x, -1.85, 2.0),
-            SelectionVisual,
-        ));
     }
 
     commands.spawn((
-        Sprite::from_color(Color::srgb(0.18, 0.19, 0.22), Vec2::new(7.0, 1.0)),
-        Transform::from_xyz(0.0, -3.55, 0.0),
-        ConfirmButton,
+        Node {
+            width: percent(100),
+            height: percent(100),
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
         SelectionVisual,
-    ));
-    commands.spawn((
-        Text2d::new("SELECT CHARACTER & JOIN"),
-        TextFont::from_font_size(34.0),
-        TextColor(Color::srgb(0.55, 0.55, 0.58)),
-        TextLayout::justify(Justify::Center),
-        Transform::from_xyz(0.0, -3.55, 2.0),
-        SelectionVisual,
+        children![
+            (
+                Node {
+                    width: percent(100),
+                    height: percent(75),
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                },
+                SelectionVisual,
+                children![
+                    (selection_button(CharacterKind::Wizard), SelectionVisual),
+                    (selection_button(CharacterKind::Mage), SelectionVisual),
+                    (selection_button(CharacterKind::Sorcerer), SelectionVisual),
+                    (selection_button(CharacterKind::Rogue), SelectionVisual),
+                    (selection_button(CharacterKind::Glavier), SelectionVisual),
+                ]
+            ),
+            (
+                Node {
+                    width: percent(100),
+                    height: percent(25),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                SelectionVisual,
+                children![confirm_button()]
+            )
+        ],
     ));
 }
 
+fn selection_button(character: CharacterKind) -> impl Bundle {
+    (
+        Button,
+        SelectionButton(character),
+        Node {
+            width: percent(20),
+            height: percent(100),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::FlexEnd,
+            padding: UiRect::bottom(px(22)),
+            border: UiRect::all(px(2)),
+            ..default()
+        },
+        BorderColor::all(Color::srgba(0.85, 0.85, 0.9, 0.35)),
+        BackgroundColor(panel_color(character, false).with_alpha(0.30)),
+        children![(
+            Text::new(character.label()),
+            TextFont::from_font_size(26.0),
+            TextColor(Color::WHITE)
+        )],
+    )
+}
+
+fn confirm_button() -> impl Bundle {
+    (
+        Button,
+        ConfirmButton,
+        Node {
+            width: percent(42),
+            height: percent(48),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            border: UiRect::all(px(3)),
+            border_radius: BorderRadius::all(px(8)),
+            ..default()
+        },
+        BorderColor::all(Color::srgba(0.85, 0.72, 0.45, 0.45)),
+        BackgroundColor(Color::srgba(0.18, 0.19, 0.22, 0.80)),
+        children![(
+            Text::new("SELECT CHARACTER & JOIN"),
+            TextFont::from_font_size(28.0),
+            TextColor(Color::srgba(0.75, 0.75, 0.78, 1.0))
+        )],
+    )
+}
+
 fn handle_selection_click(
-    mouse: Res<ButtonInput<MouseButton>>,
-    window: Single<&Window, With<PrimaryWindow>>,
     mut session: ResMut<ClientSession>,
     mut next_screen: ResMut<NextState<ClientScreen>>,
-    mut panels: Query<(&SelectionPanel, &mut Sprite), Without<ConfirmButton>>,
-    mut button: Single<&mut Sprite, (With<ConfirmButton>, Without<SelectionPanel>)>,
+    mut buttons: Query<
+        (
+            &Interaction,
+            Option<&SelectionButton>,
+            Option<&ConfirmButton>,
+            &mut BackgroundColor,
+        ),
+        With<Button>,
+    >,
     mut commands: Commands,
 ) -> Result {
-    if session.joining || !mouse.just_pressed(MouseButton::Left) {
+    if session.joining {
         return Ok(());
     }
-    let Some(cursor) = window.cursor_position() else {
-        return Ok(());
-    };
-    let normalized = Vec2::new(cursor.x / window.width(), cursor.y / window.height());
 
-    if normalized.y <= 0.75 {
-        let index = (normalized.x * 5.0).floor() as usize;
-        if let Some(character) = CharacterKind::ALL.get(index).copied() {
-            session.selected = Some(character);
+    for (interaction, selection_button, confirm_button, mut background) in &mut buttons {
+        if *interaction == Interaction::Pressed {
+            if let Some(selection_button) = selection_button {
+                session.selected = Some(selection_button.0);
+            } else if confirm_button.is_some()
+                && let Some(character) = session.selected
+            {
+                connect_client(&mut commands, session.client_id, character)?;
+                session.joining = true;
+                spawn_standard_room(&mut commands);
+                next_screen.set(ClientScreen::InGame);
+                return Ok(());
+            }
         }
-    } else if (0.80..=0.95).contains(&normalized.y)
-        && (0.25..=0.75).contains(&normalized.x)
-        && let Some(character) = session.selected
-    {
-        connect_client(&mut commands, session.client_id, character)?;
-        session.joining = true;
-        spawn_standard_room(&mut commands);
-        next_screen.set(ClientScreen::InGame);
-        return Ok(());
-    }
 
-    for (panel, mut sprite) in &mut panels {
-        sprite.color = panel_color(panel.0, session.selected == Some(panel.0));
+        if let Some(selection_button) = selection_button {
+            let selected = session.selected == Some(selection_button.0);
+            let hovered = *interaction == Interaction::Hovered;
+            **background = panel_color(selection_button.0, selected || hovered)
+                .with_alpha(if selected || hovered { 0.55 } else { 0.30 });
+        } else if confirm_button.is_some() {
+            **background = if session.selected.is_some() {
+                Color::srgba(0.38, 0.25, 0.12, 0.92)
+            } else {
+                Color::srgba(0.18, 0.19, 0.22, 0.80)
+            };
+        }
     }
-    button.color = if session.selected.is_some() {
-        Color::srgb(0.38, 0.25, 0.12)
-    } else {
-        Color::srgb(0.18, 0.19, 0.22)
-    };
     Ok(())
 }
 
