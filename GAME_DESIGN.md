@@ -206,6 +206,62 @@ The foundation should prove that these elements create fun together:
 
 Do not assume every listed room type, all five polished kits, seasonal history, team play, advanced matchmaking, final art, or every collapse variant belongs in the first playable iteration.
 
+## First vertical slice: confirmed plan
+
+The first vertical slice proves the multiplayer foundation before implementing the larger Battle Royale loop.
+
+### Target outcome
+
+- Run one dedicated headless server locally without Docker.
+- Connect five separately running graphical clients.
+- Each client first sees all five characters in a selection screen.
+- Each character occupies one fifth of the 1920 px viewport width (384 px) and the upper three quarters of its height (900 px).
+- A shared lower-area button confirms the selected character and joins the server.
+- The server spawns joined players in one standard room.
+- Each player uses WASD to move their own character.
+- Movement is server-authoritative and synchronized to all clients.
+- No collision is required in this slice, including no room-boundary collision requirement.
+- No animation state machine, primitive motion animation, actions, final mesh, final styling, account persistence, Prediction, or Reconciliation is required.
+- A simple provisional polygon representation and tinting are allowed.
+- Mage is female; Wizard, Sorcerer, Rogue, and Glavier are male.
+
+### Networking and timing
+
+- Networking library: **Lightyear 0.28**, targeting Bevy 0.19.
+- Architecture: authoritative dedicated server with replicated world state / Transform snapshots.
+- Clients send character selection and movement intent, never authoritative positions.
+- Simulation runs at a configurable fixed rate of **30 ticks per second** for this slice.
+- Prediction and Reconciliation are explicitly deferred.
+- Snapshot interpolation is optional only after basic replication works; it is not required for slice acceptance.
+
+### Separation of concerns
+
+- World data, simulation, networking, input, and presentation are separate concerns.
+- Simulation must not be embedded inside input collection, networking code, or tick-loop orchestration. The tick loop schedules/calls simulation; it does not contain the game rules.
+- Input is converted into explicit movement intent before reaching simulation.
+- Network transport carries intent and replicated state without owning movement rules.
+- For the initial movement slice, Transform is the only required movement-state component. Identity/selection/ownership markers are still permitted as domain data.
+- A mass/velocity movement model will be needed soon. It need not follow real-world physics. Do not implement it in this slice, but avoid coupling the current movement flow so tightly to direct Transform mutation that adding explicit velocity/mass later requires rewriting input or networking.
+
+### Config discipline
+
+- Provide a dedicated workspace crate/directory named `configs` for human-editable game-design parameters.
+- Prefer a typed configuration boundary backed initially by `design.toml` because these values are intended for direct solo-developer tuning without searching simulation code.
+- Initially expose only parameters explicitly requested by the developer. For this slice that includes movement speed and the confirmed 30 Hz simulation tick rate if the tick rate is represented as design configuration.
+- Later examples such as MaxHP and attack values belong there only when explicitly requested and implemented.
+- Do not expose every internal constant merely because simulation uses it; excessive configuration is considered harmful to clarity.
+
+### Intended project boundaries
+
+- `world_data`: shared domain types/components and standard-room/player data.
+- `simulation`: transport- and input-independent game rules.
+- `network`: Lightyear protocol, transport, messages, replication, ownership mapping.
+- `configs`: explicitly requested typed game-design configuration and `design.toml`.
+- `server`: headless authoritative app/orchestration.
+- `client`: selection screen, input collection, rendering, and replicated-state presentation.
+
+The concrete workspace layout and validation wrapper are Phase 1 setup decisions, but these logical boundaries are confirmed.
+
 ## Open design questions
 
 - Exact value/range of `A` and initial spawn distribution.
@@ -215,6 +271,6 @@ Do not assume every listed room type, all five polished kits, seasonal history, 
 - Exact combat and abilities of all five characters.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
-- Server/network architecture and persistence stack.
+- Persistence stack beyond the non-persistent first slice.
 - Later matchmaking strength metric/filtering.
 - Exact presentation/collision interpretation of the drawn character geometry.

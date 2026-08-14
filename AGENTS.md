@@ -65,10 +65,12 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 ### Architecture boundaries
 
 - Keep gameplay/simulation rules separate from rendering, VFX, audio, input, and other presentation concerns.
+- Keep simulation systems independent from the input collection, network transport, and tick-loop orchestration that invokes them; pass explicit data into simulation rather than embedding game rules in orchestration code.
 - Do not make client-visible presentation state the authority for gameplay state.
 - Keep player ownership and character identity explicit; do not assume there can only ever be one local or solo player.
 - Solo mode is the current implementation scope, but core data structures must not inherently prevent future teams of four.
 - Prefer configurable resources/components over scattered magic numbers so balancing parameters remain discoverable and tunable.
+- Store explicitly requested game-design parameters in the dedicated `configs` crate. Expose only parameters the user has explicitly requested; do not automatically mirror every simulation constant into public design configuration.
 - Avoid premature abstractions; introduce shared infrastructure only when required by current behavior or a confirmed architectural constraint.
 
 ### Consolidated project check command
