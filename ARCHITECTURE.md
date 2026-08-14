@@ -166,12 +166,12 @@ game01/
     └── client/
 ```
 
-The exact Cargo workspace manifests, crate names, feature wiring, and validation wrapper are Phase 1 implementation details. Preserve the logical boundaries even if minor filesystem naming changes become necessary.
+Cargo packages use the `game01-` prefix (`game01-client`, `game01-server`, `game01-configs`, `game01-network`, `game01-simulation`, and `game01-world-data`). The project-local validation entry point is `./scripts/check.sh`.
 
 ## Bevy dependency strategy
 
 - Disable Bevy default features.
-- The graphical client starts from Bevy 0.19's official `2d` profile unless implementation proves a smaller explicit feature set is more appropriate.
+- The graphical client uses an explicit subset of Bevy's 2D features. This retains the maintained 2D rendering feature collection while excluding scene, picking, UI, audio, and 3D support.
 - The server and headless shared crates use only the minimal non-rendering Bevy capabilities they need.
 - Do not add Bevy UI, 3D, audio, scene, picking, development-tool, or extra asset-format features speculatively.
 - Routine development and agent validation should use consistent feature sets and compiler flags where practical to avoid duplicate artifacts.
@@ -240,8 +240,6 @@ Acceptance: five clients move concurrently and all clients observe the same auth
 ## Open technical decisions
 
 - Exact Lightyear transport/backend and feature selection for local native development.
-- Exact Cargo package names and dependency-feature wiring.
-- Exact project-local validation wrapper (`just check`, `cargo xtask check`, or similarly lightweight alternative).
 - Whether 30 Hz snapshot publication equals simulation frequency or is independently configurable.
 - Exact movement-intent stale-input policy.
 - Exact provisional character rendering approach: direct 2D primitives versus a simple polygon mesher.

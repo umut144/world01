@@ -41,11 +41,12 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 
 ### Validation
 
-- After changing Rust code, always run:
+- After changing Rust code, always run the project-local validation wrapper:
 
-  `RUSTFLAGS="-A warnings" cargo check --quiet --features bevy/dynamic_linking`
+  `./scripts/check.sh`
 
-- Silent output means success; do not rerun with verbose output when the command succeeds.
+- The wrapper checks the headless server and graphical client separately, uses quiet Cargo output, suppresses warning noise through `RUSTFLAGS="-A warnings"`, and enables dynamic linking only for the client development check.
+- Silent output means success; do not rerun with verbose output when the wrapper succeeds.
 - If the check fails, use the existing error output first. Run more verbose or targeted commands only when needed to diagnose the failure.
 - Run relevant targeted tests when behavior covered by tests was changed.
 - Do not automatically run the complete test suite unless the change scope justifies it.
@@ -79,10 +80,9 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 
 ### Consolidated project check command
 
-- The direct Cargo validation command above is authoritative until the repository provides a project-local wrapper.
-- When validation steps become repetitive or more complex, consolidate them into one lightweight, version-controlled command such as `just check` or `cargo xtask check`.
-- Once such a wrapper exists and is documented here, prefer it over duplicating validation logic across instructions or scripts.
-- Do not assume or invoke a wrapper command before it actually exists in the repository.
+- `./scripts/check.sh` is the authoritative routine Rust validation command.
+- Keep validation logic consolidated in this lightweight wrapper rather than duplicating Cargo commands across instructions.
+- Extend the wrapper only when the project gains another target that must always compile.
 
 ### Git workflow
 

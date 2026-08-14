@@ -1,0 +1,20 @@
+[package]
+name = "game01-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[features]
+dev = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = { workspace = true, features = [
+    "default_app",
+    "std",
+    "multi_threaded",
+    "bevy_winit",
+    "2d_bevy_render",
+    "x11",
+    "wayland",
+] }
+game01-network = { path = "../../crates/network" }

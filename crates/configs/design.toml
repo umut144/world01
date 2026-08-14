@@ -1,0 +1,5 @@
+[simulation]
+ticks_per_second = 30
+
+[movement]
+speed_meters_per_second = 4.0

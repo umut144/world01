@@ -1,0 +1,8 @@
+[package]
+name = "game01-world-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["std"] }
