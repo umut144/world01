@@ -3,7 +3,7 @@ ticks_per_second = 60
 
 [network]
 snapshot_send_hz = 30
-remote_interpolation_ratio = 1.0
+remote_interpolation_ratio = 1.5
 
 [movement]
 speed_meters_per_second = 4.0

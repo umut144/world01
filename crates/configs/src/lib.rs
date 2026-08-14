@@ -74,14 +74,14 @@ mod tests {
             design.network.snapshot_interval(),
             Some(Duration::from_secs_f64(1.0 / 30.0))
         );
-        assert_eq!(design.network.remote_interpolation_ratio, 1.0);
+        assert_eq!(design.network.remote_interpolation_ratio, 1.5);
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
             Some(Duration::from_secs_f64(1.0 / 30.0))
         );
         assert_eq!(
             design.network.validated_remote_interpolation_ratio(),
-            Some(1.0)
+            Some(1.5)
         );
     }
 
