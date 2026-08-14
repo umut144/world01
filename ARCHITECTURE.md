@@ -92,6 +92,8 @@ Owns Lightyear-specific concerns:
 
 Networking transports intent and replicated state; it does not own movement rules.
 
+Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
+
 ### `server`
 
 Owns headless authoritative app orchestration:
@@ -243,7 +245,6 @@ Acceptance: five clients move concurrently and all clients observe the same auth
 
 ## Open technical decisions
 
-- Exact Lightyear transport/backend and feature selection for local native development.
 - Whether 30 Hz snapshot publication equals simulation frequency or is independently configurable.
 - Exact movement-intent stale-input policy.
 - Exact provisional character rendering approach: direct 2D primitives versus a simple polygon mesher.

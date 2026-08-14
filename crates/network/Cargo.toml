@@ -5,12 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+bevy = { workspace = true, features = ["std", "bevy_log"] }
 lightyear = { workspace = true, features = [
     "std",
     "client",
     "server",
-    "replication",
-    "interpolation",
     "netcode",
     "udp",
 ] }

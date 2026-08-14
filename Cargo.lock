@@ -3029,6 +3029,7 @@ name = "game01-client"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "game01-configs",
  "game01-network",
 ]
 
@@ -3044,6 +3045,7 @@ dependencies = [
 name = "game01-network"
 version = "0.1.0"
 dependencies = [
+ "bevy",
  "lightyear",
 ]
 
@@ -3992,7 +3994,6 @@ dependencies = [
  "bevy_utils",
  "lightyear_connection",
  "lightyear_core",
- "lightyear_interpolation",
  "lightyear_link",
  "lightyear_messages",
  "lightyear_prediction",
