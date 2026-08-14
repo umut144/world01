@@ -8,11 +8,20 @@ Before planning, discussing, or changing this project, read `GAME_DESIGN.md`, `A
 
 `SLICES_AND_TASKS.md` is the compact project tracker. Keep it tabular and update slice status and high-level task coverage without duplicating architectural detail.
 
-`AGENTS.md`, `GAME_DESIGN.md`, `ARCHITECTURE.md`, and `SLICES_AND_TASKS.md` are the complete canonical project-document set. Do not add further context, planning, design, workflow, or architecture documents unless the user explicitly requests one; extend the appropriate existing document instead.
+`AGENTS.md`, `GAME_DESIGN.md`, `ARCHITECTURE.md`, `SLICES_AND_TASKS.md`, and `TEST_FINDINGS.md` are the complete canonical project-document set. Do not add further context, planning, design, workflow, test, or architecture documents unless the user explicitly requests one; extend the appropriate existing document instead.
 
 The user is a solo developer. Prefer iterative, high-leverage work and avoid prematurely solving future-season problems. Do not implement gameplay merely because it is described in the design document; implementation requires an explicit user request.
 
 ## Development Workflow & Build Rules
+
+### Internet and data-volume discipline
+
+- The user's connection is currently data-volume constrained. Do not perform web searches, deep internet research, broad repository downloads, or external lookups without the user's explicit permission.
+- Prefer local repository files, installed dependency source, Cargo metadata, existing documentation, and direct code inspection before considering the internet.
+- If external information is explicitly authorized, use the narrowest possible query and the fewest sources needed; do not open unrelated pages, fetch large assets, or repeatedly refresh equivalent information.
+- Do not download dependencies, assets, tools, or updates proactively. Use already available local caches and only fetch what the requested task actually requires.
+- Keep command output compact (`--quiet` where the project rules permit it), avoid dumping large logs, and inspect focused file ranges rather than entire trees.
+- If current external information would materially improve the answer but no permission was given, state that limitation and ask before browsing.
 
 ### Scope and efficiency
 
