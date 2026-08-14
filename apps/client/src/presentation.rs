@@ -1,6 +1,6 @@
 use bevy::{camera::ScalingMode, prelude::*, window::PrimaryWindow};
-use game01_network::{configure_client, connect_client};
-use game01_world_data::{CharacterKind, SelectedCharacter};
+use game01_network::{ClientMovementInput, configure_client, connect_client};
+use game01_world_data::{CharacterKind, MovementIntent, SelectedCharacter};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -15,14 +15,36 @@ pub struct ClientPresentationPlugin {
 impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
         configure_client(app, self.tick_duration);
-        app.insert_resource(ClientSession {
-            client_id: self.client_id,
-            selected: None,
-            joining: false,
-        })
-        .add_systems(Startup, setup_selection)
-        .add_systems(Update, (handle_selection_click, render_new_players));
+        app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
+            .insert_resource(ClientSession {
+                client_id: self.client_id,
+                selected: None,
+                joining: false,
+            })
+            .add_systems(Startup, setup_selection)
+            .add_systems(
+                Update,
+                (
+                    handle_selection_click,
+                    collect_movement_input,
+                    render_new_players,
+                ),
+            );
     }
+}
+
+fn collect_movement_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut input: ResMut<ClientMovementInput>,
+) {
+    let x = axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA);
+    let y = axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS);
+    let direction = Vec2::new(x, y).normalize_or_zero();
+    input.0 = MovementIntent::new(direction.x, direction.y);
+}
+
+fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
+    f32::from(keyboard.pressed(positive)) - f32::from(keyboard.pressed(negative))
 }
 
 #[derive(Resource)]

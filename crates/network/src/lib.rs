@@ -10,7 +10,7 @@ use bevy::{
     log::{info, warn},
     prelude::*,
 };
-use game01_world_data::{CharacterKind, PlayerId, PlayerOwner, SelectedCharacter};
+use game01_world_data::{CharacterKind, MovementIntent, PlayerId, PlayerOwner, SelectedCharacter};
 use lightyear::{
     connection::client::Disconnecting,
     netcode::Key,
@@ -23,12 +23,30 @@ pub const MAX_CLIENTS: usize = 5;
 pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 
 const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_31;
+const STALE_INPUT_TICKS: u8 = 3;
 
 pub struct JoinChannel;
+pub struct MovementChannel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JoinRequest {
     pub character: CharacterKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MovementInput {
+    pub intent: MovementIntent,
+}
+
+#[derive(Resource, Debug, Clone, Copy, Default)]
+pub struct ClientMovementInput(pub MovementIntent);
+
+#[derive(Component, Debug, Clone, Copy, Default)]
+struct InputAge(u8);
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ServerNetworkSet {
+    PrepareSimulation,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -96,7 +114,11 @@ pub fn configure_server(app: &mut App, tick_duration: Duration) {
         .init_resource::<NextPlayerId>()
         .register_game_protocol()
         .add_systems(Startup, start_server)
-        .add_systems(Update, handle_join_requests)
+        .add_systems(Update, (handle_join_requests, receive_movement_inputs))
+        .add_systems(
+            FixedUpdate,
+            expire_stale_inputs.in_set(ServerNetworkSet::PrepareSimulation),
+        )
         .add_observer(prepare_server_client)
         .add_observer(track_connected_client)
         .add_observer(track_disconnected_client);
@@ -104,7 +126,9 @@ pub fn configure_server(app: &mut App, tick_duration: Duration) {
 
 pub fn configure_client(app: &mut App, tick_duration: Duration) {
     app.add_plugins(ClientPlugins { tick_duration })
+        .init_resource::<ClientMovementInput>()
         .register_game_protocol()
+        .add_systems(FixedUpdate, send_movement_input)
         .add_observer(send_join_when_connected)
         .add_observer(report_client_connected)
         .add_observer(report_client_disconnected);
@@ -120,6 +144,13 @@ impl GameProtocolAppExt for App {
             .add_direction(NetworkDirection::ClientToServer);
         self.add_channel::<JoinChannel>(ChannelSettings {
             mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
+            ..default()
+        })
+        .add_direction(NetworkDirection::ClientToServer);
+        self.register_message::<MovementInput>()
+            .add_direction(NetworkDirection::ClientToServer);
+        self.add_channel::<MovementChannel>(ChannelSettings {
+            mode: ChannelMode::SequencedUnreliable,
             ..default()
         })
         .add_direction(NetworkDirection::ClientToServer);
@@ -276,10 +307,54 @@ fn handle_join_requests(
             PlayerId(player_id),
             PlayerOwner(owner),
             SelectedCharacter(request.character),
+            MovementIntent::ZERO,
+            InputAge::default(),
             Transform::from_xyz(spawn.x, spawn.y, 0.0),
             Replicate::to_clients(NetworkTarget::All),
         ));
         info!(?connection, player_id, owner, character = ?request.character, "authoritative player spawned");
+    }
+}
+
+fn send_movement_input(
+    input: Res<ClientMovementInput>,
+    mut clients: Query<&mut MessageSender<MovementInput>, (With<Client>, With<Connected>)>,
+) {
+    for mut sender in &mut clients {
+        sender.send::<MovementChannel>(MovementInput { intent: input.0 });
+    }
+}
+
+fn receive_movement_inputs(
+    mut clients: Query<
+        (&RemoteId, &mut MessageReceiver<MovementInput>),
+        (With<ClientOf>, With<Connected>),
+    >,
+    mut players: Query<(&PlayerOwner, &mut MovementIntent, &mut InputAge)>,
+) {
+    for (remote, mut receiver) in &mut clients {
+        let PeerId::Netcode(owner) = remote.0 else {
+            continue;
+        };
+        let Some(input) = receiver.receive().last() else {
+            continue;
+        };
+        if let Some((_, mut intent, mut age)) = players
+            .iter_mut()
+            .find(|(player_owner, _, _)| player_owner.0 == owner)
+        {
+            *intent = input.intent;
+            age.0 = 0;
+        }
+    }
+}
+
+fn expire_stale_inputs(mut players: Query<(&mut MovementIntent, &mut InputAge)>) {
+    for (mut intent, mut age) in &mut players {
+        age.0 = age.0.saturating_add(1);
+        if age.0 >= STALE_INPUT_TICKS {
+            *intent = MovementIntent::ZERO;
+        }
     }
 }
 
@@ -380,5 +455,28 @@ mod tests {
 
         assert_ne!(first, second);
         assert_eq!(first, spawn_position(6));
+    }
+
+    #[test]
+    fn stale_input_stops_after_three_ticks() {
+        let mut app = App::new();
+        app.add_systems(FixedUpdate, expire_stale_inputs);
+        let player = app
+            .world_mut()
+            .spawn((MovementIntent::new(1.0, 0.0), InputAge::default()))
+            .id();
+
+        app.world_mut().run_schedule(FixedUpdate);
+        app.world_mut().run_schedule(FixedUpdate);
+        assert_eq!(
+            app.world().get::<MovementIntent>(player),
+            Some(&MovementIntent::new(1.0, 0.0))
+        );
+
+        app.world_mut().run_schedule(FixedUpdate);
+        assert_eq!(
+            app.world().get::<MovementIntent>(player),
+            Some(&MovementIntent::ZERO)
+        );
     }
 }

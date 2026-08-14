@@ -239,6 +239,15 @@ Acceptance: each client selects, joins, and sees the same set of spawned players
 
 Acceptance: five clients move concurrently and all clients observe the same authoritative positions.
 
+Implemented movement pipeline:
+
+- The client presentation converts WASD state into `MovementIntent`; it does not move gameplay entities locally.
+- The client network boundary sends the latest intent over a sequenced-unreliable channel at 30 Hz, so delayed input cannot overtake newer input.
+- A movement message contains no player identifier. The server derives ownership from the authenticated connection and only writes to that connection's player.
+- The server expires an intent to zero after three simulation ticks without a fresh message (about 100 ms).
+- The independent simulation system consumes `MovementIntent` and the configured `MovementStep` in `FixedUpdate` at 30 Hz.
+- Lightyear replicates the resulting authoritative `Transform` changes to every client.
+
 ### Phase 6 — manual slice verification
 
 - Provide explicit commands for one server and five clients.
@@ -247,5 +256,4 @@ Acceptance: five clients move concurrently and all clients observe the same auth
 
 ## Open technical decisions
 
-- Exact movement-intent stale-input policy.
 - Persistence architecture after the non-persistent first slice.
