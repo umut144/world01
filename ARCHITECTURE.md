@@ -94,6 +94,8 @@ Networking transports intent and replicated state; it does not own movement rule
 
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
+Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, chooses one of five separated spawn positions, and replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Transform`, entity spawn, and despawn to all clients. Snapshot publication currently follows the configured 30 Hz Lightyear tick.
+
 ### `server`
 
 Owns headless authoritative app orchestration:
@@ -245,7 +247,5 @@ Acceptance: five clients move concurrently and all clients observe the same auth
 
 ## Open technical decisions
 
-- Whether 30 Hz snapshot publication equals simulation frequency or is independently configurable.
 - Exact movement-intent stale-input policy.
-- Exact provisional character rendering approach: direct 2D primitives versus a simple polygon mesher.
 - Persistence architecture after the non-persistent first slice.

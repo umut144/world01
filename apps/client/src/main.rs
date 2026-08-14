@@ -1,8 +1,12 @@
 use std::{env, error::Error, io};
 
 use bevy::prelude::*;
+use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
-use game01_network::configure_client;
+
+use crate::presentation::ClientPresentationPlugin;
+
+mod presentation;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
@@ -15,8 +19,19 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins);
-    configure_client(&mut app, tick_duration, client_id);
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "The Labyrinth — Secrets, Room's & Travels'".into(),
+            resolution: WindowResolution::new(1920, 1200),
+            resizable: false,
+            ..default()
+        }),
+        ..default()
+    }));
+    app.add_plugins(ClientPresentationPlugin {
+        client_id,
+        tick_duration,
+    });
     app.run();
     Ok(())
 }

@@ -3031,6 +3031,7 @@ dependencies = [
  "bevy",
  "game01-configs",
  "game01-network",
+ "game01-world-data",
 ]
 
 [[package]]
@@ -3046,7 +3047,9 @@ name = "game01-network"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "game01-world-data",
  "lightyear",
+ "serde",
 ]
 
 [[package]]

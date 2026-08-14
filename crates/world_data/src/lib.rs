@@ -20,6 +20,16 @@ impl CharacterKind {
         Self::Rogue,
         Self::Glavier,
     ];
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Wizard => "Wizard",
+            Self::Mage => "Mage",
+            Self::Sorcerer => "Sorcerer",
+            Self::Rogue => "Rogue",
+            Self::Glavier => "Glavier",
+        }
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

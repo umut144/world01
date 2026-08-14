@@ -5,11 +5,14 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bevy = { workspace = true, features = ["std", "bevy_log"] }
+bevy = { workspace = true, features = ["std", "bevy_log", "serialize"] }
+game01-world-data = { path = "../world_data" }
+serde.workspace = true
 lightyear = { workspace = true, features = [
     "std",
     "client",
     "server",
+    "replication",
     "netcode",
     "udp",
 ] }
