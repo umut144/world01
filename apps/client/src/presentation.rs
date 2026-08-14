@@ -28,7 +28,9 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(
                 Update,
                 (
-                    handle_selection_click.run_if(in_state(ClientScreen::CharacterSelection)),
+                    (handle_selection_input, update_selection_feedback)
+                        .chain()
+                        .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
                     render_new_players.run_if(in_state(ClientScreen::InGame)),
                 ),
@@ -68,10 +70,16 @@ struct ClientSession {
 struct SelectionVisual;
 
 #[derive(Component)]
+struct SelectionPreview(CharacterKind);
+
+#[derive(Component)]
 struct SelectionButton(CharacterKind);
 
 #[derive(Component)]
 struct ConfirmButton;
+
+#[derive(Component)]
+struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
@@ -99,6 +107,7 @@ fn setup_selection(
                 .with_scale(Vec3::splat(PREVIEW_SCALE)),
             Visibility::default(),
             SelectionVisual,
+            SelectionPreview(character),
         ));
         attach_character_visual(&mut root, &mut meshes, &mut materials, character);
     }
@@ -152,7 +161,7 @@ fn selection_button(character: CharacterKind) -> impl Bundle {
             height: percent(100),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::FlexEnd,
-            padding: UiRect::bottom(px(22)),
+            padding: UiRect::new(px(8), px(8), px(8), px(18)),
             border: UiRect::all(px(2)),
             ..default()
         },
@@ -160,8 +169,13 @@ fn selection_button(character: CharacterKind) -> impl Bundle {
         BackgroundColor(panel_color(character, false).with_alpha(0.30)),
         children![(
             Text::new(character.label()),
-            TextFont::from_font_size(26.0),
-            TextColor(Color::WHITE)
+            TextFont::from_font_size(20.0),
+            TextColor(Color::WHITE),
+            TextLayout::justify(Justify::Center),
+            Node {
+                width: percent(100),
+                ..default()
+            }
         )],
     )
 }
@@ -182,22 +196,23 @@ fn confirm_button() -> impl Bundle {
         BorderColor::all(Color::srgba(0.85, 0.72, 0.45, 0.45)),
         BackgroundColor(Color::srgba(0.18, 0.19, 0.22, 0.80)),
         children![(
+            ConfirmButtonLabel,
             Text::new("SELECT CHARACTER & JOIN"),
-            TextFont::from_font_size(28.0),
+            TextFont::from_font_size(26.0),
             TextColor(Color::srgba(0.75, 0.75, 0.78, 1.0))
         )],
     )
 }
 
-fn handle_selection_click(
+fn handle_selection_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut session: ResMut<ClientSession>,
     mut next_screen: ResMut<NextState<ClientScreen>>,
-    mut buttons: Query<
+    buttons: Query<
         (
             &Interaction,
             Option<&SelectionButton>,
             Option<&ConfirmButton>,
-            &mut BackgroundColor,
         ),
         With<Button>,
     >,
@@ -207,34 +222,146 @@ fn handle_selection_click(
         return Ok(());
     }
 
-    for (interaction, selection_button, confirm_button, mut background) in &mut buttons {
+    for (interaction, selection_button, confirm_button) in &buttons {
         if *interaction == Interaction::Pressed {
             if let Some(selection_button) = selection_button {
                 session.selected = Some(selection_button.0);
-            } else if confirm_button.is_some()
-                && let Some(character) = session.selected
-            {
-                connect_client(&mut commands, session.client_id, character)?;
-                session.joining = true;
-                spawn_standard_room(&mut commands);
-                next_screen.set(ClientScreen::InGame);
-                return Ok(());
+            } else if confirm_button.is_some() {
+                return join_selected_character(&mut session, &mut commands, &mut next_screen);
             }
         }
+    }
 
-        if let Some(selection_button) = selection_button {
-            let selected = session.selected == Some(selection_button.0);
-            let hovered = *interaction == Interaction::Hovered;
-            **background = panel_color(selection_button.0, selected || hovered)
-                .with_alpha(if selected || hovered { 0.55 } else { 0.30 });
-        } else if confirm_button.is_some() {
-            **background = if session.selected.is_some() {
-                Color::srgba(0.38, 0.25, 0.12, 0.92)
-            } else {
-                Color::srgba(0.18, 0.19, 0.22, 0.80)
-            };
+    for (key, character) in [
+        (KeyCode::Digit1, CharacterKind::Wizard),
+        (KeyCode::Digit2, CharacterKind::Mage),
+        (KeyCode::Digit3, CharacterKind::Sorcerer),
+        (KeyCode::Digit4, CharacterKind::Rogue),
+        (KeyCode::Digit5, CharacterKind::Glavier),
+    ] {
+        if keyboard.just_pressed(key) {
+            session.selected = Some(character);
         }
     }
+
+    if keyboard.just_pressed(KeyCode::ArrowLeft) {
+        session.selected = Some(adjacent_character(session.selected, -1));
+    } else if keyboard.just_pressed(KeyCode::ArrowRight) {
+        session.selected = Some(adjacent_character(session.selected, 1));
+    }
+
+    if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
+        return join_selected_character(&mut session, &mut commands, &mut next_screen);
+    }
+
+    Ok(())
+}
+
+fn update_selection_feedback(
+    session: Res<ClientSession>,
+    mut buttons: Query<
+        (
+            &Interaction,
+            Option<&SelectionButton>,
+            Option<&ConfirmButton>,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        With<Button>,
+    >,
+    mut confirm_label: Query<&mut TextColor, With<ConfirmButtonLabel>>,
+    mut previews: Query<(&SelectionPreview, &mut Transform)>,
+) {
+    let mut hovered_character = None;
+    for (interaction, selection_button, confirm_button, mut background, mut border) in &mut buttons
+    {
+        if let Some(selection_button) = selection_button {
+            let selected = session.selected == Some(selection_button.0);
+            if *interaction == Interaction::Hovered {
+                hovered_character = Some(selection_button.0);
+            }
+            let intensity = match (*interaction, selected) {
+                (Interaction::Pressed, _) => 0.72,
+                (_, true) => 0.62,
+                (Interaction::Hovered, false) => 0.48,
+                _ => 0.30,
+            };
+            **background =
+                panel_color(selection_button.0, selected || intensity > 0.30).with_alpha(intensity);
+            let border_color = if selected {
+                Color::srgba(0.96, 0.79, 0.38, 0.95)
+            } else if *interaction == Interaction::Hovered {
+                Color::srgba(0.92, 0.92, 0.96, 0.70)
+            } else {
+                Color::srgba(0.85, 0.85, 0.90, 0.35)
+            };
+            *border = BorderColor::all(border_color);
+        } else if confirm_button.is_some() {
+            let enabled = session.selected.is_some();
+            **background = match (*interaction, enabled) {
+                (Interaction::Pressed, true) => Color::srgba(0.55, 0.35, 0.13, 1.0),
+                (Interaction::Hovered, true) => Color::srgba(0.46, 0.30, 0.13, 0.96),
+                (_, true) => Color::srgba(0.38, 0.25, 0.12, 0.92),
+                _ => Color::srgba(0.18, 0.19, 0.22, 0.62),
+            };
+            let border_color = if enabled {
+                Color::srgba(0.92, 0.73, 0.34, 0.85)
+            } else {
+                Color::srgba(0.55, 0.55, 0.58, 0.30)
+            };
+            *border = BorderColor::all(border_color);
+        }
+    }
+
+    if let Ok(mut color) = confirm_label.single_mut() {
+        **color = if session.selected.is_some() {
+            Color::WHITE
+        } else {
+            Color::srgba(0.55, 0.55, 0.58, 1.0)
+        };
+    }
+
+    for (preview, mut transform) in &mut previews {
+        let scale = if session.selected == Some(preview.0) {
+            PREVIEW_SCALE * 1.08
+        } else if hovered_character == Some(preview.0) {
+            PREVIEW_SCALE * 1.04
+        } else {
+            PREVIEW_SCALE
+        };
+        transform.scale = Vec3::splat(scale);
+    }
+}
+
+fn adjacent_character(selected: Option<CharacterKind>, offset: isize) -> CharacterKind {
+    let current = selected
+        .and_then(|selected| {
+            CharacterKind::ALL
+                .iter()
+                .position(|candidate| *candidate == selected)
+        })
+        .unwrap_or(if offset < 0 {
+            0
+        } else {
+            CharacterKind::ALL.len() - 1
+        });
+    let next = (current as isize + offset).rem_euclid(CharacterKind::ALL.len() as isize) as usize;
+    CharacterKind::ALL[next]
+}
+
+fn join_selected_character(
+    session: &mut ClientSession,
+    commands: &mut Commands,
+    next_screen: &mut NextState<ClientScreen>,
+) -> Result {
+    let Some(character) = session.selected else {
+        return Ok(());
+    };
+
+    connect_client(commands, session.client_id, character)?;
+    session.joining = true;
+    spawn_standard_room(commands);
+    next_screen.set(ClientScreen::InGame);
     Ok(())
 }
 
@@ -450,5 +577,28 @@ fn character_color(character: CharacterKind) -> Color {
         CharacterKind::Sorcerer => Color::srgb(0.62, 0.12, 0.16),
         CharacterKind::Rogue => Color::srgb(0.16, 0.17, 0.21),
         CharacterKind::Glavier => Color::srgb(0.63, 0.43, 0.11),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keyboard_selection_wraps_in_both_directions() {
+        assert_eq!(
+            adjacent_character(Some(CharacterKind::Wizard), -1),
+            CharacterKind::Glavier
+        );
+        assert_eq!(
+            adjacent_character(Some(CharacterKind::Glavier), 1),
+            CharacterKind::Wizard
+        );
+    }
+
+    #[test]
+    fn keyboard_selection_starts_at_directional_edge() {
+        assert_eq!(adjacent_character(None, 1), CharacterKind::Wizard);
+        assert_eq!(adjacent_character(None, -1), CharacterKind::Glavier);
     }
 }

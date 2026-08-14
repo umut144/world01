@@ -130,6 +130,8 @@ Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation but
 
 Phase 3 gives selection previews a shared scale and bounded composition independent from authoritative in-game transforms. Reference-driven headwear proportions, face treatment, and compact class identifiers improve silhouette distinction while keeping the deliberately minimal closed-polygon language.
 
+Phase 4 separates character labels into bounded, centered UI nodes and gives selection, hover, press, and disabled confirmation distinct visual states. Mouse input and keyboard input (`1`–`5`, arrow keys, and `Enter`) feed the same local selection and join path; neither path changes simulation or network protocol data.
+
 ## Input-to-simulation flow
 
 ```text
