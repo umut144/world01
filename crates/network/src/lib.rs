@@ -157,9 +157,20 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerId>().replicate_once();
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
-        self.component::<Position>().replicate().predict();
+        self.component::<Position>()
+            .replicate()
+            .predict()
+            .into_component_registration()
+            .add_interpolation_with(interpolate_position);
         self
     }
+}
+
+fn interpolate_position(start: Position, end: Position, t: f32) -> Position {
+    Position::new(
+        start.x + (end.x - start.x) * t,
+        start.y + (end.y - start.y) * t,
+    )
 }
 
 fn start_server(mut commands: Commands) {
@@ -314,6 +325,7 @@ fn handle_join_requests(
             },
             Replicate::to_clients(NetworkTarget::All),
             PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
+            InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
         ));
         info!(?connection, player_id, owner, character = ?request.character, "authoritative player spawned");
     }
@@ -393,6 +405,34 @@ mod tests {
 
         assert!(app.world().entity(client).contains::<PredictionManager>());
         assert!(app.world().entity(client).contains::<InputTimelineConfig>());
+    }
+
+    #[test]
+    fn position_interpolation_is_linear() {
+        let start = Position::new(-2.0, 4.0);
+        let end = Position::new(6.0, -4.0);
+
+        assert_eq!(interpolate_position(start, end, 0.0), start);
+        assert_eq!(
+            interpolate_position(start, end, 0.25),
+            Position::new(0.0, 2.0)
+        );
+        assert_eq!(interpolate_position(start, end, 1.0), end);
+    }
+
+    #[test]
+    fn dedicated_server_protocol_updates_without_client_timeline() {
+        let tick_duration = Duration::from_secs_f64(1.0 / 30.0);
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin));
+        app.add_plugins(ServerPlugins { tick_duration })
+            .add_plugins(NativeInputPlugin::<MovementIntent>::default())
+            .insert_resource(ReplicationMetadata::new(tick_duration))
+            .register_game_protocol();
+
+        app.finish();
+        app.cleanup();
+        app.update();
     }
 
     #[test]

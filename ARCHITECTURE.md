@@ -349,6 +349,17 @@ Acceptance: movement and neutral stop input use Lightyear's tick-addressed redun
 
 Acceptance: the controlled character responds from local tick input without waiting for a server round trip, while confirmed server `Position` remains authoritative and can reconcile the prediction.
 
+### Phase 4 — remote snapshot interpolation
+
+- `Position` remains the only replicated and authoritative location, with a protocol-registered linear interpolation function.
+- Each server player uses mutually exclusive delivery roles: its owner receives `Predicted`, while every other client receives `Interpolated`.
+- Lightyear buffers confirmed remote `Position` snapshots and evaluates them on its delayed, synchronized interpolation timeline. Remote entities are not extrapolated or locally simulated.
+- The owning client remains on the prediction and reconciliation path introduced in Phase 3; snapshot interpolation never delays local control.
+- Presentation copies the resolved `Position` into graphical `Transform` during `PostUpdate`, after Lightyear's `Update` interpolation work.
+- Tick rate remains 30 Hz and no frame-level render interpolation is introduced, keeping both later improvements independently measurable.
+
+Acceptance: the local player remains immediately responsive and authoritative corrections remain possible, while other players move between received server snapshots rather than snapping directly from one snapshot to the next.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.

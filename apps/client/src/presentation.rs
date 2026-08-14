@@ -33,8 +33,11 @@ impl Plugin for ClientPresentationPlugin {
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
                     render_new_players.run_if(in_state(ClientScreen::InGame)),
-                    sync_rendered_positions.run_if(in_state(ClientScreen::InGame)),
                 ),
+            )
+            .add_systems(
+                PostUpdate,
+                sync_rendered_positions.run_if(in_state(ClientScreen::InGame)),
             );
     }
 }
