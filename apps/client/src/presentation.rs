@@ -131,8 +131,8 @@ fn handle_selection_click(
     mouse: Res<ButtonInput<MouseButton>>,
     window: Single<&Window, With<PrimaryWindow>>,
     mut session: ResMut<ClientSession>,
-    mut panels: Query<(&SelectionPanel, &mut Sprite)>,
-    mut button: Single<&mut Sprite, With<ConfirmButton>>,
+    mut panels: Query<(&SelectionPanel, &mut Sprite), Without<ConfirmButton>>,
+    mut button: Single<&mut Sprite, (With<ConfirmButton>, Without<SelectionPanel>)>,
     selection_visuals: Query<Entity, With<SelectionVisual>>,
     mut commands: Commands,
 ) -> Result {
