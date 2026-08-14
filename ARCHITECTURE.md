@@ -8,6 +8,7 @@ This is the technical source of truth for architecture, dependency direction, te
 
 - `GAME_DESIGN.md` owns player-facing rules, experience, scope, and art direction.
 - `ARCHITECTURE.md` owns how confirmed requirements are represented and separated technically.
+- `SLICES_AND_TASKS.md` owns the compact tabular slice status and task overview.
 - `AGENTS.md` owns code-agent workflow, validation, editing, and Git rules.
 - Do not introduce speculative infrastructure for unconfirmed future features.
 - Preserve the distinction between confirmed architecture and open implementation details.
