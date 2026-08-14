@@ -3065,6 +3065,7 @@ dependencies = [
  "bevy",
  "game01-configs",
  "game01-network",
+ "game01-simulation",
  "game01-world-data",
 ]
 

@@ -3,9 +3,12 @@ use std::{env, error::Error, io};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
+use game01_simulation::MovementStep;
 
+use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::ClientPresentationPlugin;
 
+mod prediction;
 mod presentation;
 
 const INITIAL_WINDOW_WIDTH: u32 = 1280;
@@ -20,6 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "simulation tick rate must be greater than zero",
         )
     })?;
+    let movement_step = MovementStep::from_design(&design)?;
 
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -31,6 +35,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         }),
         ..default()
     }));
+    app.insert_resource(movement_step);
+    app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientPresentationPlugin {
         client_id,
         tick_duration,

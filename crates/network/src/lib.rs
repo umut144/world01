@@ -157,7 +157,7 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerId>().replicate_once();
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
-        self.component::<Position>().replicate();
+        self.component::<Position>().replicate().predict();
         self
     }
 }
@@ -251,9 +251,10 @@ fn track_disconnected_client(
 }
 
 fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands) {
-    commands
-        .entity(trigger.entity)
-        .insert(InputMarker::<MovementIntent>::default());
+    commands.entity(trigger.entity).insert((
+        InputMarker::<MovementIntent>::default(),
+        MovementIntent::ZERO,
+    ));
 }
 
 fn send_join_when_connected(
@@ -311,6 +312,7 @@ fn handle_join_requests(
                 lifetime: Lifetime::SessionBased,
             },
             Replicate::to_clients(NetworkTarget::All),
+            PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
         ));
         info!(?connection, player_id, owner, character = ?request.character, "authoritative player spawned");
     }
@@ -328,12 +330,18 @@ fn write_client_movement_input(
     }
 }
 
-fn apply_tick_movement_intents(
+pub fn apply_tick_movement_intents(
     mut players: Query<(&ActionState<MovementIntent>, &mut MovementIntent)>,
 ) {
     for (action_state, mut intent) in &mut players {
         *intent = action_state.0;
     }
+}
+
+pub fn client_input_timeline_synced(
+    clients: Query<(), (With<Client>, With<IsSynced<InputTimeline>>)>,
+) -> bool {
+    !clients.is_empty()
 }
 
 fn spawn_position(player_id: u64) -> Vec2 {

@@ -34,6 +34,7 @@ This is the technical source of truth for architecture, dependency direction, te
 - A later-joining client must receive the already existing replicated players.
 - Prediction and Reconciliation are explicitly excluded from the first slice.
 - Prediction, reconciliation, snapshot interpolation, and render interpolation enter in later phases of Slice 2; Phase 1 only establishes their required state boundary.
+- Slice 2 Phase 3 predicts only the owning client's `Position`; the server remains authoritative and Lightyear reconciles mismatches through rollback and tick replay.
 
 ## Dependency and responsibility boundaries
 
@@ -97,6 +98,8 @@ Networking transports intent and replicated state; it does not own movement rule
 
 Slice 2 Phase 2 uses Lightyear's native input pipeline instead of a custom movement message. The client samples hardware state into a local resource during normal frame input collection, writes that state to its controlled entity in Lightyear's `FixedPreUpdate` input stage, and sends redundant tick-addressed history. The server validates each input target against `ControlledBy`, lets Lightyear select the current tick's `ActionState`, and adapts that state to `MovementIntent` before simulation. This is a direct entity-local query with no connection-to-player scan.
 
+Slice 2 Phase 3 registers `Position` for Lightyear prediction and assigns a `PredictionTarget` only to the controlling peer. Once its input timeline is synchronized, that client adapts the rollback-aware native `ActionState` to `MovementIntent` and runs the same `MovementStep` plus `move_players` system used by the server. Confirmed server positions remain the reconciliation authority. Remote players are not predicted in this phase.
+
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
 Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses one of five separated spawn positions. Slice 2 Phase 1 now replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and despawn to all clients. Snapshot publication currently follows the configured 30 Hz Lightyear tick.
@@ -125,6 +128,7 @@ Owns non-authoritative local interaction and presentation:
 - rendering provisional characters and the standard room;
 - presenting replicated server state.
 - deriving visible Bevy `Transform`s from replicated or later predicted/interpolated `Position`s.
+- running shared movement simulation only for its controlled predicted player after input-timeline synchronization.
 
 Client presentation state is never gameplay authority.
 
@@ -330,6 +334,20 @@ Acceptance: synchronized movement still follows the server, while simulation and
 - Simulation remains input-transport-independent and the tick rate remains 30 Hz for isolated evaluation.
 
 Acceptance: movement and neutral stop input use Lightyear's tick-addressed redundant pipeline, are applied only to the authenticated controlled entity, and reach simulation as explicit `MovementIntent`.
+
+### Phase 3 — owned-position prediction and reconciliation
+
+- Lightyear prediction support is enabled and `Position` is registered as a predicted replicated component.
+- Every server-owned player still replicates to all clients, but `PredictionTarget` names only its controlling peer.
+- The owning client receives `Controlled` and the native input marker, then carries a local `MovementIntent` adapter component used solely to feed shared simulation.
+- Client prediction begins only after Lightyear reports the input timeline synchronized.
+- Client and server construct `MovementStep` from the same embedded design configuration and execute the same `move_players` system in `FixedUpdate`.
+- Lightyear stores predicted position history, compares it with confirmed server snapshots, restores mismatches, and replays buffered tick inputs.
+- Other players remain plain replicated entities until snapshot interpolation is added in Phase 4.
+- Visible correction smoothing remains a presentation concern for the later render-interpolation phase; Phase 3 keeps reconciliation state exact.
+- Tick rate remains 30 Hz so the responsiveness improvement comes from prediction rather than a frequency change.
+
+Acceptance: the controlled character responds from local tick input without waiting for a server round trip, while confirmed server `Position` remains authoritative and can reconcile the prediction.
 
 ## Open technical decisions
 
