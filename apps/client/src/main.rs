@@ -26,6 +26,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let snapshot_interval = design
+        .network
+        .snapshot_interval_for(design.simulation)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "snapshot send rate must be positive and an integer divisor of the simulation tick rate",
+            )
+        })?;
     let remote_interpolation_ratio = design
         .network
         .validated_remote_interpolation_ratio()
@@ -51,6 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins(ClientPresentationPlugin {
         client_id,
         tick_duration,
+        snapshot_interval,
         remote_interpolation_ratio,
         network_simulation,
     });

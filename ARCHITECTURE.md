@@ -432,6 +432,16 @@ Initial manual result: owned-player response, stopping, convergence, and lifecyc
 
 Acceptance: under the unchanged adverse-network profile, remote motion is materially smoother than with ratio `1.5`, while its additional delay remains acceptable and owned-player response is unchanged.
 
+### Phase 3 — bounded remote presentation extrapolation
+
+- Lightyear remains responsible for authoritative snapshot history and interpolation. When its interpolation timeline advances beyond the newest confirmed remote `Position`, the network adapter exposes a presentation-only extrapolation offset.
+- Velocity is derived from the two newest confirmed position samples and never becomes authoritative world state.
+- Extrapolation is limited to two 30 Hz snapshot intervals (approximately 66.67 ms). After that limit the remote visual stops rather than drifting indefinitely.
+- A confirmed unchanged sample produces zero velocity, so an authoritative stop is not intentionally extrapolated as packet loss.
+- Only remote interpolated entities receive the offset. The locally controlled predicted player, server simulation, replicated `Position`, reconciliation, input path, and snapshot cadence are unchanged.
+
+Acceptance: isolated lost snapshots under the `average` profile produce shorter or less visible remote stalls, without changing owned-player response or allowing remote visuals to drift for more than two snapshot intervals.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.

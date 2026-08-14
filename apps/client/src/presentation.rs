@@ -1,7 +1,7 @@
 use bevy::{camera::ScalingMode, prelude::*};
 use game01_network::{
-    ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile, configure_client,
-    connect_client,
+    ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
+    RemotePositionExtrapolation, configure_client, connect_client,
 };
 use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
@@ -16,13 +16,14 @@ const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
     pub tick_duration: std::time::Duration,
+    pub snapshot_interval: std::time::Duration,
     pub remote_interpolation_ratio: f32,
     pub network_simulation: NetworkSimulationProfile,
 }
 
 impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
-        configure_client(app, self.tick_duration);
+        configure_client(app, self.tick_duration, self.snapshot_interval);
         app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
             .init_state::<ClientScreen>()
             .insert_resource(ClientSession {
@@ -476,6 +477,7 @@ fn sync_rendered_positions(
             Entity,
             &Position,
             Option<&LocalRenderHistory>,
+            Option<&RemotePositionExtrapolation>,
             Option<&mut ClientPositionCorrection>,
             &mut Transform,
         ),
@@ -486,8 +488,13 @@ fn sync_rendered_positions(
     let alpha = fixed_time.overstep_fraction();
     let correction_decay = correction_decay(virtual_time.delta_secs());
 
-    for (entity, position, history, correction, mut transform) in &mut players {
+    for (entity, position, history, extrapolation, correction, mut transform) in &mut players {
         let mut rendered = sampled_render_position(*position, history, alpha);
+        if history.is_none()
+            && let Some(extrapolation) = extrapolation
+        {
+            rendered += extrapolation.offset;
+        }
 
         if let Some(mut correction) = correction {
             if correction.is_changed() {

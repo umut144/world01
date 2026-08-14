@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 pub const MAX_CLIENTS: usize = 5;
 pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
+const MAX_REMOTE_EXTRAPOLATION_INTERVALS: f32 = 2.0;
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum NetworkSimulationProfile {
@@ -98,6 +99,17 @@ pub struct ClientMovementInput(pub MovementIntent);
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct ClientPositionCorrection {
     pub offset: Vec2,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub struct RemotePositionExtrapolation {
+    pub offset: Vec2,
+}
+
+#[derive(Resource, Debug, Clone, Copy)]
+struct RemoteExtrapolationConfig {
+    tick_duration: Duration,
+    maximum_duration: Duration,
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -188,10 +200,14 @@ pub fn configure_server(
         .add_input_validator(authorize_controlled_targets::<NativeStateSequence<MovementIntent>>);
 }
 
-pub fn configure_client(app: &mut App, tick_duration: Duration) {
+pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
     app.add_plugins(ClientPlugins { tick_duration })
         .add_plugins(NativeInputPlugin::<MovementIntent>::default())
         .init_resource::<ClientMovementInput>()
+        .insert_resource(RemoteExtrapolationConfig {
+            tick_duration,
+            maximum_duration: snapshot_interval.mul_f32(MAX_REMOTE_EXTRAPOLATION_INTERVALS),
+        })
         .register_game_protocol()
         .add_systems(
             FixedPreUpdate,
@@ -201,10 +217,91 @@ pub fn configure_client(app: &mut App, tick_duration: Duration) {
             PreUpdate,
             expose_position_corrections.in_set(RollbackSystems::EndRollback),
         )
+        .add_systems(
+            Update,
+            expose_remote_position_extrapolation.after(InterpolationSystems::Interpolate),
+        )
         .add_observer(enable_controlled_input)
+        .add_observer(enable_remote_position_extrapolation)
         .add_observer(send_join_when_connected)
         .add_observer(report_client_connected)
         .add_observer(report_client_disconnected);
+}
+
+fn enable_remote_position_extrapolation(trigger: On<Add, Interpolated>, mut commands: Commands) {
+    commands
+        .entity(trigger.entity)
+        .insert(RemotePositionExtrapolation::default());
+}
+
+fn expose_remote_position_extrapolation(
+    timelines: Query<&InterpolationTimeline>,
+    config: Res<RemoteExtrapolationConfig>,
+    mut players: Query<
+        (
+            &ConfirmedHistory<Position>,
+            &mut RemotePositionExtrapolation,
+        ),
+        With<Interpolated>,
+    >,
+) {
+    let Ok(timeline) = timelines.single() else {
+        return;
+    };
+    let current_tick = timeline.tick().0;
+    let overstep = timeline.overstep().to_f32();
+
+    for (history, mut extrapolation) in &mut players {
+        let mut previous = None;
+        let mut latest = None;
+        for sample in history {
+            previous = latest;
+            latest = Some(sample);
+        }
+
+        extrapolation.offset = match (previous, latest) {
+            (Some((previous_tick, previous)), Some((latest_tick, latest))) => {
+                bounded_position_extrapolation(
+                    *previous,
+                    previous_tick.0,
+                    *latest,
+                    latest_tick.0,
+                    current_tick,
+                    overstep,
+                    config.tick_duration,
+                    config.maximum_duration,
+                )
+            }
+            _ => Vec2::ZERO,
+        };
+    }
+}
+
+fn bounded_position_extrapolation(
+    previous: Position,
+    previous_tick: u32,
+    latest: Position,
+    latest_tick: u32,
+    current_tick: u32,
+    overstep: f32,
+    tick_duration: Duration,
+    maximum_duration: Duration,
+) -> Vec2 {
+    let sample_ticks = latest_tick.saturating_sub(previous_tick);
+    if sample_ticks == 0 || current_tick < latest_tick {
+        return Vec2::ZERO;
+    }
+
+    let sample_seconds = tick_duration.as_secs_f32() * sample_ticks as f32;
+    if sample_seconds <= 0.0 {
+        return Vec2::ZERO;
+    }
+
+    let velocity = Vec2::new(latest.x - previous.x, latest.y - previous.y) / sample_seconds;
+    let missing_ticks = current_tick.saturating_sub(latest_tick) as f32 + overstep;
+    let extrapolation_seconds =
+        (missing_ticks * tick_duration.as_secs_f32()).min(maximum_duration.as_secs_f32());
+    velocity * extrapolation_seconds
 }
 
 trait GameProtocolAppExt {
@@ -493,7 +590,11 @@ mod tests {
     fn connected_client_initializes_prediction_context() {
         let mut app = App::new();
         app.add_plugins(bevy::state::app::StatesPlugin);
-        configure_client(&mut app, Duration::from_secs_f64(1.0 / 60.0));
+        configure_client(
+            &mut app,
+            Duration::from_secs_f64(1.0 / 60.0),
+            Duration::from_secs_f64(1.0 / 30.0),
+        );
 
         let mut queue = CommandQueue::default();
         let client = {
@@ -560,6 +661,39 @@ mod tests {
             Position::new(0.0, 2.0)
         );
         assert_eq!(interpolate_position(start, end, 1.0), end);
+    }
+
+    #[test]
+    fn remote_extrapolation_is_bounded_to_two_snapshot_intervals() {
+        let offset = bounded_position_extrapolation(
+            Position::new(0.0, 0.0),
+            10,
+            Position::new(4.0 / 30.0, 0.0),
+            12,
+            30,
+            0.0,
+            Duration::from_secs_f64(1.0 / 60.0),
+            Duration::from_secs_f64(2.0 / 30.0),
+        );
+
+        assert!((offset.x - 4.0 * 2.0 / 30.0).abs() < 0.000_001);
+        assert_eq!(offset.y, 0.0);
+    }
+
+    #[test]
+    fn remote_extrapolation_does_not_run_before_latest_sample() {
+        let offset = bounded_position_extrapolation(
+            Position::new(0.0, 0.0),
+            10,
+            Position::new(1.0, 0.0),
+            12,
+            11,
+            0.5,
+            Duration::from_secs_f64(1.0 / 60.0),
+            Duration::from_secs_f64(2.0 / 30.0),
+        );
+
+        assert_eq!(offset, Vec2::ZERO);
     }
 
     #[test]
