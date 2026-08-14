@@ -1,6 +1,9 @@
 //! Shared protocol-neutral domain data.
 
-use bevy::prelude::Component;
+use bevy::{
+    ecs::entity::{EntityMapper, MapEntities},
+    prelude::{Component, Reflect},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -71,10 +74,14 @@ impl Position {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct MovementIntent {
     pub x: f32,
     pub y: f32,
+}
+
+impl MapEntities for MovementIntent {
+    fn map_entities<M: EntityMapper>(&mut self, _entity_mapper: &mut M) {}
 }
 
 impl MovementIntent {

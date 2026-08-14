@@ -13,6 +13,7 @@ lightyear = { workspace = true, features = [
     "client",
     "server",
     "replication",
+    "input_native",
     "netcode",
     "udp",
 ] }

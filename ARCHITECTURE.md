@@ -90,10 +90,12 @@ Owns Lightyear-specific concerns:
 - protocol and message registration;
 - connection-to-player ownership mapping;
 - reliable character-selection/join messages;
-- ordered/current movement-intent delivery;
+- tick-bound native movement-input buffering, redundancy, and ownership validation;
 - spawn, despawn, component, and Position replication.
 
 Networking transports intent and replicated state; it does not own movement rules.
+
+Slice 2 Phase 2 uses Lightyear's native input pipeline instead of a custom movement message. The client samples hardware state into a local resource during normal frame input collection, writes that state to its controlled entity in Lightyear's `FixedPreUpdate` input stage, and sends redundant tick-addressed history. The server validates each input target against `ControlledBy`, lets Lightyear select the current tick's `ActionState`, and adapts that state to `MovementIntent` before simulation. This is a direct entity-local query with no connection-to-player scan.
 
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
@@ -143,12 +145,12 @@ WASD / local input device
         │
         ▼
 client input collection
-        │  MovementIntent
+        │  latest MovementIntent resource
         ▼
-Lightyear transport
+Lightyear native tick buffer
         │
         ▼
-server input/ownership mapping
+server-owned entity ActionState
         │  explicit simulation input
         ▼
 simulation system
@@ -253,7 +255,7 @@ Acceptance: each client selects, joins, and sees the same set of spawned players
 
 Acceptance: five clients move concurrently and all clients observe the same authoritative positions.
 
-Implemented movement pipeline:
+Slice 1 movement pipeline, superseded by Slice 2 Phase 2:
 
 - The client presentation converts WASD state into `MovementIntent`; it does not move gameplay entities locally.
 - The client network boundary sends the latest intent over a sequenced-unreliable channel at 30 Hz, so delayed input cannot overtake newer input.
@@ -314,6 +316,20 @@ Expected server evidence includes connection, authoritative spawn, disconnect, a
 - Input transport, prediction, interpolation, and the 30 Hz tick rate remain unchanged in this phase so later effects can be evaluated independently.
 
 Acceptance: synchronized movement still follows the server, while simulation and replicated world state contain no presentation transform authority.
+
+### Phase 2 — tick-bound native input pipeline
+
+- The custom sequenced-unreliable `MovementInput` message and movement channel are removed.
+- The graphical client still collects keyboard state outside simulation and exposes the latest normalized `MovementIntent` through a local adapter resource.
+- In Lightyear's `FixedPreUpdate` input stage, that value is written to the locally controlled entity's native `ActionState` and buffered for the associated tick.
+- Lightyear sends redundant recent input history, allowing later packets to recover an earlier lost direction or stop transition.
+- `ControlledBy` establishes the server-side connection/entity relationship and causes only the owning client to receive the local `Controlled` marker.
+- The server rejects native input targets not owned by the sending connection.
+- The current tick's native `ActionState` is copied directly to the same entity's protocol-neutral `MovementIntent` before simulation; no per-message player search is required.
+- The old three-tick `InputAge` timeout is removed. A received neutral input applies on its addressed simulation tick instead of waiting for a local expiry counter.
+- Simulation remains input-transport-independent and the tick rate remains 30 Hz for isolated evaluation.
+
+Acceptance: movement and neutral stop input use Lightyear's tick-addressed redundant pipeline, are applied only to the authenticated controlled entity, and reach simulation as explicit `MovementIntent`.
 
 ## Open technical decisions
 
