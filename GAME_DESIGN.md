@@ -225,42 +225,7 @@ The first vertical slice proves the multiplayer foundation before implementing t
 - A simple provisional polygon representation and tinting are allowed.
 - Mage is female; Wizard, Sorcerer, Rogue, and Glavier are male.
 
-### Networking and timing
-
-- Networking library: **Lightyear 0.28**, targeting Bevy 0.19.
-- Architecture: authoritative dedicated server with replicated world state / Transform snapshots.
-- Clients send character selection and movement intent, never authoritative positions.
-- Simulation runs at a configurable fixed rate of **30 ticks per second** for this slice.
-- Prediction and Reconciliation are explicitly deferred.
-- Snapshot interpolation is optional only after basic replication works; it is not required for slice acceptance.
-
-### Separation of concerns
-
-- World data, simulation, networking, input, and presentation are separate concerns.
-- Simulation must not be embedded inside input collection, networking code, or tick-loop orchestration. The tick loop schedules/calls simulation; it does not contain the game rules.
-- Input is converted into explicit movement intent before reaching simulation.
-- Network transport carries intent and replicated state without owning movement rules.
-- For the initial movement slice, Transform is the only required movement-state component. Identity/selection/ownership markers are still permitted as domain data.
-- A mass/velocity movement model will be needed soon. It need not follow real-world physics. Do not implement it in this slice, but avoid coupling the current movement flow so tightly to direct Transform mutation that adding explicit velocity/mass later requires rewriting input or networking.
-
-### Config discipline
-
-- Provide a dedicated workspace crate/directory named `configs` for human-editable game-design parameters.
-- Prefer a typed configuration boundary backed initially by `design.toml` because these values are intended for direct solo-developer tuning without searching simulation code.
-- Initially expose only parameters explicitly requested by the developer. For this slice that includes movement speed and the confirmed 30 Hz simulation tick rate if the tick rate is represented as design configuration.
-- Later examples such as MaxHP and attack values belong there only when explicitly requested and implemented.
-- Do not expose every internal constant merely because simulation uses it; excessive configuration is considered harmful to clarity.
-
-### Intended project boundaries
-
-- `world_data`: shared domain types/components and standard-room/player data.
-- `simulation`: transport- and input-independent game rules.
-- `network`: Lightyear protocol, transport, messages, replication, ownership mapping.
-- `configs`: explicitly requested typed game-design configuration and `design.toml`.
-- `server`: headless authoritative app/orchestration.
-- `client`: selection screen, input collection, rendering, and replicated-state presentation.
-
-The concrete workspace layout and validation wrapper are Phase 1 setup decisions, but these logical boundaries are confirmed.
+The technical realization, networking model, configuration boundary, and crate responsibilities for this slice are specified in `ARCHITECTURE.md`.
 
 ## Open design questions
 
@@ -271,6 +236,6 @@ The concrete workspace layout and validation wrapper are Phase 1 setup decisions
 - Exact combat and abilities of all five characters.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
-- Persistence stack beyond the non-persistent first slice.
+- Persistence design beyond the non-persistent first slice.
 - Later matchmaking strength metric/filtering.
 - Exact presentation/collision interpretation of the drawn character geometry.
