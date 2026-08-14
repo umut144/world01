@@ -122,6 +122,8 @@ Owns non-authoritative local interaction and presentation:
 
 Client presentation state is never gameplay authority.
 
+The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. Resizing remains disabled until aspect-preserving viewport or letterbox behavior is implemented explicitly.
+
 ## Input-to-simulation flow
 
 ```text
