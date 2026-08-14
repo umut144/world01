@@ -1,6 +1,6 @@
 use std::{error::Error, io};
 
-use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*};
+use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use game01_configs::load_embedded;
 use game01_network::{ServerNetworkSet, configure_server};
 use game01_simulation::{MovementStep, move_players};
@@ -19,6 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins((
         MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(tick_duration)),
         LogPlugin::default(),
+        StatesPlugin,
     ))
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
