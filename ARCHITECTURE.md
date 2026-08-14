@@ -425,12 +425,12 @@ Initial manual result: owned-player response, stopping, convergence, and lifecyc
 ### Phase 2 — adverse-network interpolation-buffer trial
 
 - The snapshot rate remains 30 Hz and simulation/input/prediction remain 60 Hz.
-- The remote interpolation ratio increases in isolation from `1.0` to `1.5`.
-- At negligible jitter this adds half a snapshot interval, approximately 16.67 ms, to the prior remote presentation offset. The expected base offset becomes roughly 66.67 ms before Lightyear's dynamic jitter allowance.
+- The remote interpolation ratio increases in isolation from `1.5` to `2.0`.
+- At negligible jitter this adds half a snapshot interval, approximately 16.67 ms, to the prior remote presentation offset. The expected base offset becomes roughly 83.33 ms before Lightyear's dynamic jitter allowance.
 - The additional history is intended to reduce interpolation-buffer underruns caused by the Phase 1 jitter and packet loss. It deliberately trades a small amount of remote delay for smoother motion.
 - No extrapolation, senderate change, prediction change, or lifecycle-timeout adjustment is included, preserving a clean A/B comparison under the same `average` profile.
 
-Acceptance: under the unchanged adverse-network profile, remote motion is materially smoother than with ratio `1.0`, while its additional delay remains acceptable and owned-player response is unchanged.
+Acceptance: under the unchanged adverse-network profile, remote motion is materially smoother than with ratio `1.5`, while its additional delay remains acceptable and owned-player response is unchanged.
 
 ## Open technical decisions
 
