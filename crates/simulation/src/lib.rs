@@ -90,7 +90,7 @@ mod tests {
     fn cardinal_movement_uses_configured_speed_and_tick_rate() {
         let displacement = movement_step().displacement(MovementIntent::new(1.0, 0.0));
 
-        assert!((displacement.x - 4.0 / 30.0).abs() < EPSILON);
+        assert!((displacement.x - 4.0 / 60.0).abs() < EPSILON);
         assert_eq!(displacement.y, 0.0);
     }
 
@@ -120,11 +120,11 @@ mod tests {
     }
 
     #[test]
-    fn thirty_ticks_cover_four_meters() {
+    fn sixty_ticks_cover_four_meters() {
         let step = movement_step();
         let mut position = Vec2::ZERO;
 
-        for _ in 0..30 {
+        for _ in 0..60 {
             position += step.displacement(MovementIntent::new(0.0, 1.0));
         }
 
@@ -147,7 +147,7 @@ mod tests {
             .world()
             .get::<Position>(player)
             .expect("spawned test player has a Position");
-        assert!((position.x + 4.0 / 30.0).abs() < EPSILON);
+        assert!((position.x + 4.0 / 60.0).abs() < EPSILON);
         assert_eq!(position.y, 0.0);
     }
 
@@ -163,7 +163,7 @@ mod tests {
         };
         let negative_speed = DesignConfig {
             simulation: SimulationConfig {
-                ticks_per_second: 30,
+                ticks_per_second: 60,
             },
             movement: MovementConfig {
                 speed_meters_per_second: -1.0,

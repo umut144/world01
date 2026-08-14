@@ -29,3 +29,19 @@ pub struct MovementConfig {
 pub fn load_embedded() -> Result<DesignConfig, toml::de::Error> {
     toml::from_str(DESIGN_TOML)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_simulation_runs_at_sixty_hertz() {
+        let design = load_embedded().expect("embedded design configuration parses");
+
+        assert_eq!(design.simulation.ticks_per_second, 60);
+        assert_eq!(
+            design.simulation.tick_duration(),
+            Some(Duration::from_secs_f64(1.0 / 60.0))
+        );
+    }
+}

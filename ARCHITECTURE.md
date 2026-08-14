@@ -102,7 +102,7 @@ Slice 2 Phase 3 registers `Position` for Lightyear prediction and assigns a `Pre
 
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
-Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses one of five separated spawn positions. Slice 2 Phase 1 now replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and despawn to all clients. Snapshot publication currently follows the configured 30 Hz Lightyear tick.
+Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses one of five separated spawn positions. Slice 2 Phase 1 now replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and despawn to all clients. Since Slice 2 Phase 6, snapshot publication follows the configured 60 Hz Lightyear tick.
 
 ### `server`
 
@@ -369,6 +369,16 @@ Acceptance: the local player remains immediately responsive and authoritative co
 - Remote snapshot delay, simulation tick rate, movement parameters, and network protocol payloads remain unchanged for isolated evaluation.
 
 Acceptance: local fixed-tick movement is visually continuous between simulation steps, remote players retain exactly one snapshot-interpolation pass, reconciliation corrections converge smoothly, and simulation observes only exact `Position` state.
+
+### Phase 6 — unified 60 Hz cadence
+
+- The canonical `configs/design.toml` simulation rate increases from 30 to 60 ticks per second; movement speed remains 4 meters per second and therefore each tick applies half the former displacement.
+- Server `ScheduleRunner`, server and client `Time<Fixed>`, Lightyear client/server timelines, native input buffering, prediction replay, and `ReplicationMetadata` all derive the same 16.67 ms tick duration from that design value.
+- Changed replicated positions can consequently publish at up to 60 snapshots per second. No separate snapshot-rate throttle is introduced in this phase.
+- Local render interpolation now carries at most one 60 Hz simulation step of intentional presentation delay, and Lightyear's unchanged default remote interpolation ratio operates on the shorter 60 Hz send interval.
+- Render frame rate remains independent, while movement distance per second and the Phase 5 correction half-life remain unchanged.
+
+Acceptance: server authority, client prediction, input ticks, and snapshot tick metadata advance at one shared 60 Hz cadence; one simulated second still moves a character exactly four meters.
 
 ## Open technical decisions
 

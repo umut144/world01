@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn dedicated_server_protocol_updates_without_client_timeline() {
-        let tick_duration = Duration::from_secs_f64(1.0 / 30.0);
+        let tick_duration = Duration::from_secs_f64(1.0 / 60.0);
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin));
         app.add_plugins(ServerPlugins { tick_duration })
