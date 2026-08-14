@@ -392,6 +392,32 @@ Acceptance: server authority, client prediction, input ticks, and snapshot tick 
 
 Acceptance: authoritative simulation and owned-player response retain their 60 Hz behavior, while remote state publishes at 30 Hz and uses a 1.0-interval interpolation buffer without removing Lightyear's adaptive jitter protection.
 
+## Third-slice implementation phases
+
+### Phase 1 — controlled adverse-network profile
+
+- Lightyear's receive-side link conditioner simulates imperfect transport without entering world data or simulation code.
+- Network simulation is disabled by default. Set `GAME01_NETWORK_SIMULATION=average` on both the server and every client to enable it.
+- The `average` profile represents an end-to-end target of approximately 100 ms round-trip latency, 20 ms jitter, and 2 percent packet loss. Half of each value is applied independently to each receive direction.
+- The profile therefore tests client input delivery and server snapshot delivery together. Lightyear's redundant native-input history, owned-player prediction/reconciliation, and remote snapshot interpolation remain unchanged.
+- The randomized packet sequence is intentionally nondeterministic; automated tests verify profile activation, while gameplay quality is evaluated manually.
+
+Run the server and each client from separate terminals with the same environment value:
+
+```sh
+GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-server
+GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-client --features dev -- 1001
+```
+
+Repeat the client command for IDs `1002` through `1005`. Startup logs must report `network_simulation="average"`. Compare against the existing VS Code tasks, which deliberately retain the default `off` profile.
+
+Manual acceptance checks:
+
+1. The owned player responds immediately through prediction and stops promptly after releasing WASD.
+2. Reconciliation may visibly correct inaccurate prediction but must not teleport continuously or diverge permanently.
+3. Remote players remain delayed but visually continuous; temporary degradation is acceptable during random loss, persistent freezing is not.
+4. All five clients converge on the same stopped positions, and no client or server panics during join, movement, disconnect, or reconnect.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.

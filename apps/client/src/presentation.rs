@@ -1,6 +1,7 @@
 use bevy::{camera::ScalingMode, prelude::*};
 use game01_network::{
-    ClientMovementInput, ClientPositionCorrection, configure_client, connect_client,
+    ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile, configure_client,
+    connect_client,
 };
 use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
@@ -16,6 +17,7 @@ pub struct ClientPresentationPlugin {
     pub client_id: u64,
     pub tick_duration: std::time::Duration,
     pub remote_interpolation_ratio: f32,
+    pub network_simulation: NetworkSimulationProfile,
 }
 
 impl Plugin for ClientPresentationPlugin {
@@ -26,6 +28,7 @@ impl Plugin for ClientPresentationPlugin {
             .insert_resource(ClientSession {
                 client_id: self.client_id,
                 remote_interpolation_ratio: self.remote_interpolation_ratio,
+                network_simulation: self.network_simulation,
                 selected: None,
                 joining: false,
             })
@@ -79,6 +82,7 @@ fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -
 struct ClientSession {
     client_id: u64,
     remote_interpolation_ratio: f32,
+    network_simulation: NetworkSimulationProfile,
     selected: Option<CharacterKind>,
     joining: bool,
 }
@@ -386,6 +390,7 @@ fn join_selected_character(
         session.client_id,
         character,
         session.remote_interpolation_ratio,
+        session.network_simulation,
     )?;
     session.joining = true;
     spawn_standard_room(commands);

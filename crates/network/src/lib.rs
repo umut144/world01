@@ -34,6 +34,47 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_CLIENTS: usize = 5;
 pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
+pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
+
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum NetworkSimulationProfile {
+    #[default]
+    Off,
+    Average,
+}
+
+impl NetworkSimulationProfile {
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "off" => Some(Self::Off),
+            "average" => Some(Self::Average),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Average => "average",
+        }
+    }
+
+    fn receive_config(self) -> Option<LinkConditionerConfig> {
+        let end_to_end = match self {
+            Self::Off => return None,
+            Self::Average => LinkConditionerConfig::new(
+                Duration::from_millis(100),
+                Duration::from_millis(20),
+                0.02,
+            ),
+        };
+        Some(end_to_end.half())
+    }
+
+    fn receive_conditioner(self) -> Option<RecvLinkConditioner> {
+        self.receive_config().map(RecvLinkConditioner::new)
+    }
+}
 
 const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_31;
 pub struct JoinChannel;
@@ -114,10 +155,16 @@ enum Admission {
     Full,
 }
 
-pub fn configure_server(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
+pub fn configure_server(
+    app: &mut App,
+    tick_duration: Duration,
+    snapshot_interval: Duration,
+    network_simulation: NetworkSimulationProfile,
+) {
     app.add_plugins(ServerPlugins { tick_duration })
         .add_plugins(NativeInputPlugin::<MovementIntent>::default())
         .insert_resource(ReplicationMetadata::new(snapshot_interval))
+        .insert_resource(network_simulation)
         .init_resource::<ConnectionRegistry>()
         .init_resource::<NextPlayerId>()
         .register_game_protocol()
@@ -202,7 +249,7 @@ fn expose_position_corrections(
     }
 }
 
-fn start_server(mut commands: Commands) {
+fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands: Commands) {
     let server = commands
         .spawn((
             NetcodeServer::new(server::NetcodeConfig {
@@ -216,7 +263,12 @@ fn start_server(mut commands: Commands) {
         .id();
 
     commands.trigger(Start { entity: server });
-    info!(%SERVER_ADDR, maximum_clients = MAX_CLIENTS, "local server starting");
+    info!(
+        %SERVER_ADDR,
+        maximum_clients = MAX_CLIENTS,
+        network_simulation = network_simulation.name(),
+        "local server starting"
+    );
 }
 
 pub fn connect_client(
@@ -224,6 +276,7 @@ pub fn connect_client(
     client_id: u64,
     character: CharacterKind,
     remote_interpolation_ratio: f32,
+    network_simulation: NetworkSimulationProfile,
 ) -> Result<Entity> {
     let authentication = Authentication::Manual {
         server_addr: SERVER_ADDR,
@@ -236,7 +289,7 @@ pub fn connect_client(
             Client::default(),
             LocalAddr(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0)),
             PeerAddr(SERVER_ADDR),
-            Link::new(None),
+            Link::new(network_simulation.receive_conditioner()),
             ReplicationReceiver,
             PredictionManager::default(),
             InterpolationConfig::default().with_send_interval_ratio(remote_interpolation_ratio),
@@ -247,11 +300,19 @@ pub fn connect_client(
         .id();
 
     commands.trigger(Connect { entity: client });
-    info!(client_id, %SERVER_ADDR, "client connecting");
+    info!(client_id, %SERVER_ADDR, network_simulation = network_simulation.name(), "client connecting");
     Ok(client)
 }
 
-fn prepare_server_client(trigger: On<Add, LinkOf>, mut commands: Commands) {
+fn prepare_server_client(
+    trigger: On<Add, LinkOf>,
+    network_simulation: Res<NetworkSimulationProfile>,
+    mut links: Query<&mut Link>,
+    mut commands: Commands,
+) {
+    if let Ok(mut link) = links.get_mut(trigger.entity) {
+        link.recv.conditioner = network_simulation.receive_conditioner();
+    }
     commands.entity(trigger.entity).insert(ReplicationSender);
 }
 
@@ -429,8 +490,14 @@ mod tests {
         let mut queue = CommandQueue::default();
         let client = {
             let mut commands = Commands::new(&mut queue, app.world());
-            connect_client(&mut commands, 1, CharacterKind::Wizard, 1.0)
-                .expect("client configuration should be valid")
+            connect_client(
+                &mut commands,
+                1,
+                CharacterKind::Wizard,
+                1.0,
+                NetworkSimulationProfile::Off,
+            )
+            .expect("client configuration should be valid")
         };
         queue.apply(app.world_mut());
 
@@ -443,6 +510,30 @@ mod tests {
                 .map(|config| config.send_interval_ratio),
             Some(1.0)
         );
+    }
+
+    #[test]
+    fn average_network_simulation_is_opt_in_and_conditions_receive_links() {
+        assert!(
+            NetworkSimulationProfile::Off
+                .receive_conditioner()
+                .is_none()
+        );
+        assert!(
+            NetworkSimulationProfile::Average
+                .receive_conditioner()
+                .is_some()
+        );
+
+        let link = Link::new(NetworkSimulationProfile::Average.receive_conditioner());
+        assert!(link.recv.conditioner.is_some());
+
+        let config = NetworkSimulationProfile::Average
+            .receive_config()
+            .expect("average profile should have receive-side settings");
+        assert_eq!(config.incoming_latency, Duration::from_millis(50));
+        assert_eq!(config.incoming_jitter, Duration::from_millis(10));
+        assert_eq!(config.incoming_loss, 0.01);
     }
 
     #[test]

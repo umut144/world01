@@ -1,12 +1,15 @@
-use std::{error::Error, io};
+use std::{env, error::Error, io};
 
 use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use game01_configs::load_embedded;
-use game01_network::{ServerNetworkSet, configure_server};
+use game01_network::{
+    NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
+};
 use game01_simulation::{MovementStep, move_players};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
+    let network_simulation = network_simulation_from_env()?;
     let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -36,7 +39,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         FixedUpdate,
         move_players.after(ServerNetworkSet::PrepareSimulation),
     );
-    configure_server(&mut app, tick_duration, snapshot_interval);
+    configure_server(
+        &mut app,
+        tick_duration,
+        snapshot_interval,
+        network_simulation,
+    );
     app.run();
     Ok(())
+}
+
+fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Error>> {
+    let value = env::var(NETWORK_SIMULATION_ENV).unwrap_or_else(|_| "off".to_owned());
+    NetworkSimulationProfile::from_name(&value).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{NETWORK_SIMULATION_ENV} must be 'off' or 'average', got '{value}'"),
+        )
+        .into()
+    })
 }
