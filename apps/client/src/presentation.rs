@@ -6,6 +6,7 @@ const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
+const PREVIEW_SCALE: f32 = 0.95;
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -94,7 +95,8 @@ fn setup_selection(
     for (index, character) in CharacterKind::ALL.into_iter().enumerate() {
         let x = -VIEWPORT_WIDTH_METERS * 0.5 + PANEL_WIDTH_METERS * (index as f32 + 0.5);
         let mut root = commands.spawn((
-            Transform::from_xyz(x, selection_center_y + 0.25, 0.0).with_scale(Vec3::splat(1.35)),
+            Transform::from_xyz(x, selection_center_y + 0.15, 0.0)
+                .with_scale(Vec3::splat(PREVIEW_SCALE)),
             Visibility::default(),
             SelectionVisual,
         ));
@@ -293,6 +295,7 @@ fn attach_character_visual(
     let skin = materials.add(Color::srgb(0.82, 0.63, 0.48));
     let primary = materials.add(character_color(character));
     let metal = materials.add(Color::srgb(0.72, 0.78, 0.82));
+    let (hat_transform, brim_size) = headwear_geometry(character);
 
     root.with_children(|parent| {
         parent.spawn((
@@ -304,13 +307,9 @@ fn attach_character_visual(
             MeshMaterial2d(skin),
             Transform::from_xyz(0.0, 0.38, 1.0),
         ));
+        parent.spawn((Mesh2d(hat_mesh), MeshMaterial2d(primary), hat_transform));
         parent.spawn((
-            Mesh2d(hat_mesh),
-            MeshMaterial2d(primary),
-            Transform::from_xyz(0.0, 0.25, 2.0),
-        ));
-        parent.spawn((
-            Sprite::from_color(Color::srgb(0.04, 0.04, 0.055), Vec2::new(1.72, 0.15)),
+            Sprite::from_color(Color::srgb(0.04, 0.04, 0.055), brim_size),
             Transform::from_xyz(0.0, 0.58, 3.0),
         ));
         for x in [-0.15, 0.15] {
@@ -319,12 +318,17 @@ fn attach_character_visual(
                 Transform::from_xyz(x, 0.40, 4.0),
             ));
         }
+        parent.spawn((
+            Sprite::from_color(Color::srgb(0.22, 0.08, 0.07), Vec2::new(0.22, 0.055)),
+            Transform::from_xyz(0.0, 0.17, 4.0),
+        ));
 
         match character {
             CharacterKind::Wizard => {
                 parent.spawn((
                     Sprite::from_color(Color::srgb(0.91, 0.77, 0.20), Vec2::splat(0.16)),
-                    Transform::from_xyz(-0.42, 1.02, 4.0),
+                    Transform::from_xyz(-0.52, 1.10, 4.0)
+                        .with_rotation(Quat::from_rotation_z(0.22)),
                 ));
             }
             CharacterKind::Mage => {
@@ -351,6 +355,11 @@ fn attach_character_visual(
                 ));
             }
             CharacterKind::Rogue => {
+                parent.spawn((
+                    Sprite::from_color(Color::srgb(0.07, 0.075, 0.09), Vec2::new(0.62, 0.16)),
+                    Transform::from_xyz(-0.45, 0.72, 4.0)
+                        .with_rotation(Quat::from_rotation_z(-0.48)),
+                ));
                 for (x, rotation) in [(-0.72, -0.55), (0.72, 0.55)] {
                     parent.spawn((
                         Sprite::from_color(Color::srgb(0.28, 0.22, 0.18), Vec2::new(0.10, 0.75)),
@@ -367,19 +376,55 @@ fn attach_character_visual(
             }
             CharacterKind::Glavier => {
                 parent.spawn((
-                    Sprite::from_color(Color::srgb(0.32, 0.22, 0.12), Vec2::new(0.10, 2.9)),
-                    Transform::from_xyz(0.82, 0.15, 3.0)
-                        .with_rotation(Quat::from_rotation_z(-0.22)),
+                    Sprite::from_color(Color::srgb(0.73, 0.52, 0.16), Vec2::new(0.58, 0.20)),
+                    Transform::from_xyz(0.0, 0.72, 4.0),
+                ));
+                parent.spawn((
+                    Sprite::from_color(Color::srgb(0.32, 0.22, 0.12), Vec2::new(0.10, 2.55)),
+                    Transform::from_xyz(0.72, 0.08, 3.0)
+                        .with_rotation(Quat::from_rotation_z(-0.18)),
                 ));
                 parent.spawn((
                     Mesh2d(blade_mesh),
                     MeshMaterial2d(metal),
-                    Transform::from_xyz(1.12, 1.58, 3.0)
-                        .with_rotation(Quat::from_rotation_z(-0.22)),
+                    Transform::from_xyz(0.94, 1.36, 3.0)
+                        .with_scale(Vec3::new(1.45, 1.45, 1.0))
+                        .with_rotation(Quat::from_rotation_z(-0.18)),
                 ));
             }
         }
     });
+}
+
+fn headwear_geometry(character: CharacterKind) -> (Transform, Vec2) {
+    match character {
+        CharacterKind::Wizard => (
+            Transform::from_xyz(-0.08, 0.24, 2.0)
+                .with_scale(Vec3::new(1.05, 0.96, 1.0))
+                .with_rotation(Quat::from_rotation_z(0.10)),
+            Vec2::new(1.82, 0.15),
+        ),
+        CharacterKind::Mage => (
+            Transform::from_xyz(0.10, 0.22, 2.0)
+                .with_scale(Vec3::new(0.96, 1.08, 1.0))
+                .with_rotation(Quat::from_rotation_z(-0.12)),
+            Vec2::new(1.65, 0.13),
+        ),
+        CharacterKind::Sorcerer => (
+            Transform::from_xyz(0.0, 0.20, 2.0).with_scale(Vec3::new(0.86, 1.18, 1.0)),
+            Vec2::new(1.52, 0.14),
+        ),
+        CharacterKind::Rogue => (
+            Transform::from_xyz(-0.02, 0.30, 2.0)
+                .with_scale(Vec3::new(1.06, 0.72, 1.0))
+                .with_rotation(Quat::from_rotation_z(0.05)),
+            Vec2::new(1.72, 0.13),
+        ),
+        CharacterKind::Glavier => (
+            Transform::from_xyz(0.0, 0.28, 2.0).with_scale(Vec3::new(0.82, 0.88, 1.0)),
+            Vec2::new(1.46, 0.14),
+        ),
+    }
 }
 
 fn panel_color(character: CharacterKind, selected: bool) -> Color {
