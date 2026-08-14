@@ -5,7 +5,7 @@
       "label": "game01: server",
       "type": "process",
       "command": "cargo",
-      "args": ["run", "--quiet", "--package", "game01-server"],
+      "args": ["run", "--package", "game01-server"],
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {
@@ -28,7 +28,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -58,7 +57,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -88,7 +86,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -118,7 +115,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -148,7 +144,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "game01-client",
         "--features",

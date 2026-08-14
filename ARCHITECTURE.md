@@ -256,7 +256,7 @@ Implemented movement pipeline:
 
 Manual verification procedure (run each command in a separate terminal from the repository root):
 
-VS Code exposes the same commands through `.vscode/tasks.json`: individual `game01: server` and `game01: client 1001`–`1005` tasks, plus `game01: local slice (server + 5 clients)` to start all six processes in parallel with dedicated terminal panels.
+VS Code exposes corresponding non-quiet commands through `.vscode/tasks.json`, keeping Cargo and runtime output visible: individual `game01: server` and `game01: client 1001`–`1005` tasks, plus `game01: local slice (server + 5 clients)` to start all six processes in parallel with dedicated terminal panels.
 
 ```sh
 RUSTFLAGS="-A warnings" cargo run --quiet --package game01-server
