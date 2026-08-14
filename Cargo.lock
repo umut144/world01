@@ -3072,6 +3072,7 @@ name = "game01-world-data"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "serde",
 ]
 
 [[package]]

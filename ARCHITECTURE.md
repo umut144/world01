@@ -49,6 +49,8 @@ Owns shared protocol-neutral domain data:
 
 For the first movement slice, `Transform` is the only required movement-state component. Identity, selection, and ownership components do not count as additional movement-state modeling.
 
+Implemented shared Phase 2 data uses transport-neutral scalar identifiers and coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`, `StandardRoom`, `SpawnPoint`, and `MovementIntent`. Network-specific connection types stay outside `world_data`.
+
 ### `configs`
 
 Owns explicitly requested, human-editable game-design parameters:
@@ -74,6 +76,8 @@ Owns transport-, input-device-, and presentation-independent game rules:
 The initial implementation may mutate Transform directly. A mass/velocity movement model will be required soon and does not need to follow real-world physics. Keep the simulation interface and network/input flow suitable for adding explicit velocity and mass without rewriting those outer layers.
 
 Collision is not required in the first slice, including room-boundary collision.
+
+Phase 2 movement is represented by `MovementStep`, constructed from the typed design configuration. It supplies explicit speed and step duration to the simulation system, clamps intent to unit length, rejects non-finite intent, and directly updates `Transform` without owning fixed-tick scheduling.
 
 ### `network`
 
