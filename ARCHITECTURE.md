@@ -254,6 +254,39 @@ Implemented movement pipeline:
 - The developer manually tests selection, join, simultaneous movement, disconnect/despawn, reconnect, late join, and server shutdown behavior.
 - Prediction, Reconciliation, and optional interpolation remain outside acceptance.
 
+Manual verification procedure (run each command in a separate terminal from the repository root):
+
+```sh
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-server
+```
+
+Start clients 1–4 first:
+
+```sh
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1001
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1002
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1003
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1004
+```
+
+Verification sequence:
+
+1. In every client, select a different character where practical and confirm joining. Every open client must show the same four characters at the same spawn positions.
+2. Focus each client in turn and move its owned character with WASD, including a diagonal. Every open client must show only that character moving and must converge on the same authoritative position after input stops.
+3. For genuinely simultaneous manual input, use multiple keyboards/operators; on a single desktop, rapidly alternating focused clients still verifies independent ownership and replication but not simultaneous key presses.
+4. Close client `1002`. Its character must disappear from every remaining client without affecting the other players.
+5. Start client `1005` with the command below, select a character, and join. As a late joiner it must immediately receive clients `1001`, `1003`, and `1004`; those clients must receive `1005`.
+
+```sh
+RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1005
+```
+
+6. Restart client `1002` with its original command, select again, and join. All five clients must now see the same five-player set, proving reconnect and released server capacity.
+7. Move all five owned characters and compare their final positions across every window. No client-side prediction is expected, so visible network latency or unsmoothed motion is acceptable in this slice.
+8. Stop the server. Clients must report or otherwise reflect disconnection without crashing. Close the remaining client processes manually.
+
+Expected server evidence includes connection, authoritative spawn, disconnect, and reconnect log entries for the corresponding identities. A failed item should be recorded with the responsible client ID, selected character, observed windows, and relevant server log line before implementation is changed.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.
