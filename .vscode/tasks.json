@@ -1,0 +1,189 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "game01: server",
+      "type": "process",
+      "command": "cargo",
+      "args": ["run", "--quiet", "--package", "game01-server"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: client 1001",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--quiet",
+        "--package",
+        "game01-client",
+        "--features",
+        "dev",
+        "--",
+        "1001"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: client 1002",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--quiet",
+        "--package",
+        "game01-client",
+        "--features",
+        "dev",
+        "--",
+        "1002"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: client 1003",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--quiet",
+        "--package",
+        "game01-client",
+        "--features",
+        "dev",
+        "--",
+        "1003"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: client 1004",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--quiet",
+        "--package",
+        "game01-client",
+        "--features",
+        "dev",
+        "--",
+        "1004"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: client 1005",
+      "type": "process",
+      "command": "cargo",
+      "args": [
+        "run",
+        "--quiet",
+        "--package",
+        "game01-client",
+        "--features",
+        "dev",
+        "--",
+        "1005"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "RUSTFLAGS": "-A warnings"
+        }
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "game01"
+      },
+      "runOptions": {
+        "instanceLimit": 1
+      }
+    },
+    {
+      "label": "game01: local slice (server + 5 clients)",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "game01: server",
+        "game01: client 1001",
+        "game01: client 1002",
+        "game01: client 1003",
+        "game01: client 1004",
+        "game01: client 1005"
+      ],
+      "problemMatcher": []
+    }
+  ]
+}
