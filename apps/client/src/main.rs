@@ -63,7 +63,9 @@ fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Err
     NetworkSimulationProfile::from_name(&value).ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("{NETWORK_SIMULATION_ENV} must be 'off' or 'average', got '{value}'"),
+            format!(
+                "{NETWORK_SIMULATION_ENV} must be 'off', 'latency-jitter', or 'average', got '{value}'"
+            ),
         )
         .into()
     })

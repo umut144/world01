@@ -398,7 +398,7 @@ Acceptance: authoritative simulation and owned-player response retain their 60 H
 
 - Lightyear's receive-side link conditioner simulates imperfect transport without entering world data or simulation code.
 - Network simulation is disabled by default. Set `GAME01_NETWORK_SIMULATION=average` on both the server and every client to enable it.
-- The `average` profile represents an end-to-end target of approximately 100 ms round-trip latency, 20 ms jitter, and 2 percent packet loss. Half of each value is applied independently to each receive direction.
+- The `latency-jitter` profile represents an end-to-end target of approximately 100 ms round-trip latency and 20 ms jitter with no packet loss. The `average` profile adds 2 percent packet loss to the same target. Half of each value is applied independently to each receive direction.
 - The profile therefore tests client input delivery and server snapshot delivery together. Lightyear's redundant native-input history, owned-player prediction/reconciliation, and remote snapshot interpolation remain unchanged.
 - The randomized packet sequence is intentionally nondeterministic; automated tests verify profile activation, while gameplay quality is evaluated manually.
 
@@ -408,6 +408,8 @@ Run the server and each client from separate terminals with the same environment
 GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-server
 GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-client --features dev -- 1001
 ```
+
+Use `GAME01_NETWORK_SIMULATION=latency-jitter` for the loss-free comparison run.
 
 Repeat the client command for IDs `1002` through `1005`. Startup logs must report `network_simulation="average"`. Compare against the existing VS Code tasks, which deliberately retain the default `off` profile.
 

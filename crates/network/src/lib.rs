@@ -40,6 +40,7 @@ pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
 pub enum NetworkSimulationProfile {
     #[default]
     Off,
+    LatencyJitter,
     Average,
 }
 
@@ -47,6 +48,7 @@ impl NetworkSimulationProfile {
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "off" => Some(Self::Off),
+            "latency-jitter" => Some(Self::LatencyJitter),
             "average" => Some(Self::Average),
             _ => None,
         }
@@ -55,6 +57,7 @@ impl NetworkSimulationProfile {
     pub fn name(self) -> &'static str {
         match self {
             Self::Off => "off",
+            Self::LatencyJitter => "latency-jitter",
             Self::Average => "average",
         }
     }
@@ -62,6 +65,11 @@ impl NetworkSimulationProfile {
     fn receive_config(self) -> Option<LinkConditionerConfig> {
         let end_to_end = match self {
             Self::Off => return None,
+            Self::LatencyJitter => LinkConditionerConfig::new(
+                Duration::from_millis(100),
+                Duration::from_millis(20),
+                0.0,
+            ),
             Self::Average => LinkConditionerConfig::new(
                 Duration::from_millis(100),
                 Duration::from_millis(20),
@@ -518,6 +526,11 @@ mod tests {
             NetworkSimulationProfile::Off
                 .receive_conditioner()
                 .is_none()
+        );
+        assert!(
+            NetworkSimulationProfile::LatencyJitter
+                .receive_conditioner()
+                .is_some()
         );
         assert!(
             NetworkSimulationProfile::Average
