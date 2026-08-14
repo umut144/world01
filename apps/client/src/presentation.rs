@@ -1,5 +1,7 @@
 use bevy::{camera::ScalingMode, prelude::*};
-use game01_network::{ClientMovementInput, configure_client, connect_client};
+use game01_network::{
+    ClientMovementInput, ClientPositionCorrection, configure_client, connect_client,
+};
 use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
@@ -7,6 +9,8 @@ const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
 const PREVIEW_SCALE: f32 = 0.95;
+const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
+const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -32,8 +36,14 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
-                    render_new_players.run_if(in_state(ClientScreen::InGame)),
+                    (render_new_players, initialize_local_render_history)
+                        .chain()
+                        .run_if(in_state(ClientScreen::InGame)),
                 ),
+            )
+            .add_systems(
+                FixedPostUpdate,
+                capture_local_render_positions.run_if(in_state(ClientScreen::InGame)),
             )
             .add_systems(
                 PostUpdate,
@@ -87,6 +97,12 @@ struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
+
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+struct LocalRenderHistory {
+    previous: Vec2,
+    current: Vec2,
+}
 
 fn setup_selection(
     mut commands: Commands,
@@ -410,13 +426,86 @@ fn render_new_players(
     }
 }
 
-fn sync_rendered_positions(
-    mut players: Query<(&Position, &mut Transform), With<RenderedCharacter>>,
+fn initialize_local_render_history(
+    mut commands: Commands,
+    players: Query<
+        (Entity, &Position),
+        (
+            With<RenderedCharacter>,
+            With<MovementIntent>,
+            Without<LocalRenderHistory>,
+        ),
+    >,
 ) {
-    for (position, mut transform) in &mut players {
-        transform.translation.x = position.x;
-        transform.translation.y = position.y;
+    for (entity, position) in &players {
+        let current = Vec2::new(position.x, position.y);
+        commands.entity(entity).insert(LocalRenderHistory {
+            previous: current,
+            current,
+        });
     }
+}
+
+fn capture_local_render_positions(
+    mut players: Query<(&Position, &mut LocalRenderHistory), With<RenderedCharacter>>,
+) {
+    for (position, mut history) in &mut players {
+        history.previous = history.current;
+        history.current = Vec2::new(position.x, position.y);
+    }
+}
+
+fn sync_rendered_positions(
+    fixed_time: Res<Time<Fixed>>,
+    virtual_time: Res<Time<Virtual>>,
+    mut players: Query<
+        (
+            Entity,
+            &Position,
+            Option<&LocalRenderHistory>,
+            Option<&mut ClientPositionCorrection>,
+            &mut Transform,
+        ),
+        With<RenderedCharacter>,
+    >,
+    mut commands: Commands,
+) {
+    let alpha = fixed_time.overstep_fraction();
+    let correction_decay = correction_decay(virtual_time.delta_secs());
+
+    for (entity, position, history, correction, mut transform) in &mut players {
+        let mut rendered = sampled_render_position(*position, history, alpha);
+
+        if let Some(mut correction) = correction {
+            if correction.is_changed() {
+                correction.offset =
+                    Vec2::new(transform.translation.x, transform.translation.y) - rendered;
+            }
+            correction.offset *= correction_decay;
+            rendered += correction.offset;
+            if correction.offset.length_squared() <= CORRECTION_EPSILON_SQUARED {
+                commands.entity(entity).remove::<ClientPositionCorrection>();
+            }
+        }
+
+        transform.translation.x = rendered.x;
+        transform.translation.y = rendered.y;
+    }
+}
+
+fn sampled_render_position(
+    position: Position,
+    history: Option<&LocalRenderHistory>,
+    alpha: f32,
+) -> Vec2 {
+    history.map_or_else(
+        || Vec2::new(position.x, position.y),
+        |history| history.previous.lerp(history.current, alpha),
+    )
+}
+
+fn correction_decay(delta_seconds: f32) -> f32 {
+    0.5_f32.powf(delta_seconds / CORRECTION_HALF_LIFE_SECONDS)
 }
 
 fn attach_character_visual(
@@ -622,7 +711,8 @@ mod tests {
     #[test]
     fn presentation_sync_only_derives_translation_from_position() {
         let mut app = App::new();
-        app.add_systems(Update, sync_rendered_positions);
+        app.add_plugins(MinimalPlugins)
+            .add_systems(PostUpdate, sync_rendered_positions);
         let entity = app
             .world_mut()
             .spawn((
@@ -640,5 +730,31 @@ mod tests {
             .expect("rendered entity retains its presentation Transform");
         assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
         assert_eq!(transform.scale, Vec3::splat(1.5));
+    }
+
+    #[test]
+    fn local_render_position_samples_fixed_tick_history() {
+        let history = LocalRenderHistory {
+            previous: Vec2::new(1.0, -2.0),
+            current: Vec2::new(5.0, 2.0),
+        };
+
+        assert_eq!(
+            sampled_render_position(Position::new(99.0, 99.0), Some(&history), 0.25),
+            Vec2::new(2.0, -1.0)
+        );
+    }
+
+    #[test]
+    fn remote_render_position_uses_snapshot_interpolated_value_directly() {
+        assert_eq!(
+            sampled_render_position(Position::new(3.0, -4.0), None, 0.25),
+            Vec2::new(3.0, -4.0)
+        );
+    }
+
+    #[test]
+    fn reconciliation_error_halves_over_configured_period() {
+        assert!((correction_decay(CORRECTION_HALF_LIFE_SECONDS) - 0.5).abs() < f32::EPSILON);
     }
 }

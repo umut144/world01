@@ -13,6 +13,7 @@ use bevy::{
 use game01_world_data::{
     CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
 };
+use lightyear::prediction::correction::PreviousVisual;
 use lightyear::{connection::client::Disconnecting, netcode::Key};
 use lightyear::{prelude::server::ServerUdpIo, prelude::*};
 use lightyear::{
@@ -43,6 +44,11 @@ pub struct JoinRequest {
 
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub struct ClientMovementInput(pub MovementIntent);
+
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct ClientPositionCorrection {
+    pub offset: Vec2,
+}
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ServerNetworkSet {
@@ -135,6 +141,10 @@ pub fn configure_client(app: &mut App, tick_duration: Duration) {
             FixedPreUpdate,
             write_client_movement_input.in_set(ClientInputSystems::WriteClientInputs),
         )
+        .add_systems(
+            PreUpdate,
+            expose_position_corrections.in_set(RollbackSystems::EndRollback),
+        )
         .add_observer(enable_controlled_input)
         .add_observer(send_join_when_connected)
         .add_observer(report_client_connected)
@@ -160,6 +170,7 @@ impl GameProtocolAppExt for App {
         self.component::<Position>()
             .replicate()
             .predict()
+            .enable_correction()
             .into_component_registration()
             .add_interpolation_with(interpolate_position);
         self
@@ -171,6 +182,23 @@ fn interpolate_position(start: Position, end: Position, t: f32) -> Position {
         start.x + (end.x - start.x) * t,
         start.y + (end.y - start.y) * t,
     )
+}
+
+fn expose_position_corrections(
+    corrected: Query<(Entity, &Position, &PreviousVisual<Position>)>,
+    mut commands: Commands,
+) {
+    for (entity, position, previous_visual) in &corrected {
+        commands
+            .entity(entity)
+            .insert(ClientPositionCorrection {
+                offset: Vec2::new(
+                    previous_visual.0.x - position.x,
+                    previous_visual.0.y - position.y,
+                ),
+            })
+            .remove::<PreviousVisual<Position>>();
+    }
 }
 
 fn start_server(mut commands: Commands) {
@@ -418,6 +446,37 @@ mod tests {
             Position::new(0.0, 2.0)
         );
         assert_eq!(interpolate_position(start, end, 1.0), end);
+    }
+
+    #[test]
+    fn reconciliation_exposes_only_a_client_visual_offset() {
+        let mut app = App::new();
+        app.add_systems(Update, expose_position_corrections);
+        let entity = app
+            .world_mut()
+            .spawn((
+                Position::new(2.0, 3.0),
+                PreviousVisual(Position::new(5.0, 1.0)),
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<ClientPositionCorrection>(entity),
+            Some(&ClientPositionCorrection {
+                offset: Vec2::new(3.0, -2.0),
+            })
+        );
+        assert!(
+            app.world()
+                .get::<PreviousVisual<Position>>(entity)
+                .is_none()
+        );
+        assert_eq!(
+            app.world().get::<Position>(entity),
+            Some(&Position::new(2.0, 3.0))
+        );
     }
 
     #[test]

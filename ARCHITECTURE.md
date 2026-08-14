@@ -360,6 +360,16 @@ Acceptance: the controlled character responds from local tick input without wait
 
 Acceptance: the local player remains immediately responsive and authoritative corrections remain possible, while other players move between received server snapshots rather than snapping directly from one snapshot to the next.
 
+### Phase 5 — presentation-only render interpolation
+
+- Only the locally controlled predicted player records its previous and current fixed-tick `Position`; remote players remain exclusively on Lightyear's snapshot-interpolation path and receive no second smoothing delay.
+- During `PostUpdate`, the local graphical `Transform` is linearly sampled from that two-tick presentation history using Bevy's fixed-time overstep fraction.
+- The interpolation history and `Transform` are client-only presentation data. They are neither replicated nor read by simulation, and authoritative/predicted `Position` is never overwritten with a visual value.
+- Prediction tracks the pre-rollback predicted `Position`. After reconciliation, the network adapter exposes only the resulting positional error as `ClientPositionCorrection`; presentation anchors it to the last visible `Transform` and decays it with a frame-rate-independent 200 ms half-life.
+- Remote snapshot delay, simulation tick rate, movement parameters, and network protocol payloads remain unchanged for isolated evaluation.
+
+Acceptance: local fixed-tick movement is visually continuous between simulation steps, remote players retain exactly one snapshot-interpolation pass, reconciliation corrections converge smoothly, and simulation observes only exact `Position` state.
+
 ## Open technical decisions
 
 - Persistence architecture after the non-persistent first slice.
