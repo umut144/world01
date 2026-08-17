@@ -202,6 +202,7 @@ Cargo packages use the `game01-` prefix (`game01-client`, `game01-server`, `game
 
 - Disable Bevy default features.
 - The graphical client uses an explicit subset of Bevy's 2D features. It includes the currently implemented Bevy UI selection screen, while excluding scene, picking, audio, and 3D support.
+- The headless server directly enables only `std`, `multi_threaded`, `bevy_log`, and `bevy_state`; it does not enable Bevy's `default_app` feature. Lightyear replication still transitively requires Bevy asset/serialization types, so removing a direct feature does not imply removing every related transitive crate.
 - The server and headless shared crates use only the minimal non-rendering Bevy capabilities they need.
 - Do not add Bevy UI, 3D, audio, scene, picking, development-tool, or extra asset-format features speculatively.
 - Routine development and agent validation should use consistent feature sets and compiler flags where practical to avoid duplicate artifacts.

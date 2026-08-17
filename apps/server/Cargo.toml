@@ -6,9 +6,10 @@ rust-version.workspace = true
 
 [dependencies]
 bevy = { workspace = true, features = [
-    "default_app",
     "std",
     "multi_threaded",
+    "bevy_log",
+    "bevy_state",
 ] }
 game01-configs = { path = "../../crates/configs" }
 game01-network = { path = "../../crates/network", default-features = false, features = ["server"] }
