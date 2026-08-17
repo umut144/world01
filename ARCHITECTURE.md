@@ -282,7 +282,7 @@ Manual verification procedure (run each command in a separate terminal from the 
 VS Code exposes corresponding non-quiet commands through `.vscode/tasks.json`, keeping Cargo and runtime output visible: individual `game01: server` and `game01: client 1001`–`1005` tasks, plus `game01: local slice (server + 5 clients)` to start all six processes in parallel with dedicated terminal panels.
 
 ```sh
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-server
+cargo run --quiet --package game01-server
 ```
 
 Start clients 1–4 first:
@@ -408,7 +408,7 @@ Acceptance: authoritative simulation and owned-player response retain their 60 H
 Run the server and each client from separate terminals with the same environment value:
 
 ```sh
-GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-server
+GAME01_NETWORK_SIMULATION=average cargo run --package game01-server
 GAME01_NETWORK_SIMULATION=average cargo run --package game01-client --features dev -- 1001
 ```
 

@@ -7,10 +7,7 @@
       "command": "cargo",
       "args": ["run", "--package", "game01-server"],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
@@ -36,10 +33,7 @@
         "1001"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
@@ -65,10 +59,7 @@
         "1002"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
@@ -94,10 +85,7 @@
         "1003"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
@@ -123,10 +111,7 @@
         "1004"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
@@ -152,10 +137,7 @@
         "1005"
       ],
       "options": {
-        "cwd": "${workspaceFolder}",
-        "env": {
-          "RUSTFLAGS": "-A warnings"
-        }
+        "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"],
       "presentation": {
