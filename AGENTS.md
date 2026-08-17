@@ -48,7 +48,7 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 - When using the `2d` profile, periodically review whether included capabilities such as scene or picking are actually needed before replacing the maintained profile with a lower-level manual feature list.
 - Removing a runtime plugin is not a substitute for disabling its compile-time Cargo feature.
 - Keep headless simulation/server code independent of rendering, audio, windowing, and input dependencies.
-- Keep development feature sets and compiler flags consistent across routine checks and local development where practical to avoid unnecessary recompilation and duplicate artifacts.
+- Keep development feature sets and compiler flags consistent across routine checks and local development. Routine development commands must not add ad-hoc `RUSTFLAGS`, because each distinct flag set creates another Cargo artifact family.
 
 ### Validation
 
@@ -56,7 +56,9 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 
   `./scripts/check.sh`
 
-- The wrapper checks the headless server and graphical client separately, uses quiet Cargo output, suppresses warning noise through `RUSTFLAGS="-A warnings"`, and enables dynamic linking only for the client development check.
+- The wrapper checks the headless server and graphical client separately, uses quiet Cargo output, and enables dynamic linking only for the client development check.
+- The workspace `dev` profile is the single source of truth for development compilation settings. It disables incremental compilation to keep `target/debug/incremental` empty while retaining normal dependency artifacts for warm checks.
+- Use the wrapper or its exact package/feature combinations for routine development. In particular, client development checks use `--features dev`; do not create an additional debug client variant without that feature.
 - Silent output means success; do not rerun with verbose output when the wrapper succeeds.
 - If the check fails, use the existing error output first. Run more verbose or targeted commands only when needed to diagnose the failure.
 - Run relevant targeted tests when behavior covered by tests was changed.

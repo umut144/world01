@@ -4,18 +4,29 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[features]
+default = ["client", "server"]
+client = [
+    "lightyear/client",
+    "lightyear/replication",
+    "lightyear/input_native",
+    "lightyear/prediction",
+    "lightyear/interpolation",
+    "lightyear/netcode",
+    "lightyear/udp",
+]
+server = [
+    "lightyear/server",
+    "lightyear/replication",
+    "lightyear/input_native",
+    "lightyear/prediction",
+    "lightyear/interpolation",
+    "lightyear/netcode",
+    "lightyear/udp",
+]
+
 [dependencies]
 bevy = { workspace = true, features = ["std", "bevy_log"] }
 game01-world-data = { path = "../world_data" }
 serde.workspace = true
-lightyear = { workspace = true, features = [
-    "std",
-    "client",
-    "server",
-    "replication",
-    "input_native",
-    "prediction",
-    "interpolation",
-    "netcode",
-    "udp",
-] }
+lightyear = { workspace = true, features = ["std"] }

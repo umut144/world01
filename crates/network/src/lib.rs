@@ -1,40 +1,50 @@
 //! Lightyear-specific protocol and transport boundary.
 
 use std::{
-    collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
 
-use bevy::{
-    log::{info, warn},
-    prelude::*,
-};
+#[cfg(feature = "server")]
+use std::collections::HashMap;
+
+#[cfg(feature = "server")]
+use bevy::log::warn;
+use bevy::{log::info, prelude::*};
 use game01_world_data::{
     CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
 };
+#[cfg(feature = "server")]
+use lightyear::connection::client::Disconnecting;
+#[cfg(feature = "client")]
 use lightyear::interpolation::timeline::InterpolationConfig;
+#[cfg(feature = "client")]
 use lightyear::prediction::correction::PreviousVisual;
-use lightyear::{connection::client::Disconnecting, netcode::Key};
-use lightyear::{prelude::server::ServerUdpIo, prelude::*};
-use lightyear::{
-    prelude::{
-        Controlled, ControlledBy, Lifetime,
-        input::{
-            client::InputSystems as ClientInputSystems,
-            native::{
-                ActionState, InputMarker, InputPlugin as NativeInputPlugin, NativeStateSequence,
-            },
-            server::{InputValidationAppExt, authorize_controlled_targets},
-        },
-    },
-    prelude::{client::*, server::*},
+#[cfg(feature = "client")]
+use lightyear::prelude::input::native::InputMarker;
+use lightyear::prelude::input::native::{ActionState, InputPlugin as NativeInputPlugin};
+#[cfg(feature = "server")]
+use lightyear::prelude::server::ServerUdpIo;
+#[cfg(feature = "client")]
+use lightyear::prelude::{
+    Controlled, client::*, input::client::InputSystems as ClientInputSystems,
 };
+#[cfg(feature = "server")]
+use lightyear::prelude::{
+    ControlledBy, Lifetime,
+    input::{
+        native::NativeStateSequence,
+        server::{InputValidationAppExt, authorize_controlled_targets},
+    },
+    server::*,
+};
+use lightyear::{netcode::Key, prelude::*};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_CLIENTS: usize = 5;
 pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
+#[cfg(feature = "client")]
 const MAX_REMOTE_EXTRAPOLATION_INTERVALS: f32 = 2.0;
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -93,47 +103,57 @@ pub struct JoinRequest {
     pub character: CharacterKind,
 }
 
+#[cfg(feature = "client")]
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub struct ClientMovementInput(pub MovementIntent);
 
+#[cfg(feature = "client")]
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct ClientPositionCorrection {
     pub offset: Vec2,
 }
 
+#[cfg(feature = "client")]
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct RemotePositionExtrapolation {
     pub offset: Vec2,
 }
 
+#[cfg(feature = "client")]
 #[derive(Resource, Debug, Clone, Copy)]
 struct RemoteExtrapolationConfig {
     tick_duration: Duration,
     maximum_duration: Duration,
 }
 
+#[cfg(feature = "server")]
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ServerNetworkSet {
     PrepareSimulation,
 }
 
+#[cfg(feature = "client")]
 #[derive(Component, Debug, Clone, Copy)]
 struct PendingJoin(CharacterKind);
 
+#[cfg(feature = "server")]
 #[derive(Resource, Debug)]
 struct NextPlayerId(u64);
 
+#[cfg(feature = "server")]
 impl Default for NextPlayerId {
     fn default() -> Self {
         Self(1)
     }
 }
 
+#[cfg(feature = "server")]
 #[derive(Resource, Debug, Default)]
 pub struct ConnectionRegistry {
     clients: HashMap<PeerId, Entity>,
 }
 
+#[cfg(feature = "server")]
 impl ConnectionRegistry {
     pub fn len(&self) -> usize {
         self.clients.len()
@@ -168,6 +188,7 @@ impl ConnectionRegistry {
     }
 }
 
+#[cfg(feature = "server")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Admission {
     Accepted,
@@ -175,6 +196,7 @@ enum Admission {
     Full,
 }
 
+#[cfg(feature = "server")]
 pub fn configure_server(
     app: &mut App,
     tick_duration: Duration,
@@ -200,6 +222,7 @@ pub fn configure_server(
         .add_input_validator(authorize_controlled_targets::<NativeStateSequence<MovementIntent>>);
 }
 
+#[cfg(feature = "client")]
 pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
     app.add_plugins(ClientPlugins { tick_duration })
         .add_plugins(NativeInputPlugin::<MovementIntent>::default())
@@ -228,12 +251,14 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
         .add_observer(report_client_disconnected);
 }
 
+#[cfg(feature = "client")]
 fn enable_remote_position_extrapolation(trigger: On<Add, Interpolated>, mut commands: Commands) {
     commands
         .entity(trigger.entity)
         .insert(RemotePositionExtrapolation::default());
 }
 
+#[cfg(feature = "client")]
 fn expose_remote_position_extrapolation(
     timelines: Query<&InterpolationTimeline>,
     config: Res<RemoteExtrapolationConfig>,
@@ -277,6 +302,7 @@ fn expose_remote_position_extrapolation(
     }
 }
 
+#[cfg(feature = "client")]
 fn bounded_position_extrapolation(
     previous: Position,
     previous_tick: u32,
@@ -337,6 +363,7 @@ fn interpolate_position(start: Position, end: Position, t: f32) -> Position {
     )
 }
 
+#[cfg(feature = "client")]
 fn expose_position_corrections(
     corrected: Query<(Entity, &Position, &PreviousVisual<Position>)>,
     mut commands: Commands,
@@ -354,6 +381,7 @@ fn expose_position_corrections(
     }
 }
 
+#[cfg(feature = "server")]
 fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands: Commands) {
     let server = commands
         .spawn((
@@ -376,6 +404,7 @@ fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands:
     );
 }
 
+#[cfg(feature = "client")]
 pub fn connect_client(
     commands: &mut Commands,
     client_id: u64,
@@ -409,6 +438,7 @@ pub fn connect_client(
     Ok(client)
 }
 
+#[cfg(feature = "server")]
 fn prepare_server_client(
     trigger: On<Add, LinkOf>,
     network_simulation: Res<NetworkSimulationProfile>,
@@ -421,6 +451,7 @@ fn prepare_server_client(
     commands.entity(trigger.entity).insert(ReplicationSender);
 }
 
+#[cfg(feature = "server")]
 fn track_connected_client(
     trigger: On<Add, Connected>,
     remotes: Query<&RemoteId, With<ClientOf>>,
@@ -446,6 +477,7 @@ fn track_connected_client(
     }
 }
 
+#[cfg(feature = "server")]
 fn track_disconnected_client(
     trigger: On<Add, Disconnected>,
     remotes: Query<&RemoteId, With<ClientOf>>,
@@ -459,6 +491,7 @@ fn track_disconnected_client(
     info!(peer = ?remote.0, clients = registry.len(), "client disconnected");
 }
 
+#[cfg(feature = "client")]
 fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands) {
     commands.entity(trigger.entity).insert((
         InputMarker::<MovementIntent>::default(),
@@ -466,6 +499,7 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
     ));
 }
 
+#[cfg(feature = "client")]
 fn send_join_when_connected(
     trigger: On<Add, Connected>,
     mut clients: Query<(&PendingJoin, &mut MessageSender<JoinRequest>), With<Client>>,
@@ -481,6 +515,7 @@ fn send_join_when_connected(
     commands.entity(trigger.entity).remove::<PendingJoin>();
 }
 
+#[cfg(feature = "server")]
 fn handle_join_requests(
     mut clients: Query<
         (Entity, &RemoteId, &mut MessageReceiver<JoinRequest>),
@@ -528,6 +563,7 @@ fn handle_join_requests(
     }
 }
 
+#[cfg(feature = "client")]
 fn write_client_movement_input(
     input: Res<ClientMovementInput>,
     mut players: Query<
@@ -540,6 +576,7 @@ fn write_client_movement_input(
     }
 }
 
+#[cfg(any(feature = "client", feature = "server"))]
 pub fn apply_tick_movement_intents(
     mut players: Query<(&ActionState<MovementIntent>, &mut MovementIntent)>,
 ) {
@@ -548,12 +585,14 @@ pub fn apply_tick_movement_intents(
     }
 }
 
+#[cfg(feature = "client")]
 pub fn client_input_timeline_synced(
     clients: Query<(), (With<Client>, With<IsSynced<InputTimeline>>)>,
 ) -> bool {
     !clients.is_empty()
 }
 
+#[cfg(feature = "server")]
 fn spawn_position(player_id: u64) -> Vec2 {
     const POSITIONS: [Vec2; MAX_CLIENTS] = [
         Vec2::new(-4.0, 0.0),
@@ -566,12 +605,14 @@ fn spawn_position(player_id: u64) -> Vec2 {
     POSITIONS[index]
 }
 
+#[cfg(feature = "client")]
 fn report_client_connected(trigger: On<Add, Connected>, clients: Query<&LocalId, With<Client>>) {
     if let Ok(local_id) = clients.get(trigger.entity) {
         info!(client = ?local_id.0, "connected to local server");
     }
 }
 
+#[cfg(feature = "client")]
 fn report_client_disconnected(
     trigger: On<Add, Disconnected>,
     clients: Query<&Disconnected, With<Client>>,
@@ -581,7 +622,7 @@ fn report_client_disconnected(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "client", feature = "server"))]
 mod tests {
     use super::*;
     use bevy::ecs::world::CommandQueue;

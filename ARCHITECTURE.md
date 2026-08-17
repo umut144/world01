@@ -96,6 +96,8 @@ Owns Lightyear-specific concerns:
 
 Networking transports intent and replicated state; it does not own movement rules.
 
+The `game01-network` crate exposes separate `client` and `server` Cargo features. Both applications disable its default features and select only their respective feature. Both sides retain Lightyear replication, native input, Netcode/UDP, prediction, and interpolation because the server registers predicted/interpolated `Position` state and assigns `PredictionTarget`/`InterpolationTarget` to recipients. The dedicated server deliberately excludes Lightyear's `client` feature and all local client connection, input-collection, prediction-presentation, and interpolation-presentation systems.
+
 Slice 2 Phase 2 uses Lightyear's native input pipeline instead of a custom movement message. The client samples hardware state into a local resource during normal frame input collection, writes that state to its controlled entity in Lightyear's `FixedPreUpdate` input stage, and sends redundant tick-addressed history. The server validates each input target against `ControlledBy`, lets Lightyear select the current tick's `ActionState`, and adapts that state to `MovementIntent` before simulation. This is a direct entity-local query with no connection-to-player scan.
 
 Slice 2 Phase 3 registers `Position` for Lightyear prediction and assigns a `PredictionTarget` only to the controlling peer. Once its input timeline is synchronized, that client adapts the rollback-aware native `ActionState` to `MovementIntent` and runs the same `MovementStep` plus `move_players` system used by the server. Confirmed server positions remain the reconciliation authority. Remote players are not predicted in this phase.
@@ -199,7 +201,7 @@ Cargo packages use the `game01-` prefix (`game01-client`, `game01-server`, `game
 ## Bevy dependency strategy
 
 - Disable Bevy default features.
-- The graphical client uses an explicit subset of Bevy's 2D features. This retains the maintained 2D rendering feature collection while excluding scene, picking, UI, audio, and 3D support.
+- The graphical client uses an explicit subset of Bevy's 2D features. It includes the currently implemented Bevy UI selection screen, while excluding scene, picking, audio, and 3D support.
 - The server and headless shared crates use only the minimal non-rendering Bevy capabilities they need.
 - Do not add Bevy UI, 3D, audio, scene, picking, development-tool, or extra asset-format features speculatively.
 - Routine development and agent validation should use consistent feature sets and compiler flags where practical to avoid duplicate artifacts.
@@ -285,10 +287,10 @@ RUSTFLAGS="-A warnings" cargo run --quiet --package game01-server
 Start clients 1–4 first:
 
 ```sh
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1001
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1002
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1003
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1004
+cargo run --quiet --package game01-client --features dev -- 1001
+cargo run --quiet --package game01-client --features dev -- 1002
+cargo run --quiet --package game01-client --features dev -- 1003
+cargo run --quiet --package game01-client --features dev -- 1004
 ```
 
 Verification sequence:
@@ -300,7 +302,7 @@ Verification sequence:
 5. Start client `1005` with the command below, select a character, and join. As a late joiner it must immediately receive clients `1001`, `1003`, and `1004`; those clients must receive `1005`.
 
 ```sh
-RUSTFLAGS="-A warnings" cargo run --quiet --package game01-client --features dev -- 1005
+cargo run --quiet --package game01-client --features dev -- 1005
 ```
 
 6. Restart client `1002` with its original command, select again, and join. All five clients must now see the same five-player set, proving reconnect and released server capacity.
@@ -406,7 +408,7 @@ Run the server and each client from separate terminals with the same environment
 
 ```sh
 GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-server
-GAME01_NETWORK_SIMULATION=average RUSTFLAGS="-A warnings" cargo run --package game01-client --features dev -- 1001
+GAME01_NETWORK_SIMULATION=average cargo run --package game01-client --features dev -- 1001
 ```
 
 Use `GAME01_NETWORK_SIMULATION=latency-jitter` for the loss-free comparison run.
