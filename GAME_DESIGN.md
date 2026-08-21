@@ -49,9 +49,9 @@ Interpretation rules:
 - Standard design viewport: **1920 × 1200 px**.
 - Other displays must be scaled/framed so they reveal neither more nor less relevant game world.
 - Scale: **1 m = 128 px**.
-- Tile size: **0.5 m = 64 px**.
-- Standard room: **30 × 18 tiles = 15 × 9 m = 1920 × 1152 px**.
-- Remaining vertical space: **48 px = 0.75 tile**, currently reserved/free at the bottom, but not a mandate for visible HUD.
+- Tile size: **1 m = 128 px**.
+- Standard room: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
+- Remaining vertical space: **48 px = 0.375 tile**, currently reserved/free at the bottom, but not a mandate for visible HUD.
 - Larger rooms must be composed from multiple standard-room units rather than using arbitrary unrelated sizing.
 - Camera is normally centered on the current room; exceptions/special rooms are possible.
 
