@@ -5,6 +5,7 @@ use game01_network::{
 };
 use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
+use crate::controller::ControllerInput;
 use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
@@ -71,16 +72,26 @@ enum ClientScreen {
 
 fn collect_movement_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientMovementInput>,
 ) {
-    let x = axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA);
-    let y = axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS);
-    let direction = Vec2::new(x, y).normalize_or_zero();
+    let keyboard_direction = Vec2::new(
+        axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA),
+        axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS),
+    );
+    let direction = movement_direction(keyboard_direction, controller_input.left_stick());
     input.0 = MovementIntent::new(direction.x, direction.y);
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
     f32::from(keyboard.pressed(positive)) - f32::from(keyboard.pressed(negative))
+}
+
+fn movement_direction(keyboard_direction: Vec2, controller_direction: Option<Vec2>) -> Vec2 {
+    controller_direction
+        .filter(|direction| direction.length_squared() > 0.0)
+        .unwrap_or(keyboard_direction)
+        .normalize_or_zero()
 }
 
 #[derive(Resource)]
@@ -589,6 +600,19 @@ mod tests {
     fn keyboard_selection_starts_at_directional_edge() {
         assert_eq!(adjacent_character(None, 1), CharacterKind::Wizard);
         assert_eq!(adjacent_character(None, -1), CharacterKind::Glavier);
+    }
+
+    #[test]
+    fn controller_direction_overrides_keyboard_direction() {
+        assert_eq!(movement_direction(Vec2::X, Some(Vec2::Y)), Vec2::Y);
+    }
+
+    #[test]
+    fn neutral_controller_direction_uses_keyboard_fallback() {
+        assert_eq!(
+            movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
+            Vec2::new(1.0, 1.0).normalize(),
+        );
     }
 
     #[test]

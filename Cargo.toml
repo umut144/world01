@@ -16,6 +16,7 @@ rust-version = "1.95"
 
 [workspace.dependencies]
 bevy = { version = "=0.19.1", default-features = false }
+gilrs = "0.11.2"
 lightyear = { version = "=0.28.0", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

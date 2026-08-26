@@ -135,12 +135,13 @@ Owns non-authoritative local interaction and presentation:
 
 Client presentation state is never gameplay authority.
 
-The planned controller boundary uses a compatible native gamepad integration on
-the graphical client only. The connected Xbox controller's left analog stick
-will be the prioritized movement source; a neutral stick will leave WASD as a
-development and accessibility fallback. Both input devices will be reduced to
-the same local `MovementIntent` before Lightyear's native tick input path, so
-the server and simulation remain unaware of input-device choice.
+The initial controller boundary uses the direct `gilrs` native gamepad backend
+on the graphical client only because Bevy 0.19.1's matching official backend
+crate is unavailable. The connected Xbox controller's left analog stick is the
+prioritized movement source; a neutral stick leaves WASD as a development and
+accessibility fallback. Both input devices are reduced to the same local
+`MovementIntent` before Lightyear's native tick input path, so the server and
+simulation remain unaware of input-device choice.
 Controller-driven selection, actions, rumble, rebinding, and multi-controller
 assignment are outside this slice.
 
