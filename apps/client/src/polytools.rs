@@ -138,6 +138,8 @@ struct PolyToolsComponent {
     contour_stroke_mesh: Option<PolyToolsStrokeMesh>,
     #[serde(default)]
     source_asset_key: Option<String>,
+    #[serde(skip)]
+    referenced_components: Vec<PolyToolsComponent>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -237,6 +239,47 @@ pub fn spawn_character_visual(
                 .id();
             commands.entity(component_entity).add_child(outline);
         }
+
+        for referenced in &component.referenced_components {
+            let referenced_entity = commands
+                .spawn((component_transform(referenced), Visibility::default()))
+                .id();
+            commands
+                .entity(component_entity)
+                .add_child(referenced_entity);
+            let fill_color = materials.add(component_color(character, &component.name));
+            let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
+            let pivot = referenced.local_pivot.unwrap_or([0.0, 0.0]);
+            if let Some(mesh) = referenced.mesh.as_ref() {
+                let fill = commands
+                    .spawn((
+                        Mesh2d(meshes.add(bevy_mesh(mesh))),
+                        MeshMaterial2d(fill_color.clone()),
+                        Transform::from_xyz(-pivot[0], -pivot[1], referenced.z_index as f32 * 0.01),
+                    ))
+                    .id();
+                commands.entity(referenced_entity).add_child(fill);
+            }
+            if let Some(stroke_mesh) = referenced.contour_stroke_mesh.as_ref()
+                && stroke_mesh.has_outline
+            {
+                let outline = commands
+                    .spawn((
+                        Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                            vertices: stroke_mesh.vertices.clone(),
+                            indices: stroke_mesh.indices.clone(),
+                        }))),
+                        MeshMaterial2d(outline_color),
+                        Transform::from_xyz(
+                            -pivot[0],
+                            -pivot[1],
+                            referenced.z_index as f32 * 0.01 + 0.001,
+                        ),
+                    ))
+                    .id();
+                commands.entity(referenced_entity).add_child(outline);
+            }
+        }
     }
 
     Ok(())
@@ -326,10 +369,7 @@ fn resolve_asset_references(
                 "referenced asset {source_key} is not a symbols manifest"
             )));
         }
-        if let Some(source_component) = symbol.components.first() {
-            component.mesh = source_component.mesh.clone();
-            component.contour_stroke_mesh = source_component.contour_stroke_mesh.clone();
-        }
+        component.referenced_components = symbol.components;
     }
     Ok(())
 }
