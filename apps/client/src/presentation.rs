@@ -684,8 +684,8 @@ fn center_camera_on_local_room(
 }
 
 fn sync_bottom_ui_bar_position(
-    cameras: Query<&Transform, With<PresentationCamera>>,
-    mut ui_bars: Query<&mut Transform, With<BottomUiBar>>,
+    cameras: Query<&Transform, (With<PresentationCamera>, Without<BottomUiBar>)>,
+    mut ui_bars: Query<&mut Transform, (With<BottomUiBar>, Without<PresentationCamera>)>,
 ) {
     let Ok(camera_transform) = cameras.single() else {
         return;
@@ -875,6 +875,28 @@ mod tests {
         assert_eq!(
             bottom_ui_bar_position(Vec2::new(15.0, -9.0)),
             Vec3::new(15.0, -13.5, 100.0)
+        );
+    }
+
+    #[test]
+    fn bottom_ui_bar_tracks_the_camera_without_transform_query_conflicts() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Update, sync_bottom_ui_bar_position);
+        app.world_mut()
+            .spawn((PresentationCamera, Transform::from_xyz(-15.0, 9.0, 0.0)));
+        let bar = app
+            .world_mut()
+            .spawn((BottomUiBar, Transform::default()))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<Transform>(bar)
+                .map(|transform| transform.translation),
+            Some(Vec3::new(-15.0, 4.5, 100.0))
         );
     }
 
