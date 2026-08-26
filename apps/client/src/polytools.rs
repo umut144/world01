@@ -1,7 +1,8 @@
 use std::{
     collections::{BTreeSet, HashMap},
     error::Error,
-    fmt,
+    fmt, fs,
+    path::Path,
 };
 
 use bevy::{
@@ -9,41 +10,6 @@ use bevy::{
 };
 use game01_world_data::CharacterId;
 use serde::Deserialize;
-
-const MANIFESTS: [(&str, &str); 8] = [
-    (
-        "barde",
-        include_str!("../../../assets/characters/barde/manifest.json"),
-    ),
-    (
-        "chantres",
-        include_str!("../../../assets/characters/chantres/manifest.json"),
-    ),
-    (
-        "hammerer",
-        include_str!("../../../assets/characters/hammerer/manifest.json"),
-    ),
-    (
-        "mage",
-        include_str!("../../../assets/characters/mage/manifest.json"),
-    ),
-    (
-        "wizard",
-        include_str!("../../../assets/characters/wizard/manifest.json"),
-    ),
-    (
-        "sorcerer",
-        include_str!("../../../assets/characters/sorcerer/manifest.json"),
-    ),
-    (
-        "rogue",
-        include_str!("../../../assets/characters/rogue/manifest.json"),
-    ),
-    (
-        "glavier",
-        include_str!("../../../assets/characters/glavier/manifest.json"),
-    ),
-];
 
 #[derive(Component)]
 pub struct BodyAnchor;
@@ -54,21 +20,40 @@ pub struct CharacterAssetLibrary {
 }
 
 impl CharacterAssetLibrary {
-    pub fn load_embedded() -> Result<Self, PolyToolsAssetError> {
-        let mut characters = HashMap::new();
-        for (key, source) in MANIFESTS {
-            let manifest: PolyToolsManifest = serde_json::from_str(source).map_err(|error| {
-                PolyToolsAssetError::new(format!("cannot parse {key}: {error}"))
+    #[cfg(test)]
+    fn load_embedded() -> Result<Self, PolyToolsAssetError> {
+        Self::load_from_directory(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../assets/characters")
+                .as_path(),
+        )
+    }
+
+    pub fn load_from_directory(directory: &Path) -> Result<Self, PolyToolsAssetError> {
+        let catalog_source =
+            fs::read_to_string(directory.join("catalog.json")).map_err(|error| {
+                PolyToolsAssetError::new(format!("cannot read character catalog: {error}"))
             })?;
-            validate_manifest(&manifest, key)?;
-            let character = CharacterId::new(key)
-                .ok_or_else(|| PolyToolsAssetError::new("empty character key"))?;
-            characters.insert(character, manifest);
+        let catalog =
+            game01_world_data::CharacterCatalog::from_json(&catalog_source).map_err(|error| {
+                PolyToolsAssetError::new(format!("cannot parse character catalog: {error}"))
+            })?;
+        let mut characters = HashMap::new();
+        for character in catalog.ids() {
+            let source = fs::read_to_string(directory.join(&character.0).join("manifest.json"))
+                .map_err(|error| {
+                    PolyToolsAssetError::new(format!("cannot read {}: {error}", character.0))
+                })?;
+            let manifest: PolyToolsManifest = serde_json::from_str(&source).map_err(|error| {
+                PolyToolsAssetError::new(format!("cannot parse {}: {error}", character.0))
+            })?;
+            validate_manifest(&manifest, &character.0)?;
+            characters.insert(character.clone(), manifest);
         }
 
         if characters.is_empty() {
             return Err(PolyToolsAssetError::new(
-                "embedded character manifests are incomplete",
+                "character catalog contains no loadable character manifests",
             ));
         }
 
@@ -418,7 +403,7 @@ mod tests {
     fn embedded_manifests_cover_current_catalog_characters() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        assert_eq!(library.ids().len(), 8);
+        assert_eq!(library.ids().len(), 9);
     }
 
     #[test]

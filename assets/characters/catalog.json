@@ -1,6 +1,12 @@
 {
   "assets": [
     {
+      "asset_key": "archerf",
+      "asset_type": "character",
+      "display_name": "ArcherF",
+      "runtime_package": "PolyToolsRuntimeExports/archerf/manifest.json"
+    },
+    {
       "asset_key": "barde",
       "asset_type": "character",
       "display_name": "Barde",

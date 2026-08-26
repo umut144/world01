@@ -59,6 +59,10 @@ impl CharacterCatalog {
     pub fn contains(&self, id: &CharacterId) -> bool {
         self.ids.contains(id)
     }
+
+    pub fn ids(&self) -> impl Iterator<Item = &CharacterId> {
+        self.ids.iter()
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
