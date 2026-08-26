@@ -51,7 +51,9 @@ Interpretation rules:
 - Scale: **1 m = 128 px**.
 - Tile size: **1 m = 128 px**.
 - Standard room: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
-- Remaining vertical space: **48 px = 0.375 tile**, currently reserved/free at the bottom, but not a mandate for visible HUD.
+- Remaining vertical space: **48 px = 0.375 tile**, rendered as a solid black
+  bottom UI bar. It is reserved for later minimal/diegetic UI such as health
+  communication and must never reveal a neighboring room floor.
 - Larger rooms must be composed from multiple standard-room units rather than using arbitrary unrelated sizing.
 - The camera follows the current room horizontally and vertically preserves the
   full **0.375-Tile** reserved/free strip below its 9-Tile floor; exceptions

@@ -16,6 +16,7 @@ use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
+const BOTTOM_UI_BAR_HEIGHT_METERS: f32 = 0.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
 const PREVIEW_SCALE: f32 = 0.95;
@@ -53,6 +54,7 @@ impl Plugin for ClientPresentationPlugin {
             })
             .insert_resource(self.character_assets.clone())
             .add_systems(Startup, setup_selection)
+            .add_systems(OnEnter(ClientScreen::InGame), spawn_bottom_ui_bar)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(
                 Update,
@@ -73,7 +75,11 @@ impl Plugin for ClientPresentationPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (sync_rendered_positions, center_camera_on_local_room)
+                (
+                    sync_rendered_positions,
+                    center_camera_on_local_room,
+                    sync_bottom_ui_bar_position,
+                )
                     .chain()
                     .run_if(in_state(ClientScreen::InGame)),
             );
@@ -154,6 +160,9 @@ struct RenderedCharacter;
 
 #[derive(Component)]
 struct PresentationCamera;
+
+#[derive(Component)]
+struct BottomUiBar;
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct LocalRenderHistory {
@@ -507,6 +516,17 @@ fn cleanup_selection(
     }
 }
 
+fn spawn_bottom_ui_bar(mut commands: Commands) {
+    commands.spawn((
+        BottomUiBar,
+        Sprite::from_color(
+            Color::BLACK,
+            Vec2::new(VIEWPORT_WIDTH_METERS, BOTTOM_UI_BAR_HEIGHT_METERS),
+        ),
+        Transform::from_translation(bottom_ui_bar_position(Vec2::ZERO)),
+    ));
+}
+
 fn spawn_starting_room_neighborhood(commands: &mut Commands) {
     for room_y in -1..=1 {
         for room_x in -1..=1 {
@@ -661,6 +681,28 @@ fn center_camera_on_local_room(
     let anchor = room_grid.camera_anchor(*room);
     camera_transform.translation.x = anchor.x;
     camera_transform.translation.y = anchor.y;
+}
+
+fn sync_bottom_ui_bar_position(
+    cameras: Query<&Transform, With<PresentationCamera>>,
+    mut ui_bars: Query<&mut Transform, With<BottomUiBar>>,
+) {
+    let Ok(camera_transform) = cameras.single() else {
+        return;
+    };
+
+    for mut ui_bar_transform in &mut ui_bars {
+        ui_bar_transform.translation =
+            bottom_ui_bar_position(camera_transform.translation.truncate());
+    }
+}
+
+fn bottom_ui_bar_position(camera_position: Vec2) -> Vec3 {
+    Vec3::new(
+        camera_position.x,
+        camera_position.y - VIEWPORT_HEIGHT_METERS * 0.5 + BOTTOM_UI_BAR_HEIGHT_METERS * 0.5,
+        100.0,
+    )
 }
 
 fn sampled_render_position(
@@ -825,6 +867,14 @@ mod tests {
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
             Some(Vec3::new(-15.0, 9.0, 0.0))
+        );
+    }
+
+    #[test]
+    fn bottom_ui_bar_exactly_covers_the_free_strip_below_the_room_floor() {
+        assert_eq!(
+            bottom_ui_bar_position(Vec2::new(15.0, -9.0)),
+            Vec3::new(15.0, -13.5, 100.0)
         );
     }
 

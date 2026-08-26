@@ -187,6 +187,12 @@ in a subtle light checkerboard: every `1 × 1 m` square is one Tile. It is a
 temporary spatial-scale aid and does not define room collision, world data, or
 the future floor-rendering system.
 
+The reserved bottom `0.375` Tile is rendered by one client-only, camera-bound
+black presentation bar above room-floor geometry. It tracks the active camera
+anchor, exactly covers the free strip, and prevents a neighboring room's floor
+from appearing there. It is visual UI reservation only: it does not alter
+authoritative collision or room-transition bounds.
+
 The neighborhood-scale test renders a client-only `3 × 3` arrangement of
 these standard rooms. A room-coordinate parity selects one of two subtle
 checkerboard palettes: the origin and its diagonal neighbors share the primary
