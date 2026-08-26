@@ -180,6 +180,11 @@ The shared spatial reference uses `1 m` terrain Tiles at `128 px/m`. The
 standard `15 × 9 m` room therefore spans `15 × 9` Tiles while retaining its
 existing physical and presentation dimensions.
 
+The current standard-room presentation uses 135 client-only `Sprite` entities
+in a subtle light checkerboard: every `1 × 1 m` square is one Tile. It is a
+temporary spatial-scale aid and does not define room collision, world data, or
+the future floor-rendering system.
+
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 
 Phase 3 gives selection previews a shared scale and bounded composition independent from authoritative in-game transforms. Reference-driven headwear proportions, face treatment, and compact class identifiers improve silhouette distinction while keeping the deliberately minimal closed-polygon language.

@@ -16,6 +16,11 @@ const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
+const STANDARD_ROOM_WIDTH_TILES: u32 = 15;
+const STANDARD_ROOM_HEIGHT_TILES: u32 = 9;
+const STANDARD_ROOM_CENTER_Y: f32 = 0.1875;
+const CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
+const CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -451,10 +456,22 @@ fn cleanup_selection(
 }
 
 fn spawn_standard_room(commands: &mut Commands) {
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.105, 0.095, 0.115), Vec2::new(15.0, 9.0)),
-        Transform::from_xyz(0.0, 0.1875, -10.0),
-    ));
+    for row in 0..STANDARD_ROOM_HEIGHT_TILES {
+        for column in 0..STANDARD_ROOM_WIDTH_TILES {
+            let color = if (row + column) % 2 == 0 {
+                CHECKERBOARD_EVEN_COLOR
+            } else {
+                CHECKERBOARD_ODD_COLOR
+            };
+            let x = column as f32 + 0.5 - STANDARD_ROOM_WIDTH_TILES as f32 * 0.5;
+            let y =
+                STANDARD_ROOM_CENTER_Y + row as f32 + 0.5 - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5;
+            commands.spawn((
+                Sprite::from_color(color, Vec2::ONE),
+                Transform::from_xyz(x, y, -10.0),
+            ));
+        }
+    }
     commands.spawn((
         Sprite::from_color(Color::srgb(0.24, 0.21, 0.27), Vec2::new(14.7, 0.10)),
         Transform::from_xyz(0.0, 4.62, -9.0),
@@ -641,6 +658,15 @@ mod tests {
             .expect("stick outside the deadzone produces movement");
         assert!((direction.x - 0.5).abs() < f32::EPSILON);
         assert_eq!(direction.y, 0.0);
+    }
+
+    #[test]
+    fn standard_room_checkerboard_matches_tile_dimensions() {
+        assert_eq!(STANDARD_ROOM_WIDTH_TILES * STANDARD_ROOM_HEIGHT_TILES, 135);
+        assert_eq!(
+            STANDARD_ROOM_CENTER_Y - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5,
+            -4.3125
+        );
     }
 
     #[test]
