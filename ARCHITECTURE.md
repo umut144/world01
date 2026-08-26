@@ -134,6 +134,28 @@ Owns non-authoritative local interaction and presentation:
 
 Client presentation state is never gameplay authority.
 
+### PolyTools character-asset boundary
+
+- PolyTools Runtime Export is the canonical interchange format for the five
+  playable character presentations.
+- The game consumes imported copies under `game01/assets/`; it does not read
+  the sibling PolyTools project at runtime and does not retain a
+  `polytools/world01` path prefix in its asset tree.
+- A deliberate sync command copies the authoritative `catalog.json` and the
+  complete packages named by it from PolyTools into `assets/`. It validates the
+  catalog, limits the import to the confirmed five character keys, and replaces
+  the generated destination atomically so stale components cannot survive a
+  re-export.
+- Client-only loading validates each imported manifest and turns its already
+  triangulated fill and contour-stroke geometry into Bevy 2D mesh presentation
+  entities. Component transforms, hierarchy, and `z_index` remain presentation
+  data; PolyTools geometry never enters simulation, networking, or replicated
+  world state.
+- The current export contract contains geometry but no material/color data.
+  The first integration applies a small client-owned temporary palette by
+  character and component name. A future material export is a separate
+  PolyTools contract decision.
+
 The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. Resizing remains disabled until aspect-preserving viewport or letterbox behavior is implemented explicitly.
 
 The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
