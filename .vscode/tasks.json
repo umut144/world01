@@ -2,23 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "game01: sync PolyTools character assets",
-      "type": "process",
-      "command": "${workspaceFolder}/scripts/sync_polytools_characters.sh",
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated",
-        "group": "game01"
-      },
-      "runOptions": {
-        "instanceLimit": 1
-      }
-    },
-    {
       "label": "game01: local room test (server + client 1001)",
       "dependsOrder": "parallel",
       "dependsOn": [
@@ -35,7 +18,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -61,7 +44,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -87,7 +70,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -113,7 +96,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -139,7 +122,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -165,7 +148,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": [],
+      "problemMatcher": ["$rustc"],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
