@@ -15,6 +15,7 @@ const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
 const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
+const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -89,9 +90,23 @@ fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -
 
 fn movement_direction(keyboard_direction: Vec2, controller_direction: Option<Vec2>) -> Vec2 {
     controller_direction
-        .filter(|direction| direction.length_squared() > 0.0)
-        .unwrap_or(keyboard_direction)
-        .normalize_or_zero()
+        .and_then(controller_stick_direction)
+        .unwrap_or_else(|| keyboard_direction.normalize_or_zero())
+}
+
+fn controller_stick_direction(stick: Vec2) -> Option<Vec2> {
+    if !stick.is_finite() {
+        return None;
+    }
+
+    let magnitude = stick.length();
+    if magnitude <= CONTROLLER_STICK_DEADZONE {
+        return None;
+    }
+
+    let scaled_magnitude =
+        ((magnitude - CONTROLLER_STICK_DEADZONE) / (1.0 - CONTROLLER_STICK_DEADZONE)).min(1.0);
+    Some(stick.normalize_or_zero() * scaled_magnitude)
 }
 
 #[derive(Resource)]
@@ -613,6 +628,19 @@ mod tests {
             movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
             Vec2::new(1.0, 1.0).normalize(),
         );
+    }
+
+    #[test]
+    fn controller_deadzone_blocks_small_stick_drift() {
+        assert_eq!(controller_stick_direction(Vec2::new(0.15, 0.0)), None);
+    }
+
+    #[test]
+    fn controller_stick_preserves_partial_movement_strength() {
+        let direction = controller_stick_direction(Vec2::new(0.575, 0.0))
+            .expect("stick outside the deadzone produces movement");
+        assert!((direction.x - 0.5).abs() < f32::EPSILON);
+        assert_eq!(direction.y, 0.0);
     }
 
     #[test]

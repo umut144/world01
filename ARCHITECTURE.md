@@ -142,6 +142,10 @@ prioritized movement source; a neutral stick leaves WASD as a development and
 accessibility fallback. Both input devices are reduced to the same local
 `MovementIntent` before Lightyear's native tick input path, so the server and
 simulation remain unaware of input-device choice.
+The left stick uses a radial 0.15 deadzone, then linearly maps the remaining
+physical travel to the `0.0..=1.0` intent magnitude. Simulation preserves that
+magnitude while clamping only values above one, so partial stick deflection
+produces proportionally slower movement.
 Controller-driven selection, actions, rumble, rebinding, and multi-controller
 assignment are outside this slice.
 
