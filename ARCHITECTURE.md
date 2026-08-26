@@ -202,9 +202,10 @@ blocks movement. Shared simulation constrains `Position` to that grid then
 derives `RoomId` after each movement step. The server is authoritative over
 both values; `RoomId` is replicated and predicted alongside the owner’s
 `Position` so predicted movement and eventual server confirmation agree. On
-each client, only the locally controlled player's current room centers the
-presentation camera. This camera response is seamless and remains
-presentation-only.
+each client, only the locally controlled player's current room anchors the
+presentation camera. Its vertical anchor preserves the full `0.375`-Tile free
+strip below every room rather than splitting it above and below the floor.
+This camera response is seamless and remains presentation-only.
 
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 

@@ -658,9 +658,9 @@ fn center_camera_on_local_room(
         return;
     };
 
-    let center = room_grid.room_center(*room);
-    camera_transform.translation.x = center.x;
-    camera_transform.translation.y = center.y;
+    let anchor = room_grid.camera_anchor(*room);
+    camera_transform.translation.x = anchor.x;
+    camera_transform.translation.y = anchor.y;
 }
 
 fn sampled_render_position(
@@ -807,7 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn camera_centers_on_the_local_players_current_room() {
+    fn camera_keeps_the_full_free_strip_below_the_local_players_current_room() {
         let mut app = App::new();
         app.init_resource::<StartingRoomGrid>()
             .add_systems(Update, center_camera_on_local_room);
@@ -824,7 +824,7 @@ mod tests {
             app.world()
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
-            Some(Vec3::new(-15.0, 9.1875, 0.0))
+            Some(Vec3::new(-15.0, 9.0, 0.0))
         );
     }
 

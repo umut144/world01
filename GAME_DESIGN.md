@@ -53,7 +53,9 @@ Interpretation rules:
 - Standard room: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
 - Remaining vertical space: **48 px = 0.375 tile**, currently reserved/free at the bottom, but not a mandate for visible HUD.
 - Larger rooms must be composed from multiple standard-room units rather than using arbitrary unrelated sizing.
-- Camera is normally centered on the current room; exceptions/special rooms are possible.
+- The camera follows the current room horizontally and vertically preserves the
+  full **0.375-Tile** reserved/free strip below its 9-Tile floor; exceptions
+  and special rooms are possible.
 - The initial room-neighborhood test uses a `3 × 3` arrangement of standard
   rooms. Its alternating room palettes are a spatial readability aid, not a
   room-type signal: the start room and its diagonal neighbors share one
