@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         primary_window: Some(Window {
             title: "The Labyrinth — Secrets, Room's & Travels'".into(),
             resolution: WindowResolution::new(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT),
-            resizable: false,
+            resizable: true,
             ..default()
         }),
         ..default()

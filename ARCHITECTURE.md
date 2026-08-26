@@ -172,7 +172,7 @@ assignment are outside this slice.
   character and component name. A future material export is a separate
   PolyTools contract decision.
 
-The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. Resizing remains disabled until aspect-preserving viewport or letterbox behavior is implemented explicitly.
+The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. The window is resizable and supports macOS fullscreen; a client-only camera viewport centers the fixed 16:10 scene in every physical window size. Remaining area is black letterboxing, so window resizing or fullscreen never reveals more or less game world.
 
 The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
 

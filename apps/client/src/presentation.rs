@@ -1,4 +1,8 @@
-use bevy::{camera::ScalingMode, prelude::*};
+use bevy::{
+    camera::{ScalingMode, Viewport},
+    prelude::*,
+    window::PrimaryWindow,
+};
 use game01_network::{
     ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
     RemotePositionExtrapolation, configure_client, connect_client,
@@ -49,6 +53,7 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(
                 Update,
                 (
+                    apply_letterbox_viewport,
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
@@ -141,6 +146,9 @@ struct ConfirmButtonLabel;
 #[derive(Component)]
 struct RenderedCharacter;
 
+#[derive(Component)]
+struct PresentationCamera;
+
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct LocalRenderHistory {
     previous: Vec2,
@@ -155,6 +163,7 @@ fn setup_selection(
 ) {
     commands.spawn((
         Camera2d,
+        PresentationCamera,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::FixedVertical {
                 viewport_height: VIEWPORT_HEIGHT_METERS,
@@ -225,6 +234,43 @@ fn setup_selection(
             )
         ],
     ));
+}
+
+fn apply_letterbox_viewport(
+    windows: Query<&Window, With<PrimaryWindow>>,
+    mut cameras: Query<&mut Camera, With<PresentationCamera>>,
+) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let Ok(mut camera) = cameras.single_mut() else {
+        return;
+    };
+
+    camera.viewport = Some(letterbox_viewport(window.physical_size()));
+}
+
+fn letterbox_viewport(window_size: UVec2) -> Viewport {
+    if window_size.x == 0 || window_size.y == 0 {
+        return Viewport {
+            physical_position: UVec2::ZERO,
+            physical_size: UVec2::ZERO,
+            depth: 0.0..1.0,
+        };
+    }
+
+    let width_from_height = u64::from(window_size.y) * 16 / 10;
+    let viewport_size = if width_from_height <= u64::from(window_size.x) {
+        UVec2::new(width_from_height as u32, window_size.y)
+    } else {
+        UVec2::new(window_size.x, (u64::from(window_size.x) * 10 / 16) as u32)
+    };
+
+    Viewport {
+        physical_position: (window_size - viewport_size) / 2,
+        physical_size: viewport_size,
+        depth: 0.0..1.0,
+    }
 }
 
 fn selection_button(character: CharacterKind) -> impl Bundle {
@@ -659,6 +705,20 @@ mod tests {
             STANDARD_ROOM_CENTER_Y - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5,
             -4.3125
         );
+    }
+
+    #[test]
+    fn letterbox_keeps_the_full_16_by_10_viewport_inside_widescreen() {
+        let viewport = letterbox_viewport(UVec2::new(1920, 1080));
+        assert_eq!(viewport.physical_position, UVec2::new(96, 0));
+        assert_eq!(viewport.physical_size, UVec2::new(1728, 1080));
+    }
+
+    #[test]
+    fn letterbox_keeps_the_full_16_by_10_viewport_inside_tall_windows() {
+        let viewport = letterbox_viewport(UVec2::new(1200, 1200));
+        assert_eq!(viewport.physical_position, UVec2::new(0, 225));
+        assert_eq!(viewport.physical_size, UVec2::new(1200, 750));
     }
 
     #[test]
