@@ -43,7 +43,7 @@ use lightyear::prelude::{
 use lightyear::{netcode::Key, prelude::*};
 use serde::{Deserialize, Serialize};
 
-pub const MAX_CLIENTS: usize = 8;
+pub const MAX_CLIENTS: usize = 5;
 pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
 #[cfg(feature = "client")]
@@ -614,9 +614,6 @@ fn spawn_position(player_id: u64) -> Vec2 {
         Vec2::new(0.0, 0.0),
         Vec2::new(2.0, 0.0),
         Vec2::new(4.0, 0.0),
-        Vec2::new(-3.0, 1.5),
-        Vec2::new(0.0, 1.5),
-        Vec2::new(3.0, 1.5),
     ];
     let index = (player_id.saturating_sub(1) % POSITIONS.len() as u64) as usize;
     POSITIONS[index]
@@ -802,7 +799,7 @@ mod tests {
     }
 
     #[test]
-    fn registry_accepts_eight_unique_clients_and_rejects_ninth() {
+    fn registry_accepts_five_unique_clients_and_rejects_sixth() {
         let mut registry = ConnectionRegistry::default();
 
         for id in 1..=MAX_CLIENTS as u64 {
@@ -814,7 +811,7 @@ mod tests {
 
         assert_eq!(registry.len(), MAX_CLIENTS);
         assert_eq!(
-            registry.register(PeerId::Netcode(MAX_CLIENTS as u64 + 1), Entity::PLACEHOLDER,),
+            registry.register(PeerId::Netcode(6), Entity::PLACEHOLDER),
             Admission::Full
         );
     }
@@ -866,7 +863,7 @@ mod tests {
         let second = spawn_position(2);
 
         assert_ne!(first, second);
-        assert_eq!(first, spawn_position(MAX_CLIENTS as u64 + 1));
+        assert_eq!(first, spawn_position(6));
     }
 
     #[test]

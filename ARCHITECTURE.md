@@ -262,7 +262,7 @@ The fixed tick loop schedules and supplies simulation inputs. Game rules must no
 - The client requires a selected catalog-backed `CharacterId` before enabling confirmation.
 - Confirming starts the connection and sends the join request once connected.
 - The server rejects repeated join attempts from a connection that already owns a player.
-- Character choices are not exclusive in the first slice; multiple players may choose the same character unless game design later changes this. During client-side comparison, `R` returns to selection, keeps existing rendered players, and reconnects the next pick with a fresh local Netcode identity.
+- Character choices are not exclusive in the first slice; multiple players may choose the same character unless game design later changes this.
 - Successful validation spawns the authoritative player at a server-selected spawn position.
 
 ## First-slice workspace intent
