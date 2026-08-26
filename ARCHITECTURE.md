@@ -185,6 +185,14 @@ in a subtle light checkerboard: every `1 × 1 m` square is one Tile. It is a
 temporary spatial-scale aid and does not define room collision, world data, or
 the future floor-rendering system.
 
+The neighborhood-scale test renders a client-only `3 × 3` arrangement of
+these standard rooms. A room-coordinate parity selects one of two subtle
+checkerboard palettes: the origin and its diagonal neighbors share the primary
+palette, while cardinal neighbors use the alternate. This presentation does
+not yet establish `RoomId`, connectivity, collision, camera transitions, or
+other gameplay authority. The later authoritative room-boundary transition is
+intended to be seamless, with no initial door or threshold presentation.
+
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 
 Phase 3 gives selection previews a shared scale and bounded composition independent from authoritative in-game transforms. Reference-driven headwear proportions, face treatment, and compact class identifiers improve silhouette distinction while keeping the deliberately minimal closed-polygon language.

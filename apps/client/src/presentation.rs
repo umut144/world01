@@ -23,8 +23,10 @@ const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
 const STANDARD_ROOM_WIDTH_TILES: u32 = 15;
 const STANDARD_ROOM_HEIGHT_TILES: u32 = 9;
 const STANDARD_ROOM_CENTER_Y: f32 = 0.1875;
-const CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
-const CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
+const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
+const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
+const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
+const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -487,7 +489,7 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_standard_room(commands);
+    spawn_starting_room_neighborhood(commands);
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -501,22 +503,43 @@ fn cleanup_selection(
     }
 }
 
-fn spawn_standard_room(commands: &mut Commands) {
+fn spawn_starting_room_neighborhood(commands: &mut Commands) {
+    for room_y in -1..=1 {
+        for room_x in -1..=1 {
+            spawn_standard_room(commands, IVec2::new(room_x, room_y));
+        }
+    }
+}
+
+fn spawn_standard_room(commands: &mut Commands, room_coordinates: IVec2) {
     for row in 0..STANDARD_ROOM_HEIGHT_TILES {
         for column in 0..STANDARD_ROOM_WIDTH_TILES {
-            let color = if (row + column) % 2 == 0 {
-                CHECKERBOARD_EVEN_COLOR
-            } else {
-                CHECKERBOARD_ODD_COLOR
-            };
-            let x = column as f32 + 0.5 - STANDARD_ROOM_WIDTH_TILES as f32 * 0.5;
-            let y =
-                STANDARD_ROOM_CENTER_Y + row as f32 + 0.5 - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5;
+            let color = checkerboard_color(room_coordinates, row, column);
+            let x =
+                room_coordinates.x as f32 * STANDARD_ROOM_WIDTH_TILES as f32 + column as f32 + 0.5
+                    - STANDARD_ROOM_WIDTH_TILES as f32 * 0.5;
+            let y = STANDARD_ROOM_CENTER_Y
+                + room_coordinates.y as f32 * STANDARD_ROOM_HEIGHT_TILES as f32
+                + row as f32
+                + 0.5
+                - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5;
             commands.spawn((
                 Sprite::from_color(color, Vec2::ONE),
                 Transform::from_xyz(x, y, -10.0),
             ));
         }
+    }
+}
+
+fn checkerboard_color(room_coordinates: IVec2, row: u32, column: u32) -> Color {
+    let primary_room = (room_coordinates.x + room_coordinates.y).rem_euclid(2) == 0;
+    let even_tile = (row + column) % 2 == 0;
+
+    match (primary_room, even_tile) {
+        (true, true) => PRIMARY_CHECKERBOARD_EVEN_COLOR,
+        (true, false) => PRIMARY_CHECKERBOARD_ODD_COLOR,
+        (false, true) => ALTERNATE_CHECKERBOARD_EVEN_COLOR,
+        (false, false) => ALTERNATE_CHECKERBOARD_ODD_COLOR,
     }
 }
 
@@ -704,6 +727,23 @@ mod tests {
         assert_eq!(
             STANDARD_ROOM_CENTER_Y - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5,
             -4.3125
+        );
+    }
+
+    #[test]
+    fn room_checkerboard_palette_alternates_by_cardinal_neighbor() {
+        let center = checkerboard_color(IVec2::ZERO, 0, 0);
+        assert_eq!(center, checkerboard_color(IVec2::new(1, 1), 0, 0));
+        assert_eq!(center, checkerboard_color(IVec2::new(-1, 1), 0, 0));
+        assert_ne!(center, checkerboard_color(IVec2::new(1, 0), 0, 0));
+        assert_ne!(center, checkerboard_color(IVec2::new(0, -1), 0, 0));
+    }
+
+    #[test]
+    fn starting_neighborhood_contains_nine_standard_rooms() {
+        assert_eq!(
+            3 * 3 * STANDARD_ROOM_WIDTH_TILES * STANDARD_ROOM_HEIGHT_TILES,
+            1215
         );
     }
 
