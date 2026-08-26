@@ -5,7 +5,7 @@ use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::MovementStep;
-use game01_world_data::StartingRoomGrid;
+use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 
 use crate::controller::ControllerInput;
 use crate::polytools::CharacterAssetLibrary;
@@ -69,6 +69,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..default()
     }));
     app.insert_resource(movement_step);
+    app.insert_resource(CharacterCatalog::from_json(include_str!(
+        "../../../assets/characters/catalog.json"
+    ))?);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)

@@ -6,7 +6,7 @@ use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{MovementStep, move_players};
-use game01_world_data::StartingRoomGrid;
+use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
@@ -34,6 +34,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         LogPlugin::default(),
         StatesPlugin,
     ))
+    .insert_resource(CharacterCatalog::from_json(include_str!(
+        "../../../assets/characters/catalog.json"
+    ))?)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
     .insert_resource(

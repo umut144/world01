@@ -7,11 +7,22 @@ use std::{
 use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
-use game01_world_data::CharacterKind;
+use game01_world_data::CharacterId;
 use serde::Deserialize;
 
-const CHARACTER_KEYS: [&str; 5] = ["mage", "wizard", "sorcerer", "rogue", "glavier"];
-const MANIFESTS: [(&str, &str); 5] = [
+const MANIFESTS: [(&str, &str); 8] = [
+    (
+        "barde",
+        include_str!("../../../assets/characters/barde/manifest.json"),
+    ),
+    (
+        "chantres",
+        include_str!("../../../assets/characters/chantres/manifest.json"),
+    ),
+    (
+        "hammerer",
+        include_str!("../../../assets/characters/hammerer/manifest.json"),
+    ),
     (
         "mage",
         include_str!("../../../assets/characters/mage/manifest.json"),
@@ -39,7 +50,7 @@ pub struct BodyAnchor;
 
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
-    characters: HashMap<CharacterKind, PolyToolsManifest>,
+    characters: HashMap<CharacterId, PolyToolsManifest>,
 }
 
 impl CharacterAssetLibrary {
@@ -50,11 +61,12 @@ impl CharacterAssetLibrary {
                 PolyToolsAssetError::new(format!("cannot parse {key}: {error}"))
             })?;
             validate_manifest(&manifest, key)?;
-            let character = character_from_key(key)?;
+            let character = CharacterId::new(key)
+                .ok_or_else(|| PolyToolsAssetError::new("empty character key"))?;
             characters.insert(character, manifest);
         }
 
-        if characters.len() != CharacterKind::ALL.len() {
+        if characters.is_empty() {
             return Err(PolyToolsAssetError::new(
                 "embedded character manifests are incomplete",
             ));
@@ -63,11 +75,17 @@ impl CharacterAssetLibrary {
         Ok(Self { characters })
     }
 
-    fn character(&self, character: CharacterKind) -> Option<&PolyToolsManifest> {
-        self.characters.get(&character)
+    pub fn ids(&self) -> Vec<CharacterId> {
+        let mut ids = self.characters.keys().cloned().collect::<Vec<_>>();
+        ids.sort_by(|a, b| a.0.cmp(&b.0));
+        ids
     }
 
-    pub fn body_pivot(&self, character: CharacterKind) -> Vec2 {
+    fn character(&self, character: &CharacterId) -> Option<&PolyToolsManifest> {
+        self.characters.get(character)
+    }
+
+    pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
         self.character(character)
             .and_then(|manifest| {
                 manifest
@@ -119,7 +137,8 @@ struct PolyToolsComponent {
     local_pivot: Option<[f32; 2]>,
     local_transform: PolyToolsTransform,
     mesh: Option<PolyToolsMesh>,
-    contour_stroke_mesh: PolyToolsStrokeMesh,
+    #[serde(default)]
+    contour_stroke_mesh: Option<PolyToolsStrokeMesh>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -148,7 +167,7 @@ pub fn spawn_character_visual(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
     library: &CharacterAssetLibrary,
-    character: CharacterKind,
+    character: &CharacterId,
 ) -> Result<(), PolyToolsAssetError> {
     let manifest = library
         .character(character)
@@ -200,12 +219,14 @@ pub fn spawn_character_visual(
             commands.entity(component_entity).add_child(fill);
         }
 
-        if component.contour_stroke_mesh.has_outline {
+        if let Some(stroke_mesh) = component.contour_stroke_mesh.as_ref()
+            && stroke_mesh.has_outline
+        {
             let outline = commands
                 .spawn((
                     Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
-                        vertices: component.contour_stroke_mesh.vertices.clone(),
-                        indices: component.contour_stroke_mesh.indices.clone(),
+                        vertices: stroke_mesh.vertices.clone(),
+                        indices: stroke_mesh.indices.clone(),
                     }))),
                     MeshMaterial2d(outline_color),
                     Transform::from_xyz(
@@ -254,7 +275,7 @@ fn bevy_mesh(mesh: &PolyToolsMesh) -> Mesh {
     bevy_mesh
 }
 
-fn component_color(character: CharacterKind, component_name: &str) -> Color {
+fn component_color(character: &CharacterId, component_name: &str) -> Color {
     match component_name {
         "head" | "belly" => Color::srgb(0.82, 0.63, 0.48),
         name if name.starts_with("eye") || name.starts_with("eyebrow") => {
@@ -264,26 +285,17 @@ fn component_color(character: CharacterKind, component_name: &str) -> Color {
     }
 }
 
-fn character_color(character: CharacterKind) -> Color {
-    match character {
-        CharacterKind::Wizard => Color::srgb(0.31, 0.18, 0.58),
-        CharacterKind::Mage => Color::srgb(0.12, 0.55, 0.62),
-        CharacterKind::Sorcerer => Color::srgb(0.62, 0.12, 0.16),
-        CharacterKind::Rogue => Color::srgb(0.16, 0.17, 0.21),
-        CharacterKind::Glavier => Color::srgb(0.63, 0.43, 0.11),
-    }
-}
-
-fn character_from_key(key: &str) -> Result<CharacterKind, PolyToolsAssetError> {
-    match key {
-        "wizard" => Ok(CharacterKind::Wizard),
-        "mage" => Ok(CharacterKind::Mage),
-        "sorcerer" => Ok(CharacterKind::Sorcerer),
-        "rogue" => Ok(CharacterKind::Rogue),
-        "glavier" => Ok(CharacterKind::Glavier),
-        _ => Err(PolyToolsAssetError::new(format!(
-            "unsupported character key: {key}"
-        ))),
+fn character_color(character: &CharacterId) -> Color {
+    match character.0.as_str() {
+        "wizard" => Color::srgb(0.31, 0.18, 0.58),
+        "mage" => Color::srgb(0.12, 0.55, 0.62),
+        "sorcerer" => Color::srgb(0.62, 0.12, 0.16),
+        "rogue" => Color::srgb(0.16, 0.17, 0.21),
+        "glavier" => Color::srgb(0.63, 0.43, 0.11),
+        "barde" => Color::srgb(0.55, 0.30, 0.12),
+        "chantres" => Color::srgb(0.42, 0.20, 0.55),
+        "hammerer" => Color::srgb(0.48, 0.31, 0.18),
+        _ => Color::srgb(0.30, 0.34, 0.40),
     }
 }
 
@@ -297,7 +309,7 @@ fn validate_manifest(
             manifest.asset_key, manifest.schema_version
         )));
     }
-    if manifest.asset_key != expected_key || !CHARACTER_KEYS.contains(&expected_key) {
+    if manifest.asset_key != expected_key || manifest.asset_type != "character" {
         return Err(PolyToolsAssetError::new(
             "manifest asset key does not match its package",
         ));
@@ -359,17 +371,19 @@ fn validate_manifest(
         if let Some(mesh) = component.mesh.as_ref() {
             validate_mesh(mesh, &component.component_id)?;
         }
-        let stroke = PolyToolsMesh {
-            vertices: component.contour_stroke_mesh.vertices.clone(),
-            indices: component.contour_stroke_mesh.indices.clone(),
-        };
-        if component.contour_stroke_mesh.has_outline {
-            validate_mesh(&stroke, &component.component_id)?;
-        } else if !stroke.vertices.is_empty() || !stroke.indices.is_empty() {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} has a disabled outline with geometry",
-                component.component_id
-            )));
+        if let Some(contour_stroke_mesh) = component.contour_stroke_mesh.as_ref() {
+            let stroke = PolyToolsMesh {
+                vertices: contour_stroke_mesh.vertices.clone(),
+                indices: contour_stroke_mesh.indices.clone(),
+            };
+            if contour_stroke_mesh.has_outline {
+                validate_mesh(&stroke, &component.component_id)?;
+            } else if !stroke.vertices.is_empty() || !stroke.indices.is_empty() {
+                return Err(PolyToolsAssetError::new(format!(
+                    "{} has a disabled outline with geometry",
+                    component.component_id
+                )));
+            }
         }
     }
     Ok(())
@@ -401,10 +415,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_manifests_cover_the_five_playable_characters() {
+    fn embedded_manifests_cover_current_catalog_characters() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        assert_eq!(library.characters.len(), CharacterKind::ALL.len());
+        assert_eq!(library.ids().len(), 8);
     }
 
     #[test]

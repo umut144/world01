@@ -44,7 +44,8 @@ World data, configuration, simulation, networking, orchestration, input, and pre
 
 Owns shared protocol-neutral domain data:
 
-- `CharacterKind`: Wizard, Mage, Sorcerer, Rogue, Glavier;
+- `CharacterId`: validated catalog key for a character asset (currently Wizard,
+  Mage, Sorcerer, Rogue, Glavier, Barde, Chantres, and Hammerer);
 - player identity, selected character, and ownership markers;
 - standard-room and spawn data;
 - the fixed initial `3 × 3` room-grid coordinate mapping and authoritative
@@ -106,7 +107,14 @@ Slice 2 Phase 3 registers `Position` for Lightyear prediction and assigns a `Pre
 
 Phase 3 uses Lightyear UDP + Netcode on loopback address `127.0.0.1:5000`. Clients bind an operating-system-selected local UDP port and receive a non-zero Netcode client ID from their first process argument (falling back to the process ID). The server admits at most five unique identities and removes connection-registry entries on disconnect.
 
-Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying `CharacterKind`. Connection begins only after local confirmation. The server rejects repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses one of five separated spawn positions. Slice 2 Phase 1 now replicates `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and despawn to all clients. Since Slice 2 Phase 6, snapshot publication follows the configured 60 Hz Lightyear tick.
+Phase 4 adds one ordered-reliable client-to-server `JoinRequest` carrying a
+catalog-backed `CharacterId`. Connection begins only after local confirmation.
+The server validates the ID against the synced character catalog, rejects
+repeated joins per Netcode identity, allocates a stable `PlayerId`, and chooses
+one of five separated spawn positions. Slice 2 Phase 1 now replicates
+`PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Position`, entity spawn, and
+despawn to all clients. Since Slice 2 Phase 6, snapshot publication follows
+the configured 60 Hz Lightyear tick.
 
 ### `server`
 
@@ -153,13 +161,13 @@ assignment are outside this slice.
 
 ### PolyTools character-asset boundary
 
-- PolyTools Runtime Export is the canonical interchange format for the five
-  playable character presentations.
+- PolyTools Runtime Export is the canonical interchange format for character
+  presentations; the synced catalog determines which character IDs are valid.
 - The game consumes imported copies under `game01/assets/`; it does not read
   the sibling PolyTools project at runtime and does not retain a
   `polytools/world01` path prefix in its asset tree.
 - `./scripts/sync_polytools_characters.sh` copies the authoritative
-  `catalog.json` and the complete packages named by it from PolyTools into
+  `catalog.json` and all character packages named by it from PolyTools into
   `assets/characters/`. It validates the catalog, limits the import to the
   confirmed five character keys, and replaces the generated destination
   atomically so stale components cannot survive a re-export. The source World
@@ -251,7 +259,7 @@ The fixed tick loop schedules and supplies simulation inputs. Game rules must no
 ## Character selection and join protocol
 
 - Selection happens locally before joining the gameplay session.
-- The client requires a selected `CharacterKind` before enabling confirmation.
+- The client requires a selected catalog-backed `CharacterId` before enabling confirmation.
 - Confirming starts the connection and sends the join request once connected.
 - The server rejects repeated join attempts from a connection that already owns a player.
 - Character choices are not exclusive in the first slice; multiple players may choose the same character unless game design later changes this.
@@ -302,7 +310,7 @@ Acceptance: client and server targets compile, and the server does not depend on
 
 ### Phase 2 — world data and isolated simulation
 
-- Add the five-value `CharacterKind`.
+- Add catalog-backed `CharacterId` selection and validation.
 - Add identity, selection, ownership, room, spawn, and movement-intent data.
 - Implement configurable direct-Transform movement at 30 Hz.
 - Normalize diagonal intent.

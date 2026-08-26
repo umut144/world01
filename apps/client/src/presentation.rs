@@ -9,7 +9,7 @@ use game01_network::{
     RemotePositionExtrapolation, configure_client, connect_client,
 };
 use game01_world_data::{
-    CharacterKind, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
+    CharacterId, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
@@ -19,7 +19,6 @@ use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
-const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
 const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
@@ -154,7 +153,7 @@ struct ClientSession {
     client_id: u64,
     remote_interpolation_ratio: f32,
     network_simulation: NetworkSimulationProfile,
-    selected: Option<CharacterKind>,
+    selected: Option<CharacterId>,
     joining: bool,
 }
 
@@ -165,10 +164,10 @@ struct RoomFloorTile;
 struct SelectionVisual;
 
 #[derive(Component)]
-struct SelectionPreview(CharacterKind);
+struct SelectionPreview(CharacterId);
 
 #[derive(Component)]
-struct SelectionButton(CharacterKind);
+struct SelectionButton(CharacterId);
 
 #[derive(Component)]
 struct ConfirmButton;
@@ -209,15 +208,17 @@ fn setup_selection(
     ));
 
     let selection_center_y = (VIEWPORT_HEIGHT_METERS - SELECTION_HEIGHT_METERS) * 0.5;
-    for (index, character) in CharacterKind::ALL.into_iter().enumerate() {
-        let x = -VIEWPORT_WIDTH_METERS * 0.5 + PANEL_WIDTH_METERS * (index as f32 + 0.5);
+    let character_ids = character_assets.ids();
+    let panel_width = VIEWPORT_WIDTH_METERS / character_ids.len().max(1) as f32;
+    for (index, character) in character_ids.iter().cloned().enumerate() {
+        let x = -VIEWPORT_WIDTH_METERS * 0.5 + panel_width * (index as f32 + 0.5);
         let root = commands
             .spawn((
                 Transform::from_xyz(x, selection_center_y + 0.15, 0.0)
                     .with_scale(Vec3::splat(PREVIEW_SCALE)),
                 Visibility::default(),
                 SelectionVisual,
-                SelectionPreview(character),
+                SelectionPreview(character.clone()),
             ))
             .id();
         if let Err(error) = spawn_character_visual(
@@ -226,50 +227,56 @@ fn setup_selection(
             &mut meshes,
             &mut materials,
             &character_assets,
-            character,
+            &character,
         ) {
             error!("cannot spawn PolyTools selection visual: {error}");
         }
     }
 
-    commands.spawn((
-        Node {
-            width: percent(100),
-            height: percent(100),
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        SelectionVisual,
-        children![
-            (
-                Node {
-                    width: percent(100),
-                    height: percent(75),
-                    flex_direction: FlexDirection::Row,
-                    ..default()
-                },
-                SelectionVisual,
-                children![
-                    (selection_button(CharacterKind::Wizard), SelectionVisual),
-                    (selection_button(CharacterKind::Mage), SelectionVisual),
-                    (selection_button(CharacterKind::Sorcerer), SelectionVisual),
-                    (selection_button(CharacterKind::Rogue), SelectionVisual),
-                    (selection_button(CharacterKind::Glavier), SelectionVisual),
-                ]
-            ),
-            (
-                Node {
-                    width: percent(100),
-                    height: percent(25),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    ..default()
-                },
-                SelectionVisual,
-                children![confirm_button()]
-            )
-        ],
-    ));
+    let panel = commands
+        .spawn((
+            Node {
+                width: percent(100),
+                height: percent(100),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            SelectionVisual,
+        ))
+        .id();
+    let row = commands
+        .spawn((
+            Node {
+                width: percent(100),
+                height: percent(75),
+                flex_direction: FlexDirection::Row,
+                ..default()
+            },
+            SelectionVisual,
+        ))
+        .id();
+    let button_width = 100.0 / character_ids.len().max(1) as f32;
+    for character in character_ids {
+        let button = commands
+            .spawn((selection_button(character, button_width), SelectionVisual))
+            .id();
+        commands.entity(row).add_child(button);
+    }
+    let footer = commands
+        .spawn((
+            Node {
+                width: percent(100),
+                height: percent(25),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            SelectionVisual,
+            children![confirm_button()],
+        ))
+        .id();
+    commands.entity(panel).add_child(row);
+    commands.entity(panel).add_child(footer);
 }
 
 fn apply_letterbox_viewport(
@@ -376,12 +383,12 @@ fn letterbox_viewport(window_size: UVec2, target_aspect: f32) -> Viewport {
     }
 }
 
-fn selection_button(character: CharacterKind) -> impl Bundle {
+fn selection_button(character: CharacterId, width_percent: f32) -> impl Bundle {
     (
         Button,
-        SelectionButton(character),
+        SelectionButton(character.clone()),
         Node {
-            width: percent(20),
+            width: percent(width_percent),
             height: percent(100),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::FlexEnd,
@@ -390,7 +397,7 @@ fn selection_button(character: CharacterKind) -> impl Bundle {
             ..default()
         },
         BorderColor::all(Color::srgba(0.85, 0.85, 0.9, 0.35)),
-        BackgroundColor(panel_color(character, false).with_alpha(0.30)),
+        BackgroundColor(panel_color(&character, false).with_alpha(0.30)),
         children![(
             Text::new(character.label()),
             TextFont::from_font_size(20.0),
@@ -442,6 +449,7 @@ fn handle_selection_input(
     >,
     mut commands: Commands,
     room_grid: Res<StartingRoomGrid>,
+    character_assets: Res<CharacterAssetLibrary>,
 ) -> Result {
     if session.joining {
         return Ok(());
@@ -450,7 +458,7 @@ fn handle_selection_input(
     for (interaction, selection_button, confirm_button) in &buttons {
         if *interaction == Interaction::Pressed {
             if let Some(selection_button) = selection_button {
-                session.selected = Some(selection_button.0);
+                session.selected = Some(selection_button.0.clone());
             } else if confirm_button.is_some() {
                 return join_selected_character(
                     &mut session,
@@ -462,22 +470,29 @@ fn handle_selection_input(
         }
     }
 
-    for (key, character) in [
-        (KeyCode::Digit1, CharacterKind::Wizard),
-        (KeyCode::Digit2, CharacterKind::Mage),
-        (KeyCode::Digit3, CharacterKind::Sorcerer),
-        (KeyCode::Digit4, CharacterKind::Rogue),
-        (KeyCode::Digit5, CharacterKind::Glavier),
-    ] {
+    for (index, character) in character_assets.ids().into_iter().enumerate() {
+        let key = match index {
+            0 => KeyCode::Digit1,
+            1 => KeyCode::Digit2,
+            2 => KeyCode::Digit3,
+            3 => KeyCode::Digit4,
+            4 => KeyCode::Digit5,
+            5 => KeyCode::Digit6,
+            6 => KeyCode::Digit7,
+            7 => KeyCode::Digit8,
+            _ => continue,
+        };
         if keyboard.just_pressed(key) {
             session.selected = Some(character);
         }
     }
 
     if keyboard.just_pressed(KeyCode::ArrowLeft) {
-        session.selected = Some(adjacent_character(session.selected, -1));
+        session.selected =
+            adjacent_character(session.selected.as_ref(), -1, &character_assets.ids());
     } else if keyboard.just_pressed(KeyCode::ArrowRight) {
-        session.selected = Some(adjacent_character(session.selected, 1));
+        session.selected =
+            adjacent_character(session.selected.as_ref(), 1, &character_assets.ids());
     }
 
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
@@ -506,9 +521,9 @@ fn update_selection_feedback(
     for (interaction, selection_button, confirm_button, mut background, mut border) in &mut buttons
     {
         if let Some(selection_button) = selection_button {
-            let selected = session.selected == Some(selection_button.0);
+            let selected = session.selected.as_ref() == Some(&selection_button.0);
             if *interaction == Interaction::Hovered {
-                hovered_character = Some(selection_button.0);
+                hovered_character = Some(selection_button.0.clone());
             }
             let intensity = match (*interaction, selected) {
                 (Interaction::Pressed, _) => 0.72,
@@ -516,8 +531,8 @@ fn update_selection_feedback(
                 (Interaction::Hovered, false) => 0.48,
                 _ => 0.30,
             };
-            **background =
-                panel_color(selection_button.0, selected || intensity > 0.30).with_alpha(intensity);
+            **background = panel_color(&selection_button.0, selected || intensity > 0.30)
+                .with_alpha(intensity);
             let border_color = if selected {
                 Color::srgba(0.96, 0.79, 0.38, 0.95)
             } else if *interaction == Interaction::Hovered {
@@ -552,9 +567,9 @@ fn update_selection_feedback(
     }
 
     for (preview, mut transform) in &mut previews {
-        let scale = if session.selected == Some(preview.0) {
+        let scale = if session.selected.as_ref() == Some(&preview.0) {
             PREVIEW_SCALE * 1.08
-        } else if hovered_character == Some(preview.0) {
+        } else if hovered_character.as_ref() == Some(&preview.0) {
             PREVIEW_SCALE * 1.04
         } else {
             PREVIEW_SCALE
@@ -563,20 +578,21 @@ fn update_selection_feedback(
     }
 }
 
-fn adjacent_character(selected: Option<CharacterKind>, offset: isize) -> CharacterKind {
-    let current = selected
-        .and_then(|selected| {
-            CharacterKind::ALL
-                .iter()
-                .position(|candidate| *candidate == selected)
-        })
-        .unwrap_or(if offset < 0 {
-            0
-        } else {
-            CharacterKind::ALL.len() - 1
-        });
-    let next = (current as isize + offset).rem_euclid(CharacterKind::ALL.len() as isize) as usize;
-    CharacterKind::ALL[next]
+fn adjacent_character(
+    selected: Option<&CharacterId>,
+    offset: isize,
+    ids: &[CharacterId],
+) -> Option<CharacterId> {
+    if ids.is_empty() {
+        return None;
+    }
+    let Some(current) =
+        selected.and_then(|selected| ids.iter().position(|candidate| candidate == selected))
+    else {
+        return Some(ids[if offset < 0 { ids.len() - 1 } else { 0 }].clone());
+    };
+    let next = (current as isize + offset).rem_euclid(ids.len() as isize) as usize;
+    Some(ids[next].clone())
 }
 
 fn join_selected_character(
@@ -585,7 +601,7 @@ fn join_selected_character(
     next_screen: &mut NextState<ClientScreen>,
     room_grid: StartingRoomGrid,
 ) -> Result {
-    let Some(character) = session.selected else {
+    let Some(character) = session.selected.clone() else {
         return Ok(());
     };
 
@@ -654,7 +670,7 @@ fn render_new_players(
     for (entity, character, position) in &players {
         commands.entity(entity).insert((
             RenderedCharacter,
-            BodyPivot(character_assets.body_pivot(character.0)),
+            BodyPivot(character_assets.body_pivot(&character.0)),
             Visibility::default(),
             Transform::from_xyz(position.x, position.y, 0.0),
         ));
@@ -664,7 +680,7 @@ fn render_new_players(
             &mut meshes,
             &mut materials,
             &character_assets,
-            character.0,
+            &character.0,
         ) {
             error!("cannot spawn PolyTools player visual: {error}");
         }
@@ -775,13 +791,17 @@ fn correction_decay(delta_seconds: f32) -> f32 {
     0.5_f32.powf(delta_seconds / CORRECTION_HALF_LIFE_SECONDS)
 }
 
-fn panel_color(character: CharacterKind, selected: bool) -> Color {
-    let base = match character {
-        CharacterKind::Wizard => (0.16, 0.12, 0.28),
-        CharacterKind::Mage => (0.10, 0.24, 0.27),
-        CharacterKind::Sorcerer => (0.29, 0.10, 0.12),
-        CharacterKind::Rogue => (0.12, 0.13, 0.15),
-        CharacterKind::Glavier => (0.27, 0.20, 0.08),
+fn panel_color(character: &CharacterId, selected: bool) -> Color {
+    let base = match character.0.as_str() {
+        "wizard" => (0.16, 0.12, 0.28),
+        "mage" => (0.10, 0.24, 0.27),
+        "sorcerer" => (0.29, 0.10, 0.12),
+        "rogue" => (0.12, 0.13, 0.15),
+        "glavier" => (0.27, 0.20, 0.08),
+        "barde" => (0.28, 0.15, 0.08),
+        "chantres" => (0.22, 0.10, 0.28),
+        "hammerer" => (0.24, 0.16, 0.10),
+        _ => (0.16, 0.18, 0.22),
     };
     let multiplier = if selected { 1.65 } else { 1.0 };
     Color::srgb(
@@ -797,20 +817,28 @@ mod tests {
 
     #[test]
     fn keyboard_selection_wraps_in_both_directions() {
+        let ids = vec![
+            CharacterId::new("glavier").unwrap(),
+            CharacterId::new("wizard").unwrap(),
+        ];
         assert_eq!(
-            adjacent_character(Some(CharacterKind::Wizard), -1),
-            CharacterKind::Glavier
+            adjacent_character(Some(&ids[0]), -1, &ids),
+            Some(ids[1].clone())
         );
         assert_eq!(
-            adjacent_character(Some(CharacterKind::Glavier), 1),
-            CharacterKind::Wizard
+            adjacent_character(Some(&ids[1]), 1, &ids),
+            Some(ids[0].clone())
         );
     }
 
     #[test]
     fn keyboard_selection_starts_at_directional_edge() {
-        assert_eq!(adjacent_character(None, 1), CharacterKind::Wizard);
-        assert_eq!(adjacent_character(None, -1), CharacterKind::Glavier);
+        let ids = vec![
+            CharacterId::new("glavier").unwrap(),
+            CharacterId::new("wizard").unwrap(),
+        ];
+        assert_eq!(adjacent_character(None, 1, &ids), Some(ids[0].clone()));
+        assert_eq!(adjacent_character(None, -1, &ids), Some(ids[1].clone()));
     }
 
     #[test]

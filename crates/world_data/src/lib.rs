@@ -5,33 +5,59 @@ use bevy::{
     prelude::{Component, Reflect, Resource, Vec2},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum CharacterKind {
-    Wizard,
-    Mage,
-    Sorcerer,
-    Rogue,
-    Glavier,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CharacterId(pub String);
+
+impl CharacterId {
+    pub fn new(value: impl Into<String>) -> Option<Self> {
+        let value = value.into();
+        (!value.is_empty()).then_some(Self(value))
+    }
+
+    pub fn label(&self) -> String {
+        self.0
+            .split('_')
+            .map(|part| {
+                let mut chars = part.chars();
+                chars.next().map_or_else(String::new, |first| {
+                    first.to_uppercase().collect::<String>() + chars.as_str()
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
-impl CharacterKind {
-    pub const ALL: [Self; 5] = [
-        Self::Wizard,
-        Self::Mage,
-        Self::Sorcerer,
-        Self::Rogue,
-        Self::Glavier,
-    ];
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct CharacterCatalog {
+    ids: HashSet<CharacterId>,
+}
 
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Wizard => "Wizard",
-            Self::Mage => "Mage",
-            Self::Sorcerer => "Sorcerer",
-            Self::Rogue => "Rogue",
-            Self::Glavier => "Glavier",
+impl CharacterCatalog {
+    pub fn from_json(source: &str) -> Result<Self, serde_json::Error> {
+        #[derive(Deserialize)]
+        struct Catalog {
+            assets: Vec<Asset>,
         }
+        #[derive(Deserialize)]
+        struct Asset {
+            asset_key: String,
+            asset_type: String,
+        }
+        let catalog: Catalog = serde_json::from_str(source)?;
+        let ids = catalog
+            .assets
+            .into_iter()
+            .filter(|asset| asset.asset_type == "character")
+            .filter_map(|asset| CharacterId::new(asset.asset_key))
+            .collect();
+        Ok(Self { ids })
+    }
+
+    pub fn contains(&self, id: &CharacterId) -> bool {
+        self.ids.contains(id)
     }
 }
 
@@ -41,8 +67,8 @@ pub struct PlayerId(pub u64);
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PlayerOwner(pub u64);
 
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SelectedCharacter(pub CharacterKind);
+#[derive(Component, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SelectedCharacter(pub CharacterId);
 
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Player;

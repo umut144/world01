@@ -5,7 +5,14 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyTools/worlds/world01}"
 source_catalog="$source_world_dir/catalog.json"
 destination_dir="$project_root/assets/characters"
-character_keys=(mage wizard sorcerer rogue glavier)
+character_keys=()
+while IFS= read -r key; do
+  [[ -n "$key" ]] && character_keys+=("$key")
+done < <(jq -r '.assets[] | select(.asset_type == "character") | .asset_key' "$source_catalog" | sort)
+if [[ "${#character_keys[@]}" -eq 0 ]]; then
+  printf '%s\n' 'error: catalog contains no character assets.' >&2
+  exit 1
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
   printf '%s\n' 'error: jq is required to validate PolyTools character exports.' >&2

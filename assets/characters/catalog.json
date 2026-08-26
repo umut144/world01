@@ -1,10 +1,28 @@
 {
   "assets": [
     {
+      "asset_key": "barde",
+      "asset_type": "character",
+      "display_name": "Barde",
+      "runtime_package": "PolyToolsRuntimeExports/barde/manifest.json"
+    },
+    {
+      "asset_key": "chantres",
+      "asset_type": "character",
+      "display_name": "Chantres",
+      "runtime_package": "PolyToolsRuntimeExports/chantres/manifest.json"
+    },
+    {
       "asset_key": "glavier",
       "asset_type": "character",
       "display_name": "Glavier",
       "runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
+    },
+    {
+      "asset_key": "hammerer",
+      "asset_type": "character",
+      "display_name": "Hammerer",
+      "runtime_package": "PolyToolsRuntimeExports/hammerer/manifest.json"
     },
     {
       "asset_key": "mage",

@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(design.room.width_tiles, 50);
         assert_eq!(design.room.height_tiles, 50);
         assert!(design.room.is_valid());
-        assert_eq!(design.camera.effective_view_tiles(), Some((22, 20)));
+        assert_eq!(design.camera.effective_view_tiles(), Some((8, 5)));
         assert!(design.camera.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),

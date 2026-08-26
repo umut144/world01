@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 #[cfg(feature = "server")]
-use game01_world_data::StartingRoomGrid;
+use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 use game01_world_data::{
-    CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, RoomId, SelectedCharacter,
+    CharacterId, MovementIntent, PlayerId, PlayerOwner, Position, RoomId, SelectedCharacter,
 };
 #[cfg(feature = "server")]
 use lightyear::connection::client::Disconnecting;
@@ -97,12 +97,13 @@ impl NetworkSimulationProfile {
     }
 }
 
-const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_31;
+// Character identifiers are catalog strings rather than the former fixed enum.
+const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
 pub struct JoinChannel;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JoinRequest {
-    pub character: CharacterKind,
+    pub character: CharacterId,
 }
 
 #[cfg(feature = "client")]
@@ -135,8 +136,8 @@ pub enum ServerNetworkSet {
 }
 
 #[cfg(feature = "client")]
-#[derive(Component, Debug, Clone, Copy)]
-struct PendingJoin(CharacterKind);
+#[derive(Component, Debug, Clone)]
+struct PendingJoin(CharacterId);
 
 #[cfg(feature = "server")]
 #[derive(Resource, Debug)]
@@ -411,7 +412,7 @@ fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands:
 pub fn connect_client(
     commands: &mut Commands,
     client_id: u64,
-    character: CharacterKind,
+    character: CharacterId,
     remote_interpolation_ratio: f32,
     network_simulation: NetworkSimulationProfile,
 ) -> Result<Entity> {
@@ -513,7 +514,7 @@ fn send_join_when_connected(
     };
 
     sender.send::<JoinChannel>(JoinRequest {
-        character: selection.0,
+        character: selection.0.clone(),
     });
     commands.entity(trigger.entity).remove::<PendingJoin>();
 }
@@ -527,12 +528,19 @@ fn handle_join_requests(
     players: Query<&PlayerOwner>,
     mut next_player_id: ResMut<NextPlayerId>,
     room_grid: Res<StartingRoomGrid>,
+    catalog: Option<Res<CharacterCatalog>>,
     mut commands: Commands,
 ) {
     for (connection, remote, mut receiver) in &mut clients {
         let Some(request) = receiver.receive().next() else {
             continue;
         };
+        if let Some(catalog) = catalog.as_ref()
+            && !catalog.contains(&request.character)
+        {
+            warn!(peer = ?remote.0, character = ?request.character, "ignoring join for unknown character");
+            continue;
+        }
         let PeerId::Netcode(owner) = remote.0 else {
             warn!(peer = ?remote.0, "ignoring join from unsupported peer identity");
             continue;
@@ -549,10 +557,11 @@ fn handle_join_requests(
         };
         next_player_id.0 = following_id;
         let spawn = spawn_position(player_id);
+        let selected_character = request.character.clone();
         commands.spawn((
             PlayerId(player_id),
             PlayerOwner(owner),
-            SelectedCharacter(request.character),
+            SelectedCharacter(selected_character.clone()),
             MovementIntent::ZERO,
             Position::new(spawn.x, spawn.y),
             room_grid.starting_room(),
@@ -564,7 +573,7 @@ fn handle_join_requests(
             PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
             InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
         ));
-        info!(?connection, player_id, owner, character = ?request.character, "authoritative player spawned");
+        info!(?connection, player_id, owner, character = ?selected_character, "authoritative player spawned");
     }
 }
 
@@ -648,7 +657,7 @@ mod tests {
             connect_client(
                 &mut commands,
                 1,
-                CharacterKind::Wizard,
+                CharacterId::new("wizard").expect("static character id"),
                 1.0,
                 NetworkSimulationProfile::Off,
             )
