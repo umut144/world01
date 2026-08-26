@@ -6,6 +6,7 @@ use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{MovementStep, move_players};
+use game01_world_data::StartingRoomGrid;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
@@ -35,6 +36,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ))
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
+    .init_resource::<StartingRoomGrid>()
     .add_systems(
         FixedUpdate,
         move_players.after(ServerNetworkSet::PrepareSimulation),

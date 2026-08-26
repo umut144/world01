@@ -7,7 +7,9 @@ use game01_network::{
     ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
     RemotePositionExtrapolation, configure_client, connect_client,
 };
-use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
+use game01_world_data::{
+    CharacterKind, MovementIntent, Position, RoomId, SelectedCharacter, StartingRoomGrid,
+};
 
 use crate::controller::ControllerInput;
 use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
@@ -71,7 +73,9 @@ impl Plugin for ClientPresentationPlugin {
             )
             .add_systems(
                 PostUpdate,
-                sync_rendered_positions.run_if(in_state(ClientScreen::InGame)),
+                (sync_rendered_positions, center_camera_on_local_room)
+                    .chain()
+                    .run_if(in_state(ClientScreen::InGame)),
             );
     }
 }
@@ -642,6 +646,23 @@ fn sync_rendered_positions(
     }
 }
 
+fn center_camera_on_local_room(
+    room_grid: Res<StartingRoomGrid>,
+    local_players: Query<&RoomId, (With<RenderedCharacter>, With<MovementIntent>)>,
+    mut cameras: Query<&mut Transform, With<PresentationCamera>>,
+) {
+    let Ok(room) = local_players.single() else {
+        return;
+    };
+    let Ok(mut camera_transform) = cameras.single_mut() else {
+        return;
+    };
+
+    let center = room_grid.room_center(*room);
+    camera_transform.translation.x = center.x;
+    camera_transform.translation.y = center.y;
+}
+
 fn sampled_render_position(
     position: Position,
     history: Option<&LocalRenderHistory>,
@@ -783,6 +804,28 @@ mod tests {
             .expect("rendered entity retains its presentation Transform");
         assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
         assert_eq!(transform.scale, Vec3::splat(1.5));
+    }
+
+    #[test]
+    fn camera_centers_on_the_local_players_current_room() {
+        let mut app = App::new();
+        app.init_resource::<StartingRoomGrid>()
+            .add_systems(Update, center_camera_on_local_room);
+        let camera = app
+            .world_mut()
+            .spawn((PresentationCamera, Transform::default()))
+            .id();
+        app.world_mut()
+            .spawn((RenderedCharacter, MovementIntent::ZERO, RoomId(6)));
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<Transform>(camera)
+                .map(|transform| transform.translation),
+            Some(Vec3::new(-15.0, 9.1875, 0.0))
+        );
     }
 
     #[test]

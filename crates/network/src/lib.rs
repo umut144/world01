@@ -11,8 +11,10 @@ use std::collections::HashMap;
 #[cfg(feature = "server")]
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
+#[cfg(feature = "server")]
+use game01_world_data::StartingRoomGrid;
 use game01_world_data::{
-    CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
+    CharacterKind, MovementIntent, PlayerId, PlayerOwner, Position, RoomId, SelectedCharacter,
 };
 #[cfg(feature = "server")]
 use lightyear::connection::client::Disconnecting;
@@ -346,6 +348,7 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerId>().replicate_once();
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
+        self.component::<RoomId>().replicate().predict();
         self.component::<Position>()
             .replicate()
             .predict()
@@ -551,6 +554,7 @@ fn handle_join_requests(
             SelectedCharacter(request.character),
             MovementIntent::ZERO,
             Position::new(spawn.x, spawn.y),
+            StartingRoomGrid.starting_room(),
             ControlledBy {
                 owner: connection,
                 lifetime: Lifetime::SessionBased,

@@ -5,6 +5,7 @@ use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::MovementStep;
+use game01_world_data::StartingRoomGrid;
 
 use crate::controller::ControllerInput;
 use crate::polytools::CharacterAssetLibrary;
@@ -62,6 +63,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..default()
     }));
     app.insert_resource(movement_step);
+    app.init_resource::<StartingRoomGrid>();
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientPresentationPlugin {

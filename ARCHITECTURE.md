@@ -47,6 +47,8 @@ Owns shared protocol-neutral domain data:
 - `CharacterKind`: Wizard, Mage, Sorcerer, Rogue, Glavier;
 - player identity, selected character, and ownership markers;
 - standard-room and spawn data;
+- the fixed initial `3 × 3` room-grid coordinate mapping and authoritative
+  `RoomId` assignment;
 - movement intent data passed into simulation;
 - authoritative two-dimensional `Position` in meters;
 - replicated gameplay components that are not transport-specific.
@@ -192,6 +194,17 @@ palette, while cardinal neighbors use the alternate. This presentation does
 not yet establish `RoomId`, connectivity, collision, camera transitions, or
 other gameplay authority. The later authoritative room-boundary transition is
 intended to be seamless, with no initial door or threshold presentation.
+
+For the initial room-transition slice, `StartingRoomGrid` is shared
+protocol-neutral domain data: its nine room coordinates map to stable
+`RoomId`s, all internal cardinal boundaries are open, and its outer perimeter
+blocks movement. Shared simulation constrains `Position` to that grid then
+derives `RoomId` after each movement step. The server is authoritative over
+both values; `RoomId` is replicated and predicted alongside the owner’s
+`Position` so predicted movement and eventual server confirmation agree. On
+each client, only the locally controlled player's current room centers the
+presentation camera. This camera response is seamless and remains
+presentation-only.
 
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 
