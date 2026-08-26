@@ -8,6 +8,7 @@ pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub movement: MovementConfig,
+    pub room: RoomConfig,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -52,6 +53,18 @@ pub struct MovementConfig {
     pub speed_meters_per_second: f32,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub struct RoomConfig {
+    pub width_tiles: u32,
+    pub height_tiles: u32,
+}
+
+impl RoomConfig {
+    pub const fn is_valid(self) -> bool {
+        self.width_tiles > 0 && self.height_tiles > 0
+    }
+}
+
 pub fn load_embedded() -> Result<DesignConfig, toml::de::Error> {
     toml::from_str(DESIGN_TOML)
 }
@@ -75,6 +88,9 @@ mod tests {
             Some(Duration::from_secs_f64(1.0 / 30.0))
         );
         assert_eq!(design.network.remote_interpolation_ratio, 2.0);
+        assert_eq!(design.room.width_tiles, 22);
+        assert_eq!(design.room.height_tiles, 20);
+        assert!(design.room.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
             Some(Duration::from_secs_f64(1.0 / 30.0))

@@ -84,7 +84,9 @@ fn normalized_intent(intent: MovementIntent) -> Vec2 {
 mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
-    use game01_configs::{MovementConfig, NetworkConfig, SimulationConfig, load_embedded};
+    use game01_configs::{
+        MovementConfig, NetworkConfig, RoomConfig, SimulationConfig, load_embedded,
+    };
 
     const EPSILON: f32 = 0.000_01;
 
@@ -149,7 +151,7 @@ mod tests {
             .spawn((
                 MovementIntent::new(-1.0, 0.0),
                 Position::ZERO,
-                StartingRoomGrid.starting_room(),
+                StartingRoomGrid::default().starting_room(),
             ))
             .id();
 
@@ -174,7 +176,7 @@ mod tests {
             .spawn((
                 MovementIntent::new(1.0, 0.0),
                 Position::new(7.49, 0.0),
-                StartingRoomGrid.starting_room(),
+                StartingRoomGrid::default().starting_room(),
             ))
             .id();
 
@@ -196,6 +198,10 @@ mod tests {
             movement: MovementConfig {
                 speed_meters_per_second: 4.0,
             },
+            room: RoomConfig {
+                width_tiles: 15,
+                height_tiles: 9,
+            },
         };
         let negative_speed = DesignConfig {
             simulation: SimulationConfig {
@@ -207,6 +213,10 @@ mod tests {
             },
             movement: MovementConfig {
                 speed_meters_per_second: -1.0,
+            },
+            room: RoomConfig {
+                width_tiles: 15,
+                height_tiles: 9,
             },
         };
 

@@ -526,6 +526,7 @@ fn handle_join_requests(
     >,
     players: Query<&PlayerOwner>,
     mut next_player_id: ResMut<NextPlayerId>,
+    room_grid: Res<StartingRoomGrid>,
     mut commands: Commands,
 ) {
     for (connection, remote, mut receiver) in &mut clients {
@@ -554,7 +555,7 @@ fn handle_join_requests(
             SelectedCharacter(request.character),
             MovementIntent::ZERO,
             Position::new(spawn.x, spawn.y),
-            StartingRoomGrid.starting_room(),
+            room_grid.starting_room(),
             ControlledBy {
                 owner: connection,
                 lifetime: Lifetime::SessionBased,

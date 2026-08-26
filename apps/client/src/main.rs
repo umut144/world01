@@ -63,7 +63,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..default()
     }));
     app.insert_resource(movement_step);
-    app.init_resource::<StartingRoomGrid>();
+    app.insert_resource(
+        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "room dimensions must be greater than zero",
+                )
+            })?,
+    );
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientPresentationPlugin {

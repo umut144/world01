@@ -22,72 +22,10 @@ const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
-const STANDARD_ROOM_WIDTH_TILES: u32 = 15;
-const STANDARD_ROOM_HEIGHT_TILES: u32 = 9;
-const STANDARD_ROOM_CENTER_Y: f32 = 0.1875;
 const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
 const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
-
-#[derive(Resource, Debug, Clone, Copy, Default, Eq, PartialEq)]
-enum PresentationZoom {
-    #[default]
-    Standard,
-    Expanded,
-}
-
-impl PresentationZoom {
-    const fn viewport_width(self) -> f32 {
-        match self {
-            Self::Standard => 15.0,
-            Self::Expanded => 20.0,
-        }
-    }
-
-    const fn viewport_height(self) -> f32 {
-        match self {
-            Self::Standard => 9.375,
-            Self::Expanded => 12.5,
-        }
-    }
-
-    const fn bottom_ui_bar_height(self) -> f32 {
-        match self {
-            Self::Standard => 0.375,
-            Self::Expanded => 0.5,
-        }
-    }
-
-    const fn extra_tiles_left(self) -> f32 {
-        match self {
-            Self::Standard => 0.0,
-            Self::Expanded => 2.0,
-        }
-    }
-
-    const fn extra_tiles_below(self) -> f32 {
-        match self {
-            Self::Standard => 0.0,
-            Self::Expanded => 1.0,
-        }
-    }
-
-    const fn toggled(self) -> Self {
-        match self {
-            Self::Standard => Self::Expanded,
-            Self::Expanded => Self::Standard,
-        }
-    }
-
-    fn camera_anchor(self, room_floor_minimum: Vec2) -> Vec2 {
-        Vec2::new(
-            room_floor_minimum.x - self.extra_tiles_left() + self.viewport_width() * 0.5,
-            room_floor_minimum.y - self.extra_tiles_below() + self.viewport_height() * 0.5
-                - self.bottom_ui_bar_height(),
-        )
-    }
-}
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -103,7 +41,6 @@ impl Plugin for ClientPresentationPlugin {
         configure_client(app, self.tick_duration, self.snapshot_interval);
         app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
             .init_state::<ClientScreen>()
-            .init_resource::<PresentationZoom>()
             .insert_resource(ClientSession {
                 client_id: self.client_id,
                 remote_interpolation_ratio: self.remote_interpolation_ratio,
@@ -113,7 +50,7 @@ impl Plugin for ClientPresentationPlugin {
             })
             .insert_resource(self.character_assets.clone())
             .add_systems(Startup, setup_selection)
-            .add_systems(OnEnter(ClientScreen::InGame), spawn_bottom_ui_bar)
+            .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(
                 Update,
@@ -123,7 +60,6 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
-                    toggle_presentation_zoom.run_if(in_state(ClientScreen::InGame)),
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
@@ -135,11 +71,7 @@ impl Plugin for ClientPresentationPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (
-                    sync_rendered_positions,
-                    center_camera_on_local_room,
-                    sync_bottom_ui_bar_position,
-                )
+                (sync_rendered_positions, center_camera_on_local_room)
                     .chain()
                     .run_if(in_state(ClientScreen::InGame)),
             );
@@ -164,25 +96,6 @@ fn collect_movement_input(
     );
     let direction = movement_direction(keyboard_direction, controller_input.left_stick());
     input.0 = MovementIntent::new(direction.x, direction.y);
-}
-
-fn toggle_presentation_zoom(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut zoom: ResMut<PresentationZoom>,
-    mut cameras: Query<&mut Projection, With<PresentationCamera>>,
-) {
-    if !keyboard.just_pressed(KeyCode::KeyZ) {
-        return;
-    }
-
-    *zoom = zoom.toggled();
-    for mut projection in &mut cameras {
-        if let Projection::Orthographic(orthographic) = &mut *projection {
-            orthographic.scaling_mode = ScalingMode::FixedVertical {
-                viewport_height: zoom.viewport_height(),
-            };
-        }
-    }
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
@@ -240,9 +153,6 @@ struct RenderedCharacter;
 #[derive(Component)]
 struct PresentationCamera;
 
-#[derive(Component)]
-struct BottomUiBar;
-
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct LocalRenderHistory {
     previous: Vec2,
@@ -260,7 +170,7 @@ fn setup_selection(
         PresentationCamera,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: PresentationZoom::Standard.viewport_height(),
+                viewport_height: VIEWPORT_HEIGHT_METERS,
             },
             ..OrthographicProjection::default_2d()
         }),
@@ -333,6 +243,8 @@ fn setup_selection(
 fn apply_letterbox_viewport(
     windows: Query<&Window, With<PrimaryWindow>>,
     mut cameras: Query<&mut Camera, With<PresentationCamera>>,
+    room_grid: Res<StartingRoomGrid>,
+    screen: Res<State<ClientScreen>>,
 ) {
     let Ok(window) = windows.single() else {
         return;
@@ -341,10 +253,28 @@ fn apply_letterbox_viewport(
         return;
     };
 
-    camera.viewport = Some(letterbox_viewport(window.physical_size()));
+    let aspect = if screen.get() == &ClientScreen::InGame {
+        room_grid.width_meters() / room_grid.height_meters()
+    } else {
+        VIEWPORT_WIDTH_METERS / VIEWPORT_HEIGHT_METERS
+    };
+    camera.viewport = Some(letterbox_viewport(window.physical_size(), aspect));
 }
 
-fn letterbox_viewport(window_size: UVec2) -> Viewport {
+fn configure_ingame_camera(
+    room_grid: Res<StartingRoomGrid>,
+    mut cameras: Query<&mut Projection, With<PresentationCamera>>,
+) {
+    for mut projection in &mut cameras {
+        if let Projection::Orthographic(orthographic) = &mut *projection {
+            orthographic.scaling_mode = ScalingMode::FixedVertical {
+                viewport_height: room_grid.height_meters(),
+            };
+        }
+    }
+}
+
+fn letterbox_viewport(window_size: UVec2, target_aspect: f32) -> Viewport {
     if window_size.x == 0 || window_size.y == 0 {
         return Viewport {
             physical_position: UVec2::ZERO,
@@ -353,11 +283,14 @@ fn letterbox_viewport(window_size: UVec2) -> Viewport {
         };
     }
 
-    let width_from_height = u64::from(window_size.y) * 16 / 10;
-    let viewport_size = if width_from_height <= u64::from(window_size.x) {
-        UVec2::new(width_from_height as u32, window_size.y)
+    let width_from_height = (window_size.y as f32 * target_aspect).round() as u32;
+    let viewport_size = if width_from_height <= window_size.x {
+        UVec2::new(width_from_height, window_size.y)
     } else {
-        UVec2::new(window_size.x, (u64::from(window_size.x) * 10 / 16) as u32)
+        UVec2::new(
+            window_size.x,
+            (window_size.x as f32 / target_aspect).round() as u32,
+        )
     };
 
     Viewport {
@@ -432,6 +365,7 @@ fn handle_selection_input(
         With<Button>,
     >,
     mut commands: Commands,
+    room_grid: Res<StartingRoomGrid>,
 ) -> Result {
     if session.joining {
         return Ok(());
@@ -442,7 +376,12 @@ fn handle_selection_input(
             if let Some(selection_button) = selection_button {
                 session.selected = Some(selection_button.0);
             } else if confirm_button.is_some() {
-                return join_selected_character(&mut session, &mut commands, &mut next_screen);
+                return join_selected_character(
+                    &mut session,
+                    &mut commands,
+                    &mut next_screen,
+                    *room_grid,
+                );
             }
         }
     }
@@ -466,7 +405,7 @@ fn handle_selection_input(
     }
 
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
-        return join_selected_character(&mut session, &mut commands, &mut next_screen);
+        return join_selected_character(&mut session, &mut commands, &mut next_screen, *room_grid);
     }
 
     Ok(())
@@ -568,6 +507,7 @@ fn join_selected_character(
     session: &mut ClientSession,
     commands: &mut Commands,
     next_screen: &mut NextState<ClientScreen>,
+    room_grid: StartingRoomGrid,
 ) -> Result {
     let Some(character) = session.selected else {
         return Ok(());
@@ -581,7 +521,7 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_starting_room_neighborhood(commands);
+    spawn_starting_room_neighborhood(commands, room_grid);
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -595,37 +535,26 @@ fn cleanup_selection(
     }
 }
 
-fn spawn_bottom_ui_bar(mut commands: Commands, zoom: Res<PresentationZoom>) {
-    commands.spawn((
-        BottomUiBar,
-        Sprite::from_color(
-            Color::BLACK,
-            Vec2::new(zoom.viewport_width(), zoom.bottom_ui_bar_height()),
-        ),
-        Transform::from_translation(bottom_ui_bar_position(Vec2::ZERO, *zoom)),
-    ));
-}
-
-fn spawn_starting_room_neighborhood(commands: &mut Commands) {
+fn spawn_starting_room_neighborhood(commands: &mut Commands, room_grid: StartingRoomGrid) {
     for room_y in -1..=1 {
         for room_x in -1..=1 {
-            spawn_standard_room(commands, IVec2::new(room_x, room_y));
+            spawn_standard_room(commands, IVec2::new(room_x, room_y), room_grid);
         }
     }
 }
 
-fn spawn_standard_room(commands: &mut Commands, room_coordinates: IVec2) {
-    for row in 0..STANDARD_ROOM_HEIGHT_TILES {
-        for column in 0..STANDARD_ROOM_WIDTH_TILES {
+fn spawn_standard_room(
+    commands: &mut Commands,
+    room_coordinates: IVec2,
+    room_grid: StartingRoomGrid,
+) {
+    for row in 0..room_grid.height_meters() as u32 {
+        for column in 0..room_grid.width_meters() as u32 {
             let color = checkerboard_color(room_coordinates, row, column);
-            let x =
-                room_coordinates.x as f32 * STANDARD_ROOM_WIDTH_TILES as f32 + column as f32 + 0.5
-                    - STANDARD_ROOM_WIDTH_TILES as f32 * 0.5;
-            let y = STANDARD_ROOM_CENTER_Y
-                + room_coordinates.y as f32 * STANDARD_ROOM_HEIGHT_TILES as f32
-                + row as f32
-                + 0.5
-                - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5;
+            let x = room_coordinates.x as f32 * room_grid.width_meters() + column as f32 + 0.5
+                - room_grid.width_meters() * 0.5;
+            let y = room_coordinates.y as f32 * room_grid.height_meters() + row as f32 + 0.5
+                - room_grid.height_meters() * 0.5;
             commands.spawn((
                 Sprite::from_color(color, Vec2::ONE),
                 Transform::from_xyz(x, y, -10.0),
@@ -747,7 +676,6 @@ fn sync_rendered_positions(
 
 fn center_camera_on_local_room(
     room_grid: Res<StartingRoomGrid>,
-    zoom: Res<PresentationZoom>,
     local_players: Query<&RoomId, (With<RenderedCharacter>, With<MovementIntent>)>,
     mut cameras: Query<&mut Transform, With<PresentationCamera>>,
 ) {
@@ -758,39 +686,9 @@ fn center_camera_on_local_room(
         return;
     };
 
-    let anchor = zoom.camera_anchor(room_grid.room_floor_minimum(*room));
+    let anchor = room_grid.room_center(*room);
     camera_transform.translation.x = anchor.x;
     camera_transform.translation.y = anchor.y;
-}
-
-fn sync_bottom_ui_bar_position(
-    zoom: Res<PresentationZoom>,
-    cameras: Query<&Transform, (With<PresentationCamera>, Without<BottomUiBar>)>,
-    mut ui_bars: Query<
-        (&mut Transform, &mut Sprite),
-        (With<BottomUiBar>, Without<PresentationCamera>),
-    >,
-) {
-    let Ok(camera_transform) = cameras.single() else {
-        return;
-    };
-
-    for (mut ui_bar_transform, mut sprite) in &mut ui_bars {
-        ui_bar_transform.translation =
-            bottom_ui_bar_position(camera_transform.translation.truncate(), *zoom);
-        sprite.custom_size = Some(Vec2::new(
-            zoom.viewport_width(),
-            zoom.bottom_ui_bar_height(),
-        ));
-    }
-}
-
-fn bottom_ui_bar_position(camera_position: Vec2, zoom: PresentationZoom) -> Vec3 {
-    Vec3::new(
-        camera_position.x,
-        camera_position.y - zoom.viewport_height() * 0.5 + zoom.bottom_ui_bar_height() * 0.5,
-        100.0,
-    )
 }
 
 fn sampled_render_position(
@@ -874,11 +772,8 @@ mod tests {
 
     #[test]
     fn standard_room_checkerboard_matches_tile_dimensions() {
-        assert_eq!(STANDARD_ROOM_WIDTH_TILES * STANDARD_ROOM_HEIGHT_TILES, 135);
-        assert_eq!(
-            STANDARD_ROOM_CENTER_Y - STANDARD_ROOM_HEIGHT_TILES as f32 * 0.5,
-            -4.3125
-        );
+        let room = StartingRoomGrid::default();
+        assert_eq!(room.width_meters() * room.height_meters(), 135.0);
     }
 
     #[test]
@@ -893,21 +788,23 @@ mod tests {
     #[test]
     fn starting_neighborhood_contains_nine_standard_rooms() {
         assert_eq!(
-            3 * 3 * STANDARD_ROOM_WIDTH_TILES * STANDARD_ROOM_HEIGHT_TILES,
+            3 * 3
+                * StartingRoomGrid::default().width_meters() as u32
+                * StartingRoomGrid::default().height_meters() as u32,
             1215
         );
     }
 
     #[test]
     fn letterbox_keeps_the_full_16_by_10_viewport_inside_widescreen() {
-        let viewport = letterbox_viewport(UVec2::new(1920, 1080));
+        let viewport = letterbox_viewport(UVec2::new(1920, 1080), 16.0 / 10.0);
         assert_eq!(viewport.physical_position, UVec2::new(96, 0));
         assert_eq!(viewport.physical_size, UVec2::new(1728, 1080));
     }
 
     #[test]
     fn letterbox_keeps_the_full_16_by_10_viewport_inside_tall_windows() {
-        let viewport = letterbox_viewport(UVec2::new(1200, 1200));
+        let viewport = letterbox_viewport(UVec2::new(1200, 1200), 16.0 / 10.0);
         assert_eq!(viewport.physical_position, UVec2::new(0, 225));
         assert_eq!(viewport.physical_size, UVec2::new(1200, 750));
     }
@@ -940,7 +837,6 @@ mod tests {
     fn camera_keeps_the_full_free_strip_below_the_local_players_current_room() {
         let mut app = App::new();
         app.init_resource::<StartingRoomGrid>()
-            .init_resource::<PresentationZoom>()
             .add_systems(Update, center_camera_on_local_room);
         let camera = app
             .world_mut()
@@ -956,88 +852,6 @@ mod tests {
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
             Some(Vec3::new(-15.0, 9.0, 0.0))
-        );
-    }
-
-    #[test]
-    fn bottom_ui_bar_exactly_covers_the_free_strip_below_the_room_floor() {
-        assert_eq!(
-            bottom_ui_bar_position(Vec2::new(15.0, -9.0), PresentationZoom::Standard),
-            Vec3::new(15.0, -13.5, 100.0)
-        );
-    }
-
-    #[test]
-    fn expanded_zoom_shows_twenty_by_twelve_complete_floor_tiles() {
-        assert_eq!(PresentationZoom::Expanded.viewport_width(), 20.0);
-        assert_eq!(
-            PresentationZoom::Expanded.viewport_height()
-                - PresentationZoom::Expanded.bottom_ui_bar_height(),
-            12.0
-        );
-        assert_eq!(
-            PresentationZoom::Expanded.camera_anchor(Vec2::new(-7.5, -4.3125)),
-            Vec2::new(0.5, 0.4375)
-        );
-        assert_eq!(
-            bottom_ui_bar_position(Vec2::new(0.5, 0.4375), PresentationZoom::Expanded),
-            Vec3::new(0.5, -5.5625, 100.0)
-        );
-    }
-
-    #[test]
-    fn z_toggles_the_camera_projection_to_the_expanded_zoom() {
-        let mut app = App::new();
-        app.init_resource::<PresentationZoom>()
-            .insert_resource(ButtonInput::<KeyCode>::default())
-            .add_systems(Update, toggle_presentation_zoom);
-        let camera = app
-            .world_mut()
-            .spawn((
-                PresentationCamera,
-                Projection::Orthographic(OrthographicProjection::default_2d()),
-            ))
-            .id();
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyZ);
-
-        app.update();
-
-        assert_eq!(
-            app.world().resource::<PresentationZoom>(),
-            &PresentationZoom::Expanded
-        );
-        let Some(Projection::Orthographic(projection)) = app.world().get::<Projection>(camera)
-        else {
-            panic!("presentation camera retains an orthographic projection");
-        };
-        let ScalingMode::FixedVertical { viewport_height } = projection.scaling_mode else {
-            panic!("zoom toggle uses a fixed vertical camera projection");
-        };
-        assert_eq!(viewport_height, 12.5);
-    }
-
-    #[test]
-    fn bottom_ui_bar_tracks_the_camera_without_transform_query_conflicts() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins)
-            .init_resource::<PresentationZoom>()
-            .add_systems(Update, sync_bottom_ui_bar_position);
-        app.world_mut()
-            .spawn((PresentationCamera, Transform::from_xyz(-15.0, 9.0, 0.0)));
-        let bar = app
-            .world_mut()
-            .spawn((BottomUiBar, Sprite::default(), Transform::default()))
-            .id();
-
-        app.update();
-
-        assert_eq!(
-            app.world()
-                .get::<Transform>(bar)
-                .map(|transform| transform.translation),
-            Some(Vec3::new(-15.0, 4.5, 100.0))
         );
     }
 

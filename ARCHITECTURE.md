@@ -174,39 +174,33 @@ assignment are outside this slice.
   character and component name. A future material export is a separate
   PolyTools contract decision.
 
-The 1920 × 1200 design viewport is independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized 1920 × 1200 logical window. The window is resizable and supports macOS fullscreen; a client-only camera viewport centers the fixed 16:10 scene in every physical window size. Remaining area is black letterboxing, so window resizing or fullscreen never reveals more or less game world.
+The 1920 × 1200 design window remains a reference size independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized window. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
 
 The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
 
-The shared spatial reference uses `1 m` terrain Tiles at `128 px/m`. The
-standard `15 × 9 m` room therefore spans `15 × 9` Tiles while retaining its
-existing physical and presentation dimensions.
+The shared spatial reference uses `1 m` terrain Tiles at `128 px/m`. Room
+dimensions come from the pre-match `configs` resource; the current test config
+is `22 × 20` Tiles.
 
-The current standard-room presentation uses 135 client-only `Sprite` entities
-in a subtle light checkerboard: every `1 × 1 m` square is one Tile. It is a
-temporary spatial-scale aid and does not define room collision, world data, or
-the future floor-rendering system.
+The current room presentation uses one client-only `Sprite` per configured
+`1 × 1 m` Tile in a subtle light checkerboard. It is a temporary spatial-scale
+aid and does not define room collision, world data, or the future floor-
+rendering system.
 
-The reserved bottom `0.375` Tile is rendered by one client-only, camera-bound
-black presentation bar above room-floor geometry. It tracks the active camera
-anchor, exactly covers the free strip, and prevents a neighboring room's floor
-from appearing there. It is visual UI reservation only: it does not alter
-authoritative collision or room-transition bounds.
-
-The client has two local discrete presentation zoom modes, toggled with `Z`:
-the standard `15 × 9` floor-Tile view with a `0.375`-Tile bar and the expanded
-`20 × 12` view with a `0.5`-Tile bar. The expanded mode keeps full Tile edges
-by framing 2 additional Tiles left, 3 right, 1 below, and 2 above the current
-room; its projection, camera anchor, and black bar size update together. Zoom
-mode is neither authoritative nor replicated.
+Room dimensions are loaded from the pre-match `configs` resource and inserted
+identically into server, simulation, and client. The client derives the
+orthographic projection and camera viewport aspect from the active room's
+width and height, so the complete room is centered and any native-window
+remainder is letterboxed. Room geometry, movement bounds, and transitions use
+the same dimensions; there is no runtime zoom toggle or bottom UI-bar geometry.
 
 The neighborhood-scale test renders a client-only `3 × 3` arrangement of
-these standard rooms. A room-coordinate parity selects one of two subtle
+these configured rooms. A room-coordinate parity selects one of two subtle
 checkerboard palettes: the origin and its diagonal neighbors share the primary
 palette, while cardinal neighbors use the alternate. This presentation does
-not yet establish `RoomId`, connectivity, collision, camera transitions, or
-other gameplay authority. The later authoritative room-boundary transition is
-intended to be seamless, with no initial door or threshold presentation.
+uses the same room dimensions as the authoritative grid and has no separate
+collision or transition authority. Room-boundary transitions are seamless,
+with no initial door or threshold presentation.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable
@@ -216,9 +210,9 @@ derives `RoomId` after each movement step. The server is authoritative over
 both values; `RoomId` is replicated and predicted alongside the owner’s
 `Position` so predicted movement and eventual server confirmation agree. On
 each client, only the locally controlled player's current room anchors the
-presentation camera. Its vertical anchor preserves the full `0.375`-Tile free
-strip below every room rather than splitting it above and below the floor.
-This camera response is seamless and remains presentation-only.
+presentation camera to the complete configured room. The room-sized camera
+viewport is centered inside the native window; any remaining area is black
+letterboxing. This camera response is seamless and remains presentation-only.
 
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 

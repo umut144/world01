@@ -7,3 +7,7 @@ remote_interpolation_ratio = 2.0
 
 [movement]
 speed_meters_per_second = 4.0
+
+[room]
+width_tiles = 22
+height_tiles = 20

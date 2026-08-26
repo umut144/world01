@@ -51,18 +51,15 @@ Interpretation rules:
 - Scale: **1 m = 128 px**.
 - Tile size: **1 m = 128 px**.
 - Standard room: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
-- Remaining vertical space: **48 px = 0.375 tile**, rendered as a solid black
-  bottom UI bar. It is reserved for later minimal/diegetic UI such as health
-  communication and must never reveal a neighboring room floor.
-- Larger rooms must be composed from multiple standard-room units rather than using arbitrary unrelated sizing.
-- The camera follows the current room horizontally and vertically preserves the
-  full **0.375-Tile** reserved/free strip below its 9-Tile floor; exceptions
-  and special rooms are possible.
-- The current zoom trial offers two discrete views: the default shows `15 × 9`
-  floor Tiles with a `0.375`-Tile bottom UI bar; the expanded view shows `20 ×
-  12` floor Tiles with a `0.5`-Tile bottom UI bar. Its additional floor Tiles
-  are distributed as 2 left / 3 right and 1 below / 2 above the current room.
-  `Z` toggles these local development views.
+- The active room defines the complete camera frame. Any unused portion of the
+  native window is letterboxed; no gameplay floor is shown outside that room.
+- Larger logical spaces can be composed from multiple room units, while each
+  room's configured tile dimensions remain independent and are shown whole.
+- The camera follows and centers the complete active room; exceptions and
+  special rooms are possible.
+- Room dimensions are configured before a match and may vary between rooms;
+  every configured room is shown completely and centered in its own aspect-
+  matched camera frame.
 - The initial room-neighborhood test uses a `3 × 3` arrangement of standard
   rooms. Its alternating room palettes are a spatial readability aid, not a
   room-type signal: the start room and its diagonal neighbors share one

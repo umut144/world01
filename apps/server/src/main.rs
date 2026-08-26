@@ -36,7 +36,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     ))
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
-    .init_resource::<StartingRoomGrid>()
+    .insert_resource(
+        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "room dimensions must be greater than zero",
+                )
+            })?,
+    )
     .add_systems(
         FixedUpdate,
         move_players.after(ServerNetworkSet::PrepareSimulation),
