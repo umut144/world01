@@ -6,9 +6,11 @@ use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::MovementStep;
 
+use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::ClientPresentationPlugin;
 
+mod polytools;
 mod prediction;
 mod presentation;
 
@@ -18,6 +20,7 @@ const INITIAL_WINDOW_HEIGHT: u32 = 800;
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
+    let character_assets = CharacterAssetLibrary::load_embedded()?;
     let design = load_embedded()?;
     let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -63,6 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         snapshot_interval,
         remote_interpolation_ratio,
         network_simulation,
+        character_assets,
     });
     app.run();
     Ok(())

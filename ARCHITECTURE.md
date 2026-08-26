@@ -141,11 +141,12 @@ Client presentation state is never gameplay authority.
 - The game consumes imported copies under `game01/assets/`; it does not read
   the sibling PolyTools project at runtime and does not retain a
   `polytools/world01` path prefix in its asset tree.
-- A deliberate sync command copies the authoritative `catalog.json` and the
-  complete packages named by it from PolyTools into `assets/`. It validates the
-  catalog, limits the import to the confirmed five character keys, and replaces
-  the generated destination atomically so stale components cannot survive a
-  re-export.
+- `./scripts/sync_polytools_characters.sh` copies the authoritative
+  `catalog.json` and the complete packages named by it from PolyTools into
+  `assets/characters/`. It validates the catalog, limits the import to the
+  confirmed five character keys, and replaces the generated destination
+  atomically so stale components cannot survive a re-export. The source World
+  directory can be overridden with `POLYTOOLS_WORLD_DIR`.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill and contour-stroke geometry into Bevy 2D mesh presentation
   entities. Component transforms, hierarchy, and `z_index` remain presentation

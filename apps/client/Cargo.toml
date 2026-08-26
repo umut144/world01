@@ -26,3 +26,5 @@ game01-network = { path = "../../crates/network", default-features = false, feat
 game01-configs = { path = "../../crates/configs" }
 game01-simulation = { path = "../../crates/simulation" }
 game01-world-data = { path = "../../crates/world_data" }
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,37 @@
+{
+  "assets": [
+    {
+      "asset_key": "glavier",
+      "asset_type": "character",
+      "display_name": "Glavier",
+      "runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
+    },
+    {
+      "asset_key": "mage",
+      "asset_type": "character",
+      "display_name": "Mage",
+      "runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
+    },
+    {
+      "asset_key": "rogue",
+      "asset_type": "character",
+      "display_name": "Rogue",
+      "runtime_package": "PolyToolsRuntimeExports/rogue/manifest.json"
+    },
+    {
+      "asset_key": "sorcerer",
+      "asset_type": "character",
+      "display_name": "Sorcerer",
+      "runtime_package": "PolyToolsRuntimeExports/sorcerer/manifest.json"
+    },
+    {
+      "asset_key": "wizard",
+      "asset_type": "character",
+      "display_name": "Wizard",
+      "runtime_package": "PolyToolsRuntimeExports/wizard/manifest.json"
+    }
+  ],
+  "schema_version": 1,
+  "world_key": "world01",
+  "world_name": "Secrets, Room's & Travels'"
+}

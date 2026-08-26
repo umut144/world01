@@ -5,6 +5,8 @@ use game01_network::{
 };
 use game01_world_data::{CharacterKind, MovementIntent, Position, SelectedCharacter};
 
+use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
+
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
@@ -19,6 +21,7 @@ pub struct ClientPresentationPlugin {
     pub snapshot_interval: std::time::Duration,
     pub remote_interpolation_ratio: f32,
     pub network_simulation: NetworkSimulationProfile,
+    pub character_assets: CharacterAssetLibrary,
 }
 
 impl Plugin for ClientPresentationPlugin {
@@ -33,6 +36,7 @@ impl Plugin for ClientPresentationPlugin {
                 selected: None,
                 joining: false,
             })
+            .insert_resource(self.character_assets.clone())
             .add_systems(Startup, setup_selection)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(
@@ -116,6 +120,7 @@ fn setup_selection(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    character_assets: Res<CharacterAssetLibrary>,
 ) {
     commands.spawn((
         Camera2d,
@@ -130,14 +135,25 @@ fn setup_selection(
     let selection_center_y = (VIEWPORT_HEIGHT_METERS - SELECTION_HEIGHT_METERS) * 0.5;
     for (index, character) in CharacterKind::ALL.into_iter().enumerate() {
         let x = -VIEWPORT_WIDTH_METERS * 0.5 + PANEL_WIDTH_METERS * (index as f32 + 0.5);
-        let mut root = commands.spawn((
-            Transform::from_xyz(x, selection_center_y + 0.15, 0.0)
-                .with_scale(Vec3::splat(PREVIEW_SCALE)),
-            Visibility::default(),
-            SelectionVisual,
-            SelectionPreview(character),
-        ));
-        attach_character_visual(&mut root, &mut meshes, &mut materials, character);
+        let root = commands
+            .spawn((
+                Transform::from_xyz(x, selection_center_y + 0.15, 0.0)
+                    .with_scale(Vec3::splat(PREVIEW_SCALE)),
+                Visibility::default(),
+                SelectionVisual,
+                SelectionPreview(character),
+            ))
+            .id();
+        if let Err(error) = spawn_character_visual(
+            &mut commands,
+            root,
+            &mut meshes,
+            &mut materials,
+            &character_assets,
+            character,
+        ) {
+            error!("cannot spawn PolyTools selection visual: {error}");
+        }
     }
 
     commands.spawn((
@@ -428,15 +444,24 @@ fn render_new_players(
     players: Query<(Entity, &SelectedCharacter, &Position), Without<RenderedCharacter>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    character_assets: Res<CharacterAssetLibrary>,
 ) {
     for (entity, character, position) in &players {
-        let mut player = commands.entity(entity);
-        player.insert((
+        commands.entity(entity).insert((
             RenderedCharacter,
             Visibility::default(),
             Transform::from_xyz(position.x, position.y, 0.0),
         ));
-        attach_character_visual(&mut player, &mut meshes, &mut materials, character.0);
+        if let Err(error) = spawn_character_visual(
+            &mut commands,
+            entity,
+            &mut meshes,
+            &mut materials,
+            &character_assets,
+            character.0,
+        ) {
+            error!("cannot spawn PolyTools player visual: {error}");
+        }
     }
 }
 
@@ -528,158 +553,6 @@ fn correction_decay(delta_seconds: f32) -> f32 {
     0.5_f32.powf(delta_seconds / CORRECTION_HALF_LIFE_SECONDS)
 }
 
-fn attach_character_visual(
-    root: &mut EntityCommands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<ColorMaterial>,
-    character: CharacterKind,
-) {
-    let head_mesh = meshes.add(Circle::new(0.38));
-    let hat_mesh = meshes.add(Triangle2d::new(
-        Vec2::new(0.0, 1.55),
-        Vec2::new(-0.82, 0.35),
-        Vec2::new(0.82, 0.35),
-    ));
-    let blade_mesh = meshes.add(Triangle2d::new(
-        Vec2::new(0.0, 0.28),
-        Vec2::new(-0.12, -0.18),
-        Vec2::new(0.12, -0.18),
-    ));
-    let skin = materials.add(Color::srgb(0.82, 0.63, 0.48));
-    let primary = materials.add(character_color(character));
-    let metal = materials.add(Color::srgb(0.72, 0.78, 0.82));
-    let (hat_transform, brim_size) = headwear_geometry(character);
-
-    root.with_children(|parent| {
-        parent.spawn((
-            Sprite::from_color(character_color(character), Vec2::new(1.15, 1.45)),
-            Transform::from_xyz(0.0, -0.55, 0.0),
-        ));
-        parent.spawn((
-            Mesh2d(head_mesh),
-            MeshMaterial2d(skin),
-            Transform::from_xyz(0.0, 0.38, 1.0),
-        ));
-        parent.spawn((Mesh2d(hat_mesh), MeshMaterial2d(primary), hat_transform));
-        parent.spawn((
-            Sprite::from_color(Color::srgb(0.04, 0.04, 0.055), brim_size),
-            Transform::from_xyz(0.0, 0.58, 3.0),
-        ));
-        for x in [-0.15, 0.15] {
-            parent.spawn((
-                Sprite::from_color(Color::srgb(0.03, 0.03, 0.04), Vec2::splat(0.09)),
-                Transform::from_xyz(x, 0.40, 4.0),
-            ));
-        }
-        parent.spawn((
-            Sprite::from_color(Color::srgb(0.22, 0.08, 0.07), Vec2::new(0.22, 0.055)),
-            Transform::from_xyz(0.0, 0.17, 4.0),
-        ));
-
-        match character {
-            CharacterKind::Wizard => {
-                parent.spawn((
-                    Sprite::from_color(Color::srgb(0.91, 0.77, 0.20), Vec2::splat(0.16)),
-                    Transform::from_xyz(-0.52, 1.10, 4.0)
-                        .with_rotation(Quat::from_rotation_z(0.22)),
-                ));
-            }
-            CharacterKind::Mage => {
-                for x in [-0.34, 0.34] {
-                    parent.spawn((
-                        Sprite::from_color(Color::srgb(0.30, 0.16, 0.10), Vec2::new(0.16, 0.78)),
-                        Transform::from_xyz(x, 0.08, 0.5),
-                    ));
-                }
-                parent.spawn((
-                    Sprite::from_color(Color::srgb(0.18, 0.72, 0.78), Vec2::new(0.55, 0.18)),
-                    Transform::from_xyz(0.48, 1.18, 3.0)
-                        .with_rotation(Quat::from_rotation_z(-0.65)),
-                ));
-            }
-            CharacterKind::Sorcerer => {
-                parent.spawn((
-                    Sprite::from_color(Color::WHITE, Vec2::new(0.14, 0.55)),
-                    Transform::from_xyz(0.0, 1.0, 4.0),
-                ));
-                parent.spawn((
-                    Sprite::from_color(Color::WHITE, Vec2::new(0.48, 0.14)),
-                    Transform::from_xyz(0.0, 1.0, 4.0),
-                ));
-            }
-            CharacterKind::Rogue => {
-                parent.spawn((
-                    Sprite::from_color(Color::srgb(0.07, 0.075, 0.09), Vec2::new(0.62, 0.16)),
-                    Transform::from_xyz(-0.45, 0.72, 4.0)
-                        .with_rotation(Quat::from_rotation_z(-0.48)),
-                ));
-                for (x, rotation) in [(-0.72, -0.55), (0.72, 0.55)] {
-                    parent.spawn((
-                        Sprite::from_color(Color::srgb(0.28, 0.22, 0.18), Vec2::new(0.10, 0.75)),
-                        Transform::from_xyz(x, -0.30, 3.0)
-                            .with_rotation(Quat::from_rotation_z(rotation)),
-                    ));
-                    parent.spawn((
-                        Mesh2d(blade_mesh.clone()),
-                        MeshMaterial2d(metal.clone()),
-                        Transform::from_xyz(x * 1.18, 0.05, 3.0)
-                            .with_rotation(Quat::from_rotation_z(rotation)),
-                    ));
-                }
-            }
-            CharacterKind::Glavier => {
-                parent.spawn((
-                    Sprite::from_color(Color::srgb(0.73, 0.52, 0.16), Vec2::new(0.58, 0.20)),
-                    Transform::from_xyz(0.0, 0.72, 4.0),
-                ));
-                parent.spawn((
-                    Sprite::from_color(Color::srgb(0.32, 0.22, 0.12), Vec2::new(0.10, 2.55)),
-                    Transform::from_xyz(0.72, 0.08, 3.0)
-                        .with_rotation(Quat::from_rotation_z(-0.18)),
-                ));
-                parent.spawn((
-                    Mesh2d(blade_mesh),
-                    MeshMaterial2d(metal),
-                    Transform::from_xyz(0.94, 1.36, 3.0)
-                        .with_scale(Vec3::new(1.45, 1.45, 1.0))
-                        .with_rotation(Quat::from_rotation_z(-0.18)),
-                ));
-            }
-        }
-    });
-}
-
-fn headwear_geometry(character: CharacterKind) -> (Transform, Vec2) {
-    match character {
-        CharacterKind::Wizard => (
-            Transform::from_xyz(-0.08, 0.24, 2.0)
-                .with_scale(Vec3::new(1.05, 0.96, 1.0))
-                .with_rotation(Quat::from_rotation_z(0.10)),
-            Vec2::new(1.82, 0.15),
-        ),
-        CharacterKind::Mage => (
-            Transform::from_xyz(0.10, 0.22, 2.0)
-                .with_scale(Vec3::new(0.96, 1.08, 1.0))
-                .with_rotation(Quat::from_rotation_z(-0.12)),
-            Vec2::new(1.65, 0.13),
-        ),
-        CharacterKind::Sorcerer => (
-            Transform::from_xyz(0.0, 0.20, 2.0).with_scale(Vec3::new(0.86, 1.18, 1.0)),
-            Vec2::new(1.52, 0.14),
-        ),
-        CharacterKind::Rogue => (
-            Transform::from_xyz(-0.02, 0.30, 2.0)
-                .with_scale(Vec3::new(1.06, 0.72, 1.0))
-                .with_rotation(Quat::from_rotation_z(0.05)),
-            Vec2::new(1.72, 0.13),
-        ),
-        CharacterKind::Glavier => (
-            Transform::from_xyz(0.0, 0.28, 2.0).with_scale(Vec3::new(0.82, 0.88, 1.0)),
-            Vec2::new(1.46, 0.14),
-        ),
-    }
-}
-
 fn panel_color(character: CharacterKind, selected: bool) -> Color {
     let base = match character {
         CharacterKind::Wizard => (0.16, 0.12, 0.28),
@@ -694,16 +567,6 @@ fn panel_color(character: CharacterKind, selected: bool) -> Color {
         base.1 * multiplier,
         base.2 * multiplier,
     )
-}
-
-fn character_color(character: CharacterKind) -> Color {
-    match character {
-        CharacterKind::Wizard => Color::srgb(0.31, 0.18, 0.58),
-        CharacterKind::Mage => Color::srgb(0.12, 0.55, 0.62),
-        CharacterKind::Sorcerer => Color::srgb(0.62, 0.12, 0.16),
-        CharacterKind::Rogue => Color::srgb(0.16, 0.17, 0.21),
-        CharacterKind::Glavier => Color::srgb(0.63, 0.43, 0.11),
-    }
 }
 
 #[cfg(test)]

@@ -3067,6 +3067,8 @@ dependencies = [
  "game01-network",
  "game01-simulation",
  "game01-world-data",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
