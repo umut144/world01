@@ -301,7 +301,11 @@ fn hot_reload_design(
     let Ok(modified) = std::fs::metadata(path).and_then(|metadata| metadata.modified()) else {
         return;
     };
-    if last_modified.as_ref() == Some(&modified) {
+    let Some(previous_modified) = *last_modified else {
+        *last_modified = Some(modified);
+        return;
+    };
+    if previous_modified == modified {
         return;
     }
     *last_modified = Some(modified);
