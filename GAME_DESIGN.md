@@ -46,11 +46,10 @@ Interpretation rules:
 - Rooms use four-way cardinal connectivity: north/east/south/west (N/O/S/W in German notation).
 - Standard rooms normally have up to four exits, with explicit exceptions possible.
 - Initial topology is an `A × A` box/grid. Collapse quickly turns it into a unique shape.
-- Standard design viewport: **1920 × 1200 px**.
+- Standard design viewport: **2880 × 1800 px**.
 - Other displays must be scaled/framed so they reveal neither more nor less relevant game world.
-- Scale: **1 m = 128 px**.
-- Tile size: **1 m = 128 px**.
-- Standard room reference: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
+- Scale: **1 m = 192 px**.
+- Tile size: **1 m = 192 px**.
 - The current camera test uses one **50 × 50 tile** room; room dimensions are
   independent from the camera's visible tile count.
 - The camera view is configured separately (`view_width_tiles` /
@@ -227,7 +226,7 @@ The first vertical slice proves the multiplayer foundation before implementing t
 - Run one dedicated headless server locally without Docker.
 - Connect five separately running graphical clients.
 - Each client first sees all five characters in a selection screen.
-- Each character occupies one fifth of the 1920 px viewport width (384 px) and the upper three quarters of its height (900 px).
+- Each character occupies one fifth of the 2880 px viewport width (576 px) and the upper three quarters of its height (1350 px).
 - A shared lower-area button confirms the selected character and joins the server.
 - The server spawns joined players in one standard room.
 - Each player uses WASD to move their own character.

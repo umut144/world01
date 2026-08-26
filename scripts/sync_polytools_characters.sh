@@ -54,7 +54,7 @@ for key in "${character_keys[@]}"; do
   fi
 
   if ! jq -e --arg key "$key" '
-    .schema_version == 5
+    .schema_version == 6
     and .asset_key == $key
     and .asset_type == "character"
     and (.components | type == "array" and length > 0)
