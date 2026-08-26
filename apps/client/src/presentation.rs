@@ -472,14 +472,6 @@ fn spawn_standard_room(commands: &mut Commands) {
             ));
         }
     }
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.24, 0.21, 0.27), Vec2::new(14.7, 0.10)),
-        Transform::from_xyz(0.0, 4.62, -9.0),
-    ));
-    commands.spawn((
-        Sprite::from_color(Color::srgb(0.24, 0.21, 0.27), Vec2::new(14.7, 0.10)),
-        Transform::from_xyz(0.0, -4.245, -9.0),
-    ));
 }
 
 fn render_new_players(
