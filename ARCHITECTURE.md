@@ -348,7 +348,7 @@ Slice 1 movement pipeline, superseded by Slice 2 Phase 2:
 Manual verification procedure (run each command in a separate terminal from the repository root):
 
 VS Code exposes corresponding non-quiet commands through `.vscode/tasks.json`, keeping Cargo and runtime output visible: individual `game01: server` and `game01: client 1001`–`1005` tasks, plus `game01: local slice (server + 5 clients)` to start all six processes in parallel with dedicated terminal panels.
-For a single-client movement/room test, `game01: local room test (server + client 1001)` starts a server task in one terminal, waits until it has bound UDP port `5000`, then starts client `1001` in a separate terminal. The server keeps running when the client closes and can be stopped independently through VS Code's task controls.
+For a single-client movement/room test, `game01: local room test (server + client 1001)` starts the existing server and client `1001` tasks in parallel in separate terminals. It adds no readiness polling or startup wrapper; the client uses its normal connection behavior while the server starts independently.
 
 ```sh
 cargo run --quiet --package game01-server
