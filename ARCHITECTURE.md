@@ -193,6 +193,13 @@ anchor, exactly covers the free strip, and prevents a neighboring room's floor
 from appearing there. It is visual UI reservation only: it does not alter
 authoritative collision or room-transition bounds.
 
+The client has two local discrete presentation zoom modes, toggled with `Z`:
+the standard `15 × 9` floor-Tile view with a `0.375`-Tile bar and the expanded
+`20 × 12` view with a `0.5`-Tile bar. The expanded mode keeps full Tile edges
+by framing 2 additional Tiles left, 3 right, 1 below, and 2 above the current
+room; its projection, camera anchor, and black bar size update together. Zoom
+mode is neither authoritative nor replicated.
+
 The neighborhood-scale test renders a client-only `3 × 3` arrangement of
 these standard rooms. A room-coordinate parity selects one of two subtle
 checkerboard palettes: the origin and its diagonal neighbors share the primary

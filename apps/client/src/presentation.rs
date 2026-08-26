@@ -16,7 +16,6 @@ use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
-const BOTTOM_UI_BAR_HEIGHT_METERS: f32 = 0.375;
 const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PANEL_WIDTH_METERS: f32 = VIEWPORT_WIDTH_METERS / 5.0;
 const PREVIEW_SCALE: f32 = 0.95;
@@ -30,6 +29,65 @@ const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
 const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
+
+#[derive(Resource, Debug, Clone, Copy, Default, Eq, PartialEq)]
+enum PresentationZoom {
+    #[default]
+    Standard,
+    Expanded,
+}
+
+impl PresentationZoom {
+    const fn viewport_width(self) -> f32 {
+        match self {
+            Self::Standard => 15.0,
+            Self::Expanded => 20.0,
+        }
+    }
+
+    const fn viewport_height(self) -> f32 {
+        match self {
+            Self::Standard => 9.375,
+            Self::Expanded => 12.5,
+        }
+    }
+
+    const fn bottom_ui_bar_height(self) -> f32 {
+        match self {
+            Self::Standard => 0.375,
+            Self::Expanded => 0.5,
+        }
+    }
+
+    const fn extra_tiles_left(self) -> f32 {
+        match self {
+            Self::Standard => 0.0,
+            Self::Expanded => 2.0,
+        }
+    }
+
+    const fn extra_tiles_below(self) -> f32 {
+        match self {
+            Self::Standard => 0.0,
+            Self::Expanded => 1.0,
+        }
+    }
+
+    const fn toggled(self) -> Self {
+        match self {
+            Self::Standard => Self::Expanded,
+            Self::Expanded => Self::Standard,
+        }
+    }
+
+    fn camera_anchor(self, room_floor_minimum: Vec2) -> Vec2 {
+        Vec2::new(
+            room_floor_minimum.x - self.extra_tiles_left() + self.viewport_width() * 0.5,
+            room_floor_minimum.y - self.extra_tiles_below() + self.viewport_height() * 0.5
+                - self.bottom_ui_bar_height(),
+        )
+    }
+}
 
 pub struct ClientPresentationPlugin {
     pub client_id: u64,
@@ -45,6 +103,7 @@ impl Plugin for ClientPresentationPlugin {
         configure_client(app, self.tick_duration, self.snapshot_interval);
         app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
             .init_state::<ClientScreen>()
+            .init_resource::<PresentationZoom>()
             .insert_resource(ClientSession {
                 client_id: self.client_id,
                 remote_interpolation_ratio: self.remote_interpolation_ratio,
@@ -64,6 +123,7 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
+                    toggle_presentation_zoom.run_if(in_state(ClientScreen::InGame)),
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
@@ -104,6 +164,25 @@ fn collect_movement_input(
     );
     let direction = movement_direction(keyboard_direction, controller_input.left_stick());
     input.0 = MovementIntent::new(direction.x, direction.y);
+}
+
+fn toggle_presentation_zoom(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut zoom: ResMut<PresentationZoom>,
+    mut cameras: Query<&mut Projection, With<PresentationCamera>>,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyZ) {
+        return;
+    }
+
+    *zoom = zoom.toggled();
+    for mut projection in &mut cameras {
+        if let Projection::Orthographic(orthographic) = &mut *projection {
+            orthographic.scaling_mode = ScalingMode::FixedVertical {
+                viewport_height: zoom.viewport_height(),
+            };
+        }
+    }
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
@@ -181,7 +260,7 @@ fn setup_selection(
         PresentationCamera,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: VIEWPORT_HEIGHT_METERS,
+                viewport_height: PresentationZoom::Standard.viewport_height(),
             },
             ..OrthographicProjection::default_2d()
         }),
@@ -516,14 +595,14 @@ fn cleanup_selection(
     }
 }
 
-fn spawn_bottom_ui_bar(mut commands: Commands) {
+fn spawn_bottom_ui_bar(mut commands: Commands, zoom: Res<PresentationZoom>) {
     commands.spawn((
         BottomUiBar,
         Sprite::from_color(
             Color::BLACK,
-            Vec2::new(VIEWPORT_WIDTH_METERS, BOTTOM_UI_BAR_HEIGHT_METERS),
+            Vec2::new(zoom.viewport_width(), zoom.bottom_ui_bar_height()),
         ),
-        Transform::from_translation(bottom_ui_bar_position(Vec2::ZERO)),
+        Transform::from_translation(bottom_ui_bar_position(Vec2::ZERO, *zoom)),
     ));
 }
 
@@ -668,6 +747,7 @@ fn sync_rendered_positions(
 
 fn center_camera_on_local_room(
     room_grid: Res<StartingRoomGrid>,
+    zoom: Res<PresentationZoom>,
     local_players: Query<&RoomId, (With<RenderedCharacter>, With<MovementIntent>)>,
     mut cameras: Query<&mut Transform, With<PresentationCamera>>,
 ) {
@@ -678,29 +758,37 @@ fn center_camera_on_local_room(
         return;
     };
 
-    let anchor = room_grid.camera_anchor(*room);
+    let anchor = zoom.camera_anchor(room_grid.room_floor_minimum(*room));
     camera_transform.translation.x = anchor.x;
     camera_transform.translation.y = anchor.y;
 }
 
 fn sync_bottom_ui_bar_position(
+    zoom: Res<PresentationZoom>,
     cameras: Query<&Transform, (With<PresentationCamera>, Without<BottomUiBar>)>,
-    mut ui_bars: Query<&mut Transform, (With<BottomUiBar>, Without<PresentationCamera>)>,
+    mut ui_bars: Query<
+        (&mut Transform, &mut Sprite),
+        (With<BottomUiBar>, Without<PresentationCamera>),
+    >,
 ) {
     let Ok(camera_transform) = cameras.single() else {
         return;
     };
 
-    for mut ui_bar_transform in &mut ui_bars {
+    for (mut ui_bar_transform, mut sprite) in &mut ui_bars {
         ui_bar_transform.translation =
-            bottom_ui_bar_position(camera_transform.translation.truncate());
+            bottom_ui_bar_position(camera_transform.translation.truncate(), *zoom);
+        sprite.custom_size = Some(Vec2::new(
+            zoom.viewport_width(),
+            zoom.bottom_ui_bar_height(),
+        ));
     }
 }
 
-fn bottom_ui_bar_position(camera_position: Vec2) -> Vec3 {
+fn bottom_ui_bar_position(camera_position: Vec2, zoom: PresentationZoom) -> Vec3 {
     Vec3::new(
         camera_position.x,
-        camera_position.y - VIEWPORT_HEIGHT_METERS * 0.5 + BOTTOM_UI_BAR_HEIGHT_METERS * 0.5,
+        camera_position.y - zoom.viewport_height() * 0.5 + zoom.bottom_ui_bar_height() * 0.5,
         100.0,
     )
 }
@@ -852,6 +940,7 @@ mod tests {
     fn camera_keeps_the_full_free_strip_below_the_local_players_current_room() {
         let mut app = App::new();
         app.init_resource::<StartingRoomGrid>()
+            .init_resource::<PresentationZoom>()
             .add_systems(Update, center_camera_on_local_room);
         let camera = app
             .world_mut()
@@ -873,21 +962,73 @@ mod tests {
     #[test]
     fn bottom_ui_bar_exactly_covers_the_free_strip_below_the_room_floor() {
         assert_eq!(
-            bottom_ui_bar_position(Vec2::new(15.0, -9.0)),
+            bottom_ui_bar_position(Vec2::new(15.0, -9.0), PresentationZoom::Standard),
             Vec3::new(15.0, -13.5, 100.0)
         );
+    }
+
+    #[test]
+    fn expanded_zoom_shows_twenty_by_twelve_complete_floor_tiles() {
+        assert_eq!(PresentationZoom::Expanded.viewport_width(), 20.0);
+        assert_eq!(
+            PresentationZoom::Expanded.viewport_height()
+                - PresentationZoom::Expanded.bottom_ui_bar_height(),
+            12.0
+        );
+        assert_eq!(
+            PresentationZoom::Expanded.camera_anchor(Vec2::new(-7.5, -4.3125)),
+            Vec2::new(0.5, 0.4375)
+        );
+        assert_eq!(
+            bottom_ui_bar_position(Vec2::new(0.5, 0.4375), PresentationZoom::Expanded),
+            Vec3::new(0.5, -5.5625, 100.0)
+        );
+    }
+
+    #[test]
+    fn z_toggles_the_camera_projection_to_the_expanded_zoom() {
+        let mut app = App::new();
+        app.init_resource::<PresentationZoom>()
+            .insert_resource(ButtonInput::<KeyCode>::default())
+            .add_systems(Update, toggle_presentation_zoom);
+        let camera = app
+            .world_mut()
+            .spawn((
+                PresentationCamera,
+                Projection::Orthographic(OrthographicProjection::default_2d()),
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyZ);
+
+        app.update();
+
+        assert_eq!(
+            app.world().resource::<PresentationZoom>(),
+            &PresentationZoom::Expanded
+        );
+        let Some(Projection::Orthographic(projection)) = app.world().get::<Projection>(camera)
+        else {
+            panic!("presentation camera retains an orthographic projection");
+        };
+        let ScalingMode::FixedVertical { viewport_height } = projection.scaling_mode else {
+            panic!("zoom toggle uses a fixed vertical camera projection");
+        };
+        assert_eq!(viewport_height, 12.5);
     }
 
     #[test]
     fn bottom_ui_bar_tracks_the_camera_without_transform_query_conflicts() {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)
+            .init_resource::<PresentationZoom>()
             .add_systems(Update, sync_bottom_ui_bar_position);
         app.world_mut()
             .spawn((PresentationCamera, Transform::from_xyz(-15.0, 9.0, 0.0)));
         let bar = app
             .world_mut()
-            .spawn((BottomUiBar, Transform::default()))
+            .spawn((BottomUiBar, Sprite::default(), Transform::default()))
             .id();
 
         app.update();

@@ -58,6 +58,11 @@ Interpretation rules:
 - The camera follows the current room horizontally and vertically preserves the
   full **0.375-Tile** reserved/free strip below its 9-Tile floor; exceptions
   and special rooms are possible.
+- The current zoom trial offers two discrete views: the default shows `15 × 9`
+  floor Tiles with a `0.375`-Tile bottom UI bar; the expanded view shows `20 ×
+  12` floor Tiles with a `0.5`-Tile bottom UI bar. Its additional floor Tiles
+  are distributed as 2 left / 3 right and 1 below / 2 above the current room.
+  `Z` toggles these local development views.
 - The initial room-neighborhood test uses a `3 × 3` arrangement of standard
   rooms. Its alternating room palettes are a spatial readability aid, not a
   room-type signal: the start room and its diagonal neighbors share one

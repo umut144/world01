@@ -81,11 +81,11 @@ impl StartingRoomGrid {
         Self::room_id_for_coordinates(x, y)
     }
 
-    pub fn camera_anchor(self, room: RoomId) -> Vec2 {
+    pub fn room_floor_minimum(self, room: RoomId) -> Vec2 {
         let (x, y) = Self::coordinates_for_room_id(room);
         Vec2::new(
-            x as f32 * STANDARD_ROOM_WIDTH_METERS,
-            y as f32 * STANDARD_ROOM_HEIGHT_METERS,
+            (x as f32 - 0.5) * STANDARD_ROOM_WIDTH_METERS,
+            STANDARD_ROOM_CENTER_Y_METERS + (y as f32 - 0.5) * STANDARD_ROOM_HEIGHT_METERS,
         )
     }
 
