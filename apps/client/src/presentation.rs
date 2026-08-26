@@ -14,7 +14,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::controller::ControllerInput;
-use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
+use crate::polytools::{BodyAnchor, CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -737,18 +737,26 @@ fn sync_rendered_positions(
 }
 
 fn follow_local_character(
-    local_players: Query<&Transform, (With<RenderedCharacter>, With<MovementIntent>)>,
+    local_players: Query<&Children, (With<RenderedCharacter>, With<MovementIntent>)>,
+    body_anchors: Query<&GlobalTransform, With<BodyAnchor>>,
     mut cameras: Query<&mut Transform, (With<PresentationCamera>, Without<RenderedCharacter>)>,
 ) {
-    let Ok(player_transform) = local_players.single() else {
+    let Ok(children) = local_players.single() else {
+        return;
+    };
+    let Some(anchor_transform) = children
+        .iter()
+        .find_map(|child| body_anchors.get(child).ok())
+    else {
         return;
     };
     let Ok(mut camera_transform) = cameras.single_mut() else {
         return;
     };
 
-    camera_transform.translation.x = player_transform.translation.x;
-    camera_transform.translation.y = player_transform.translation.y;
+    let anchor = anchor_transform.translation().truncate();
+    camera_transform.translation.x = anchor.x;
+    camera_transform.translation.y = anchor.y;
 }
 
 fn sampled_render_position(
@@ -882,11 +890,23 @@ mod tests {
             .world_mut()
             .spawn((PresentationCamera, Transform::default()))
             .id();
-        app.world_mut().spawn((
-            RenderedCharacter,
-            MovementIntent::ZERO,
-            Transform::from_xyz(3.0, -4.0, 0.0),
-        ));
+        let player = app
+            .world_mut()
+            .spawn((
+                RenderedCharacter,
+                MovementIntent::ZERO,
+                Transform::from_xyz(3.0, -4.0, 0.0),
+            ))
+            .id();
+        let anchor = app
+            .world_mut()
+            .spawn((
+                BodyAnchor,
+                Transform::from_xyz(1.0, 2.0, 0.0),
+                GlobalTransform::from_translation(Vec3::new(4.0, -2.0, 0.0)),
+            ))
+            .id();
+        app.world_mut().entity_mut(player).add_child(anchor);
 
         app.update();
 
@@ -894,7 +914,7 @@ mod tests {
             app.world()
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
-            Some(Vec3::new(3.0, -4.0, 0.0))
+            Some(Vec3::new(4.0, -2.0, 0.0))
         );
     }
 

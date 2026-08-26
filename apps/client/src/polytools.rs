@@ -34,6 +34,9 @@ const MANIFESTS: [(&str, &str); 5] = [
     ),
 ];
 
+#[derive(Component)]
+pub struct BodyAnchor;
+
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterKind, PolyToolsManifest>,
@@ -136,6 +139,7 @@ pub fn spawn_character_visual(
         .ok_or_else(|| PolyToolsAssetError::new("missing validated character manifest"))?;
     let anchor = commands
         .spawn((
+            BodyAnchor,
             Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0),
             Visibility::default(),
         ))
