@@ -6,6 +6,7 @@ source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyT
 source_catalog="$source_world_dir/catalog.json"
 destination_dir="$project_root/assets/characters"
 character_keys=()
+symbol_keys=()
 while IFS= read -r key; do
   [[ -n "$key" ]] && character_keys+=("$key")
 done < <(jq -r '.assets[] | select(.asset_type == "character") | .asset_key' "$source_catalog" | sort)
@@ -70,11 +71,23 @@ for key in "${character_keys[@]}"; do
     exit 1
   fi
 
+  while IFS= read -r symbol_key; do
+    [[ -n "$symbol_key" ]] && symbol_keys+=("$symbol_key")
+  done < <(jq -r '.components[] | .source_asset_key // empty' "$manifest_path" | sort -u)
+
   mkdir "$staging_dir/$key"
   cp "$manifest_path" "$staging_dir/$key/manifest.json"
 done
 
-jq --argjson keys "$(printf '%s\n' "${character_keys[@]}" | jq -R . | jq -s .)" '
+for key in "${symbol_keys[@]}"; do
+  package_path="PolyToolsRuntimeExports/$key/manifest.json"
+  manifest_path="$source_world_dir/$package_path"
+  [[ -f "$manifest_path" ]] || { printf 'error: missing referenced PolyTools manifest: %s\n' "$manifest_path" >&2; exit 1; }
+  mkdir -p "$staging_dir/$key"
+  cp "$manifest_path" "$staging_dir/$key/manifest.json"
+done
+
+jq --argjson keys "$(printf '%s\n' "${character_keys[@]}" "${symbol_keys[@]}" | jq -R . | jq -s .)" '
   .assets |= [
     .[]
     | select(.asset_key as $key | $keys | index($key))

@@ -47,6 +47,8 @@ impl CharacterAssetLibrary {
             let manifest: PolyToolsManifest = serde_json::from_str(&source).map_err(|error| {
                 PolyToolsAssetError::new(format!("cannot parse {}: {error}", character.0))
             })?;
+            let mut manifest = manifest;
+            resolve_asset_references(&mut manifest, directory)?;
             validate_manifest(&manifest, &character.0)?;
             characters.insert(character.clone(), manifest);
         }
@@ -111,6 +113,16 @@ struct PolyToolsManifest {
 }
 
 #[derive(Clone, Deserialize)]
+struct PolyToolsSymbolManifest {
+    #[serde(alias = "asset_key")]
+    key: String,
+    #[serde(rename = "type", alias = "asset_type")]
+    asset_kind: String,
+    #[serde(default)]
+    components: Vec<PolyToolsComponent>,
+}
+
+#[derive(Clone, Deserialize)]
 struct PolyToolsComponent {
     component_id: String,
     name: String,
@@ -124,6 +136,8 @@ struct PolyToolsComponent {
     mesh: Option<PolyToolsMesh>,
     #[serde(default)]
     contour_stroke_mesh: Option<PolyToolsStrokeMesh>,
+    #[serde(default)]
+    source_asset_key: Option<String>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -282,6 +296,42 @@ fn character_color(character: &CharacterId) -> Color {
         "hammerer" => Color::srgb(0.48, 0.31, 0.18),
         _ => Color::srgb(0.30, 0.34, 0.40),
     }
+}
+
+fn resolve_asset_references(
+    manifest: &mut PolyToolsManifest,
+    directory: &Path,
+) -> Result<(), PolyToolsAssetError> {
+    for component in &mut manifest.components {
+        if component.mesh.is_some() || component.contour_stroke_mesh.is_some() {
+            continue;
+        }
+        let Some(source_key) = component.source_asset_key.as_deref() else {
+            continue;
+        };
+        let source = fs::read_to_string(directory.join(source_key).join("manifest.json")).map_err(
+            |error| {
+                PolyToolsAssetError::new(format!(
+                    "cannot read referenced asset {source_key}: {error}"
+                ))
+            },
+        )?;
+        let symbol: PolyToolsSymbolManifest = serde_json::from_str(&source).map_err(|error| {
+            PolyToolsAssetError::new(format!(
+                "cannot parse referenced asset {source_key}: {error}"
+            ))
+        })?;
+        if symbol.key != source_key || symbol.asset_kind != "symbols" {
+            return Err(PolyToolsAssetError::new(format!(
+                "referenced asset {source_key} is not a symbols manifest"
+            )));
+        }
+        if let Some(source_component) = symbol.components.first() {
+            component.mesh = source_component.mesh.clone();
+            component.contour_stroke_mesh = source_component.contour_stroke_mesh.clone();
+        }
+    }
+    Ok(())
 }
 
 fn validate_manifest(

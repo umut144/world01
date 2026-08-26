@@ -37,6 +37,18 @@
       "runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
     },
     {
+      "asset_key": "orb",
+      "asset_type": "symbols",
+      "display_name": "Orb",
+      "runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
+    },
+    {
+      "asset_key": "plus",
+      "asset_type": "symbols",
+      "display_name": "Plus",
+      "runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
+    },
+    {
       "asset_key": "rogue",
       "asset_type": "character",
       "display_name": "Rogue",

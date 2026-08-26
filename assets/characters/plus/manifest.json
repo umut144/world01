@@ -1,0 +1,185 @@
+{
+	"asset_key": "plus",
+	"asset_pivot": [
+		0.0,
+		0.0
+	],
+	"asset_type": "symbols",
+	"components": [
+		{
+			"component_id": "component_68",
+			"component_pivot": [
+				0.0,
+				0.0
+			],
+			"contour_stroke_mesh": {
+				"cap": "butt",
+				"centerline": "original_authored_boundary",
+				"has_outline": true,
+				"indices": [
+					0,
+					1,
+					2,
+					2,
+					1,
+					3
+				],
+				"inner_offset_meters": 0.0104166666666667,
+				"join": {
+					"fallback": "bevel",
+					"miter_limit": 4.0,
+					"type": "miter"
+				},
+				"outer_offset_meters": 0.0104166666666667,
+				"reference_pixels_per_meter": 192.0,
+				"role": "centered_boundary_stroke",
+				"runs": [
+					{
+						"closed": false,
+						"edge_ids": [
+							"edge_3948597005567644152"
+						],
+						"end_cap": "butt",
+						"index_count": 6,
+						"index_offset": 0,
+						"run_id": "chain_394184919159566129:run:0",
+						"start_cap": "butt",
+						"vertex_count": 4,
+						"vertex_offset": 0
+					}
+				],
+				"stroke_width_meters": 0.0208333333333333,
+				"stroke_width_px": 4.0,
+				"topology_role": "outer",
+				"vertices": [
+					[
+						0.0300000011920929,
+						-0.010416666418314
+					],
+					[
+						0.0300000011920929,
+						0.010416666418314
+					],
+					[
+						-0.0300000011920929,
+						-0.010416666418314
+					],
+					[
+						-0.0300000011920929,
+						0.010416666418314
+					]
+				]
+			},
+			"local_transform": {
+				"position": [
+					0.0,
+					0.0
+				],
+				"rotation_radians": 0.0,
+				"scale": [
+					1.0,
+					1.0
+				]
+			},
+			"name": "horizontal",
+			"parent_component_id": null,
+			"z_index": 0
+		},
+		{
+			"component_id": "component_69",
+			"component_pivot": [
+				0.0,
+				0.0
+			],
+			"contour_stroke_mesh": {
+				"cap": "butt",
+				"centerline": "original_authored_boundary",
+				"has_outline": true,
+				"indices": [
+					0,
+					1,
+					2,
+					2,
+					1,
+					3
+				],
+				"inner_offset_meters": 0.0104166666666667,
+				"join": {
+					"fallback": "bevel",
+					"miter_limit": 4.0,
+					"type": "miter"
+				},
+				"outer_offset_meters": 0.0104166666666667,
+				"reference_pixels_per_meter": 192.0,
+				"role": "centered_boundary_stroke",
+				"runs": [
+					{
+						"closed": false,
+						"edge_ids": [
+							"edge_2900255558076538475"
+						],
+						"end_cap": "butt",
+						"index_count": 6,
+						"index_offset": 0,
+						"run_id": "chain_3055785181632684594:run:0",
+						"start_cap": "butt",
+						"vertex_count": 4,
+						"vertex_offset": 0
+					}
+				],
+				"stroke_width_meters": 0.0208333333333333,
+				"stroke_width_px": 4.0,
+				"topology_role": "outer",
+				"vertices": [
+					[
+						0.010416666418314,
+						0.0300000011920929
+					],
+					[
+						-0.010416666418314,
+						0.0300000011920929
+					],
+					[
+						0.010416666418314,
+						-0.0300000011920929
+					],
+					[
+						-0.010416666418314,
+						-0.0300000011920929
+					]
+				]
+			},
+			"local_transform": {
+				"position": [
+					0.0,
+					0.0
+				],
+				"rotation_radians": 0.0,
+				"scale": [
+					1.0,
+					1.0
+				]
+			},
+			"name": "vertical",
+			"parent_component_id": null,
+			"z_index": 0
+		}
+	],
+	"coordinate_system": {
+		"component_transform": "T(position) * R(rotation) * S(scale) * T(-pivot)",
+		"dimensions": 2,
+		"positive_rotation": "counter_clockwise",
+		"rotation_unit": "radian",
+		"tool_unit_in_meters": 0.1,
+		"unit": "meter",
+		"x_axis": "right",
+		"y_axis": "up"
+	},
+	"display_name": "Plus",
+	"schema_version": 6,
+	"z_order": {
+		"back_to_front": "ascending",
+		"scope": "global",
+		"tie_breaker": "component_id_lexicographic"
+	}
+}
