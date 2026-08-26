@@ -742,13 +742,20 @@ fn sync_rendered_positions(
 
 fn follow_local_character(
     local_players: Query<&Children, (With<RenderedCharacter>, With<MovementIntent>)>,
+    hierarchy: Query<&Children>,
     body_anchors: Query<&GlobalTransform, With<BodyAnchor>>,
     mut cameras: Query<&mut Transform, (With<PresentationCamera>, Without<RenderedCharacter>)>,
 ) {
     let Ok(children) = local_players.single() else {
         return;
     };
-    let Some(anchor_transform) = children
+    let Some(wrapper) = children.iter().next() else {
+        return;
+    };
+    let Ok(wrapper_children) = hierarchy.get(wrapper) else {
+        return;
+    };
+    let Some(anchor_transform) = wrapper_children
         .iter()
         .find_map(|child| body_anchors.get(child).ok())
     else {
@@ -902,15 +909,23 @@ mod tests {
                 Transform::from_xyz(3.0, -4.0, 0.0),
             ))
             .id();
+        let wrapper = app
+            .world_mut()
+            .spawn((
+                Transform::from_xyz(1.0, 2.0, 0.0),
+                GlobalTransform::default(),
+            ))
+            .id();
         let anchor = app
             .world_mut()
             .spawn((
                 BodyAnchor,
-                Transform::from_xyz(1.0, 2.0, 0.0),
+                Transform::default(),
                 GlobalTransform::from_translation(Vec3::new(4.0, -2.0, 0.0)),
             ))
             .id();
-        app.world_mut().entity_mut(player).add_child(anchor);
+        app.world_mut().entity_mut(player).add_child(wrapper);
+        app.world_mut().entity_mut(wrapper).add_child(anchor);
 
         app.update();
 

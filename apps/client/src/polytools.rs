@@ -100,7 +100,10 @@ struct PolyToolsComponent {
     name: String,
     parent_component_id: Option<String>,
     z_index: i32,
-    local_pivot: [f32; 2],
+    #[serde(default)]
+    component_pivot: Option<[f32; 2]>,
+    #[serde(default)]
+    local_pivot: Option<[f32; 2]>,
     local_transform: PolyToolsTransform,
     mesh: Option<PolyToolsMesh>,
     contour_stroke_mesh: PolyToolsStrokeMesh,
@@ -139,7 +142,6 @@ pub fn spawn_character_visual(
         .ok_or_else(|| PolyToolsAssetError::new("missing validated character manifest"))?;
     let anchor = commands
         .spawn((
-            BodyAnchor,
             Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0),
             Visibility::default(),
         ))
@@ -148,9 +150,12 @@ pub fn spawn_character_visual(
 
     let mut component_entities = HashMap::new();
     for component in &manifest.components {
-        let entity = commands
-            .spawn((component_transform(component), Visibility::default()))
-            .id();
+        let mut entity_commands =
+            commands.spawn((component_transform(component), Visibility::default()));
+        if component.name == "body" {
+            entity_commands.insert(BodyAnchor);
+        }
+        let entity = entity_commands.id();
         component_entities.insert(component.component_id.as_str(), entity);
     }
 
@@ -166,8 +171,8 @@ pub fn spawn_character_visual(
         let fill_color = materials.add(component_color(character, &component.name));
         let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
         let mesh_transform = Transform::from_xyz(
-            -component.local_pivot[0],
-            -component.local_pivot[1],
+            -component.local_pivot.unwrap_or([0.0, 0.0])[0],
+            -component.local_pivot.unwrap_or([0.0, 0.0])[1],
             component.z_index as f32 * 0.01,
         );
 
@@ -191,8 +196,8 @@ pub fn spawn_character_visual(
                     }))),
                     MeshMaterial2d(outline_color),
                     Transform::from_xyz(
-                        -component.local_pivot[0],
-                        -component.local_pivot[1],
+                        -component.local_pivot.unwrap_or([0.0, 0.0])[0],
+                        -component.local_pivot.unwrap_or([0.0, 0.0])[1],
                         component.z_index as f32 * 0.01 + 0.001,
                     ),
                 ))
@@ -273,7 +278,7 @@ fn validate_manifest(
     manifest: &PolyToolsManifest,
     expected_key: &str,
 ) -> Result<(), PolyToolsAssetError> {
-    if manifest.schema_version != 5 {
+    if !(5..=6).contains(&manifest.schema_version) {
         return Err(PolyToolsAssetError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -311,7 +316,11 @@ fn validate_manifest(
     }
 
     for component in &manifest.components {
-        if !finite_pair(component.local_pivot)
+        let pivot = component
+            .component_pivot
+            .or(component.local_pivot)
+            .unwrap_or([0.0, 0.0]);
+        if !finite_pair(pivot)
             || !finite_pair(component.local_transform.position)
             || !component.local_transform.rotation_radians.is_finite()
             || !finite_pair(component.local_transform.scale)
