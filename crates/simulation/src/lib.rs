@@ -4,7 +4,7 @@ use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::{MovementIntent, Position, RoomId, StartingRoomGrid};
+use game01_world_data::{MovementIntent, Position};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -57,18 +57,10 @@ impl fmt::Display for MovementConfigError {
 
 impl Error for MovementConfigError {}
 
-pub fn move_players(
-    step: Res<MovementStep>,
-    room_grid: Res<StartingRoomGrid>,
-    mut players: Query<(&MovementIntent, &mut Position, &mut RoomId)>,
-) {
-    for (intent, mut position, mut room) in &mut players {
+pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent, &mut Position)>) {
+    for (intent, mut position) in &mut players {
         let displacement = step.displacement(*intent);
-        *position = room_grid.constrain_position(Position::new(
-            position.x + displacement.x,
-            position.y + displacement.y,
-        ));
-        *room = room_grid.room_id_at(*position);
+        *position = Position::new(position.x + displacement.x, position.y + displacement.y);
     }
 }
 
@@ -144,15 +136,10 @@ mod tests {
     fn movement_system_updates_authoritative_position() {
         let mut app = App::new();
         app.insert_resource(movement_step())
-            .init_resource::<StartingRoomGrid>()
             .add_systems(Update, move_players);
         let player = app
             .world_mut()
-            .spawn((
-                MovementIntent::new(-1.0, 0.0),
-                Position::ZERO,
-                StartingRoomGrid::default().starting_room(),
-            ))
+            .spawn((MovementIntent::new(-1.0, 0.0), Position::ZERO))
             .id();
 
         app.update();
@@ -163,26 +150,6 @@ mod tests {
             .expect("spawned test player has a Position");
         assert!((position.x + 4.0 / 60.0).abs() < EPSILON);
         assert_eq!(position.y, 0.0);
-    }
-
-    #[test]
-    fn movement_assigns_the_cardinal_neighbor_room_after_crossing_its_boundary() {
-        let mut app = App::new();
-        app.insert_resource(movement_step())
-            .init_resource::<StartingRoomGrid>()
-            .add_systems(Update, move_players);
-        let player = app
-            .world_mut()
-            .spawn((
-                MovementIntent::new(1.0, 0.0),
-                Position::new(7.49, 0.0),
-                StartingRoomGrid::default().starting_room(),
-            ))
-            .id();
-
-        app.update();
-
-        assert_eq!(app.world().get::<RoomId>(player), Some(&RoomId(5)));
     }
 
     #[test]
@@ -202,6 +169,11 @@ mod tests {
                 width_tiles: 15,
                 height_tiles: 9,
             },
+            camera: game01_configs::CameraConfig {
+                view_preset: 0,
+                view_width_tiles: 22,
+                view_height_tiles: 20,
+            },
         };
         let negative_speed = DesignConfig {
             simulation: SimulationConfig {
@@ -217,6 +189,11 @@ mod tests {
             room: RoomConfig {
                 width_tiles: 15,
                 height_tiles: 9,
+            },
+            camera: game01_configs::CameraConfig {
+                view_preset: 0,
+                view_width_tiles: 22,
+                view_height_tiles: 20,
             },
         };
 

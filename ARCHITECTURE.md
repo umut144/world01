@@ -179,8 +179,10 @@ The 1920 × 1200 design window remains a reference size independent from the nat
 The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
 
 The shared spatial reference uses `1 m` terrain Tiles at `128 px/m`. Room
-dimensions come from the pre-match `configs` resource; the current test config
-is `22 × 20` Tiles.
+dimensions come from `[room]` in the `configs` resource; the current camera
+test room is `50 × 50` Tiles. Visible framing is independent and comes from
+`[camera]`: preset `0` uses the explicit width/height values, while presets
+`1`–`5` select the fixed `8×5`, `16×10`, `24×15`, `32×20`, and `40×25` views.
 
 The current room presentation uses one client-only `Sprite` per configured
 `1 × 1 m` Tile in a subtle light checkerboard. It is a temporary spatial-scale
@@ -188,19 +190,17 @@ aid and does not define room collision, world data, or the future floor-
 rendering system.
 
 Room dimensions are loaded from the pre-match `configs` resource and inserted
-identically into server, simulation, and client. The client derives the
-orthographic projection and camera viewport aspect from the active room's
-width and height, so the complete room is centered and any native-window
-remainder is letterboxed. Room geometry, movement bounds, and transitions use
-the same dimensions; there is no runtime zoom toggle or bottom UI-bar geometry.
+identically into server and client. The client derives its orthographic
+projection and viewport aspect from the effective camera view, so exactly the
+configured tile count is shown and any native-window remainder is letterboxed.
+The current one-room test has no room-boundary or transition logic; movement is
+unbounded within the 50×50 presentation floor and the player spawns at origin.
+The client watches `crates/configs/design.toml` and hot-reloads valid room and
+camera changes during development.
 
-The neighborhood-scale test renders a client-only `3 × 3` arrangement of
-these configured rooms. A room-coordinate parity selects one of two subtle
-checkerboard palettes: the origin and its diagonal neighbors share the primary
-palette, while cardinal neighbors use the alternate. This presentation does
-uses the same room dimensions as the authoritative grid and has no separate
-collision or transition authority. Room-boundary transitions are seamless,
-with no initial door or threshold presentation.
+The current presentation renders one client-only checkerboard floor using the
+configured room dimensions. Each tile is one `1 × 1 m` Sprite; it is a temporary
+scale aid and has no gameplay collision authority.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable

@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 const DESIGN_TOML: &str = include_str!("../design.toml");
 
@@ -9,6 +9,7 @@ pub struct DesignConfig {
     pub network: NetworkConfig,
     pub movement: MovementConfig,
     pub room: RoomConfig,
+    pub camera: CameraConfig,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -65,8 +66,38 @@ impl RoomConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+pub struct CameraConfig {
+    pub view_preset: u32,
+    pub view_width_tiles: u32,
+    pub view_height_tiles: u32,
+}
+
+impl CameraConfig {
+    pub const fn effective_view_tiles(self) -> Option<(u32, u32)> {
+        match self.view_preset {
+            0 => Some((self.view_width_tiles, self.view_height_tiles)),
+            1 => Some((8, 5)),
+            2 => Some((16, 10)),
+            3 => Some((24, 15)),
+            4 => Some((32, 20)),
+            5 => Some((40, 25)),
+            _ => None,
+        }
+    }
+
+    pub const fn is_valid(self) -> bool {
+        matches!(self.effective_view_tiles(), Some((width, height)) if width > 0 && height > 0)
+    }
+}
+
 pub fn load_embedded() -> Result<DesignConfig, toml::de::Error> {
     toml::from_str(DESIGN_TOML)
+}
+
+pub fn load_file(path: &Path) -> Result<DesignConfig, Box<dyn std::error::Error + Send + Sync>> {
+    let contents = std::fs::read_to_string(path)?;
+    Ok(toml::from_str(&contents)?)
 }
 
 #[cfg(test)]
@@ -88,9 +119,11 @@ mod tests {
             Some(Duration::from_secs_f64(1.0 / 30.0))
         );
         assert_eq!(design.network.remote_interpolation_ratio, 2.0);
-        assert_eq!(design.room.width_tiles, 22);
-        assert_eq!(design.room.height_tiles, 20);
+        assert_eq!(design.room.width_tiles, 50);
+        assert_eq!(design.room.height_tiles, 50);
         assert!(design.room.is_valid());
+        assert_eq!(design.camera.effective_view_tiles(), Some((22, 20)));
+        assert!(design.camera.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
             Some(Duration::from_secs_f64(1.0 / 30.0))

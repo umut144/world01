@@ -3,13 +3,15 @@ use bevy::{
     prelude::*,
     window::PrimaryWindow,
 };
+use game01_configs::load_file;
 use game01_network::{
     ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
     RemotePositionExtrapolation, configure_client, connect_client,
 };
 use game01_world_data::{
-    CharacterKind, MovementIntent, Position, RoomId, SelectedCharacter, StartingRoomGrid,
+    CharacterKind, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
 };
+use std::{path::Path, time::SystemTime};
 
 use crate::controller::ControllerInput;
 use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
@@ -36,6 +38,28 @@ pub struct ClientPresentationPlugin {
     pub character_assets: CharacterAssetLibrary,
 }
 
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CameraView {
+    pub width_tiles: u32,
+    pub height_tiles: u32,
+}
+
+impl CameraView {
+    pub const fn new(width_tiles: u32, height_tiles: u32) -> Self {
+        Self {
+            width_tiles,
+            height_tiles,
+        }
+    }
+
+    pub fn width_meters(self) -> f32 {
+        self.width_tiles as f32
+    }
+    pub fn height_meters(self) -> f32 {
+        self.height_tiles as f32
+    }
+}
+
 impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
         configure_client(app, self.tick_duration, self.snapshot_interval);
@@ -56,6 +80,7 @@ impl Plugin for ClientPresentationPlugin {
                 Update,
                 (
                     apply_letterbox_viewport,
+                    hot_reload_design,
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
@@ -131,6 +156,9 @@ struct ClientSession {
     selected: Option<CharacterKind>,
     joining: bool,
 }
+
+#[derive(Component)]
+struct RoomFloorTile;
 
 #[derive(Component)]
 struct SelectionVisual;
@@ -243,7 +271,7 @@ fn setup_selection(
 fn apply_letterbox_viewport(
     windows: Query<&Window, With<PrimaryWindow>>,
     mut cameras: Query<&mut Camera, With<PresentationCamera>>,
-    room_grid: Res<StartingRoomGrid>,
+    camera_view: Res<CameraView>,
     screen: Res<State<ClientScreen>>,
 ) {
     let Ok(window) = windows.single() else {
@@ -254,21 +282,61 @@ fn apply_letterbox_viewport(
     };
 
     let aspect = if screen.get() == &ClientScreen::InGame {
-        room_grid.width_meters() / room_grid.height_meters()
+        camera_view.width_meters() / camera_view.height_meters()
     } else {
         VIEWPORT_WIDTH_METERS / VIEWPORT_HEIGHT_METERS
     };
     camera.viewport = Some(letterbox_viewport(window.physical_size(), aspect));
 }
 
+fn hot_reload_design(
+    mut last_modified: Local<Option<SystemTime>>,
+    mut camera_view: ResMut<CameraView>,
+    mut room_grid: ResMut<StartingRoomGrid>,
+    floor_tiles: Query<Entity, With<RoomFloorTile>>,
+    mut commands: Commands,
+) {
+    let path = Path::new("crates/configs/design.toml");
+    let Ok(modified) = std::fs::metadata(path).and_then(|metadata| metadata.modified()) else {
+        return;
+    };
+    if last_modified.as_ref() == Some(&modified) {
+        return;
+    }
+    *last_modified = Some(modified);
+
+    let Ok(design) = load_file(path) else {
+        warn!("ignoring invalid hot-reloaded design configuration");
+        return;
+    };
+    let Some((camera_width, camera_height)) = design.camera.effective_view_tiles() else {
+        warn!("ignoring hot-reloaded configuration with invalid camera dimensions");
+        return;
+    };
+    let Some(new_grid) =
+        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
+    else {
+        warn!("ignoring hot-reloaded configuration with invalid room dimensions");
+        return;
+    };
+
+    *camera_view = CameraView::new(camera_width, camera_height);
+    *room_grid = new_grid;
+    for entity in &floor_tiles {
+        commands.entity(entity).despawn();
+    }
+    spawn_single_room(&mut commands, new_grid);
+    info!("reloaded room and camera configuration");
+}
+
 fn configure_ingame_camera(
-    room_grid: Res<StartingRoomGrid>,
+    camera_view: Res<CameraView>,
     mut cameras: Query<&mut Projection, With<PresentationCamera>>,
 ) {
     for mut projection in &mut cameras {
         if let Projection::Orthographic(orthographic) = &mut *projection {
             orthographic.scaling_mode = ScalingMode::FixedVertical {
-                viewport_height: room_grid.height_meters(),
+                viewport_height: camera_view.height_meters(),
             };
         }
     }
@@ -521,7 +589,7 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_starting_room_neighborhood(commands, room_grid);
+    spawn_single_room(commands, room_grid);
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -535,29 +603,16 @@ fn cleanup_selection(
     }
 }
 
-fn spawn_starting_room_neighborhood(commands: &mut Commands, room_grid: StartingRoomGrid) {
-    for room_y in -1..=1 {
-        for room_x in -1..=1 {
-            spawn_standard_room(commands, IVec2::new(room_x, room_y), room_grid);
-        }
-    }
-}
-
-fn spawn_standard_room(
-    commands: &mut Commands,
-    room_coordinates: IVec2,
-    room_grid: StartingRoomGrid,
-) {
+fn spawn_single_room(commands: &mut Commands, room_grid: StartingRoomGrid) {
     for row in 0..room_grid.height_meters() as u32 {
         for column in 0..room_grid.width_meters() as u32 {
-            let color = checkerboard_color(room_coordinates, row, column);
-            let x = room_coordinates.x as f32 * room_grid.width_meters() + column as f32 + 0.5
-                - room_grid.width_meters() * 0.5;
-            let y = room_coordinates.y as f32 * room_grid.height_meters() + row as f32 + 0.5
-                - room_grid.height_meters() * 0.5;
+            let color = checkerboard_color(IVec2::ZERO, row, column);
+            let x = column as f32 + 0.5 - room_grid.width_meters() * 0.5;
+            let y = row as f32 + 0.5 - room_grid.height_meters() * 0.5;
             commands.spawn((
                 Sprite::from_color(color, Vec2::ONE),
                 Transform::from_xyz(x, y, -10.0),
+                RoomFloorTile,
             ));
         }
     }
@@ -674,21 +729,13 @@ fn sync_rendered_positions(
     }
 }
 
-fn center_camera_on_local_room(
-    room_grid: Res<StartingRoomGrid>,
-    local_players: Query<&RoomId, (With<RenderedCharacter>, With<MovementIntent>)>,
-    mut cameras: Query<&mut Transform, With<PresentationCamera>>,
-) {
-    let Ok(room) = local_players.single() else {
-        return;
-    };
+fn center_camera_on_local_room(mut cameras: Query<&mut Transform, With<PresentationCamera>>) {
     let Ok(mut camera_transform) = cameras.single_mut() else {
         return;
     };
 
-    let anchor = room_grid.room_center(*room);
-    camera_transform.translation.x = anchor.x;
-    camera_transform.translation.y = anchor.y;
+    camera_transform.translation.x = 0.0;
+    camera_transform.translation.y = 0.0;
 }
 
 fn sampled_render_position(
@@ -777,25 +824,6 @@ mod tests {
     }
 
     #[test]
-    fn room_checkerboard_palette_alternates_by_cardinal_neighbor() {
-        let center = checkerboard_color(IVec2::ZERO, 0, 0);
-        assert_eq!(center, checkerboard_color(IVec2::new(1, 1), 0, 0));
-        assert_eq!(center, checkerboard_color(IVec2::new(-1, 1), 0, 0));
-        assert_ne!(center, checkerboard_color(IVec2::new(1, 0), 0, 0));
-        assert_ne!(center, checkerboard_color(IVec2::new(0, -1), 0, 0));
-    }
-
-    #[test]
-    fn starting_neighborhood_contains_nine_standard_rooms() {
-        assert_eq!(
-            3 * 3
-                * StartingRoomGrid::default().width_meters() as u32
-                * StartingRoomGrid::default().height_meters() as u32,
-            1215
-        );
-    }
-
-    #[test]
     fn letterbox_keeps_the_full_16_by_10_viewport_inside_widescreen() {
         let viewport = letterbox_viewport(UVec2::new(1920, 1080), 16.0 / 10.0);
         assert_eq!(viewport.physical_position, UVec2::new(96, 0));
@@ -834,16 +862,13 @@ mod tests {
     }
 
     #[test]
-    fn camera_keeps_the_full_free_strip_below_the_local_players_current_room() {
+    fn camera_stays_centered_on_the_single_room() {
         let mut app = App::new();
-        app.init_resource::<StartingRoomGrid>()
-            .add_systems(Update, center_camera_on_local_room);
+        app.add_systems(Update, center_camera_on_local_room);
         let camera = app
             .world_mut()
             .spawn((PresentationCamera, Transform::default()))
             .id();
-        app.world_mut()
-            .spawn((RenderedCharacter, MovementIntent::ZERO, RoomId(6)));
 
         app.update();
 
@@ -851,7 +876,7 @@ mod tests {
             app.world()
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
-            Some(Vec3::new(-15.0, 9.0, 0.0))
+            Some(Vec3::ZERO)
         );
     }
 

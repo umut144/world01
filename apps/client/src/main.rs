@@ -10,7 +10,7 @@ use game01_world_data::StartingRoomGrid;
 use crate::controller::ControllerInput;
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
-use crate::presentation::ClientPresentationPlugin;
+use crate::presentation::{CameraView, ClientPresentationPlugin};
 
 mod controller;
 mod polytools;
@@ -33,6 +33,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "camera view preset or dimensions are invalid",
+        )
+    })?;
     let snapshot_interval = design
         .network
         .snapshot_interval_for(design.simulation)
@@ -63,6 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..default()
     }));
     app.insert_resource(movement_step);
+    app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
             .ok_or_else(|| {

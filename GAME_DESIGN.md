@@ -50,9 +50,11 @@ Interpretation rules:
 - Other displays must be scaled/framed so they reveal neither more nor less relevant game world.
 - Scale: **1 m = 128 px**.
 - Tile size: **1 m = 128 px**.
-- Standard room: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
-- The active room defines the complete camera frame. Any unused portion of the
-  native window is letterboxed; no gameplay floor is shown outside that room.
+- Standard room reference: **15 × 9 tiles = 15 × 9 m = 1920 × 1152 px**.
+- The current camera test uses one **50 × 50 tile** room; room dimensions are
+  independent from the camera's visible tile count.
+- The camera view is configured separately (`view_width_tiles` /
+  `view_height_tiles`) and letterboxes any unused native-window area.
 - Larger logical spaces can be composed from multiple room units, while each
   room's configured tile dimensions remain independent and are shown whole.
 - The camera follows and centers the complete active room; exceptions and
@@ -60,10 +62,8 @@ Interpretation rules:
 - Room dimensions are configured before a match and may vary between rooms;
   every configured room is shown completely and centered in its own aspect-
   matched camera frame.
-- The initial room-neighborhood test uses a `3 × 3` arrangement of standard
-  rooms. Its alternating room palettes are a spatial readability aid, not a
-  room-type signal: the start room and its diagonal neighbors share one
-  checkerboard palette, while its cardinal neighbors use another.
+- The current camera test intentionally has no neighbor-room or transition
+  presentation; the character starts at the center of the single room.
 - Room transitions are intended to be completely seamless at first, without a
   visible door, threshold, or transition moment.
 

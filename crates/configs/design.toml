@@ -9,5 +9,10 @@ remote_interpolation_ratio = 2.0
 speed_meters_per_second = 4.0
 
 [room]
-width_tiles = 22
-height_tiles = 20
+width_tiles = 50
+height_tiles = 50
+
+[camera]
+view_preset = 0
+view_width_tiles = 22
+view_height_tiles = 20
