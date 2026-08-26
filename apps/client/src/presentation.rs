@@ -9,7 +9,7 @@ use game01_network::{
     RemotePositionExtrapolation, configure_client, connect_client,
 };
 use game01_world_data::{
-    CharacterId, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
+    CharacterId, MovementIntent, PlayerOwner, Position, SelectedCharacter, StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
@@ -72,15 +72,15 @@ impl Plugin for ClientPresentationPlugin {
                 joining: false,
             })
             .insert_resource(self.character_assets.clone())
-            .add_systems(Startup, setup_selection)
+            .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
-            .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
             .add_systems(
                 Update,
                 (
                     apply_letterbox_viewport,
                     hot_reload_design.run_if(in_state(ClientScreen::InGame)),
+                    handle_ingame_repick.run_if(in_state(ClientScreen::InGame)),
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
@@ -121,6 +121,21 @@ fn collect_movement_input(
     );
     let direction = movement_direction(keyboard_direction, controller_input.left_stick());
     input.0 = MovementIntent::new(direction.x, direction.y);
+}
+
+fn handle_ingame_repick(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut session: ResMut<ClientSession>,
+    mut next_screen: ResMut<NextState<ClientScreen>>,
+) {
+    if keyboard.just_pressed(KeyCode::KeyR) {
+        session.selected = None;
+        session.joining = false;
+        // Each additional pick uses a fresh Netcode identity so the server
+        // keeps the previously selected character in the world.
+        session.client_id = session.client_id.saturating_add(1_000_000);
+        next_screen.set(ClientScreen::CharacterSelection);
+    }
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
@@ -450,6 +465,7 @@ fn handle_selection_input(
     mut commands: Commands,
     room_grid: Res<StartingRoomGrid>,
     character_assets: Res<CharacterAssetLibrary>,
+    room_tiles: Query<(), With<RoomFloorTile>>,
 ) -> Result {
     if session.joining {
         return Ok(());
@@ -465,6 +481,7 @@ fn handle_selection_input(
                     &mut commands,
                     &mut next_screen,
                     *room_grid,
+                    !room_tiles.is_empty(),
                 );
             }
         }
@@ -496,7 +513,13 @@ fn handle_selection_input(
     }
 
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
-        return join_selected_character(&mut session, &mut commands, &mut next_screen, *room_grid);
+        return join_selected_character(
+            &mut session,
+            &mut commands,
+            &mut next_screen,
+            *room_grid,
+            !room_tiles.is_empty(),
+        );
     }
 
     Ok(())
@@ -600,6 +623,7 @@ fn join_selected_character(
     commands: &mut Commands,
     next_screen: &mut NextState<ClientScreen>,
     room_grid: StartingRoomGrid,
+    room_already_spawned: bool,
 ) -> Result {
     let Some(character) = session.selected.clone() else {
         return Ok(());
@@ -613,7 +637,9 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_single_room(commands, room_grid);
+    if !room_already_spawned {
+        spawn_single_room(commands, room_grid);
+    }
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -623,12 +649,6 @@ fn cleanup_selection(
     mut commands: Commands,
 ) {
     for entity in &selection_visuals {
-        commands.entity(entity).despawn();
-    }
-}
-
-fn cleanup_room_floor(floor_tiles: Query<Entity, With<RoomFloorTile>>, mut commands: Commands) {
-    for entity in &floor_tiles {
         commands.entity(entity).despawn();
     }
 }
@@ -761,10 +781,26 @@ fn sync_rendered_positions(
 }
 
 fn follow_local_character(
-    local_players: Query<(&Transform, &BodyPivot), (With<RenderedCharacter>, With<MovementIntent>)>,
+    session: Option<Res<ClientSession>>,
+    local_players: Query<
+        (&Transform, &BodyPivot, Option<&PlayerOwner>),
+        (With<RenderedCharacter>, With<MovementIntent>),
+    >,
     mut cameras: Query<&mut Transform, (With<PresentationCamera>, Without<RenderedCharacter>)>,
 ) {
-    let Ok((player_transform, body_pivot)) = local_players.single() else {
+    let mut players = local_players.iter();
+    let Some((player_transform, body_pivot, _owner)) = players
+        .find(|(_, _, owner)| {
+            session
+                .as_ref()
+                .is_some_and(|session| owner.is_some_and(|owner| owner.0 == session.client_id))
+        })
+        .or_else(|| {
+            let mut fallback = local_players.iter();
+            let first = fallback.next()?;
+            fallback.next().is_none().then_some(first)
+        })
+    else {
         return;
     };
     let Ok(mut camera_transform) = cameras.single_mut() else {
