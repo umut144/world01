@@ -66,6 +66,19 @@ impl CharacterAssetLibrary {
     fn character(&self, character: CharacterKind) -> Option<&PolyToolsManifest> {
         self.characters.get(&character)
     }
+
+    pub fn body_pivot(&self, character: CharacterKind) -> Vec2 {
+        self.character(character)
+            .and_then(|manifest| {
+                manifest
+                    .components
+                    .iter()
+                    .find(|component| component.name == "body")
+            })
+            .and_then(|component| component.component_pivot.or(component.local_pivot))
+            .map(|pivot| Vec2::new(pivot[0], pivot[1]))
+            .unwrap_or(Vec2::ZERO)
+    }
 }
 
 #[derive(Debug)]

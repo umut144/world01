@@ -14,7 +14,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::controller::ControllerInput;
-use crate::polytools::{BodyAnchor, CharacterAssetLibrary, spawn_character_visual};
+use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -178,6 +178,9 @@ struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
+
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+struct BodyPivot(Vec2);
 
 #[derive(Component)]
 struct PresentationCamera;
@@ -651,6 +654,7 @@ fn render_new_players(
     for (entity, character, position) in &players {
         commands.entity(entity).insert((
             RenderedCharacter,
+            BodyPivot(character_assets.body_pivot(character.0)),
             Visibility::default(),
             Transform::from_xyz(position.x, position.y, 0.0),
         ));
@@ -741,31 +745,17 @@ fn sync_rendered_positions(
 }
 
 fn follow_local_character(
-    local_players: Query<&Children, (With<RenderedCharacter>, With<MovementIntent>)>,
-    hierarchy: Query<&Children>,
-    body_anchors: Query<&GlobalTransform, With<BodyAnchor>>,
+    local_players: Query<(&Transform, &BodyPivot), (With<RenderedCharacter>, With<MovementIntent>)>,
     mut cameras: Query<&mut Transform, (With<PresentationCamera>, Without<RenderedCharacter>)>,
 ) {
-    let Ok(children) = local_players.single() else {
-        return;
-    };
-    let Some(wrapper) = children.iter().next() else {
-        return;
-    };
-    let Ok(wrapper_children) = hierarchy.get(wrapper) else {
-        return;
-    };
-    let Some(anchor_transform) = wrapper_children
-        .iter()
-        .find_map(|child| body_anchors.get(child).ok())
-    else {
+    let Ok((player_transform, body_pivot)) = local_players.single() else {
         return;
     };
     let Ok(mut camera_transform) = cameras.single_mut() else {
         return;
     };
 
-    let anchor = anchor_transform.translation().truncate();
+    let anchor = player_transform.translation.truncate() + body_pivot.0;
     camera_transform.translation.x = anchor.x;
     camera_transform.translation.y = anchor.y;
 }
@@ -901,31 +891,12 @@ mod tests {
             .world_mut()
             .spawn((PresentationCamera, Transform::default()))
             .id();
-        let player = app
-            .world_mut()
-            .spawn((
-                RenderedCharacter,
-                MovementIntent::ZERO,
-                Transform::from_xyz(3.0, -4.0, 0.0),
-            ))
-            .id();
-        let wrapper = app
-            .world_mut()
-            .spawn((
-                Transform::from_xyz(1.0, 2.0, 0.0),
-                GlobalTransform::default(),
-            ))
-            .id();
-        let anchor = app
-            .world_mut()
-            .spawn((
-                BodyAnchor,
-                Transform::default(),
-                GlobalTransform::from_translation(Vec3::new(4.0, -2.0, 0.0)),
-            ))
-            .id();
-        app.world_mut().entity_mut(player).add_child(wrapper);
-        app.world_mut().entity_mut(wrapper).add_child(anchor);
+        app.world_mut().spawn((
+            RenderedCharacter,
+            MovementIntent::ZERO,
+            BodyPivot(Vec2::new(1.0, 2.0)),
+            Transform::from_xyz(3.0, -4.0, 0.0),
+        ));
 
         app.update();
 
