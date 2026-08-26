@@ -210,17 +210,20 @@ fn setup_selection(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     character_assets: Res<CharacterAssetLibrary>,
+    cameras: Query<(), With<PresentationCamera>>,
 ) {
-    commands.spawn((
-        Camera2d,
-        PresentationCamera,
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: VIEWPORT_HEIGHT_METERS,
-            },
-            ..OrthographicProjection::default_2d()
-        }),
-    ));
+    if cameras.is_empty() {
+        commands.spawn((
+            Camera2d,
+            PresentationCamera,
+            Projection::Orthographic(OrthographicProjection {
+                scaling_mode: ScalingMode::FixedVertical {
+                    viewport_height: VIEWPORT_HEIGHT_METERS,
+                },
+                ..OrthographicProjection::default_2d()
+            }),
+        ));
+    }
 
     let selection_center_y = (VIEWPORT_HEIGHT_METERS - SELECTION_HEIGHT_METERS) * 0.5;
     let character_ids = character_assets.ids();
@@ -645,11 +648,13 @@ fn join_selected_character(
 }
 
 fn cleanup_selection(
-    selection_visuals: Query<Entity, With<SelectionVisual>>,
+    selection_visuals: Query<(Entity, Option<&ChildOf>), With<SelectionVisual>>,
     mut commands: Commands,
 ) {
-    for entity in &selection_visuals {
-        commands.entity(entity).despawn();
+    for (entity, parent) in &selection_visuals {
+        if parent.is_none() {
+            commands.entity(entity).despawn();
+        }
     }
 }
 
