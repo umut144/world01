@@ -127,12 +127,22 @@ Owns non-authoritative local interaction and presentation:
 - character-selection screen;
 - connection lifecycle presentation;
 - keyboard input collection and conversion to movement intent;
+- gamepad input collection and conversion to movement intent;
 - rendering provisional characters and the standard room;
 - presenting replicated server state.
 - deriving visible Bevy `Transform`s from replicated or later predicted/interpolated `Position`s.
 - running shared movement simulation only for its controlled predicted player after input-timeline synchronization.
 
 Client presentation state is never gameplay authority.
+
+The planned controller boundary uses a compatible native gamepad integration on
+the graphical client only. The connected Xbox controller's left analog stick
+will be the prioritized movement source; a neutral stick will leave WASD as a
+development and accessibility fallback. Both input devices will be reduced to
+the same local `MovementIntent` before Lightyear's native tick input path, so
+the server and simulation remain unaware of input-device choice.
+Controller-driven selection, actions, rumble, rebinding, and multi-controller
+assignment are outside this slice.
 
 ### PolyTools character-asset boundary
 
