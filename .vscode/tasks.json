@@ -35,7 +35,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -61,7 +61,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -87,7 +87,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -113,7 +113,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -139,7 +139,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -165,7 +165,7 @@
       "options": {
         "cwd": "${workspaceFolder}"
       },
-      "problemMatcher": ["$rustc"],
+      "problemMatcher": [],
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
