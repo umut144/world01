@@ -76,11 +76,12 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(Startup, setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
+            .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
             .add_systems(
                 Update,
                 (
                     apply_letterbox_viewport,
-                    hot_reload_design,
+                    hot_reload_design.run_if(in_state(ClientScreen::InGame)),
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
@@ -96,7 +97,7 @@ impl Plugin for ClientPresentationPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (sync_rendered_positions, center_camera_on_local_room)
+                (sync_rendered_positions, follow_local_character)
                     .chain()
                     .run_if(in_state(ClientScreen::InGame)),
             );
@@ -603,6 +604,12 @@ fn cleanup_selection(
     }
 }
 
+fn cleanup_room_floor(floor_tiles: Query<Entity, With<RoomFloorTile>>, mut commands: Commands) {
+    for entity in &floor_tiles {
+        commands.entity(entity).despawn();
+    }
+}
+
 fn spawn_single_room(commands: &mut Commands, room_grid: StartingRoomGrid) {
     for row in 0..room_grid.height_meters() as u32 {
         for column in 0..room_grid.width_meters() as u32 {
@@ -729,13 +736,19 @@ fn sync_rendered_positions(
     }
 }
 
-fn center_camera_on_local_room(mut cameras: Query<&mut Transform, With<PresentationCamera>>) {
+fn follow_local_character(
+    local_players: Query<&Transform, (With<RenderedCharacter>, With<MovementIntent>)>,
+    mut cameras: Query<&mut Transform, (With<PresentationCamera>, Without<RenderedCharacter>)>,
+) {
+    let Ok(player_transform) = local_players.single() else {
+        return;
+    };
     let Ok(mut camera_transform) = cameras.single_mut() else {
         return;
     };
 
-    camera_transform.translation.x = 0.0;
-    camera_transform.translation.y = 0.0;
+    camera_transform.translation.x = player_transform.translation.x;
+    camera_transform.translation.y = player_transform.translation.y;
 }
 
 fn sampled_render_position(
@@ -862,13 +875,18 @@ mod tests {
     }
 
     #[test]
-    fn camera_stays_centered_on_the_single_room() {
+    fn camera_follows_the_local_character() {
         let mut app = App::new();
-        app.add_systems(Update, center_camera_on_local_room);
+        app.add_systems(Update, follow_local_character);
         let camera = app
             .world_mut()
             .spawn((PresentationCamera, Transform::default()))
             .id();
+        app.world_mut().spawn((
+            RenderedCharacter,
+            MovementIntent::ZERO,
+            Transform::from_xyz(3.0, -4.0, 0.0),
+        ));
 
         app.update();
 
@@ -876,7 +894,7 @@ mod tests {
             app.world()
                 .get::<Transform>(camera)
                 .map(|transform| transform.translation),
-            Some(Vec3::ZERO)
+            Some(Vec3::new(3.0, -4.0, 0.0))
         );
     }
 
