@@ -172,7 +172,7 @@ Reference drawings:
 
 - Every currently playable character except Barde has eyes with one shared, round black pupil shape.
 - Each pupil covers exactly **26.0%** of its authored eye polygon's area; its radius is derived independently from that eye's geometry.
-- Pupil movement uses **50.0%** of the visible pupil radius for boundary collision, allowing half-radius overlap beneath the eye contour while the contour remains visually in front.
+- Pupil movement uses **35.0%** of the visible pupil radius for boundary collision. The portion crossing the eye boundary is geometrically clipped, and the contour remains visually in front; eyes have no separate visible fill.
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left, `K` down, and `L` right. This is presentation-only and does not change movement.
 - Each character keeps its own eye geometry, eye positions, and eye pivots. Pupil movement is constrained by that eye's geometry rather than the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.

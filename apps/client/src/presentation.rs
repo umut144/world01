@@ -15,7 +15,7 @@ use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
 use crate::input::{LocalGaze, collect_gaze_input, collect_movement_input};
-use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
+use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -759,13 +759,22 @@ fn follow_local_character(
 
 fn apply_eye_gaze(
     local_players: Query<&LocalGaze>,
-    mut pupils: Query<(&EyePupil, &GlobalTransform, &mut Transform)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut pupils: Query<(&EyePupil, &Mesh2d, &GlobalTransform, &mut Transform)>,
 ) {
-    for (pupil, global_transform, mut transform) in &mut pupils {
+    for (pupil, mesh_handle, global_transform, mut transform) in &mut pupils {
         let Ok(gaze) = local_players.get(pupil.owner) else {
             continue;
         };
         let position = pupil.position_for_world_gaze(gaze.0, global_transform);
+        if transform.translation.truncate().distance_squared(position) <= f32::EPSILON {
+            continue;
+        }
+        let Some(mut mesh) = meshes.get_mut(&mesh_handle.0) else {
+            warn!("cannot update clipped pupil mesh");
+            continue;
+        };
+        *mesh = bevy_pupil_mesh(&pupil.clipped_geometry(position));
         transform.translation.x = position.x;
         transform.translation.y = position.y;
     }

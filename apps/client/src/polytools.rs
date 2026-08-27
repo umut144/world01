@@ -11,7 +11,7 @@ use bevy::{
 use game01_world_data::CharacterId;
 use serde::Deserialize;
 
-use crate::eyes::{EyeCollider, EyePupil};
+use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
 
 #[derive(Component)]
 pub struct BodyAnchor;
@@ -165,6 +165,8 @@ struct PolyToolsComponent {
     local_transform: PolyToolsTransform,
     mesh: Option<PolyToolsMesh>,
     #[serde(default)]
+    closed_region_mesh: Option<PolyToolsRegionMesh>,
+    #[serde(default)]
     contour_stroke_mesh: Option<PolyToolsStrokeMesh>,
     #[serde(default)]
     source_asset_key: Option<String>,
@@ -181,6 +183,13 @@ struct PolyToolsTransform {
 
 #[derive(Clone, Deserialize)]
 struct PolyToolsMesh {
+    vertices: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+#[derive(Clone, Deserialize)]
+struct PolyToolsRegionMesh {
+    role: String,
     vertices: Vec<[f32; 2]>,
     indices: Vec<u32>,
 }
@@ -237,14 +246,31 @@ pub fn spawn_character_visual(
             && (component.name == "eye_left" || component.name == "eye_right");
         let eye_collider = is_dynamic_eye
             .then(|| {
-                component.contour_stroke_mesh.as_ref().and_then(|mesh| {
-                    EyeCollider::from_outline_area_ratio(
-                        &mesh.vertices,
-                        &mesh.indices,
-                        library.pupil_area_ratio,
-                        library.pupil_collision_radius_ratio,
-                    )
-                })
+                component
+                    .closed_region_mesh
+                    .as_ref()
+                    .and_then(|mesh| {
+                        EyeCollider::from_region_mesh(
+                            &mesh.vertices,
+                            &mesh.indices,
+                            library.pupil_area_ratio,
+                            library.pupil_collision_radius_ratio,
+                        )
+                    })
+                    .or_else(|| {
+                        (manifest.schema_version < 8)
+                            .then(|| {
+                                component.contour_stroke_mesh.as_ref().and_then(|mesh| {
+                                    EyeCollider::from_outline_area_ratio(
+                                        &mesh.vertices,
+                                        &mesh.indices,
+                                        library.pupil_area_ratio,
+                                        library.pupil_collision_radius_ratio,
+                                    )
+                                })
+                            })
+                            .flatten()
+                    })
             })
             .flatten();
         if is_dynamic_eye && eye_collider.is_none() {
@@ -257,33 +283,14 @@ pub fn spawn_character_visual(
         );
 
         if let Some(eye_collider) = eye_collider {
-            let pupil_radius = eye_collider.radius();
             let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
             let pivot = Vec2::from_array(pivot);
-            let eye_fill = commands
-                .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&polygon_mesh(
-                        eye_collider.center(),
-                        eye_collider.boundary(),
-                    )))),
-                    MeshMaterial2d(materials.add(Color::srgb(0.96, 0.94, 0.88))),
-                    Transform::from_xyz(
-                        -pivot.x,
-                        -pivot.y,
-                        component.z_index as f32 * 0.01 - 0.001,
-                    ),
-                ))
-                .id();
-            commands.entity(component_entity).add_child(eye_fill);
-
             let local_collider = eye_collider.translated(-pivot);
+            let pupil_geometry = local_collider.clipped_pupil_geometry(local_collider.center());
             let pupil = commands
                 .spawn((
                     EyePupil::new(root, local_collider.clone()),
-                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(
-                        Vec2::ZERO,
-                        Vec2::splat(pupil_radius),
-                    )))),
+                    Mesh2d(meshes.add(bevy_pupil_mesh(&pupil_geometry))),
                     MeshMaterial2d(materials.add(Color::srgb(0.01, 0.008, 0.01))),
                     Transform::from_xyz(
                         local_collider.center().x,
@@ -376,34 +383,6 @@ pub fn spawn_character_visual(
     Ok(())
 }
 
-fn polygon_mesh(center: Vec2, boundary: &[Vec2]) -> PolyToolsMesh {
-    let mut vertices = Vec::with_capacity(boundary.len() + 1);
-    vertices.push(center.to_array());
-    vertices.extend(boundary.iter().map(|vertex| vertex.to_array()));
-    let mut indices = Vec::with_capacity(boundary.len() * 3);
-    for index in 0..boundary.len() as u32 {
-        indices.extend_from_slice(&[0, index + 1, (index + 1) % boundary.len() as u32 + 1]);
-    }
-    PolyToolsMesh { vertices, indices }
-}
-
-fn ellipse_mesh(center: Vec2, half_size: Vec2) -> PolyToolsMesh {
-    const SEGMENTS: u32 = 24;
-    let mut vertices = Vec::with_capacity(SEGMENTS as usize + 1);
-    vertices.push(center.to_array());
-    for segment in 0..SEGMENTS {
-        let angle = std::f32::consts::TAU * segment as f32 / SEGMENTS as f32;
-        vertices.push(
-            (center + Vec2::new(angle.cos() * half_size.x, angle.sin() * half_size.y)).to_array(),
-        );
-    }
-    let mut indices = Vec::with_capacity(SEGMENTS as usize * 3);
-    for segment in 0..SEGMENTS {
-        indices.extend_from_slice(&[0, segment + 1, (segment + 1) % SEGMENTS + 1]);
-    }
-    PolyToolsMesh { vertices, indices }
-}
-
 fn component_transform(component: &PolyToolsComponent) -> Transform {
     Transform::from_xyz(
         component.local_transform.position[0],
@@ -421,18 +400,26 @@ fn component_transform(component: &PolyToolsComponent) -> Transform {
 }
 
 fn bevy_mesh(mesh: &PolyToolsMesh) -> Mesh {
+    bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
+}
+
+pub(crate) fn bevy_pupil_mesh(geometry: &PupilGeometry) -> Mesh {
+    bevy_mesh_from_parts(&geometry.vertices, &geometry.indices)
+}
+
+fn bevy_mesh_from_parts(vertices: &[[f32; 2]], indices: &[u32]) -> Mesh {
     let mut bevy_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     );
     bevy_mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
-        mesh.vertices
+        vertices
             .iter()
             .map(|vertex| [vertex[0], vertex[1], 0.0])
             .collect::<Vec<_>>(),
     );
-    bevy_mesh.insert_indices(Indices::U32(mesh.indices.clone()));
+    bevy_mesh.insert_indices(Indices::U32(indices.to_vec()));
     bevy_mesh
 }
 
@@ -565,6 +552,25 @@ fn validate_manifest(
         if let Some(mesh) = component.mesh.as_ref() {
             validate_mesh(mesh, &component.component_id)?;
         }
+        if let Some(region) = component.closed_region_mesh.as_ref() {
+            if region.role != "closed_contour_region" {
+                return Err(PolyToolsAssetError::new(format!(
+                    "{} has an invalid closed region role",
+                    component.component_id
+                )));
+            }
+            validate_mesh_parts(&region.vertices, &region.indices, &component.component_id)?;
+        }
+        if manifest.schema_version >= 8
+            && expected_key != "barde"
+            && (component.name == "eye_left" || component.name == "eye_right")
+            && component.closed_region_mesh.is_none()
+        {
+            return Err(PolyToolsAssetError::new(format!(
+                "{} is missing its schema-8 closed eye region",
+                component.component_id
+            )));
+        }
         if let Some(contour_stroke_mesh) = component.contour_stroke_mesh.as_ref() {
             let stroke = PolyToolsMesh {
                 vertices: contour_stroke_mesh.vertices.clone(),
@@ -584,14 +590,21 @@ fn validate_manifest(
 }
 
 fn validate_mesh(mesh: &PolyToolsMesh, component_id: &str) -> Result<(), PolyToolsAssetError> {
-    if mesh.vertices.is_empty()
-        || mesh.indices.is_empty()
-        || mesh.indices.len() % 3 != 0
-        || mesh.vertices.iter().any(|vertex| !finite_pair(*vertex))
-        || mesh
-            .indices
+    validate_mesh_parts(&mesh.vertices, &mesh.indices, component_id)
+}
+
+fn validate_mesh_parts(
+    vertices: &[[f32; 2]],
+    indices: &[u32],
+    component_id: &str,
+) -> Result<(), PolyToolsAssetError> {
+    if vertices.is_empty()
+        || indices.is_empty()
+        || indices.len() % 3 != 0
+        || vertices.iter().any(|vertex| !finite_pair(*vertex))
+        || indices
             .iter()
-            .any(|index| *index as usize >= mesh.vertices.len())
+            .any(|index| *index as usize >= vertices.len())
     {
         return Err(PolyToolsAssetError::new(format!(
             "{component_id} has invalid mesh geometry"
@@ -629,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn imported_eye_contours_build_colliders() {
+    fn imported_eye_regions_build_colliders() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
         for (character, manifest) in &library.characters {
@@ -640,14 +653,14 @@ mod tests {
                 if component.name != "eye_left" && component.name != "eye_right" {
                     continue;
                 }
-                let stroke = component
-                    .contour_stroke_mesh
+                let region = component
+                    .closed_region_mesh
                     .as_ref()
-                    .expect("eye has an outline");
+                    .expect("eye has a closed region");
                 assert!(
-                    EyeCollider::from_outline_area_ratio(
-                        &stroke.vertices,
-                        &stroke.indices,
+                    EyeCollider::from_region_mesh(
+                        &region.vertices,
+                        &region.indices,
                         library.pupil_area_ratio,
                         library.pupil_collision_radius_ratio,
                     )

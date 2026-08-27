@@ -1,11 +1,21 @@
 use bevy::prelude::*;
+use std::collections::HashMap;
+
+const PUPIL_SEGMENTS: u32 = 24;
 
 #[derive(Clone, Debug)]
 pub struct EyeCollider {
     center: Vec2,
     boundary: Vec<Vec2>,
+    triangles: Vec<[Vec2; 3]>,
     radius: f32,
     collision_radius: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct PupilGeometry {
+    pub vertices: Vec<[f32; 2]>,
+    pub indices: Vec<u32>,
 }
 
 impl EyeCollider {
@@ -17,19 +27,44 @@ impl EyeCollider {
         Self::from_boundary(outline_boundary(vertices, indices)?, radius, radius)
     }
 
+    pub fn from_region_mesh(
+        vertices: &[[f32; 2]],
+        indices: &[u32],
+        pupil_area_ratio: f32,
+        pupil_collision_radius_ratio: f32,
+    ) -> Option<Self> {
+        if !valid_ratios(pupil_area_ratio, pupil_collision_radius_ratio) {
+            return None;
+        }
+        let vertices = vertices
+            .iter()
+            .copied()
+            .map(Vec2::from_array)
+            .collect::<Vec<_>>();
+        let triangles = region_triangles(&vertices, indices)?;
+        let area = triangles
+            .iter()
+            .map(|triangle| triangle_area(*triangle).abs())
+            .sum::<f32>();
+        if !area.is_finite() || area <= f32::EPSILON {
+            return None;
+        }
+        let radius = (area * pupil_area_ratio / std::f32::consts::PI).sqrt();
+        Self::from_geometry(
+            region_boundary(&vertices, indices)?,
+            triangles,
+            radius,
+            radius * pupil_collision_radius_ratio,
+        )
+    }
+
     pub fn from_outline_area_ratio(
         vertices: &[[f32; 2]],
         indices: &[u32],
         pupil_area_ratio: f32,
         pupil_collision_radius_ratio: f32,
     ) -> Option<Self> {
-        if !pupil_area_ratio.is_finite()
-            || pupil_area_ratio <= 0.0
-            || pupil_area_ratio >= 1.0
-            || !pupil_collision_radius_ratio.is_finite()
-            || pupil_collision_radius_ratio <= 0.0
-            || pupil_collision_radius_ratio > 1.0
-        {
+        if !valid_ratios(pupil_area_ratio, pupil_collision_radius_ratio) {
             return None;
         }
         let boundary = outline_boundary(vertices, indices)?;
@@ -38,14 +73,11 @@ impl EyeCollider {
         Self::from_boundary(boundary, radius, radius * pupil_collision_radius_ratio)
     }
 
-    pub fn radius(&self) -> f32 {
-        self.radius
-    }
-
     pub fn center(&self) -> Vec2 {
         self.center
     }
 
+    #[cfg(test)]
     pub fn boundary(&self) -> &[Vec2] {
         &self.boundary
     }
@@ -57,6 +89,11 @@ impl EyeCollider {
                 .boundary
                 .iter()
                 .map(|vertex| *vertex + offset)
+                .collect(),
+            triangles: self
+                .triangles
+                .iter()
+                .map(|triangle| triangle.map(|vertex| vertex + offset))
                 .collect(),
             radius: self.radius,
             collision_radius: self.collision_radius,
@@ -87,7 +124,49 @@ impl EyeCollider {
         self.center + direction * minimum
     }
 
+    pub fn clipped_pupil_geometry(&self, center: Vec2) -> PupilGeometry {
+        let circle = (0..PUPIL_SEGMENTS)
+            .map(|segment| {
+                let angle = std::f32::consts::TAU * segment as f32 / PUPIL_SEGMENTS as f32;
+                center + Vec2::new(angle.cos(), angle.sin()) * self.radius
+            })
+            .collect::<Vec<_>>();
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+
+        for triangle in &self.triangles {
+            let clipped = clip_polygon_to_triangle(&circle, *triangle);
+            if clipped.len() < 3 {
+                continue;
+            }
+            let first = vertices.len() as u32;
+            vertices.extend(clipped.iter().map(|vertex| (*vertex - center).to_array()));
+            for index in 1..clipped.len() as u32 - 1 {
+                indices.extend_from_slice(&[first, first + index, first + index + 1]);
+            }
+        }
+
+        PupilGeometry { vertices, indices }
+    }
+
     fn from_boundary(boundary: Vec<Vec2>, radius: f32, collision_radius: f32) -> Option<Self> {
+        let center = polygon_center(&boundary);
+        let triangles = boundary
+            .iter()
+            .copied()
+            .zip(boundary.iter().copied().cycle().skip(1))
+            .take(boundary.len())
+            .map(|(left, right)| [center, left, right])
+            .collect();
+        Self::from_geometry(boundary, triangles, radius, collision_radius)
+    }
+
+    fn from_geometry(
+        boundary: Vec<Vec2>,
+        triangles: Vec<[Vec2; 3]>,
+        radius: f32,
+        collision_radius: f32,
+    ) -> Option<Self> {
         let centroid = polygon_center(&boundary);
         let center = if circle_fits(centroid, &boundary, collision_radius) {
             centroid
@@ -97,6 +176,7 @@ impl EyeCollider {
         Some(Self {
             center,
             boundary,
+            triangles,
             radius,
             collision_radius,
         })
@@ -105,6 +185,134 @@ impl EyeCollider {
     fn circle_fits(&self, center: Vec2) -> bool {
         circle_fits(center, &self.boundary, self.collision_radius)
     }
+}
+
+fn valid_ratios(pupil_area_ratio: f32, pupil_collision_radius_ratio: f32) -> bool {
+    pupil_area_ratio.is_finite()
+        && pupil_area_ratio > 0.0
+        && pupil_area_ratio < 1.0
+        && pupil_collision_radius_ratio.is_finite()
+        && pupil_collision_radius_ratio > 0.0
+        && pupil_collision_radius_ratio <= 1.0
+}
+
+fn region_triangles(vertices: &[Vec2], indices: &[u32]) -> Option<Vec<[Vec2; 3]>> {
+    if indices.is_empty() || !indices.len().is_multiple_of(3) {
+        return None;
+    }
+    indices
+        .chunks_exact(3)
+        .map(|triangle| {
+            let triangle = [
+                *vertices.get(triangle[0] as usize)?,
+                *vertices.get(triangle[1] as usize)?,
+                *vertices.get(triangle[2] as usize)?,
+            ];
+            (triangle_area(triangle).abs() > f32::EPSILON).then_some(triangle)
+        })
+        .collect()
+}
+
+fn region_boundary(vertices: &[Vec2], indices: &[u32]) -> Option<Vec<Vec2>> {
+    let mut edge_counts = HashMap::<(u32, u32), u32>::new();
+    for triangle in indices.chunks_exact(3) {
+        for (left, right) in [
+            (triangle[0], triangle[1]),
+            (triangle[1], triangle[2]),
+            (triangle[2], triangle[0]),
+        ] {
+            let edge = if left < right {
+                (left, right)
+            } else {
+                (right, left)
+            };
+            *edge_counts.entry(edge).or_default() += 1;
+        }
+    }
+    let boundary_edges = edge_counts
+        .into_iter()
+        .filter_map(|(edge, count)| (count == 1).then_some(edge))
+        .collect::<Vec<_>>();
+    let mut neighbors = HashMap::<u32, Vec<u32>>::new();
+    for (left, right) in &boundary_edges {
+        neighbors.entry(*left).or_default().push(*right);
+        neighbors.entry(*right).or_default().push(*left);
+    }
+    if neighbors.len() < 3 || neighbors.values().any(|adjacent| adjacent.len() != 2) {
+        return None;
+    }
+
+    let start = *neighbors.keys().min()?;
+    let mut ordered = vec![start];
+    let mut previous = None;
+    let mut current = start;
+    loop {
+        let adjacent = neighbors.get(&current)?;
+        let next = adjacent
+            .iter()
+            .copied()
+            .find(|candidate| Some(*candidate) != previous)?;
+        if next == start {
+            break;
+        }
+        if ordered.contains(&next) {
+            return None;
+        }
+        ordered.push(next);
+        previous = Some(current);
+        current = next;
+    }
+    if ordered.len() != neighbors.len() {
+        return None;
+    }
+    ordered
+        .into_iter()
+        .map(|index| vertices.get(index as usize).copied())
+        .collect()
+}
+
+fn triangle_area(triangle: [Vec2; 3]) -> f32 {
+    (triangle[1] - triangle[0]).perp_dot(triangle[2] - triangle[0]) * 0.5
+}
+
+fn clip_polygon_to_triangle(subject: &[Vec2], triangle: [Vec2; 3]) -> Vec<Vec2> {
+    let orientation = triangle_area(triangle).signum();
+    if orientation == 0.0 {
+        return Vec::new();
+    }
+    let mut output = subject.to_vec();
+    for (clip_start, clip_end) in triangle
+        .iter()
+        .copied()
+        .zip(triangle.iter().copied().cycle().skip(1))
+        .take(3)
+    {
+        let input = std::mem::take(&mut output);
+        let Some(mut previous) = input.last().copied() else {
+            break;
+        };
+        let mut previous_distance =
+            orientation * (clip_end - clip_start).perp_dot(previous - clip_start);
+        for current in input {
+            let current_distance =
+                orientation * (clip_end - clip_start).perp_dot(current - clip_start);
+            let previous_inside = previous_distance >= -f32::EPSILON;
+            let current_inside = current_distance >= -f32::EPSILON;
+            if previous_inside != current_inside {
+                let denominator = previous_distance - current_distance;
+                if denominator.abs() > f32::EPSILON {
+                    output
+                        .push(previous + (current - previous) * (previous_distance / denominator));
+                }
+            }
+            if current_inside {
+                output.push(current);
+            }
+            previous = current;
+            previous_distance = current_distance;
+        }
+    }
+    output
 }
 
 fn outline_boundary(vertices: &[[f32; 2]], indices: &[u32]) -> Option<Vec<Vec2>> {
@@ -136,6 +344,10 @@ impl EyePupil {
     ) -> Vec2 {
         self.collider
             .position_for_local_gaze(gaze_in_local_space(world_gaze, global_transform))
+    }
+
+    pub fn clipped_geometry(&self, position: Vec2) -> PupilGeometry {
+        self.collider.clipped_pupil_geometry(position)
     }
 }
 
@@ -408,5 +620,27 @@ mod tests {
         )));
 
         assert!(gaze_in_local_space(Vec2::X, &transform).distance(-Vec2::X) < 0.000_1);
+    }
+
+    #[test]
+    fn region_mesh_clips_pupil_vertices_to_its_boundary() {
+        let vertices = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+        let collider = EyeCollider::from_region_mesh(&vertices, &[0, 1, 2, 0, 2, 3], 0.26, 0.35)
+            .expect("square region fits a pupil");
+        let position = collider.position_for_local_gaze(Vec2::X);
+        let geometry = collider.clipped_pupil_geometry(position);
+
+        assert!(!geometry.indices.is_empty());
+        assert!(geometry.vertices.iter().all(|vertex| {
+            let point = Vec2::from_array(*vertex) + position;
+            point_is_inside_polygon(point, collider.boundary())
+                || collider
+                    .boundary()
+                    .iter()
+                    .copied()
+                    .zip(collider.boundary().iter().copied().cycle().skip(1))
+                    .take(collider.boundary().len())
+                    .any(|(start, end)| point_segment_distance(point, start, end) < 0.000_1)
+        }));
     }
 }
