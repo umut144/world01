@@ -179,7 +179,14 @@ Reference drawings:
 - Every currently catalogued character except Barde has eyes with one shared, round black pupil shape.
 - Each pupil covers exactly **26.0%** of its authored eye polygon's area; its radius is derived independently from that eye's geometry.
 - Pupil movement uses the Hammerer's **35.0%** pupil-radius collision as its normalization reference. Every other eye uses the same absolute collision radius, capped at its own pupil radius: smaller pupils therefore clip less deeply relative to their size, while larger pupils such as Warrior's clip more deeply. Every closed-region edge remains a collision boundary, but only edges with a visible outline clip the pupil; hidden outline edges may therefore retain a round pupil overlap. The contour remains visually in front, and eyes have no separate visible fill.
-- `IJKL` controls the local character's gaze direction: `I` up, `J` left, `K` down, and `L` right. This is presentation-only and does not change movement.
+- `IJKL` controls the local character's gaze direction: `I` up, `J` left,
+  `K` down, and `L` right. Cardinal keys may be combined for diagonal gaze.
+  Before the first gaze input the pupils are neutral; after that, releasing the
+  keys retains the last non-neutral gaze direction.
+- Gaze is gameplay-relevant authoritative state. The controlling client sends
+  its gaze intent to the server, and the resulting gaze direction is replicated
+  so every client sees the same look direction. Gaze remains independent from
+  movement and body facing.
 - Each character keeps its own eye geometry, eye positions, and eye pivots. Pupil movement is constrained by that eye's geometry rather than the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.
 
@@ -187,10 +194,10 @@ Reference drawings:
 
 - Each PolyTools character asset declares its authored initial pose as Left,
   Right, Neutral, Top, or Down.
-- The first movement-pose iteration applies only to the locally controlled
-  character and only to authored Left/Right poses. Moving horizontally in the
-  authored direction keeps the original geometry; moving in the opposite
-  direction mirrors the complete character presentation horizontally.
+- Authored Left/Right poses follow the character's server-authoritative body
+  facing. Moving horizontally in the authored direction keeps the original
+  geometry; moving in the opposite direction mirrors the complete character
+  presentation horizontally on every client.
 - Neutral characters deliberately do not flip in this iteration. Top and Down
   are retained as authored metadata for later use but have no runtime behavior
   yet.
@@ -199,10 +206,8 @@ Reference drawings:
 - Body pose and eye gaze are independent. A character may move and face right
   while its pupils continue looking left; mirroring the body must not mirror
   the gaze in screen space.
-- Releasing the current `IJKL` gaze input still returns the pupils to their
-  neutral position in this slice. The following gaze/facing slice is intended
-  to retain the last gaze direction and replicate both body facing and gaze so
-  other clients observe them consistently.
+- Body facing and gaze are retained and replicated independently. A late-joining
+  client receives their current authoritative values.
 
 ## Diegetic / minimal UI philosophy
 

@@ -4,7 +4,7 @@ use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::{MovementIntent, Position};
+use game01_world_data::{BodyFacing, GazeDirection, GazeIntent, MovementIntent, Position};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -61,6 +61,31 @@ pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent
     for (intent, mut position) in &mut players {
         let displacement = step.displacement(*intent);
         *position = Position::new(position.x + displacement.x, position.y + displacement.y);
+    }
+}
+
+pub fn update_character_orientation(
+    mut players: Query<(
+        &MovementIntent,
+        &GazeIntent,
+        &mut BodyFacing,
+        &mut GazeDirection,
+    )>,
+) {
+    for (movement, gaze, mut facing, mut gaze_direction) in &mut players {
+        if movement.x.is_finite() {
+            if movement.x < 0.0 {
+                *facing = BodyFacing::Left;
+            } else if movement.x > 0.0 {
+                *facing = BodyFacing::Right;
+            }
+        }
+
+        let gaze = Vec2::new(gaze.x, gaze.y);
+        if gaze.is_finite() && gaze != Vec2::ZERO {
+            let gaze = gaze.normalize();
+            *gaze_direction = GazeDirection::new(gaze.x, gaze.y);
+        }
     }
 }
 
@@ -153,6 +178,76 @@ mod tests {
     }
 
     #[test]
+    fn orientation_follows_horizontal_movement_and_retains_last_gaze() {
+        let mut app = App::new();
+        app.add_systems(Update, update_character_orientation);
+        let player = app
+            .world_mut()
+            .spawn((
+                MovementIntent::new(1.0, 0.0),
+                GazeIntent::new(-1.0, 1.0),
+                BodyFacing::Authored,
+                GazeDirection::ZERO,
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<BodyFacing>(player),
+            Some(&BodyFacing::Right)
+        );
+        let diagonal = 1.0 / 2.0_f32.sqrt();
+        assert_eq!(
+            app.world().get::<GazeDirection>(player),
+            Some(&GazeDirection::new(-diagonal, diagonal))
+        );
+
+        *app.world_mut()
+            .get_mut::<MovementIntent>(player)
+            .expect("player retains movement intent") = MovementIntent::new(0.0, 1.0);
+        *app.world_mut()
+            .get_mut::<GazeIntent>(player)
+            .expect("player retains gaze intent") = GazeIntent::ZERO;
+        app.update();
+
+        assert_eq!(
+            app.world().get::<BodyFacing>(player),
+            Some(&BodyFacing::Right)
+        );
+        assert_eq!(
+            app.world().get::<GazeDirection>(player),
+            Some(&GazeDirection::new(-diagonal, diagonal))
+        );
+    }
+
+    #[test]
+    fn invalid_orientation_input_does_not_replace_valid_state() {
+        let mut app = App::new();
+        app.add_systems(Update, update_character_orientation);
+        let player = app
+            .world_mut()
+            .spawn((
+                MovementIntent::new(f32::NAN, 0.0),
+                GazeIntent::new(f32::INFINITY, 0.0),
+                BodyFacing::Left,
+                GazeDirection::new(0.0, -1.0),
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<BodyFacing>(player),
+            Some(&BodyFacing::Left)
+        );
+        assert_eq!(
+            app.world().get::<GazeDirection>(player),
+            Some(&GazeDirection::new(0.0, -1.0))
+        );
+    }
+
+    #[test]
     fn invalid_design_values_are_rejected() {
         let zero_tick_rate = DesignConfig {
             simulation: SimulationConfig {
@@ -176,7 +271,7 @@ mod tests {
             },
             eyes: EyesConfig {
                 pupil_area_ratio: 0.26,
-                pupil_collision_radius_ratio: 0.35,
+                hammerer_collision_radius_ratio: 0.35,
             },
         };
         let negative_speed = DesignConfig {
@@ -201,7 +296,7 @@ mod tests {
             },
             eyes: EyesConfig {
                 pupil_area_ratio: 0.26,
-                pupil_collision_radius_ratio: 0.35,
+                hammerer_collision_radius_ratio: 0.35,
             },
         };
 

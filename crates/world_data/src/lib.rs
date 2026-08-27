@@ -215,6 +215,65 @@ impl MovementIntent {
     }
 }
 
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct GazeIntent {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl GazeIntent {
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct GazeDirection {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl GazeDirection {
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub enum BodyFacing {
+    #[default]
+    Authored,
+    Left,
+    Right,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct PlayerInput {
+    pub movement: MovementIntent,
+    pub gaze: GazeIntent,
+}
+
+impl PlayerInput {
+    pub const ZERO: Self = Self {
+        movement: MovementIntent::ZERO,
+        gaze: GazeIntent::ZERO,
+    };
+
+    pub const fn new(movement: MovementIntent, gaze: GazeIntent) -> Self {
+        Self { movement, gaze }
+    }
+}
+
+impl MapEntities for PlayerInput {
+    fn map_entities<M: EntityMapper>(&mut self, _entity_mapper: &mut M) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

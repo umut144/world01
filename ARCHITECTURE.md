@@ -52,12 +52,18 @@ Owns shared protocol-neutral domain data:
 - the fixed initial `3 × 3` room-grid coordinate mapping and authoritative
   `RoomId` assignment;
 - movement intent data passed into simulation;
+- combined tick-bound player input containing movement and gaze intent;
+- authoritative retained horizontal body facing and gaze direction;
 - authoritative two-dimensional `Position` in meters;
 - replicated gameplay components that are not transport-specific.
 
 Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1 supersedes that choice with the protocol-neutral `Position`; graphical transforms no longer belong to shared world state.
 
-Implemented shared Phase 2 data uses transport-neutral scalar identifiers and coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`, `StandardRoom`, `SpawnPoint`, and `MovementIntent`. Network-specific connection types stay outside `world_data`.
+Implemented shared data uses transport-neutral scalar identifiers and
+coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`,
+`StandardRoom`, `SpawnPoint`, `PlayerInput`, `MovementIntent`, `GazeIntent`,
+`BodyFacing`, and `GazeDirection`. Network-specific connection types stay
+outside `world_data`.
 
 ### `configs`
 
@@ -75,13 +81,21 @@ Later values such as mass, MaxHP, or attack values are added only when the devel
 Owns transport-, input-device-, and presentation-independent game rules:
 
 - consumes explicit movement intent;
+- consumes explicit gaze intent;
 - applies current movement rules to authoritative state;
 - runs when scheduled by fixed-step orchestration but contains no tick-loop orchestration itself;
 - does not read keyboard input;
 - does not send or receive network messages;
 - does not render, animate, play audio, or manage UI.
 
-The simulation mutates protocol-neutral `Position`, never presentation `Transform`. A mass/velocity movement model will be required soon and does not need to follow real-world physics. Keep the simulation interface and network/input flow suitable for adding explicit velocity and mass without rewriting those outer layers.
+The simulation mutates protocol-neutral `Position`, `BodyFacing`, and
+`GazeDirection`, never presentation `Transform`. Horizontal movement intent
+updates retained Left/Right body facing; zero horizontal intent preserves it.
+A finite non-zero gaze intent is normalized and replaces the retained gaze;
+zero or invalid gaze preserves the previous direction. A mass/velocity movement
+model will be required soon and does not need to follow real-world physics.
+Keep the simulation interface and network/input flow suitable for adding
+explicit velocity and mass without rewriting those outer layers.
 
 Collision is not required in the first slice, including room-boundary collision.
 
@@ -102,7 +116,16 @@ Networking transports intent and replicated state; it does not own movement rule
 
 The `game01-network` crate exposes separate `client` and `server` Cargo features. Both applications disable its default features and select only their respective feature. Both sides retain Lightyear replication, native input, Netcode/UDP, prediction, and interpolation because the server registers predicted/interpolated `Position` state and assigns `PredictionTarget`/`InterpolationTarget` to recipients. The dedicated server deliberately excludes Lightyear's `client` feature and all local client connection, input-collection, prediction-presentation, and interpolation-presentation systems.
 
-Slice 2 Phase 2 uses Lightyear's native input pipeline instead of a custom movement message. The client samples hardware state into a local resource during normal frame input collection, writes that state to its controlled entity in Lightyear's `FixedPreUpdate` input stage, and sends redundant tick-addressed history. The server validates each input target against `ControlledBy`, lets Lightyear select the current tick's `ActionState`, and adapts that state to `MovementIntent` before simulation. This is a direct entity-local query with no connection-to-player scan.
+Slice 2 Phase 2 uses Lightyear's native input pipeline instead of a custom
+movement message. The current pipeline carries one combined `PlayerInput` with
+movement and gaze intent. The client samples hardware state into a local
+resource during normal frame input collection, writes that state to its
+controlled entity in Lightyear's `FixedPreUpdate` input stage, and sends
+redundant tick-addressed history. The server validates each input target against
+`ControlledBy`, lets Lightyear select the current tick's `ActionState`, and
+adapts that state to explicit `MovementIntent` and `GazeIntent` components
+before simulation. This is a direct entity-local query with no
+connection-to-player scan.
 
 Slice 2 Phase 3 registers `Position` for Lightyear prediction and assigns a `PredictionTarget` only to the controlling peer. Once its input timeline is synchronized, that client adapts the rollback-aware native `ActionState` to `MovementIntent` and runs the same `MovementStep` plus `move_players` system used by the server. Confirmed server positions remain the reconciliation authority. Remote players are not predicted in this phase.
 
@@ -226,9 +249,9 @@ fit the complete circle. The gaze vector is transformed through the inverse
 full eye transform hierarchy before collision, so mirrored or rotated asset
 components retain the same screen-space look direction. This presentation-only
 geometry lives in `apps/client/src/eyes.rs`. Device sampling and conversion
-into local movement/gaze presentation inputs live in `apps/client/src/input.rs`;
-`IJKL` is not part of movement intent or network state. Barde is intentionally
-excluded for now.
+into the combined local movement/gaze input live in `apps/client/src/input.rs`.
+`IJKL` updates only non-zero gaze intent, so releasing the keys retains the
+previous direction. Barde is intentionally excluded for now.
 The configured `[eyes].pupil_area_ratio` is currently `0.26`; each visible pupil
 radius is derived from the schema-8 `closed_region_mesh` area. At asset-library
 load time, `[eyes].hammerer_collision_radius_ratio = 0.35` is applied to the
@@ -251,18 +274,18 @@ entity and the existing asset-pivot hierarchy. Horizontal mirroring changes
 only that orientation root, never the player `Transform`, authoritative
 `Position`, simulation state, or network state.
 
-The first directional-pose slice reads the current client-side movement input
-only for the locally controlled rendered character. Authored Left and Right
-poses select an orientation-root x scale of `1` or `-1`; zero horizontal input
-retains the current pose, while Neutral, Top, and Down are runtime no-ops.
-Remote characters remain in their authored pose until the confirmed follow-up
-slice introduces replicated body facing. Eye gaze remains an independent
-screen-space vector. Before normal transform propagation, the eye system
-computes each pupil's current full hierarchy transform, including a newly
-changed orientation-root scale, and converts the unchanged screen-space gaze
-through its inverse. A body flip therefore does not reverse visible gaze.
-Retained gaze plus replication of both body facing and gaze belongs to the
-follow-up slice.
+The server derives retained `BodyFacing` from horizontal movement intent and
+retained `GazeDirection` from gaze intent. Both components replicate to remote
+clients and are predicted for the controlling client using the same shared
+simulation system. Authored Left and Right poses convert `BodyFacing` into an
+orientation-root x scale of `1` or `-1`; Neutral, Top, and Down remain visual
+no-ops. Eye gaze is read from the independently replicated/predicted
+`GazeDirection`. Before normal transform propagation, the eye system computes
+each pupil's current full hierarchy transform, including the orientation-root
+scale, and converts the unchanged screen-space gaze through its inverse. A body
+flip therefore does not reverse visible gaze. Initial `BodyFacing::Authored`
+and zero gaze preserve the exported pose and neutral pupils until corresponding
+input arrives.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable
@@ -285,25 +308,25 @@ Phase 4 separates character labels into bounded, centered UI nodes and gives sel
 ## Input-to-simulation flow
 
 ```text
-WASD / local input device
+WASD / controller + IJKL
         │
         ▼
 client input collection
-        │  latest MovementIntent resource
+        │  latest PlayerInput resource
         ▼
 Lightyear native tick buffer
         │
         ▼
-server-owned entity ActionState
-        │  explicit simulation input
+server-owned entity ActionState<PlayerInput>
+        │  MovementIntent + GazeIntent
         ▼
 simulation system
-        │  authoritative Position mutation
+        │  authoritative Position + BodyFacing + GazeDirection
         ▼
-Lightyear Position replication
+Lightyear state replication / owner prediction
         │
         ▼
-client presentation derives Transform
+client presentation derives Transform, body pose, and pupils
 ```
 
 The fixed tick loop schedules and supplies simulation inputs. Game rules must not be embedded in the loop, input adapter, or network handler.

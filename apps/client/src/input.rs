@@ -1,39 +1,45 @@
 use bevy::prelude::*;
-use game01_network::ClientMovementInput;
-use game01_world_data::MovementIntent;
+use game01_network::ClientPlayerInput;
+use game01_world_data::{GazeIntent, MovementIntent};
 
 use crate::controller::ControllerInput;
 
 const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
 
-#[derive(Component, Debug, Clone, Copy, Default)]
-pub struct LocalGaze(pub Vec2);
-
 pub fn collect_movement_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut controller_input: NonSendMut<ControllerInput>,
-    mut input: ResMut<ClientMovementInput>,
+    mut input: ResMut<ClientPlayerInput>,
 ) {
     let keyboard_direction = Vec2::new(
         axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA),
         axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS),
     );
     let direction = movement_direction(keyboard_direction, controller_input.left_stick());
-    input.0 = MovementIntent::new(direction.x, direction.y);
+    input.0.movement = MovementIntent::new(direction.x, direction.y);
 }
 
 pub fn collect_gaze_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut local_players: Query<&mut LocalGaze, With<MovementIntent>>,
+    local_players: Query<(), With<MovementIntent>>,
+    mut input: ResMut<ClientPlayerInput>,
 ) {
+    if local_players.is_empty() {
+        return;
+    }
     let direction = Vec2::new(
         axis(&keyboard, KeyCode::KeyL, KeyCode::KeyJ),
         axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
-    )
-    .normalize_or_zero();
+    );
+    input.0.gaze = retained_gaze(input.0.gaze, direction);
+}
 
-    for mut gaze in &mut local_players {
-        gaze.0 = direction;
+fn retained_gaze(current: GazeIntent, direction: Vec2) -> GazeIntent {
+    let direction = direction.normalize_or_zero();
+    if direction == Vec2::ZERO {
+        current
+    } else {
+        GazeIntent::new(direction.x, direction.y)
     }
 }
 
@@ -63,4 +69,25 @@ pub(crate) fn controller_stick_direction(stick: Vec2) -> Option<Vec2> {
     let scaled_magnitude =
         ((magnitude - CONTROLLER_STICK_DEADZONE) / (1.0 - CONTROLLER_STICK_DEADZONE)).min(1.0);
     Some(stick.normalize_or_zero() * scaled_magnitude)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gaze_input_retains_the_last_direction_after_release() {
+        let left = retained_gaze(GazeIntent::ZERO, -Vec2::X);
+
+        assert_eq!(left, GazeIntent::new(-1.0, 0.0));
+        assert_eq!(retained_gaze(left, Vec2::ZERO), left);
+    }
+
+    #[test]
+    fn gaze_input_normalizes_diagonals() {
+        let diagonal = retained_gaze(GazeIntent::ZERO, Vec2::new(1.0, 1.0));
+        let expected = 1.0 / 2.0_f32.sqrt();
+
+        assert_eq!(diagonal, GazeIntent::new(expected, expected));
+    }
 }

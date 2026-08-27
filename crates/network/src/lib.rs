@@ -11,11 +11,12 @@ use std::collections::HashMap;
 #[cfg(feature = "server")]
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
+use game01_world_data::{
+    BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementIntent, PlayerId, PlayerInput,
+    PlayerOwner, Position, RoomId, SelectedCharacter,
+};
 #[cfg(feature = "server")]
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
-use game01_world_data::{
-    CharacterId, MovementIntent, PlayerId, PlayerOwner, Position, RoomId, SelectedCharacter,
-};
 #[cfg(feature = "server")]
 use lightyear::connection::client::Disconnecting;
 #[cfg(feature = "client")]
@@ -108,7 +109,7 @@ pub struct JoinRequest {
 
 #[cfg(feature = "client")]
 #[derive(Resource, Debug, Clone, Copy, Default)]
-pub struct ClientMovementInput(pub MovementIntent);
+pub struct ClientPlayerInput(pub PlayerInput);
 
 #[cfg(feature = "client")]
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -207,7 +208,7 @@ pub fn configure_server(
     network_simulation: NetworkSimulationProfile,
 ) {
     app.add_plugins(ServerPlugins { tick_duration })
-        .add_plugins(NativeInputPlugin::<MovementIntent>::default())
+        .add_plugins(NativeInputPlugin::<PlayerInput>::default())
         .insert_resource(ReplicationMetadata::new(snapshot_interval))
         .insert_resource(network_simulation)
         .init_resource::<ConnectionRegistry>()
@@ -217,19 +218,19 @@ pub fn configure_server(
         .add_systems(Update, handle_join_requests)
         .add_systems(
             FixedUpdate,
-            apply_tick_movement_intents.in_set(ServerNetworkSet::PrepareSimulation),
+            apply_tick_player_input.in_set(ServerNetworkSet::PrepareSimulation),
         )
         .add_observer(prepare_server_client)
         .add_observer(track_connected_client)
         .add_observer(track_disconnected_client)
-        .add_input_validator(authorize_controlled_targets::<NativeStateSequence<MovementIntent>>);
+        .add_input_validator(authorize_controlled_targets::<NativeStateSequence<PlayerInput>>);
 }
 
 #[cfg(feature = "client")]
 pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
     app.add_plugins(ClientPlugins { tick_duration })
-        .add_plugins(NativeInputPlugin::<MovementIntent>::default())
-        .init_resource::<ClientMovementInput>()
+        .add_plugins(NativeInputPlugin::<PlayerInput>::default())
+        .init_resource::<ClientPlayerInput>()
         .insert_resource(RemoteExtrapolationConfig {
             tick_duration,
             maximum_duration: snapshot_interval.mul_f32(MAX_REMOTE_EXTRAPOLATION_INTERVALS),
@@ -237,7 +238,7 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
         .register_game_protocol()
         .add_systems(
             FixedPreUpdate,
-            write_client_movement_input.in_set(ClientInputSystems::WriteClientInputs),
+            write_client_player_input.in_set(ClientInputSystems::WriteClientInputs),
         )
         .add_systems(
             PreUpdate,
@@ -350,6 +351,8 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
         self.component::<RoomId>().replicate().predict();
+        self.component::<BodyFacing>().replicate().predict();
+        self.component::<GazeDirection>().replicate().predict();
         self.component::<Position>()
             .replicate()
             .predict()
@@ -498,8 +501,9 @@ fn track_disconnected_client(
 #[cfg(feature = "client")]
 fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands) {
     commands.entity(trigger.entity).insert((
-        InputMarker::<MovementIntent>::default(),
+        InputMarker::<PlayerInput>::default(),
         MovementIntent::ZERO,
+        GazeIntent::ZERO,
     ));
 }
 
@@ -563,6 +567,9 @@ fn handle_join_requests(
             PlayerOwner(owner),
             SelectedCharacter(selected_character.clone()),
             MovementIntent::ZERO,
+            GazeIntent::ZERO,
+            BodyFacing::Authored,
+            GazeDirection::ZERO,
             Position::new(spawn.x, spawn.y),
             room_grid.starting_room(),
             ControlledBy {
@@ -578,11 +585,11 @@ fn handle_join_requests(
 }
 
 #[cfg(feature = "client")]
-fn write_client_movement_input(
-    input: Res<ClientMovementInput>,
+fn write_client_player_input(
+    input: Res<ClientPlayerInput>,
     mut players: Query<
-        &mut ActionState<MovementIntent>,
-        (With<Controlled>, With<InputMarker<MovementIntent>>),
+        &mut ActionState<PlayerInput>,
+        (With<Controlled>, With<InputMarker<PlayerInput>>),
     >,
 ) {
     for mut action_state in &mut players {
@@ -591,11 +598,16 @@ fn write_client_movement_input(
 }
 
 #[cfg(any(feature = "client", feature = "server"))]
-pub fn apply_tick_movement_intents(
-    mut players: Query<(&ActionState<MovementIntent>, &mut MovementIntent)>,
+pub fn apply_tick_player_input(
+    mut players: Query<(
+        &ActionState<PlayerInput>,
+        &mut MovementIntent,
+        &mut GazeIntent,
+    )>,
 ) {
-    for (action_state, mut intent) in &mut players {
-        *intent = action_state.0;
+    for (action_state, mut movement, mut gaze) in &mut players {
+        *movement = action_state.0.movement;
+        *gaze = action_state.0.gaze;
     }
 }
 
@@ -789,7 +801,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::state::app::StatesPlugin));
         app.add_plugins(ServerPlugins { tick_duration })
-            .add_plugins(NativeInputPlugin::<MovementIntent>::default())
+            .add_plugins(NativeInputPlugin::<PlayerInput>::default())
             .insert_resource(ReplicationMetadata::new(snapshot_interval))
             .register_game_protocol();
 
@@ -867,14 +879,18 @@ mod tests {
     }
 
     #[test]
-    fn tick_input_applies_direction_and_stop_without_timeout() {
+    fn tick_input_applies_movement_and_gaze_without_timeout() {
         let mut app = App::new();
-        app.add_systems(FixedUpdate, apply_tick_movement_intents);
+        app.add_systems(FixedUpdate, apply_tick_player_input);
         let player = app
             .world_mut()
             .spawn((
-                ActionState(MovementIntent::new(1.0, 0.0)),
+                ActionState(PlayerInput::new(
+                    MovementIntent::new(1.0, 0.0),
+                    GazeIntent::new(-1.0, 0.0),
+                )),
                 MovementIntent::ZERO,
+                GazeIntent::ZERO,
             ))
             .id();
 
@@ -883,15 +899,23 @@ mod tests {
             app.world().get::<MovementIntent>(player),
             Some(&MovementIntent::new(1.0, 0.0))
         );
+        assert_eq!(
+            app.world().get::<GazeIntent>(player),
+            Some(&GazeIntent::new(-1.0, 0.0))
+        );
 
         app.world_mut()
-            .get_mut::<ActionState<MovementIntent>>(player)
+            .get_mut::<ActionState<PlayerInput>>(player)
             .expect("test player has native action state")
-            .0 = MovementIntent::ZERO;
+            .0 = PlayerInput::ZERO;
         app.world_mut().run_schedule(FixedUpdate);
         assert_eq!(
             app.world().get::<MovementIntent>(player),
             Some(&MovementIntent::ZERO)
+        );
+        assert_eq!(
+            app.world().get::<GazeIntent>(player),
+            Some(&GazeIntent::ZERO)
         );
     }
 }

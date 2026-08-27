@@ -5,7 +5,7 @@ use game01_configs::load_embedded;
 use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
-use game01_simulation::{MovementStep, move_players};
+use game01_simulation::{MovementStep, move_players, update_character_orientation};
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -50,7 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )
     .add_systems(
         FixedUpdate,
-        move_players.after(ServerNetworkSet::PrepareSimulation),
+        (move_players, update_character_orientation).after(ServerNetworkSet::PrepareSimulation),
     );
     configure_server(
         &mut app,
