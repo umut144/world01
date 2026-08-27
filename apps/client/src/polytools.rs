@@ -16,6 +16,15 @@ use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
 #[derive(Component)]
 pub struct BodyAnchor;
 
+#[derive(Component, Debug, Clone, Copy)]
+pub struct CharacterVisual {
+    pub orientation_root: Entity,
+    pub authored_facing: AuthoredFacing,
+}
+
+#[derive(Component)]
+pub struct CharacterVisualOrientation;
+
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
@@ -137,6 +146,13 @@ impl CharacterAssetLibrary {
             .map(|pivot| Vec2::new(pivot[0], pivot[1]))
             .unwrap_or(Vec2::ZERO)
     }
+
+    #[cfg(test)]
+    fn authored_facing(&self, character: &CharacterId) -> AuthoredFacing {
+        self.character(character)
+            .map(|manifest| manifest.presentation.authored_facing)
+            .unwrap_or_default()
+    }
 }
 
 #[derive(Debug)]
@@ -156,12 +172,31 @@ impl fmt::Display for PolyToolsAssetError {
 
 impl Error for PolyToolsAssetError {}
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthoredFacing {
+    Left,
+    Right,
+    #[default]
+    Neutral,
+    Top,
+    Down,
+}
+
+#[derive(Clone, Default, Deserialize)]
+struct PolyToolsPresentation {
+    #[serde(default)]
+    authored_facing: AuthoredFacing,
+}
+
 #[derive(Clone, Deserialize)]
 struct PolyToolsManifest {
     schema_version: u32,
     asset_key: String,
     asset_type: String,
     asset_pivot: [f32; 2],
+    #[serde(default)]
+    presentation: PolyToolsPresentation,
     components: Vec<PolyToolsComponent>,
 }
 
@@ -242,13 +277,25 @@ pub fn spawn_character_visual(
     let manifest = library
         .character(character)
         .ok_or_else(|| PolyToolsAssetError::new("missing validated character manifest"))?;
+    let orientation_root = commands
+        .spawn((
+            CharacterVisualOrientation,
+            Transform::default(),
+            Visibility::default(),
+        ))
+        .id();
     let anchor = commands
         .spawn((
             Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0),
             Visibility::default(),
         ))
         .id();
-    commands.entity(root).add_child(anchor);
+    commands.entity(root).insert(CharacterVisual {
+        orientation_root,
+        authored_facing: manifest.presentation.authored_facing,
+    });
+    commands.entity(root).add_child(orientation_root);
+    commands.entity(orientation_root).add_child(anchor);
 
     let mut component_entities = HashMap::new();
     for component in &manifest.components {
@@ -667,6 +714,68 @@ mod tests {
 
         assert_eq!(ids.len(), 10);
         assert!(ids.iter().any(|character| character.0 == "warrior"));
+    }
+
+    #[test]
+    fn embedded_manifests_expose_confirmed_authored_facing() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let expected = [
+            ("archerf", AuthoredFacing::Left),
+            ("barde", AuthoredFacing::Neutral),
+            ("chantres", AuthoredFacing::Left),
+            ("glavier", AuthoredFacing::Neutral),
+            ("hammerer", AuthoredFacing::Neutral),
+            ("mage", AuthoredFacing::Right),
+            ("rogue", AuthoredFacing::Left),
+            ("sorcerer", AuthoredFacing::Left),
+            ("warrior", AuthoredFacing::Neutral),
+            ("wizard", AuthoredFacing::Right),
+        ];
+
+        for (character, facing) in expected {
+            assert_eq!(
+                library.authored_facing(&CharacterId(character.to_owned())),
+                facing,
+                "{character} has the wrong authored facing",
+            );
+        }
+    }
+
+    #[test]
+    fn missing_presentation_metadata_defaults_to_neutral() {
+        let manifest: PolyToolsManifest = serde_json::from_str(
+            r#"{
+                "schema_version": 8,
+                "asset_key": "legacy",
+                "asset_type": "character",
+                "asset_pivot": [0.0, 0.0],
+                "components": []
+            }"#,
+        )
+        .expect("legacy manifest remains readable");
+
+        assert_eq!(
+            manifest.presentation.authored_facing,
+            AuthoredFacing::Neutral
+        );
+    }
+
+    #[test]
+    fn authored_facing_accepts_every_exported_value() {
+        for (serialized, expected) in [
+            (r#""left""#, AuthoredFacing::Left),
+            (r#""right""#, AuthoredFacing::Right),
+            (r#""neutral""#, AuthoredFacing::Neutral),
+            (r#""top""#, AuthoredFacing::Top),
+            (r#""down""#, AuthoredFacing::Down),
+        ] {
+            assert_eq!(
+                serde_json::from_str::<AuthoredFacing>(serialized)
+                    .expect("exported authored facing is valid"),
+                expected,
+            );
+        }
     }
 
     #[test]

@@ -7275,6 +7275,9 @@
 		"y_axis": "up"
 	},
 	"display_name": "Barde",
+	"presentation": {
+		"authored_facing": "neutral"
+	},
 	"schema_version": 8,
 	"z_order": {
 		"back_to_front": "ascending",

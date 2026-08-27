@@ -1,6 +1,6 @@
 # The Labyrinth — persistent technical architecture
 
-Last updated: 2026-08-14
+Last updated: 2026-08-27
 
 ## Purpose and authority
 
@@ -240,6 +240,29 @@ stroke centerlines while retaining the complete closed region as the collision
 boundary. It renders no separate eye fill and keeps the eye contour in front of
 the resulting mesh. Legacy schema 5–7 packages may reconstruct the region
 boundary from their stroke geometry.
+
+PolyTools schema-8 manifests now expose
+`presentation.authored_facing` with the values `left`, `right`, `neutral`,
+`top`, and `down`; older compatible manifests default to `neutral` when the
+presentation metadata is absent. The client retains that asset-authored value
+separately from runtime movement and gaze state. Character geometry is parented
+under a client-only visual-orientation root between the replicated player
+entity and the existing asset-pivot hierarchy. Horizontal mirroring changes
+only that orientation root, never the player `Transform`, authoritative
+`Position`, simulation state, or network state.
+
+The first directional-pose slice reads the current client-side movement input
+only for the locally controlled rendered character. Authored Left and Right
+poses select an orientation-root x scale of `1` or `-1`; zero horizontal input
+retains the current pose, while Neutral, Top, and Down are runtime no-ops.
+Remote characters remain in their authored pose until the confirmed follow-up
+slice introduces replicated body facing. Eye gaze remains an independent
+screen-space vector. Before normal transform propagation, the eye system
+computes each pupil's current full hierarchy transform, including a newly
+changed orientation-root scale, and converts the unchanged screen-space gaze
+through its inverse. A body flip therefore does not reverse visible gaze.
+Retained gaze plus replication of both body facing and gaze belongs to the
+follow-up slice.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable

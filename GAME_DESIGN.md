@@ -1,6 +1,6 @@
 # The Labyrinth — persistent AI design context
 
-Last updated: 2026-08-14
+Last updated: 2026-08-27
 
 ## Purpose and authority
 
@@ -182,6 +182,27 @@ Reference drawings:
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left, `K` down, and `L` right. This is presentation-only and does not change movement.
 - Each character keeps its own eye geometry, eye positions, and eye pivots. Pupil movement is constrained by that eye's geometry rather than the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.
+
+### Movement-dependent body pose
+
+- Each PolyTools character asset declares its authored initial pose as Left,
+  Right, Neutral, Top, or Down.
+- The first movement-pose iteration applies only to the locally controlled
+  character and only to authored Left/Right poses. Moving horizontally in the
+  authored direction keeps the original geometry; moving in the opposite
+  direction mirrors the complete character presentation horizontally.
+- Neutral characters deliberately do not flip in this iteration. Top and Down
+  are retained as authored metadata for later use but have no runtime behavior
+  yet.
+- Pure vertical movement and stopping retain the last horizontal body pose. At
+  spawn, the character uses its authored pose.
+- Body pose and eye gaze are independent. A character may move and face right
+  while its pupils continue looking left; mirroring the body must not mirror
+  the gaze in screen space.
+- Releasing the current `IJKL` gaze input still returns the pupils to their
+  neutral position in this slice. The following gaze/facing slice is intended
+  to retain the last gaze direction and replicate both body facing and gaze so
+  other clients observe them consistently.
 
 ## Diegetic / minimal UI philosophy
 

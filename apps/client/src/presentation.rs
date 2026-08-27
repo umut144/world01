@@ -1,12 +1,13 @@
 use bevy::{
     camera::{ScalingMode, Viewport},
     prelude::*,
+    transform::{TransformSystems, helper::TransformHelper},
     window::PrimaryWindow,
 };
 use game01_configs::load_file;
 use game01_network::{
-    ClientPositionCorrection, NetworkSimulationProfile, RemotePositionExtrapolation,
-    configure_client, connect_client,
+    ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
+    RemotePositionExtrapolation, configure_client, connect_client,
 };
 use game01_world_data::{
     CharacterId, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
@@ -15,7 +16,10 @@ use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
 use crate::input::{LocalGaze, collect_gaze_input, collect_movement_input};
-use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
+use crate::polytools::{
+    AuthoredFacing, CharacterAssetLibrary, CharacterVisual, CharacterVisualOrientation,
+    bevy_pupil_mesh, spawn_character_visual,
+};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -88,7 +92,7 @@ impl Plugin for ClientPresentationPlugin {
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
-                    collect_movement_input,
+                    (collect_movement_input, apply_local_directional_body_pose).chain(),
                     collect_gaze_input,
                     (render_new_players, initialize_local_render_history)
                         .chain()
@@ -107,6 +111,7 @@ impl Plugin for ClientPresentationPlugin {
                     apply_eye_gaze,
                 )
                     .chain()
+                    .before(TransformSystems::Propagate)
                     .run_if(in_state(ClientScreen::InGame)),
             );
     }
@@ -757,16 +762,64 @@ fn follow_local_character(
     camera_transform.translation.y = anchor.y;
 }
 
+fn apply_local_directional_body_pose(
+    movement: Res<ClientMovementInput>,
+    local_players: Query<&CharacterVisual, (With<RenderedCharacter>, With<MovementIntent>)>,
+    mut orientation_roots: Query<&mut Transform, With<CharacterVisualOrientation>>,
+) {
+    let Ok(visual) = local_players.single() else {
+        return;
+    };
+    let Some(scale_x) = directional_pose_scale_x(visual.authored_facing, movement.0.x) else {
+        return;
+    };
+    let Ok(mut transform) = orientation_roots.get_mut(visual.orientation_root) else {
+        return;
+    };
+    transform.scale.x = scale_x;
+}
+
+fn directional_pose_scale_x(authored_facing: AuthoredFacing, movement_x: f32) -> Option<f32> {
+    if !movement_x.is_finite() || movement_x == 0.0 {
+        return None;
+    }
+
+    match authored_facing {
+        AuthoredFacing::Left => Some(if movement_x < 0.0 { 1.0 } else { -1.0 }),
+        AuthoredFacing::Right => Some(if movement_x > 0.0 { 1.0 } else { -1.0 }),
+        AuthoredFacing::Neutral | AuthoredFacing::Top | AuthoredFacing::Down => None,
+    }
+}
+
 fn apply_eye_gaze(
     local_players: Query<&LocalGaze>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut pupils: Query<(&EyePupil, &Mesh2d, &GlobalTransform, &mut Transform)>,
+    mut pupils: ParamSet<(
+        TransformHelper,
+        Query<(Entity, &EyePupil, &Mesh2d, &mut Transform)>,
+    )>,
 ) {
-    for (pupil, mesh_handle, global_transform, mut transform) in &mut pupils {
-        let Ok(gaze) = local_players.get(pupil.owner) else {
+    let pupil_owners = {
+        let mut pupil_query = pupils.p1();
+        pupil_query
+            .iter_mut()
+            .map(|(entity, pupil, _, _)| (entity, pupil.owner))
+            .collect::<Vec<_>>()
+    };
+
+    for (entity, owner) in pupil_owners {
+        let Ok(gaze) = local_players.get(owner) else {
             continue;
         };
-        let position = pupil.position_for_world_gaze(gaze.0, global_transform);
+        let Ok(global_transform) = pupils.p0().compute_global_transform(entity) else {
+            warn!(?entity, "cannot compute current eye transform");
+            continue;
+        };
+        let mut pupil_query = pupils.p1();
+        let Ok((_, pupil, mesh_handle, mut transform)) = pupil_query.get_mut(entity) else {
+            continue;
+        };
+        let position = pupil.position_for_world_gaze(gaze.0, &global_transform);
         if transform.translation.truncate().distance_squared(position) <= f32::EPSILON {
             continue;
         }
@@ -919,6 +972,91 @@ mod tests {
             .expect("rendered entity retains its presentation Transform");
         assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
         assert_eq!(transform.scale, Vec3::splat(1.5));
+    }
+
+    #[test]
+    fn directional_pose_matches_horizontal_movement_and_authored_facing() {
+        assert_eq!(
+            directional_pose_scale_x(AuthoredFacing::Left, -1.0),
+            Some(1.0)
+        );
+        assert_eq!(
+            directional_pose_scale_x(AuthoredFacing::Left, 1.0),
+            Some(-1.0)
+        );
+        assert_eq!(
+            directional_pose_scale_x(AuthoredFacing::Right, 1.0),
+            Some(1.0)
+        );
+        assert_eq!(
+            directional_pose_scale_x(AuthoredFacing::Right, -1.0),
+            Some(-1.0)
+        );
+    }
+
+    #[test]
+    fn unsupported_or_absent_horizontal_pose_changes_preserve_current_pose() {
+        for authored_facing in [
+            AuthoredFacing::Neutral,
+            AuthoredFacing::Top,
+            AuthoredFacing::Down,
+        ] {
+            assert_eq!(directional_pose_scale_x(authored_facing, -1.0), None);
+            assert_eq!(directional_pose_scale_x(authored_facing, 1.0), None);
+        }
+        assert_eq!(directional_pose_scale_x(AuthoredFacing::Left, 0.0), None);
+        assert_eq!(
+            directional_pose_scale_x(AuthoredFacing::Right, f32::NAN),
+            None
+        );
+    }
+
+    #[test]
+    fn local_pose_flips_only_the_visual_orientation_root() {
+        let mut app = App::new();
+        app.insert_resource(ClientMovementInput(MovementIntent::new(1.0, 0.0)))
+            .add_systems(Update, apply_local_directional_body_pose);
+        let orientation_root = app
+            .world_mut()
+            .spawn((CharacterVisualOrientation, Transform::default()))
+            .id();
+        let player = app
+            .world_mut()
+            .spawn((
+                RenderedCharacter,
+                MovementIntent::ZERO,
+                CharacterVisual {
+                    orientation_root,
+                    authored_facing: AuthoredFacing::Left,
+                },
+                Transform::from_scale(Vec3::splat(2.0)),
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<Transform>(orientation_root)
+                .map(|transform| transform.scale),
+            Some(Vec3::new(-1.0, 1.0, 1.0))
+        );
+        assert_eq!(
+            app.world()
+                .get::<Transform>(player)
+                .map(|transform| transform.scale),
+            Some(Vec3::splat(2.0))
+        );
+
+        app.world_mut().resource_mut::<ClientMovementInput>().0 = MovementIntent::new(0.0, 1.0);
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<Transform>(orientation_root)
+                .map(|transform| transform.scale),
+            Some(Vec3::new(-1.0, 1.0, 1.0))
+        );
     }
 
     #[test]

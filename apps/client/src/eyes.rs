@@ -718,6 +718,13 @@ mod tests {
     }
 
     #[test]
+    fn world_gaze_stays_constant_through_a_horizontal_character_flip() {
+        let transform = GlobalTransform::from(Transform::from_scale(Vec3::new(-1.0, 1.0, 1.0)));
+
+        assert!(gaze_in_local_space(-Vec2::X, &transform).distance(Vec2::X) < 0.000_1);
+    }
+
+    #[test]
     fn region_mesh_clips_pupil_vertices_to_its_boundary() {
         let vertices = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
         let collider = EyeCollider::from_region_mesh(&vertices, &[0, 1, 2, 0, 2, 3], 0.26, 0.35)

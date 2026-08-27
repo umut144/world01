@@ -7296,13 +7296,13 @@
 					162,
 					163
 				],
-				"inner_offset_meters": 0.00520833333333333,
+				"inner_offset_meters": 0.00520833333333335,
 				"join": {
 					"fallback": "bevel",
 					"miter_limit": 4.0,
 					"type": "miter"
 				},
-				"outer_offset_meters": 0.00520833333333333,
+				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
 				"role": "centered_boundary_stroke",
 				"runs": [
@@ -8415,13 +8415,13 @@
 					162,
 					163
 				],
-				"inner_offset_meters": 0.00520833333333333,
+				"inner_offset_meters": 0.00520833333333335,
 				"join": {
 					"fallback": "bevel",
 					"miter_limit": 4.0,
 					"type": "miter"
 				},
-				"outer_offset_meters": 0.00520833333333333,
+				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
 				"role": "centered_boundary_stroke",
 				"runs": [
@@ -13411,6 +13411,9 @@
 		"y_axis": "up"
 	},
 	"display_name": "Wizard",
+	"presentation": {
+		"authored_facing": "right"
+	},
 	"schema_version": 8,
 	"z_order": {
 		"back_to_front": "ascending",
