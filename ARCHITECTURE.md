@@ -232,9 +232,12 @@ excluded for now.
 The configured `[eyes].pupil_area_ratio` is currently `0.26`; each visible pupil
 radius is derived from the schema-8 `closed_region_mesh` area. Movement uses
 `[eyes].pupil_collision_radius_ratio = 0.35`. The client intersects the pupil
-polygon with the exported region triangles, renders no separate eye fill, and
-keeps the eye contour in front of the resulting clipped mesh. Legacy schema
-5–7 packages may reconstruct the region boundary from their stroke geometry.
+polygon with the exported region triangles when the complete outline is
+visible. For partial outlines, it clips only against reconstructed visible
+stroke centerlines while retaining the complete closed region as the collision
+boundary. It renders no separate eye fill and keeps the eye contour in front of
+the resulting mesh. Legacy schema 5–7 packages may reconstruct the region
+boundary from their stroke geometry.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable

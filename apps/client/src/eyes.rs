@@ -8,6 +8,7 @@ pub struct EyeCollider {
     center: Vec2,
     boundary: Vec<Vec2>,
     triangles: Vec<[Vec2; 3]>,
+    visible_clip_segments: Option<Vec<[Vec2; 2]>>,
     radius: f32,
     collision_radius: f32,
 }
@@ -77,6 +78,18 @@ impl EyeCollider {
         self.center
     }
 
+    pub fn with_visible_outline(
+        mut self,
+        vertices: &[[f32; 2]],
+        indices: &[u32],
+        outline_is_closed: bool,
+    ) -> Self {
+        if !outline_is_closed {
+            self.visible_clip_segments = Some(stroke_centerline_segments(vertices, indices));
+        }
+        self
+    }
+
     #[cfg(test)]
     pub fn boundary(&self) -> &[Vec2] {
         &self.boundary
@@ -95,6 +108,12 @@ impl EyeCollider {
                 .iter()
                 .map(|triangle| triangle.map(|vertex| vertex + offset))
                 .collect(),
+            visible_clip_segments: self.visible_clip_segments.as_ref().map(|segments| {
+                segments
+                    .iter()
+                    .map(|segment| segment.map(|vertex| vertex + offset))
+                    .collect()
+            }),
             radius: self.radius,
             collision_radius: self.collision_radius,
         }
@@ -134,16 +153,17 @@ impl EyeCollider {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
 
+        if let Some(segments) = self.visible_clip_segments.as_ref() {
+            let clipped = segments.iter().fold(circle, |polygon, segment| {
+                clip_polygon_to_half_plane(&polygon, segment[0], segment[1], self.center)
+            });
+            append_polygon_geometry(&clipped, center, &mut vertices, &mut indices);
+            return PupilGeometry { vertices, indices };
+        }
+
         for triangle in &self.triangles {
             let clipped = clip_polygon_to_triangle(&circle, *triangle);
-            if clipped.len() < 3 {
-                continue;
-            }
-            let first = vertices.len() as u32;
-            vertices.extend(clipped.iter().map(|vertex| (*vertex - center).to_array()));
-            for index in 1..clipped.len() as u32 - 1 {
-                indices.extend_from_slice(&[first, first + index, first + index + 1]);
-            }
+            append_polygon_geometry(&clipped, center, &mut vertices, &mut indices);
         }
 
         PupilGeometry { vertices, indices }
@@ -177,6 +197,7 @@ impl EyeCollider {
             center,
             boundary,
             triangles,
+            visible_clip_segments: None,
             radius,
             collision_radius,
         })
@@ -275,42 +296,87 @@ fn triangle_area(triangle: [Vec2; 3]) -> f32 {
     (triangle[1] - triangle[0]).perp_dot(triangle[2] - triangle[0]) * 0.5
 }
 
-fn clip_polygon_to_triangle(subject: &[Vec2], triangle: [Vec2; 3]) -> Vec<Vec2> {
-    let orientation = triangle_area(triangle).signum();
-    if orientation == 0.0 {
-        return Vec::new();
+fn stroke_centerline_segments(vertices: &[[f32; 2]], indices: &[u32]) -> Vec<[Vec2; 2]> {
+    indices
+        .chunks_exact(6)
+        .filter_map(|quad| {
+            if quad[2] != quad[3] || quad[1] != quad[4] {
+                return None;
+            }
+            let start_outer = Vec2::from_array(*vertices.get(quad[0] as usize)?);
+            let start_inner = Vec2::from_array(*vertices.get(quad[1] as usize)?);
+            let end_outer = Vec2::from_array(*vertices.get(quad[2] as usize)?);
+            let end_inner = Vec2::from_array(*vertices.get(quad[5] as usize)?);
+            Some([
+                (start_outer + start_inner) * 0.5,
+                (end_outer + end_inner) * 0.5,
+            ])
+        })
+        .collect()
+}
+
+fn append_polygon_geometry(
+    polygon: &[Vec2],
+    center: Vec2,
+    vertices: &mut Vec<[f32; 2]>,
+    indices: &mut Vec<u32>,
+) {
+    if polygon.len() < 3 {
+        return;
     }
+    let first = vertices.len() as u32;
+    vertices.extend(polygon.iter().map(|vertex| (*vertex - center).to_array()));
+    for index in 1..polygon.len() as u32 - 1 {
+        indices.extend_from_slice(&[first, first + index, first + index + 1]);
+    }
+}
+
+fn clip_polygon_to_half_plane(
+    subject: &[Vec2],
+    clip_start: Vec2,
+    clip_end: Vec2,
+    inside_reference: Vec2,
+) -> Vec<Vec2> {
+    let reference_distance = (clip_end - clip_start).perp_dot(inside_reference - clip_start);
+    if reference_distance.abs() <= f32::EPSILON {
+        return subject.to_vec();
+    }
+    let orientation = reference_distance.signum();
+    let mut output = Vec::new();
+    let Some(mut previous) = subject.last().copied() else {
+        return output;
+    };
+    let mut previous_distance =
+        orientation * (clip_end - clip_start).perp_dot(previous - clip_start);
+    for current in subject.iter().copied() {
+        let current_distance = orientation * (clip_end - clip_start).perp_dot(current - clip_start);
+        let previous_inside = previous_distance >= -f32::EPSILON;
+        let current_inside = current_distance >= -f32::EPSILON;
+        if previous_inside != current_inside {
+            let denominator = previous_distance - current_distance;
+            if denominator.abs() > f32::EPSILON {
+                output.push(previous + (current - previous) * (previous_distance / denominator));
+            }
+        }
+        if current_inside {
+            output.push(current);
+        }
+        previous = current;
+        previous_distance = current_distance;
+    }
+    output
+}
+
+fn clip_polygon_to_triangle(subject: &[Vec2], triangle: [Vec2; 3]) -> Vec<Vec2> {
     let mut output = subject.to_vec();
+    let inside_reference = (triangle[0] + triangle[1] + triangle[2]) / 3.0;
     for (clip_start, clip_end) in triangle
         .iter()
         .copied()
         .zip(triangle.iter().copied().cycle().skip(1))
         .take(3)
     {
-        let input = std::mem::take(&mut output);
-        let Some(mut previous) = input.last().copied() else {
-            break;
-        };
-        let mut previous_distance =
-            orientation * (clip_end - clip_start).perp_dot(previous - clip_start);
-        for current in input {
-            let current_distance =
-                orientation * (clip_end - clip_start).perp_dot(current - clip_start);
-            let previous_inside = previous_distance >= -f32::EPSILON;
-            let current_inside = current_distance >= -f32::EPSILON;
-            if previous_inside != current_inside {
-                let denominator = previous_distance - current_distance;
-                if denominator.abs() > f32::EPSILON {
-                    output
-                        .push(previous + (current - previous) * (previous_distance / denominator));
-                }
-            }
-            if current_inside {
-                output.push(current);
-            }
-            previous = current;
-            previous_distance = current_distance;
-        }
+        output = clip_polygon_to_half_plane(&output, clip_start, clip_end, inside_reference);
     }
     output
 }
@@ -642,5 +708,28 @@ mod tests {
                     .take(collider.boundary().len())
                     .any(|(start, end)| point_segment_distance(point, start, end) < 0.000_1)
         }));
+    }
+
+    #[test]
+    fn invisible_edge_collides_without_clipping_the_pupil() {
+        let vertices = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+        let mut collider =
+            EyeCollider::from_region_mesh(&vertices, &[0, 1, 2, 0, 2, 3], 0.26, 0.35)
+                .expect("square region fits a pupil");
+        collider.visible_clip_segments = Some(vec![
+            [Vec2::new(-1.0, 1.0), Vec2::new(1.0, 1.0)],
+            [Vec2::new(1.0, 1.0), Vec2::new(1.0, -1.0)],
+            [Vec2::new(-1.0, -1.0), Vec2::new(-1.0, 1.0)],
+        ]);
+        let position = collider.position_for_local_gaze(-Vec2::Y);
+        let geometry = collider.clipped_pupil_geometry(position);
+
+        assert!(collider.circle_fits(position));
+        assert!(
+            geometry
+                .vertices
+                .iter()
+                .any(|vertex| Vec2::from_array(*vertex).y + position.y < -1.0)
+        );
     }
 }

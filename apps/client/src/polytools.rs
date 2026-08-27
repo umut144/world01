@@ -199,6 +199,13 @@ struct PolyToolsStrokeMesh {
     has_outline: bool,
     vertices: Vec<[f32; 2]>,
     indices: Vec<u32>,
+    #[serde(default)]
+    runs: Vec<PolyToolsStrokeRun>,
+}
+
+#[derive(Clone, Deserialize)]
+struct PolyToolsStrokeRun {
+    closed: bool,
 }
 
 pub fn spawn_character_visual(
@@ -246,7 +253,7 @@ pub fn spawn_character_visual(
             && (component.name == "eye_left" || component.name == "eye_right");
         let eye_collider = is_dynamic_eye
             .then(|| {
-                component
+                let collider = component
                     .closed_region_mesh
                     .as_ref()
                     .and_then(|mesh| {
@@ -270,7 +277,15 @@ pub fn spawn_character_visual(
                                 })
                             })
                             .flatten()
-                    })
+                    });
+                collider.map(|collider| match component.contour_stroke_mesh.as_ref() {
+                    Some(stroke) => collider.with_visible_outline(
+                        &stroke.vertices,
+                        &stroke.indices,
+                        stroke.runs.iter().any(|run| run.closed),
+                    ),
+                    None => collider,
+                })
             })
             .flatten();
         if is_dynamic_eye && eye_collider.is_none() {
