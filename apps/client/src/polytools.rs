@@ -19,19 +19,32 @@ pub struct BodyAnchor;
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
+    pupil_area_ratio: f32,
 }
 
 impl CharacterAssetLibrary {
     #[cfg(test)]
     fn load_embedded() -> Result<Self, PolyToolsAssetError> {
+        let design = game01_configs::load_embedded().map_err(|error| {
+            PolyToolsAssetError::new(format!("cannot load embedded eye design: {error}"))
+        })?;
         Self::load_from_directory(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../assets/characters")
                 .as_path(),
+            design.eyes.pupil_area_ratio,
         )
     }
 
-    pub fn load_from_directory(directory: &Path) -> Result<Self, PolyToolsAssetError> {
+    pub fn load_from_directory(
+        directory: &Path,
+        pupil_area_ratio: f32,
+    ) -> Result<Self, PolyToolsAssetError> {
+        if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
+            return Err(PolyToolsAssetError::new(
+                "pupil area ratio must be finite and between zero and one",
+            ));
+        }
         let catalog_source =
             fs::read_to_string(directory.join("catalog.json")).map_err(|error| {
                 PolyToolsAssetError::new(format!("cannot read character catalog: {error}"))
@@ -61,7 +74,10 @@ impl CharacterAssetLibrary {
             ));
         }
 
-        Ok(Self { characters })
+        Ok(Self {
+            characters,
+            pupil_area_ratio,
+        })
     }
 
     pub fn ids(&self) -> Vec<CharacterId> {
@@ -207,11 +223,14 @@ pub fn spawn_character_visual(
         let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
         let is_dynamic_eye = character.0 != "barde"
             && (component.name == "eye_left" || component.name == "eye_right");
-        let pupil_radius = 0.012;
         let eye_collider = is_dynamic_eye
             .then(|| {
                 component.contour_stroke_mesh.as_ref().and_then(|mesh| {
-                    EyeCollider::from_outline(&mesh.vertices, &mesh.indices, pupil_radius)
+                    EyeCollider::from_outline_area_ratio(
+                        &mesh.vertices,
+                        &mesh.indices,
+                        library.pupil_area_ratio,
+                    )
                 })
             })
             .flatten();
@@ -225,6 +244,7 @@ pub fn spawn_character_visual(
         );
 
         if let Some(eye_collider) = eye_collider {
+            let pupil_radius = eye_collider.radius();
             let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
             let pivot = Vec2::from_array(pivot);
             let eye_fill = commands
@@ -612,7 +632,12 @@ mod tests {
                     .as_ref()
                     .expect("eye has an outline");
                 assert!(
-                    EyeCollider::from_outline(&stroke.vertices, &stroke.indices, 0.012,).is_some(),
+                    EyeCollider::from_outline_area_ratio(
+                        &stroke.vertices,
+                        &stroke.indices,
+                        library.pupil_area_ratio,
+                    )
+                    .is_some(),
                     "{} {} must produce an eye collider",
                     character.0,
                     component.name,

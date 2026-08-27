@@ -77,7 +77,7 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
     use game01_configs::{
-        MovementConfig, NetworkConfig, RoomConfig, SimulationConfig, load_embedded,
+        EyesConfig, MovementConfig, NetworkConfig, RoomConfig, SimulationConfig, load_embedded,
     };
 
     const EPSILON: f32 = 0.000_01;
@@ -174,6 +174,9 @@ mod tests {
                 view_width_tiles: 22,
                 view_height_tiles: 20,
             },
+            eyes: EyesConfig {
+                pupil_area_ratio: 0.26,
+            },
         };
         let negative_speed = DesignConfig {
             simulation: SimulationConfig {
@@ -194,6 +197,9 @@ mod tests {
                 view_preset: 0,
                 view_width_tiles: 22,
                 view_height_tiles: 20,
+            },
+            eyes: EyesConfig {
+                pupil_area_ratio: 0.26,
             },
         };
 

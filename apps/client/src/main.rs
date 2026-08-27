@@ -25,10 +25,12 @@ const INITIAL_WINDOW_HEIGHT: u32 = 1800;
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
-    let character_assets =
-        CharacterAssetLibrary::load_from_directory(Path::new("assets/characters"))?;
-    let controller_input = ControllerInput::new()?;
     let design = load_embedded()?;
+    let character_assets = CharacterAssetLibrary::load_from_directory(
+        Path::new("assets/characters"),
+        design.eyes.pupil_area_ratio,
+    )?;
+    let controller_input = ControllerInput::new()?;
     let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,

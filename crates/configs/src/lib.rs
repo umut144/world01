@@ -10,6 +10,7 @@ pub struct DesignConfig {
     pub movement: MovementConfig,
     pub room: RoomConfig,
     pub camera: CameraConfig,
+    pub eyes: EyesConfig,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -52,6 +53,19 @@ impl SimulationConfig {
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct MovementConfig {
     pub speed_meters_per_second: f32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct EyesConfig {
+    pub pupil_area_ratio: f32,
+}
+
+impl EyesConfig {
+    pub fn is_valid(self) -> bool {
+        self.pupil_area_ratio.is_finite()
+            && self.pupil_area_ratio > 0.0
+            && self.pupil_area_ratio < 1.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -127,6 +141,8 @@ mod tests {
         assert!(design.room.is_valid());
         assert_eq!(design.camera.effective_view_tiles(), Some((8, 5)));
         assert!(design.camera.is_valid());
+        assert_eq!(design.eyes.pupil_area_ratio, 0.26);
+        assert!(design.eyes.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
             Some(Duration::from_secs_f64(1.0 / 30.0))
@@ -135,6 +151,14 @@ mod tests {
             design.network.validated_remote_interpolation_ratio(),
             Some(2.0)
         );
+    }
+
+    #[test]
+    fn embedded_eye_area_ratio_is_valid() {
+        let design = load_embedded().expect("embedded design configuration parses");
+
+        assert_eq!(design.eyes.pupil_area_ratio, 0.26);
+        assert!(design.eyes.is_valid());
     }
 
     #[test]

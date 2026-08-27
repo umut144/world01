@@ -8,19 +8,30 @@ pub struct EyeCollider {
 }
 
 impl EyeCollider {
+    #[cfg(test)]
     pub fn from_outline(vertices: &[[f32; 2]], indices: &[u32], radius: f32) -> Option<Self> {
         if !radius.is_finite() || radius <= 0.0 {
             return None;
         }
-        let boundary = centerline_loops(vertices, indices)
-            .into_iter()
-            .filter(|loop_vertices| loop_vertices.len() >= 3)
-            .max_by(|left, right| {
-                polygon_area(left)
-                    .abs()
-                    .total_cmp(&polygon_area(right).abs())
-            })?;
+        Self::from_boundary(outline_boundary(vertices, indices)?, radius)
+    }
+
+    pub fn from_outline_area_ratio(
+        vertices: &[[f32; 2]],
+        indices: &[u32],
+        pupil_area_ratio: f32,
+    ) -> Option<Self> {
+        if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
+            return None;
+        }
+        let boundary = outline_boundary(vertices, indices)?;
+        let radius =
+            (polygon_area(&boundary).abs() * pupil_area_ratio / std::f32::consts::PI).sqrt();
         Self::from_boundary(boundary, radius)
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius
     }
 
     pub fn center(&self) -> Vec2 {
@@ -84,6 +95,17 @@ impl EyeCollider {
     fn circle_fits(&self, center: Vec2) -> bool {
         circle_fits(center, &self.boundary, self.radius)
     }
+}
+
+fn outline_boundary(vertices: &[[f32; 2]], indices: &[u32]) -> Option<Vec<Vec2>> {
+    centerline_loops(vertices, indices)
+        .into_iter()
+        .filter(|loop_vertices| loop_vertices.len() >= 3)
+        .max_by(|left, right| {
+            polygon_area(left)
+                .abs()
+                .total_cmp(&polygon_area(right).abs())
+        })
 }
 
 #[derive(Component, Debug, Clone)]

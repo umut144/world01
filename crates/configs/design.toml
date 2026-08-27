@@ -16,3 +16,6 @@ height_tiles = 50
 view_preset = 3
 view_width_tiles = 21
 view_height_tiles = 13
+
+[eyes]
+pupil_area_ratio = 0.26
