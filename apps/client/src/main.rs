@@ -16,6 +16,7 @@ mod controller;
 mod eyes;
 mod input;
 mod polytools;
+mod pose;
 mod prediction;
 mod presentation;
 

@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementIntent, PlayerId, PlayerInput,
-    PlayerOwner, Position, RoomId, SelectedCharacter,
+    BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementDirection, MovementIntent,
+    PlayerId, PlayerInput, PlayerOwner, Position, RoomId, SelectedCharacter,
 };
 #[cfg(feature = "server")]
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
@@ -351,6 +351,7 @@ impl GameProtocolAppExt for App {
         self.component::<PlayerOwner>().replicate_once();
         self.component::<SelectedCharacter>().replicate_once();
         self.component::<RoomId>().replicate().predict();
+        self.component::<MovementDirection>().replicate().predict();
         self.component::<BodyFacing>().replicate().predict();
         self.component::<GazeDirection>().replicate().predict();
         self.component::<Position>()
@@ -568,6 +569,7 @@ fn handle_join_requests(
             SelectedCharacter(selected_character.clone()),
             MovementIntent::ZERO,
             GazeIntent::ZERO,
+            MovementDirection::ZERO,
             BodyFacing::Authored,
             GazeDirection::ZERO,
             Position::new(spawn.x, spawn.y),

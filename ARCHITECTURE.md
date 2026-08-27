@@ -53,7 +53,8 @@ Owns shared protocol-neutral domain data:
   `RoomId` assignment;
 - movement intent data passed into simulation;
 - combined tick-bound player input containing movement and gaze intent;
-- authoritative retained horizontal body facing and gaze direction;
+- authoritative current movement direction, retained horizontal body facing,
+  and retained gaze direction;
 - authoritative two-dimensional `Position` in meters;
 - replicated gameplay components that are not transport-specific.
 
@@ -62,8 +63,8 @@ Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1
 Implemented shared data uses transport-neutral scalar identifiers and
 coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`,
 `StandardRoom`, `SpawnPoint`, `PlayerInput`, `MovementIntent`, `GazeIntent`,
-`BodyFacing`, and `GazeDirection`. Network-specific connection types stay
-outside `world_data`.
+`MovementDirection`, `BodyFacing`, and `GazeDirection`. Network-specific
+connection types stay outside `world_data`.
 
 ### `configs`
 
@@ -88,14 +89,16 @@ Owns transport-, input-device-, and presentation-independent game rules:
 - does not send or receive network messages;
 - does not render, animate, play audio, or manage UI.
 
-The simulation mutates protocol-neutral `Position`, `BodyFacing`, and
-`GazeDirection`, never presentation `Transform`. Horizontal movement intent
-updates retained Left/Right body facing; zero horizontal intent preserves it.
-A finite non-zero gaze intent is normalized and replaces the retained gaze;
-zero or invalid gaze preserves the previous direction. A mass/velocity movement
-model will be required soon and does not need to follow real-world physics.
-Keep the simulation interface and network/input flow suitable for adding
-explicit velocity and mass without rewriting those outer layers.
+The simulation mutates protocol-neutral `Position`, `MovementDirection`,
+`BodyFacing`, and `GazeDirection`, never presentation `Transform`. Every tick,
+finite movement intent becomes a unit-clamped current `MovementDirection` and
+zero or invalid intent becomes zero. Horizontal movement intent updates
+retained Left/Right body facing; zero horizontal intent preserves it. A finite
+non-zero gaze intent is normalized and replaces the retained gaze; zero or
+invalid gaze preserves the previous direction. A mass/velocity movement model
+will be required soon and does not need to follow real-world physics. Keep the
+simulation interface and network/input flow suitable for adding explicit
+velocity and mass without rewriting those outer layers.
 
 Collision is not required in the first slice, including room-boundary collision.
 
@@ -274,18 +277,26 @@ entity and the existing asset-pivot hierarchy. Horizontal mirroring changes
 only that orientation root, never the player `Transform`, authoritative
 `Position`, simulation state, or network state.
 
-The server derives retained `BodyFacing` from horizontal movement intent and
-retained `GazeDirection` from gaze intent. Both components replicate to remote
-clients and are predicted for the controlling client using the same shared
-simulation system. Authored Left and Right poses convert `BodyFacing` into an
-orientation-root x scale of `1` or `-1`; Neutral, Top, and Down remain visual
-no-ops. Eye gaze is read from the independently replicated/predicted
-`GazeDirection`. Before normal transform propagation, the eye system computes
-each pupil's current full hierarchy transform, including the orientation-root
-scale, and converts the unchanged screen-space gaze through its inverse. A body
-flip therefore does not reverse visible gaze. Initial `BodyFacing::Authored`
-and zero gaze preserve the exported pose and neutral pupils until corresponding
-input arrives.
+The server derives current `MovementDirection` and retained `BodyFacing` from
+movement intent plus retained `GazeDirection` from gaze intent. All three
+components replicate to remote clients and are predicted for the controlling
+client using the same shared simulation system. Client-only `pose.rs` owns all
+movement-dependent visual transforms. Authored Left and Right poses convert
+`BodyFacing` into an orientation-root x scale of `1` or `-1`; Top and Down
+remain visual no-ops. For Neutral assets, `pose.rs` shifts the exported `head`
+component and its complete child hierarchy up to 0.06 meters along the current
+eight-directional movement vector, smoothing both entry and return with a
+provisional 0.05-second half-life. The body remains unflipped and zero movement
+returns the head to its authored transform. These values live together in the
+client-only `PoseSettings` resource for focused visual tuning.
+
+Eye gaze is read from the independently replicated/predicted `GazeDirection`.
+Before normal transform propagation, the eye system computes each pupil's
+current full hierarchy transform, including body orientation and neutral-head
+motion, and converts the unchanged screen-space gaze through its inverse. A
+body flip or head shift therefore does not reverse or replace visible gaze.
+Initial `BodyFacing::Authored`, zero movement, and zero gaze preserve the
+exported pose and neutral pupils until corresponding input arrives.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable
@@ -321,12 +332,12 @@ server-owned entity ActionState<PlayerInput>
         │  MovementIntent + GazeIntent
         ▼
 simulation system
-        │  authoritative Position + BodyFacing + GazeDirection
+        │  authoritative Position + MovementDirection + BodyFacing + GazeDirection
         ▼
 Lightyear state replication / owner prediction
         │
         ▼
-client presentation derives Transform, body pose, and pupils
+client `pose.rs` and eye presentation derive body/head transforms and pupils
 ```
 
 The fixed tick loop schedules and supplies simulation inputs. Game rules must not be embedded in the loop, input adapter, or network handler.

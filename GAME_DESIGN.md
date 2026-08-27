@@ -198,14 +198,18 @@ Reference drawings:
   facing. Moving horizontally in the authored direction keeps the original
   geometry; moving in the opposite direction mirrors the complete character
   presentation horizontally on every client.
-- Neutral characters deliberately do not flip in this iteration. Top and Down
-  are retained as authored metadata for later use but have no runtime behavior
-  yet.
+- Neutral characters do not flip. While moving, their complete authored head
+  subtree shifts slightly in the current movement direction, including
+  diagonals, and smoothly returns to its authored neutral position when they
+  stop. Top and Down are retained as authored metadata for later use but have
+  no runtime behavior yet.
 - Pure vertical movement and stopping retain the last horizontal body pose. At
   spawn, the character uses its authored pose.
 - Body pose and eye gaze are independent. A character may move and face right
   while its pupils continue looking left; mirroring the body must not mirror
-  the gaze in screen space.
+  the gaze in screen space. Likewise, a neutral character's head may follow
+  movement while its pupils continue looking independently in another
+  direction.
 - Body facing and gaze are retained and replicated independently. A late-joining
   client receives their current authoritative values.
 

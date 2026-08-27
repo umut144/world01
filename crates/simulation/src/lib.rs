@@ -4,7 +4,9 @@ use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::{BodyFacing, GazeDirection, GazeIntent, MovementIntent, Position};
+use game01_world_data::{
+    BodyFacing, GazeDirection, GazeIntent, MovementDirection, MovementIntent, Position,
+};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -68,11 +70,15 @@ pub fn update_character_orientation(
     mut players: Query<(
         &MovementIntent,
         &GazeIntent,
+        &mut MovementDirection,
         &mut BodyFacing,
         &mut GazeDirection,
     )>,
 ) {
-    for (movement, gaze, mut facing, mut gaze_direction) in &mut players {
+    for (movement, gaze, mut movement_direction, mut facing, mut gaze_direction) in &mut players {
+        let direction = normalized_intent(*movement);
+        *movement_direction = MovementDirection::new(direction.x, direction.y);
+
         if movement.x.is_finite() {
             if movement.x < 0.0 {
                 *facing = BodyFacing::Left;
@@ -186,6 +192,7 @@ mod tests {
             .spawn((
                 MovementIntent::new(1.0, 0.0),
                 GazeIntent::new(-1.0, 1.0),
+                MovementDirection::ZERO,
                 BodyFacing::Authored,
                 GazeDirection::ZERO,
             ))
@@ -196,6 +203,10 @@ mod tests {
         assert_eq!(
             app.world().get::<BodyFacing>(player),
             Some(&BodyFacing::Right)
+        );
+        assert_eq!(
+            app.world().get::<MovementDirection>(player),
+            Some(&MovementDirection::new(1.0, 0.0))
         );
         let diagonal = 1.0 / 2.0_f32.sqrt();
         assert_eq!(
@@ -216,6 +227,10 @@ mod tests {
             Some(&BodyFacing::Right)
         );
         assert_eq!(
+            app.world().get::<MovementDirection>(player),
+            Some(&MovementDirection::new(0.0, 1.0))
+        );
+        assert_eq!(
             app.world().get::<GazeDirection>(player),
             Some(&GazeDirection::new(-diagonal, diagonal))
         );
@@ -230,6 +245,7 @@ mod tests {
             .spawn((
                 MovementIntent::new(f32::NAN, 0.0),
                 GazeIntent::new(f32::INFINITY, 0.0),
+                MovementDirection::new(1.0, 0.0),
                 BodyFacing::Left,
                 GazeDirection::new(0.0, -1.0),
             ))
@@ -240,6 +256,10 @@ mod tests {
         assert_eq!(
             app.world().get::<BodyFacing>(player),
             Some(&BodyFacing::Left)
+        );
+        assert_eq!(
+            app.world().get::<MovementDirection>(player),
+            Some(&MovementDirection::ZERO)
         );
         assert_eq!(
             app.world().get::<GazeDirection>(player),

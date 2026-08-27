@@ -12,6 +12,7 @@ use game01_world_data::CharacterId;
 use serde::Deserialize;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
+use crate::pose::CharacterHead;
 
 #[derive(Component)]
 pub struct BodyAnchor;
@@ -299,10 +300,13 @@ pub fn spawn_character_visual(
 
     let mut component_entities = HashMap::new();
     for component in &manifest.components {
-        let mut entity_commands =
-            commands.spawn((component_transform(component), Visibility::default()));
+        let transform = component_transform(component);
+        let mut entity_commands = commands.spawn((transform, Visibility::default()));
         if component.name == "body" {
             entity_commands.insert(BodyAnchor);
+        }
+        if component.name == "head" {
+            entity_commands.insert(CharacterHead::new(root, transform.translation));
         }
         let entity = entity_commands.id();
         component_entities.insert(component.component_id.as_str(), entity);

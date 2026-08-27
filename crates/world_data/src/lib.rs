@@ -216,6 +216,20 @@ impl MovementIntent {
 }
 
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct MovementDirection {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl MovementDirection {
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+
+    pub const fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct GazeIntent {
     pub x: f32,
     pub y: f32,

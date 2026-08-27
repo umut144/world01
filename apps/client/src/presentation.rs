@@ -10,17 +10,14 @@ use game01_network::{
     configure_client, connect_client,
 };
 use game01_world_data::{
-    BodyFacing, CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter,
-    StartingRoomGrid,
+    CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
 use crate::input::{collect_gaze_input, collect_movement_input};
-use crate::polytools::{
-    AuthoredFacing, CharacterAssetLibrary, CharacterVisual, CharacterVisualOrientation,
-    bevy_pupil_mesh, spawn_character_visual,
-};
+use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
+use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -77,6 +74,7 @@ impl Plugin for ClientPresentationPlugin {
                 joining: false,
             })
             .insert_resource(self.character_assets.clone())
+            .init_resource::<PoseSettings>()
             .add_systems(Startup, setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
@@ -95,7 +93,7 @@ impl Plugin for ClientPresentationPlugin {
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
                     collect_gaze_input,
-                    apply_body_facing,
+                    (apply_body_facing, apply_neutral_head_motion),
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
@@ -763,34 +761,6 @@ fn follow_local_character(
     camera_transform.translation.y = anchor.y;
 }
 
-fn apply_body_facing(
-    players: Query<(&BodyFacing, &CharacterVisual), With<RenderedCharacter>>,
-    mut orientation_roots: Query<&mut Transform, With<CharacterVisualOrientation>>,
-) {
-    for (facing, visual) in &players {
-        let Some(scale_x) = directional_pose_scale_x(visual.authored_facing, *facing) else {
-            continue;
-        };
-        let Ok(mut transform) = orientation_roots.get_mut(visual.orientation_root) else {
-            continue;
-        };
-        transform.scale.x = scale_x;
-    }
-}
-
-fn directional_pose_scale_x(authored_facing: AuthoredFacing, facing: BodyFacing) -> Option<f32> {
-    match (authored_facing, facing) {
-        (AuthoredFacing::Left | AuthoredFacing::Right, BodyFacing::Authored) => Some(1.0),
-        (AuthoredFacing::Left, BodyFacing::Left) | (AuthoredFacing::Right, BodyFacing::Right) => {
-            Some(1.0)
-        }
-        (AuthoredFacing::Left, BodyFacing::Right) | (AuthoredFacing::Right, BodyFacing::Left) => {
-            Some(-1.0)
-        }
-        (AuthoredFacing::Neutral | AuthoredFacing::Top | AuthoredFacing::Down, _) => None,
-    }
-}
-
 fn apply_eye_gaze(
     players: Query<&GazeDirection>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -972,97 +942,6 @@ mod tests {
             .expect("rendered entity retains its presentation Transform");
         assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
         assert_eq!(transform.scale, Vec3::splat(1.5));
-    }
-
-    #[test]
-    fn directional_pose_matches_replicated_and_authored_facing() {
-        assert_eq!(
-            directional_pose_scale_x(AuthoredFacing::Left, BodyFacing::Left),
-            Some(1.0)
-        );
-        assert_eq!(
-            directional_pose_scale_x(AuthoredFacing::Left, BodyFacing::Right),
-            Some(-1.0)
-        );
-        assert_eq!(
-            directional_pose_scale_x(AuthoredFacing::Right, BodyFacing::Right),
-            Some(1.0)
-        );
-        assert_eq!(
-            directional_pose_scale_x(AuthoredFacing::Right, BodyFacing::Left),
-            Some(-1.0)
-        );
-        assert_eq!(
-            directional_pose_scale_x(AuthoredFacing::Left, BodyFacing::Authored),
-            Some(1.0)
-        );
-    }
-
-    #[test]
-    fn non_horizontal_authored_poses_ignore_replicated_facing() {
-        for authored_facing in [
-            AuthoredFacing::Neutral,
-            AuthoredFacing::Top,
-            AuthoredFacing::Down,
-        ] {
-            assert_eq!(
-                directional_pose_scale_x(authored_facing, BodyFacing::Left),
-                None
-            );
-            assert_eq!(
-                directional_pose_scale_x(authored_facing, BodyFacing::Right),
-                None
-            );
-        }
-    }
-
-    #[test]
-    fn replicated_pose_flips_only_the_visual_orientation_root() {
-        let mut app = App::new();
-        app.add_systems(Update, apply_body_facing);
-        let orientation_root = app
-            .world_mut()
-            .spawn((CharacterVisualOrientation, Transform::default()))
-            .id();
-        let player = app
-            .world_mut()
-            .spawn((
-                RenderedCharacter,
-                BodyFacing::Right,
-                CharacterVisual {
-                    orientation_root,
-                    authored_facing: AuthoredFacing::Left,
-                },
-                Transform::from_scale(Vec3::splat(2.0)),
-            ))
-            .id();
-
-        app.update();
-
-        assert_eq!(
-            app.world()
-                .get::<Transform>(orientation_root)
-                .map(|transform| transform.scale),
-            Some(Vec3::new(-1.0, 1.0, 1.0))
-        );
-        assert_eq!(
-            app.world()
-                .get::<Transform>(player)
-                .map(|transform| transform.scale),
-            Some(Vec3::splat(2.0))
-        );
-
-        *app.world_mut()
-            .get_mut::<BodyFacing>(player)
-            .expect("player retains replicated facing") = BodyFacing::Authored;
-        app.update();
-
-        assert_eq!(
-            app.world()
-                .get::<Transform>(orientation_root)
-                .map(|transform| transform.scale),
-            Some(Vec3::ONE)
-        );
     }
 
     #[test]
