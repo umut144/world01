@@ -1808,7 +1808,7 @@
 		"y_axis": "up"
 	},
 	"display_name": "Orb",
-	"schema_version": 7,
+	"schema_version": 8,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

@@ -4001,6 +4001,28 @@
 			"z_index": 3
 		},
 		{
+			"closed_region_mesh": {
+				"indices": [
+					0,
+					2,
+					1
+				],
+				"role": "closed_contour_region",
+				"vertices": [
+					[
+						-0.05,
+						0.0340000152587891
+					],
+					[
+						0.05,
+						0.0350000381469727
+					],
+					[
+						0.0,
+						-0.0649999618530274
+					]
+				]
+			},
 			"component_id": "component_20",
 			"component_pivot": [
 				0.075,
@@ -4192,6 +4214,28 @@
 			"z_index": 4
 		},
 		{
+			"closed_region_mesh": {
+				"indices": [
+					0,
+					1,
+					2
+				],
+				"role": "closed_contour_region",
+				"vertices": [
+					[
+						-0.05,
+						-0.0340000152587891
+					],
+					[
+						0.05,
+						-0.0350000381469727
+					],
+					[
+						0.0,
+						0.0649999618530274
+					]
+				]
+			},
 			"component_id": "component_21",
 			"component_pivot": [
 				-0.0750001609325409,
@@ -4803,7 +4847,7 @@
 		"y_axis": "up"
 	},
 	"display_name": "Glavier",
-	"schema_version": 7,
+	"schema_version": 8,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
