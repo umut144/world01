@@ -37,6 +37,12 @@
       "runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
     },
     {
+      "asset_key": "monk",
+      "asset_type": "character",
+      "display_name": "Monk",
+      "runtime_package": "PolyToolsRuntimeExports/monk/manifest.json"
+    },
+    {
       "asset_key": "orb",
       "asset_type": "symbols",
       "display_name": "Orb",

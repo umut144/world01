@@ -828,6 +828,7 @@ fn panel_color(character: &CharacterId, selected: bool) -> Color {
         "barde" => (0.28, 0.15, 0.08),
         "chantres" => (0.22, 0.10, 0.28),
         "hammerer" => (0.24, 0.16, 0.10),
+        "monk" => (0.27, 0.15, 0.05),
         _ => (0.16, 0.18, 0.22),
     };
     let multiplier = if selected { 1.65 } else { 1.0 };

@@ -45,8 +45,8 @@ World data, configuration, simulation, networking, orchestration, input, and pre
 Owns shared protocol-neutral domain data:
 
 - `CharacterId`: validated catalog key for a character asset (currently
-  ArcherF, Barde, Chantres, Glavier, Hammerer, Mage, Rogue, Sorcerer, Warrior,
-  and Wizard);
+  ArcherF, Barde, Chantres, Glavier, Hammerer, Mage, Monk, Rogue, Sorcerer,
+  Warrior, and Wizard);
 - player identity, selected character, and ownership markers;
 - standard-room and spawn data;
 - the fixed initial `3 × 3` room-grid coordinate mapping and authoritative

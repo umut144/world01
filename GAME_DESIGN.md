@@ -146,10 +146,10 @@ Confirmed playable set for The Labyrinth:
 There are **five**, not four. Each account is intended to own all five, each with its own character progression. The developer already has concrete concepts for them; do not invent final roles, kits, lore, or visual replacements without discussion.
 
 The current catalog-driven presentation client additionally exposes ArcherF,
-Barde, Chantres, Hammerer, and Warrior, for ten selectable character assets in
-total. Their presence in the presentation catalog does not by itself confirm
-final gameplay roles, kits, lore, or progression beyond the original five-
-character core set.
+Barde, Chantres, Hammerer, Monk, and Warrior, for eleven selectable character
+assets in total. Their presence in the presentation catalog does not by itself
+confirm final gameplay roles, kits, lore, or progression beyond the original
+five-character core set.
 
 Reference drawings:
 

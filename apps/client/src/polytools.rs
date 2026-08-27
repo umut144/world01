@@ -532,6 +532,7 @@ fn character_color(character: &CharacterId) -> Color {
         "barde" => Color::srgb(0.55, 0.30, 0.12),
         "chantres" => Color::srgb(0.42, 0.20, 0.55),
         "hammerer" => Color::srgb(0.48, 0.31, 0.18),
+        "monk" => Color::srgb(0.58, 0.32, 0.10),
         _ => Color::srgb(0.30, 0.34, 0.40),
     }
 }
@@ -716,7 +717,8 @@ mod tests {
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
         let ids = library.ids();
 
-        assert_eq!(ids.len(), 10);
+        assert_eq!(ids.len(), 11);
+        assert!(ids.iter().any(|character| character.0 == "monk"));
         assert!(ids.iter().any(|character| character.0 == "warrior"));
     }
 
@@ -731,6 +733,7 @@ mod tests {
             ("glavier", AuthoredFacing::Neutral),
             ("hammerer", AuthoredFacing::Neutral),
             ("mage", AuthoredFacing::Right),
+            ("monk", AuthoredFacing::Neutral),
             ("rogue", AuthoredFacing::Left),
             ("sorcerer", AuthoredFacing::Left),
             ("warrior", AuthoredFacing::Neutral),
