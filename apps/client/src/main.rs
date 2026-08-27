@@ -19,8 +19,8 @@ mod polytools;
 mod prediction;
 mod presentation;
 
-const INITIAL_WINDOW_WIDTH: u32 = 1280;
-const INITIAL_WINDOW_HEIGHT: u32 = 800;
+const INITIAL_WINDOW_WIDTH: u32 = 2880;
+const INITIAL_WINDOW_HEIGHT: u32 = 1800;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;

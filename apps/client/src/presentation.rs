@@ -79,8 +79,12 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(
                 Update,
                 (
-                    apply_letterbox_viewport,
-                    hot_reload_design.run_if(in_state(ClientScreen::InGame)),
+                    (
+                        hot_reload_design,
+                        configure_ingame_camera,
+                        apply_letterbox_viewport,
+                    )
+                        .run_if(in_state(ClientScreen::InGame)),
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
@@ -318,6 +322,10 @@ fn configure_ingame_camera(
     camera_view: Res<CameraView>,
     mut cameras: Query<&mut Projection, With<PresentationCamera>>,
 ) {
+    if !camera_view.is_changed() {
+        return;
+    }
+
     for mut projection in &mut cameras {
         if let Projection::Orthographic(orthographic) = &mut *projection {
             orthographic.scaling_mode = ScalingMode::FixedVertical {

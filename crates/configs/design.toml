@@ -13,6 +13,6 @@ width_tiles = 50
 height_tiles = 50
 
 [camera]
-view_preset = 1
-view_width_tiles = 22
-view_height_tiles = 20
+view_preset = 3
+view_width_tiles = 21
+view_height_tiles = 13
