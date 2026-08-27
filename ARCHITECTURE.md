@@ -225,8 +225,10 @@ geometry lives in `apps/client/src/eyes.rs`. Device sampling and conversion
 into local movement/gaze presentation inputs live in `apps/client/src/input.rs`;
 `IJKL` is not part of movement intent or network state. Barde is intentionally
 excluded for now.
-The configured `[eyes].pupil_area_ratio` is currently `0.26`; each pupil radius
-is derived from its eye polygon area before circle-versus-polygon validation.
+The configured `[eyes].pupil_area_ratio` is currently `0.26`; each visible pupil
+radius is derived from its eye polygon area. Circle-versus-polygon movement uses
+`[eyes].pupil_collision_radius_ratio = 0.5`, and eye contours render in front of
+pupils so the permitted half-radius boundary overlap disappears beneath them.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable

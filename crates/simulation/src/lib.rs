@@ -176,6 +176,7 @@ mod tests {
             },
             eyes: EyesConfig {
                 pupil_area_ratio: 0.26,
+                pupil_collision_radius_ratio: 0.5,
             },
         };
         let negative_speed = DesignConfig {
@@ -200,6 +201,7 @@ mod tests {
             },
             eyes: EyesConfig {
                 pupil_area_ratio: 0.26,
+                pupil_collision_radius_ratio: 0.5,
             },
         };
 

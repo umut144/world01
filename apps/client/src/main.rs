@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let character_assets = CharacterAssetLibrary::load_from_directory(
         Path::new("assets/characters"),
         design.eyes.pupil_area_ratio,
+        design.eyes.pupil_collision_radius_ratio,
     )?;
     let controller_input = ControllerInput::new()?;
     let tick_duration = design.simulation.tick_duration().ok_or_else(|| {

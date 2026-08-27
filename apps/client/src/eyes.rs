@@ -5,6 +5,7 @@ pub struct EyeCollider {
     center: Vec2,
     boundary: Vec<Vec2>,
     radius: f32,
+    collision_radius: f32,
 }
 
 impl EyeCollider {
@@ -13,21 +14,28 @@ impl EyeCollider {
         if !radius.is_finite() || radius <= 0.0 {
             return None;
         }
-        Self::from_boundary(outline_boundary(vertices, indices)?, radius)
+        Self::from_boundary(outline_boundary(vertices, indices)?, radius, radius)
     }
 
     pub fn from_outline_area_ratio(
         vertices: &[[f32; 2]],
         indices: &[u32],
         pupil_area_ratio: f32,
+        pupil_collision_radius_ratio: f32,
     ) -> Option<Self> {
-        if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
+        if !pupil_area_ratio.is_finite()
+            || pupil_area_ratio <= 0.0
+            || pupil_area_ratio >= 1.0
+            || !pupil_collision_radius_ratio.is_finite()
+            || pupil_collision_radius_ratio <= 0.0
+            || pupil_collision_radius_ratio > 1.0
+        {
             return None;
         }
         let boundary = outline_boundary(vertices, indices)?;
         let radius =
             (polygon_area(&boundary).abs() * pupil_area_ratio / std::f32::consts::PI).sqrt();
-        Self::from_boundary(boundary, radius)
+        Self::from_boundary(boundary, radius, radius * pupil_collision_radius_ratio)
     }
 
     pub fn radius(&self) -> f32 {
@@ -51,6 +59,7 @@ impl EyeCollider {
                 .map(|vertex| *vertex + offset)
                 .collect(),
             radius: self.radius,
+            collision_radius: self.collision_radius,
         }
     }
 
@@ -66,7 +75,7 @@ impl EyeCollider {
             .iter()
             .map(|vertex| vertex.distance(self.center))
             .fold(0.0, f32::max)
-            + self.radius;
+            + self.collision_radius;
         for _ in 0..20 {
             let distance = (minimum + maximum) * 0.5;
             if self.circle_fits(self.center + direction * distance) {
@@ -78,22 +87,23 @@ impl EyeCollider {
         self.center + direction * minimum
     }
 
-    fn from_boundary(boundary: Vec<Vec2>, radius: f32) -> Option<Self> {
+    fn from_boundary(boundary: Vec<Vec2>, radius: f32, collision_radius: f32) -> Option<Self> {
         let centroid = polygon_center(&boundary);
-        let center = if circle_fits(centroid, &boundary, radius) {
+        let center = if circle_fits(centroid, &boundary, collision_radius) {
             centroid
         } else {
-            largest_clearance_center(&boundary, radius)?
+            largest_clearance_center(&boundary, collision_radius)?
         };
         Some(Self {
             center,
             boundary,
             radius,
+            collision_radius,
         })
     }
 
     fn circle_fits(&self, center: Vec2) -> bool {
-        circle_fits(center, &self.boundary, self.radius)
+        circle_fits(center, &self.boundary, self.collision_radius)
     }
 }
 
@@ -347,6 +357,7 @@ mod tests {
                 Vec2::new(1.0, -1.0),
                 Vec2::new(0.0, 1.0),
             ],
+            0.1,
             0.1,
         )
         .expect("triangle fits the pupil");

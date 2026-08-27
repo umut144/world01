@@ -20,6 +20,7 @@ pub struct BodyAnchor;
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
     pupil_area_ratio: f32,
+    pupil_collision_radius_ratio: f32,
 }
 
 impl CharacterAssetLibrary {
@@ -33,16 +34,26 @@ impl CharacterAssetLibrary {
                 .join("../../assets/characters")
                 .as_path(),
             design.eyes.pupil_area_ratio,
+            design.eyes.pupil_collision_radius_ratio,
         )
     }
 
     pub fn load_from_directory(
         directory: &Path,
         pupil_area_ratio: f32,
+        pupil_collision_radius_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
         if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
             return Err(PolyToolsAssetError::new(
                 "pupil area ratio must be finite and between zero and one",
+            ));
+        }
+        if !pupil_collision_radius_ratio.is_finite()
+            || pupil_collision_radius_ratio <= 0.0
+            || pupil_collision_radius_ratio > 1.0
+        {
+            return Err(PolyToolsAssetError::new(
+                "pupil collision radius ratio must be finite, greater than zero, and at most one",
             ));
         }
         let catalog_source =
@@ -77,6 +88,7 @@ impl CharacterAssetLibrary {
         Ok(Self {
             characters,
             pupil_area_ratio,
+            pupil_collision_radius_ratio,
         })
     }
 
@@ -230,6 +242,7 @@ pub fn spawn_character_visual(
                         &mesh.vertices,
                         &mesh.indices,
                         library.pupil_area_ratio,
+                        library.pupil_collision_radius_ratio,
                     )
                 })
             })
@@ -636,6 +649,7 @@ mod tests {
                         &stroke.vertices,
                         &stroke.indices,
                         library.pupil_area_ratio,
+                        library.pupil_collision_radius_ratio,
                     )
                     .is_some(),
                     "{} {} must produce an eye collider",

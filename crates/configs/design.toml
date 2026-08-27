@@ -19,3 +19,4 @@ view_height_tiles = 13
 
 [eyes]
 pupil_area_ratio = 0.26
+pupil_collision_radius_ratio = 0.5
