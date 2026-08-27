@@ -61,6 +61,12 @@
       "runtime_package": "PolyToolsRuntimeExports/sorcerer/manifest.json"
     },
     {
+      "asset_key": "warrior",
+      "asset_type": "character",
+      "display_name": "Warrior",
+      "runtime_package": "PolyToolsRuntimeExports/warrior/manifest.json"
+    },
+    {
       "asset_key": "wizard",
       "asset_type": "character",
       "display_name": "Wizard",
