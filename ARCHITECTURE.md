@@ -182,7 +182,7 @@ assignment are outside this slice.
   character and component name. A future material export is a separate
   PolyTools contract decision.
 
-The 2880 × 1800 design window remains a reference size independent from the native window size. The first local client window starts at 1280 × 800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling without requesting a desktop-sized window. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
+The 2880 × 1800 design window remains a reference size independent from the native window size. The first local client window starts at 2880 × 1800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling while matching the full design viewport out of the box. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
 
 The client now has a local presentation state boundary with `CharacterSelection` and `InGame` states. Phase 1 enables Bevy UI rendering and uses the state boundary to cleanly remove selection entities on transition; actual button-driven layout migration is Phase 2.
 
@@ -190,7 +190,7 @@ The shared authored spatial reference uses `1 m` terrain Tiles at `192 px/m`.
 Room dimensions come from `[room]` in the `configs` resource; the current
 camera test room is `50 × 50` Tiles. Visible framing is independent and comes
 from `[camera]`: preset `0` uses the explicit width/height values, while
-presets `1`–`5` select the fixed `8×5`, `16×10`, `24×15`, `32×20`, and `40×25`
+presets `1`–`9` select the fixed `8×5`, `16×10`, `20×12`, `24×15`, `28×18`, `32×20`, `36×22`, `40×25`, and `44×27`
 views. The active camera currently shows `22 × 20` Tiles; native-window and
 reference-window pixel sizes do not change those meter-based dimensions.
 

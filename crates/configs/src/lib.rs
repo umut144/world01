@@ -79,9 +79,13 @@ impl CameraConfig {
             0 => Some((self.view_width_tiles, self.view_height_tiles)),
             1 => Some((8, 5)),
             2 => Some((16, 10)),
-            3 => Some((24, 15)),
-            4 => Some((32, 20)),
-            5 => Some((40, 25)),
+            3 => Some((20, 12)),
+            4 => Some((24, 15)),
+            5 => Some((28, 18)),
+            6 => Some((32, 20)),
+            7 => Some((36, 22)),
+            8 => Some((40, 25)),
+            9 => Some((44, 27)),
             _ => None,
         }
     }
