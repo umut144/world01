@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -14,10 +12,10 @@ impl EyeCollider {
         if !radius.is_finite() || radius <= 0.0 {
             return None;
         }
-        let boundary = boundary_loops(vertices, indices)
+        let boundary = centerline_loops(vertices, indices)
             .into_iter()
             .filter(|loop_vertices| loop_vertices.len() >= 3)
-            .min_by(|left, right| {
+            .max_by(|left, right| {
                 polygon_area(left)
                     .abs()
                     .total_cmp(&polygon_area(right).abs())
@@ -121,44 +119,76 @@ fn gaze_in_local_space(world_gaze: Vec2, global_transform: &GlobalTransform) -> 
         .normalize_or_zero()
 }
 
-fn boundary_loops(vertices: &[[f32; 2]], indices: &[u32]) -> Vec<Vec<Vec2>> {
-    let mut edges = HashMap::new();
-    for triangle in indices.chunks_exact(3) {
-        for (start, end) in [
-            (triangle[0], triangle[1]),
-            (triangle[1], triangle[2]),
-            (triangle[2], triangle[0]),
-        ] {
-            let key = (start.min(end), start.max(end));
-            if edges.remove(&key).is_none() {
-                edges.insert(key, (start, end));
-            }
-        }
-    }
-
-    let mut outgoing = edges.into_values().collect::<HashMap<_, _>>();
+fn centerline_loops(vertices: &[[f32; 2]], indices: &[u32]) -> Vec<Vec<Vec2>> {
+    const JOIN_EPSILON_SQUARED: f32 = 0.000_000_01;
     let mut loops = Vec::new();
-    while let Some(start) = outgoing.keys().next().copied() {
-        let mut vertex_ids = vec![start];
-        let mut current = start;
-        while let Some(next) = outgoing.remove(&current) {
-            if next == start {
-                break;
-            }
-            vertex_ids.push(next);
-            current = next;
+    let mut current = Vec::new();
+
+    for quad in indices.chunks_exact(6) {
+        if quad[2] != quad[3] || quad[1] != quad[4] {
+            continue;
         }
-        if vertex_ids.len() >= 3 {
-            loops.push(
-                vertex_ids
-                    .into_iter()
-                    .filter_map(|index| vertices.get(index as usize))
-                    .map(|vertex| Vec2::from_array(*vertex))
-                    .collect(),
-            );
+        let Some(start_outer) = vertices
+            .get(quad[0] as usize)
+            .copied()
+            .map(Vec2::from_array)
+        else {
+            continue;
+        };
+        let Some(start_inner) = vertices
+            .get(quad[1] as usize)
+            .copied()
+            .map(Vec2::from_array)
+        else {
+            continue;
+        };
+        let Some(end_outer) = vertices
+            .get(quad[2] as usize)
+            .copied()
+            .map(Vec2::from_array)
+        else {
+            continue;
+        };
+        let Some(end_inner) = vertices
+            .get(quad[5] as usize)
+            .copied()
+            .map(Vec2::from_array)
+        else {
+            continue;
+        };
+        let start = (start_outer + start_inner) * 0.5;
+        let end = (end_outer + end_inner) * 0.5;
+
+        if current
+            .last()
+            .is_some_and(|previous: &Vec2| previous.distance_squared(start) > JOIN_EPSILON_SQUARED)
+        {
+            finish_centerline_loop(&mut loops, &mut current, JOIN_EPSILON_SQUARED);
         }
+        if current.is_empty() {
+            current.push(start);
+        }
+        current.push(end);
     }
+    finish_centerline_loop(&mut loops, &mut current, JOIN_EPSILON_SQUARED);
     loops
+}
+
+fn finish_centerline_loop(
+    loops: &mut Vec<Vec<Vec2>>,
+    current: &mut Vec<Vec2>,
+    epsilon_squared: f32,
+) {
+    if current.len() >= 2
+        && current[0].distance_squared(*current.last().expect("length checked")) <= epsilon_squared
+    {
+        current.pop();
+    }
+    if current.len() >= 3 {
+        loops.push(std::mem::take(current));
+    } else {
+        current.clear();
+    }
 }
 
 fn polygon_area(vertices: &[Vec2]) -> f32 {
@@ -305,6 +335,37 @@ mod tests {
             clearance(position, collider.boundary()) - 0.1 < 0.000_1,
             "pupil should touch the boundary"
         );
+    }
+
+    #[test]
+    fn disconnected_stroke_quads_reconstruct_the_authored_boundary() {
+        let vertices = [
+            [-1.0, -1.1],
+            [-1.0, -0.9],
+            [1.0, -1.1],
+            [1.0, -0.9],
+            [0.9, -1.0],
+            [1.1, -1.0],
+            [0.9, 1.0],
+            [1.1, 1.0],
+            [1.0, 0.9],
+            [1.0, 1.1],
+            [-1.0, 0.9],
+            [-1.0, 1.1],
+            [-0.9, 1.0],
+            [-1.1, 1.0],
+            [-0.9, -1.0],
+            [-1.1, -1.0],
+        ];
+        let indices = [
+            0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7, 8, 9, 10, 10, 9, 11, 12, 13, 14, 14, 13, 15,
+        ];
+
+        let collider = EyeCollider::from_outline(&vertices, &indices, 0.1)
+            .expect("disconnected quads form a valid square eye");
+
+        assert_eq!(collider.boundary().len(), 4);
+        assert!(collider.circle_fits(Vec2::ZERO));
     }
 
     #[test]

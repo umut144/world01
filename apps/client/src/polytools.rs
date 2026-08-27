@@ -286,7 +286,8 @@ pub fn spawn_character_visual(
                     Transform::from_xyz(
                         -component.local_pivot.unwrap_or([0.0, 0.0])[0],
                         -component.local_pivot.unwrap_or([0.0, 0.0])[1],
-                        component.z_index as f32 * 0.01 + 0.001,
+                        component.z_index as f32 * 0.01
+                            + if is_dynamic_eye { 0.003 } else { 0.001 },
                     ),
                 ))
                 .id();
@@ -590,6 +591,32 @@ mod tests {
                 if let Some(mesh) = component.mesh.as_ref() {
                     validate_mesh(mesh, &component.component_id).expect("fill mesh is valid");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn imported_eye_contours_build_colliders() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        for (character, manifest) in &library.characters {
+            if character.0 == "barde" {
+                continue;
+            }
+            for component in &manifest.components {
+                if component.name != "eye_left" && component.name != "eye_right" {
+                    continue;
+                }
+                let stroke = component
+                    .contour_stroke_mesh
+                    .as_ref()
+                    .expect("eye has an outline");
+                assert!(
+                    EyeCollider::from_outline(&stroke.vertices, &stroke.indices, 0.012,).is_some(),
+                    "{} {} must produce an eye collider",
+                    character.0,
+                    component.name,
+                );
             }
         }
     }
