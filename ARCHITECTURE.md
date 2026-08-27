@@ -171,7 +171,9 @@ assignment are outside this slice.
   `assets/characters/`. It validates the catalog, limits the import to the
   confirmed five character keys, and replaces the generated destination
   atomically so stale components cannot survive a re-export. The source World
-  directory can be overridden with `POLYTOOLS_WORLD_DIR`.
+  directory can be overridden with `POLYTOOLS_WORLD_DIR`. New syncs require
+  PolyTools Runtime Manifest schema 8; the client temporarily retains loading
+  compatibility with the already imported schema 5 through 7 packages.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill and contour-stroke geometry into Bevy 2D mesh presentation
   entities. Component transforms, hierarchy, and `z_index` remain presentation

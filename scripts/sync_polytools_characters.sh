@@ -62,7 +62,7 @@ for key in "${character_keys[@]}"; do
   fi
 
   if ! jq -e --arg key "$key" '
-    (.schema_version == 6 or .schema_version == 7)
+    .schema_version == 8
     and .asset_key == $key
     and .asset_type == "character"
     and (.components | type == "array" and length > 0)
