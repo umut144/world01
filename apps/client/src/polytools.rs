@@ -14,11 +14,14 @@ use serde::Deserialize;
 #[derive(Component)]
 pub struct BodyAnchor;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct EyePupil {
     pub owner: Entity,
     pub center: Vec2,
-    pub max_offset: Vec2,
+    pub boundary: Vec<Vec2>,
+    pub rotation_radians: f32,
+    pub scale: Vec2,
+    pub radius: f32,
 }
 
 #[derive(Resource, Clone)]
@@ -212,22 +215,27 @@ pub fn spawn_character_visual(
         let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
         let eye_geometry = (character.0 != "barde"
             && (component.name == "eye_left" || component.name == "eye_right"))
-            .then(|| eye_geometry(component));
+            .then(|| eye_geometry(component))
+            .flatten();
         let mesh_transform = Transform::from_xyz(
             -component.local_pivot.unwrap_or([0.0, 0.0])[0],
             -component.local_pivot.unwrap_or([0.0, 0.0])[1],
             component.z_index as f32 * 0.01,
         );
 
-        if let Some((center, half_size)) = eye_geometry {
+        if let Some(eye_geometry) = eye_geometry {
             let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
+            let pivot = Vec2::from_array(pivot);
             let eye_fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(center, half_size)))),
+                    Mesh2d(meshes.add(bevy_mesh(&polygon_mesh(
+                        eye_geometry.center,
+                        &eye_geometry.boundary,
+                    )))),
                     MeshMaterial2d(materials.add(Color::srgb(0.96, 0.94, 0.88))),
                     Transform::from_xyz(
-                        -pivot[0],
-                        -pivot[1],
+                        -pivot.x,
+                        -pivot.y,
                         component.z_index as f32 * 0.01 - 0.001,
                     ),
                 ))
@@ -239,14 +247,24 @@ pub fn spawn_character_visual(
                 .spawn((
                     EyePupil {
                         owner: root,
-                        center: center - Vec2::from_array(pivot),
-                        max_offset: (half_size - Vec2::splat(pupil_radius)).max(Vec2::ZERO),
+                        center: eye_geometry.center - pivot,
+                        boundary: eye_geometry
+                            .boundary
+                            .iter()
+                            .map(|vertex| *vertex - pivot)
+                            .collect(),
+                        rotation_radians: component.local_transform.rotation_radians,
+                        scale: Vec2::from_array(component.local_transform.scale),
+                        radius: pupil_radius,
                     },
-                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(center, Vec2::splat(pupil_radius))))),
+                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(
+                        eye_geometry.center,
+                        Vec2::splat(pupil_radius),
+                    )))),
                     MeshMaterial2d(materials.add(Color::srgb(0.01, 0.008, 0.01))),
                     Transform::from_xyz(
-                        -pivot[0],
-                        -pivot[1],
+                        -pivot.x,
+                        -pivot.y,
                         component.z_index as f32 * 0.01 + 0.002,
                     ),
                 ))
@@ -334,20 +352,105 @@ pub fn spawn_character_visual(
     Ok(())
 }
 
-fn eye_geometry(component: &PolyToolsComponent) -> (Vec2, Vec2) {
-    let Some(mesh) = component.contour_stroke_mesh.as_ref() else {
-        return (Vec2::ZERO, Vec2::splat(0.012));
-    };
-    let mut minimum = Vec2::splat(f32::INFINITY);
-    let mut maximum = Vec2::splat(f32::NEG_INFINITY);
-    for vertex in &mesh.vertices {
-        let vertex = Vec2::from_array(*vertex);
-        minimum = minimum.min(vertex);
-        maximum = maximum.max(vertex);
+struct EyeGeometry {
+    center: Vec2,
+    boundary: Vec<Vec2>,
+}
+
+fn eye_geometry(component: &PolyToolsComponent) -> Option<EyeGeometry> {
+    let mesh = component.contour_stroke_mesh.as_ref()?;
+    let boundary = boundary_loops(mesh)
+        .into_iter()
+        .filter(|loop_vertices| loop_vertices.len() >= 3)
+        .min_by(|left, right| {
+            polygon_area(left)
+                .abs()
+                .total_cmp(&polygon_area(right).abs())
+        })?;
+    Some(EyeGeometry {
+        center: polygon_center(&boundary),
+        boundary,
+    })
+}
+
+fn boundary_loops(mesh: &PolyToolsStrokeMesh) -> Vec<Vec<Vec2>> {
+    let mut edges = HashMap::new();
+    for triangle in mesh.indices.chunks_exact(3) {
+        for (start, end) in [
+            (triangle[0], triangle[1]),
+            (triangle[1], triangle[2]),
+            (triangle[2], triangle[0]),
+        ] {
+            let key = (start.min(end), start.max(end));
+            if edges.remove(&key).is_none() {
+                edges.insert(key, (start, end));
+            }
+        }
     }
-    let center = (minimum + maximum) * 0.5;
-    let half_size = ((maximum - minimum) * 0.5).max(Vec2::splat(0.012));
-    (center, half_size)
+
+    let mut outgoing = edges
+        .into_values()
+        .map(|(start, end)| (start, end))
+        .collect::<HashMap<_, _>>();
+    let mut loops = Vec::new();
+    while let Some(start) = outgoing.keys().next().copied() {
+        let mut vertex_ids = vec![start];
+        let mut current = start;
+        while let Some(next) = outgoing.remove(&current) {
+            if next == start {
+                break;
+            }
+            vertex_ids.push(next);
+            current = next;
+        }
+        if vertex_ids.len() >= 3 {
+            loops.push(
+                vertex_ids
+                    .into_iter()
+                    .map(|index| Vec2::from_array(mesh.vertices[index as usize]))
+                    .collect(),
+            );
+        }
+    }
+    loops
+}
+
+fn polygon_area(vertices: &[Vec2]) -> f32 {
+    vertices
+        .iter()
+        .zip(vertices.iter().cycle().skip(1))
+        .take(vertices.len())
+        .map(|(left, right)| left.x * right.y - right.x * left.y)
+        .sum::<f32>()
+        * 0.5
+}
+
+fn polygon_center(vertices: &[Vec2]) -> Vec2 {
+    let area = polygon_area(vertices);
+    if area.abs() <= f32::EPSILON {
+        return vertices.iter().copied().sum::<Vec2>() / vertices.len() as f32;
+    }
+    let weighted = vertices
+        .iter()
+        .zip(vertices.iter().cycle().skip(1))
+        .take(vertices.len())
+        .map(|(left, right)| {
+            let cross = left.x * right.y - right.x * left.y;
+            (*left + *right) * cross
+        })
+        .sum::<Vec2>();
+    weighted / (6.0 * area)
+}
+
+fn polygon_mesh(center: Vec2, boundary: &[Vec2]) -> PolyToolsMesh {
+    let mut vertices = Vec::with_capacity(boundary.len() + 1);
+    vertices.push(center.to_array());
+    vertices.extend(boundary.iter().map(|vertex| vertex.to_array()));
+    let mut indices = Vec::with_capacity(boundary.len() * 3);
+    for index in 0..boundary.len() as u32 {
+        indices.extend_from_slice(&[0, index + 1, (index + 1) % boundary.len() as u32 + 1]);
+    }
+    PolyToolsMesh { vertices, indices }
 }
 
 fn ellipse_mesh(center: Vec2, half_size: Vec2) -> PolyToolsMesh {

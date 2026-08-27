@@ -172,7 +172,7 @@ Reference drawings:
 
 - Every currently playable character except Barde has eyes with one shared, round black pupil shape.
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left, `K` down, and `L` right. This is presentation-only and does not change movement.
-- Each character keeps its own eye geometry, eye positions, and eye pivots. The pupil movement is constrained by that eye's geometry rather than by the character's overall pivot.
+- Each character keeps its own eye geometry, eye positions, and eye pivots. The complete pupil circle must remain inside that eye's geometry rather than being constrained by the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.
 
 ## Diegetic / minimal UI philosophy

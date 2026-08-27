@@ -813,9 +813,75 @@ fn apply_eye_gaze(
         let Ok(gaze) = local_players.get(pupil.owner) else {
             continue;
         };
-        transform.translation.x = pupil.center.x + gaze.0.x * pupil.max_offset.x;
-        transform.translation.y = pupil.center.y + gaze.0.y * pupil.max_offset.y;
+        transform.translation =
+            pupil_center_for_gaze(pupil, gaze.0).extend(transform.translation.z);
     }
+}
+
+fn pupil_center_for_gaze(pupil: &EyePupil, gaze: Vec2) -> Vec2 {
+    let direction = gaze_in_eye_space(gaze, pupil.rotation_radians, pupil.scale);
+    if direction == Vec2::ZERO {
+        return pupil.center;
+    }
+
+    let mut minimum = 0.0;
+    let mut maximum = pupil
+        .boundary
+        .iter()
+        .map(|vertex| vertex.distance(pupil.center))
+        .fold(0.0, f32::max);
+    for _ in 0..16 {
+        let distance = (minimum + maximum) * 0.5;
+        if pupil_fits(
+            pupil.center + direction * distance,
+            &pupil.boundary,
+            pupil.radius,
+        ) {
+            minimum = distance;
+        } else {
+            maximum = distance;
+        }
+    }
+    pupil.center + direction * minimum
+}
+
+fn gaze_in_eye_space(gaze: Vec2, rotation_radians: f32, scale: Vec2) -> Vec2 {
+    if gaze == Vec2::ZERO || scale.x == 0.0 || scale.y == 0.0 {
+        return Vec2::ZERO;
+    }
+    let (sin, cos) = rotation_radians.sin_cos();
+    Vec2::new(
+        (cos * gaze.x + sin * gaze.y) / scale.x,
+        (-sin * gaze.x + cos * gaze.y) / scale.y,
+    )
+    .normalize_or_zero()
+}
+
+fn pupil_fits(center: Vec2, boundary: &[Vec2], radius: f32) -> bool {
+    point_is_inside_polygon(center, boundary)
+        && boundary
+            .iter()
+            .zip(boundary.iter().cycle().skip(1))
+            .take(boundary.len())
+            .all(|(start, end)| point_segment_distance(center, *start, *end) >= radius)
+}
+
+fn point_is_inside_polygon(point: Vec2, boundary: &[Vec2]) -> bool {
+    boundary
+        .iter()
+        .zip(boundary.iter().cycle().skip(1))
+        .take(boundary.len())
+        .fold(false, |inside, (start, end)| {
+            let crosses = (start.y > point.y) != (end.y > point.y)
+                && point.x < (end.x - start.x) * (point.y - start.y) / (end.y - start.y) + start.x;
+            inside ^ crosses
+        })
+}
+
+fn point_segment_distance(point: Vec2, start: Vec2, end: Vec2) -> f32 {
+    let segment = end - start;
+    let projection = (point - start).dot(segment) / segment.length_squared();
+    point.distance(start + segment * projection.clamp(0.0, 1.0))
 }
 
 fn sampled_render_position(
