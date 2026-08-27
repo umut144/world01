@@ -14,6 +14,13 @@ use serde::Deserialize;
 #[derive(Component)]
 pub struct BodyAnchor;
 
+#[derive(Component, Debug, Clone, Copy)]
+pub struct EyePupil {
+    pub owner: Entity,
+    pub center: Vec2,
+    pub max_offset: Vec2,
+}
+
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
@@ -203,11 +210,49 @@ pub fn spawn_character_visual(
 
         let fill_color = materials.add(component_color(character, &component.name));
         let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
+        let eye_geometry = (character.0 != "barde"
+            && (component.name == "eye_left" || component.name == "eye_right"))
+            .then(|| eye_geometry(component));
         let mesh_transform = Transform::from_xyz(
             -component.local_pivot.unwrap_or([0.0, 0.0])[0],
             -component.local_pivot.unwrap_or([0.0, 0.0])[1],
             component.z_index as f32 * 0.01,
         );
+
+        if let Some((center, half_size)) = eye_geometry {
+            let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
+            let eye_fill = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(center, half_size)))),
+                    MeshMaterial2d(materials.add(Color::srgb(0.96, 0.94, 0.88))),
+                    Transform::from_xyz(
+                        -pivot[0],
+                        -pivot[1],
+                        component.z_index as f32 * 0.01 - 0.001,
+                    ),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(eye_fill);
+
+            let pupil_radius = 0.012;
+            let pupil = commands
+                .spawn((
+                    EyePupil {
+                        owner: root,
+                        center: center - Vec2::from_array(pivot),
+                        max_offset: (half_size - Vec2::splat(pupil_radius)).max(Vec2::ZERO),
+                    },
+                    Mesh2d(meshes.add(bevy_mesh(&ellipse_mesh(center, Vec2::splat(pupil_radius))))),
+                    MeshMaterial2d(materials.add(Color::srgb(0.01, 0.008, 0.01))),
+                    Transform::from_xyz(
+                        -pivot[0],
+                        -pivot[1],
+                        component.z_index as f32 * 0.01 + 0.002,
+                    ),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(pupil);
+        }
 
         if let Some(mesh) = component.mesh.as_ref() {
             let fill = commands
@@ -287,6 +332,39 @@ pub fn spawn_character_visual(
     }
 
     Ok(())
+}
+
+fn eye_geometry(component: &PolyToolsComponent) -> (Vec2, Vec2) {
+    let Some(mesh) = component.contour_stroke_mesh.as_ref() else {
+        return (Vec2::ZERO, Vec2::splat(0.012));
+    };
+    let mut minimum = Vec2::splat(f32::INFINITY);
+    let mut maximum = Vec2::splat(f32::NEG_INFINITY);
+    for vertex in &mesh.vertices {
+        let vertex = Vec2::from_array(*vertex);
+        minimum = minimum.min(vertex);
+        maximum = maximum.max(vertex);
+    }
+    let center = (minimum + maximum) * 0.5;
+    let half_size = ((maximum - minimum) * 0.5).max(Vec2::splat(0.012));
+    (center, half_size)
+}
+
+fn ellipse_mesh(center: Vec2, half_size: Vec2) -> PolyToolsMesh {
+    const SEGMENTS: u32 = 24;
+    let mut vertices = Vec::with_capacity(SEGMENTS as usize + 1);
+    vertices.push(center.to_array());
+    for segment in 0..SEGMENTS {
+        let angle = std::f32::consts::TAU * segment as f32 / SEGMENTS as f32;
+        vertices.push(
+            (center + Vec2::new(angle.cos() * half_size.x, angle.sin() * half_size.y)).to_array(),
+        );
+    }
+    let mut indices = Vec::with_capacity(SEGMENTS as usize * 3);
+    for segment in 0..SEGMENTS {
+        indices.extend_from_slice(&[0, segment + 1, (segment + 1) % SEGMENTS + 1]);
+    }
+    PolyToolsMesh { vertices, indices }
 }
 
 fn component_transform(component: &PolyToolsComponent) -> Transform {

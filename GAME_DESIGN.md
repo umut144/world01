@@ -168,6 +168,13 @@ Reference drawings:
 - The drawings demonstrate related but distinguishable silhouettes: characteristic hat/hood contours, face openings/eye treatment, class symbols, and Glavier's prominent weapon/form motifs.
 - Preserve the charming, readable abstraction; do not “improve” it into anatomically complex or detail-heavy fantasy art by default.
 
+### Eyes and gaze
+
+- Every currently playable character except Barde has eyes with one shared, round black pupil shape.
+- `IJKL` controls the local character's gaze direction: `I` up, `J` left, `K` down, and `L` right. This is presentation-only and does not change movement.
+- Each character keeps its own eye geometry, eye positions, and eye pivots. The pupil movement is constrained by that eye's geometry rather than by the character's overall pivot.
+- Barde is temporarily excluded from the eye/pupil implementation.
+
 ## Diegetic / minimal UI philosophy
 
 - The developer categorically dislikes conventional camera-lens HUD: text, numbers, floating bars, and overlays should appear only when absolutely necessary or genuinely useful.

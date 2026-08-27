@@ -212,6 +212,13 @@ The current presentation renders one client-only checkerboard floor using the
 configured room dimensions. Each tile is one `1 × 1 m` Sprite; it is a temporary
 scale aid and has no gameplay collision authority.
 
+Character eyes are client-only presentation entities. PolyTools `eye_left` and
+`eye_right` contours provide the per-character bounds and local pivots; the
+client creates the same round black pupil mesh for each eye and clamps its
+offset independently on the horizontal and vertical axes. `IJKL` is sampled
+only by the local client and is not part of movement intent or network state.
+Barde is intentionally excluded for now.
+
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable
 `RoomId`s, all internal cardinal boundaries are open, and its outer perimeter
