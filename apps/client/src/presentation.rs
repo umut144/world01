@@ -14,7 +14,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::controller::ControllerInput;
-use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
+use crate::polytools::{CharacterAssetLibrary, EyePupil, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -85,6 +85,7 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
+                    collect_gaze_input,
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
@@ -96,7 +97,11 @@ impl Plugin for ClientPresentationPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (sync_rendered_positions, follow_local_character)
+                (
+                    sync_rendered_positions,
+                    follow_local_character,
+                    apply_eye_gaze,
+                )
                     .chain()
                     .run_if(in_state(ClientScreen::InGame)),
             );
@@ -121,6 +126,21 @@ fn collect_movement_input(
     );
     let direction = movement_direction(keyboard_direction, controller_input.left_stick());
     input.0 = MovementIntent::new(direction.x, direction.y);
+}
+
+fn collect_gaze_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut local_players: Query<&mut LocalGaze, With<MovementIntent>>,
+) {
+    let direction = Vec2::new(
+        axis(&keyboard, KeyCode::KeyL, KeyCode::KeyJ),
+        axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
+    )
+    .normalize_or_zero();
+
+    for mut gaze in &mut local_players {
+        gaze.0 = direction;
+    }
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
@@ -177,6 +197,9 @@ struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
+
+#[derive(Component, Debug, Clone, Copy, Default)]
+struct LocalGaze(Vec2);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct BodyPivot(Vec2);
@@ -675,6 +698,7 @@ fn render_new_players(
     for (entity, character, position) in &players {
         commands.entity(entity).insert((
             RenderedCharacter,
+            LocalGaze::default(),
             BodyPivot(character_assets.body_pivot(&character.0)),
             Visibility::default(),
             Transform::from_xyz(position.x, position.y, 0.0),
@@ -779,6 +803,19 @@ fn follow_local_character(
     let anchor = player_transform.translation.truncate() + body_pivot.0;
     camera_transform.translation.x = anchor.x;
     camera_transform.translation.y = anchor.y;
+}
+
+fn apply_eye_gaze(
+    local_players: Query<&LocalGaze>,
+    mut pupils: Query<(&EyePupil, &mut Transform)>,
+) {
+    for (pupil, mut transform) in &mut pupils {
+        let Ok(gaze) = local_players.get(pupil.owner) else {
+            continue;
+        };
+        transform.translation.x = pupil.center.x + gaze.0.x * pupil.max_offset.x;
+        transform.translation.y = pupil.center.y + gaze.0.y * pupil.max_offset.y;
+    }
 }
 
 fn sampled_render_position(
