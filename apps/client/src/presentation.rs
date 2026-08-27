@@ -5,16 +5,17 @@ use bevy::{
 };
 use game01_configs::load_file;
 use game01_network::{
-    ClientMovementInput, ClientPositionCorrection, NetworkSimulationProfile,
-    RemotePositionExtrapolation, configure_client, connect_client,
+    ClientPositionCorrection, NetworkSimulationProfile, RemotePositionExtrapolation,
+    configure_client, connect_client,
 };
 use game01_world_data::{
     CharacterId, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
-use crate::controller::ControllerInput;
-use crate::polytools::{CharacterAssetLibrary, EyePupil, spawn_character_visual};
+use crate::eyes::EyePupil;
+use crate::input::{LocalGaze, collect_gaze_input, collect_movement_input};
+use crate::polytools::{CharacterAssetLibrary, spawn_character_visual};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -22,7 +23,6 @@ const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
-const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
 const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
 const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
@@ -115,59 +115,6 @@ enum ClientScreen {
     InGame,
 }
 
-fn collect_movement_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut controller_input: NonSendMut<ControllerInput>,
-    mut input: ResMut<ClientMovementInput>,
-) {
-    let keyboard_direction = Vec2::new(
-        axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA),
-        axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS),
-    );
-    let direction = movement_direction(keyboard_direction, controller_input.left_stick());
-    input.0 = MovementIntent::new(direction.x, direction.y);
-}
-
-fn collect_gaze_input(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut local_players: Query<&mut LocalGaze, With<MovementIntent>>,
-) {
-    let direction = Vec2::new(
-        axis(&keyboard, KeyCode::KeyL, KeyCode::KeyJ),
-        axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
-    )
-    .normalize_or_zero();
-
-    for mut gaze in &mut local_players {
-        gaze.0 = direction;
-    }
-}
-
-fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
-    f32::from(keyboard.pressed(positive)) - f32::from(keyboard.pressed(negative))
-}
-
-fn movement_direction(keyboard_direction: Vec2, controller_direction: Option<Vec2>) -> Vec2 {
-    controller_direction
-        .and_then(controller_stick_direction)
-        .unwrap_or_else(|| keyboard_direction.normalize_or_zero())
-}
-
-fn controller_stick_direction(stick: Vec2) -> Option<Vec2> {
-    if !stick.is_finite() {
-        return None;
-    }
-
-    let magnitude = stick.length();
-    if magnitude <= CONTROLLER_STICK_DEADZONE {
-        return None;
-    }
-
-    let scaled_magnitude =
-        ((magnitude - CONTROLLER_STICK_DEADZONE) / (1.0 - CONTROLLER_STICK_DEADZONE)).min(1.0);
-    Some(stick.normalize_or_zero() * scaled_magnitude)
-}
-
 #[derive(Resource)]
 struct ClientSession {
     client_id: u64,
@@ -197,9 +144,6 @@ struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
-
-#[derive(Component, Debug, Clone, Copy, Default)]
-struct LocalGaze(Vec2);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct BodyPivot(Vec2);
@@ -807,81 +751,16 @@ fn follow_local_character(
 
 fn apply_eye_gaze(
     local_players: Query<&LocalGaze>,
-    mut pupils: Query<(&EyePupil, &mut Transform)>,
+    mut pupils: Query<(&EyePupil, &GlobalTransform, &mut Transform)>,
 ) {
-    for (pupil, mut transform) in &mut pupils {
+    for (pupil, global_transform, mut transform) in &mut pupils {
         let Ok(gaze) = local_players.get(pupil.owner) else {
             continue;
         };
-        transform.translation =
-            pupil_center_for_gaze(pupil, gaze.0).extend(transform.translation.z);
+        let position = pupil.position_for_world_gaze(gaze.0, global_transform);
+        transform.translation.x = position.x;
+        transform.translation.y = position.y;
     }
-}
-
-fn pupil_center_for_gaze(pupil: &EyePupil, gaze: Vec2) -> Vec2 {
-    let direction = gaze_in_eye_space(gaze, pupil.rotation_radians, pupil.scale);
-    if direction == Vec2::ZERO {
-        return pupil.center;
-    }
-
-    let mut minimum = 0.0;
-    let mut maximum = pupil
-        .boundary
-        .iter()
-        .map(|vertex| vertex.distance(pupil.center))
-        .fold(0.0, f32::max);
-    for _ in 0..16 {
-        let distance = (minimum + maximum) * 0.5;
-        if pupil_fits(
-            pupil.center + direction * distance,
-            &pupil.boundary,
-            pupil.radius,
-        ) {
-            minimum = distance;
-        } else {
-            maximum = distance;
-        }
-    }
-    pupil.center + direction * minimum
-}
-
-fn gaze_in_eye_space(gaze: Vec2, rotation_radians: f32, scale: Vec2) -> Vec2 {
-    if gaze == Vec2::ZERO || scale.x == 0.0 || scale.y == 0.0 {
-        return Vec2::ZERO;
-    }
-    let (sin, cos) = rotation_radians.sin_cos();
-    Vec2::new(
-        (cos * gaze.x + sin * gaze.y) / scale.x,
-        (-sin * gaze.x + cos * gaze.y) / scale.y,
-    )
-    .normalize_or_zero()
-}
-
-fn pupil_fits(center: Vec2, boundary: &[Vec2], radius: f32) -> bool {
-    point_is_inside_polygon(center, boundary)
-        && boundary
-            .iter()
-            .zip(boundary.iter().cycle().skip(1))
-            .take(boundary.len())
-            .all(|(start, end)| point_segment_distance(center, *start, *end) >= radius)
-}
-
-fn point_is_inside_polygon(point: Vec2, boundary: &[Vec2]) -> bool {
-    boundary
-        .iter()
-        .zip(boundary.iter().cycle().skip(1))
-        .take(boundary.len())
-        .fold(false, |inside, (start, end)| {
-            let crosses = (start.y > point.y) != (end.y > point.y)
-                && point.x < (end.x - start.x) * (point.y - start.y) / (end.y - start.y) + start.x;
-            inside ^ crosses
-        })
-}
-
-fn point_segment_distance(point: Vec2, start: Vec2, end: Vec2) -> f32 {
-    let segment = end - start;
-    let projection = (point - start).dot(segment) / segment.length_squared();
-    point.distance(start + segment * projection.clamp(0.0, 1.0))
 }
 
 fn sampled_render_position(
@@ -951,25 +830,31 @@ mod tests {
 
     #[test]
     fn controller_direction_overrides_keyboard_direction() {
-        assert_eq!(movement_direction(Vec2::X, Some(Vec2::Y)), Vec2::Y);
+        assert_eq!(
+            crate::input::movement_direction(Vec2::X, Some(Vec2::Y)),
+            Vec2::Y
+        );
     }
 
     #[test]
     fn neutral_controller_direction_uses_keyboard_fallback() {
         assert_eq!(
-            movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
+            crate::input::movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
             Vec2::new(1.0, 1.0).normalize(),
         );
     }
 
     #[test]
     fn controller_deadzone_blocks_small_stick_drift() {
-        assert_eq!(controller_stick_direction(Vec2::new(0.15, 0.0)), None);
+        assert_eq!(
+            crate::input::controller_stick_direction(Vec2::new(0.15, 0.0)),
+            None
+        );
     }
 
     #[test]
     fn controller_stick_preserves_partial_movement_strength() {
-        let direction = controller_stick_direction(Vec2::new(0.575, 0.0))
+        let direction = crate::input::controller_stick_direction(Vec2::new(0.575, 0.0))
             .expect("stick outside the deadzone produces movement");
         assert!((direction.x - 0.5).abs() < f32::EPSILON);
         assert_eq!(direction.y, 0.0);

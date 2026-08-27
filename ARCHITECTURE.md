@@ -216,11 +216,15 @@ Character eyes are client-only presentation entities. PolyTools `eye_left` and
 `eye_right` contours provide the per-character bounds and local pivots; the
 client reconstructs the inner closed contour from each eye's exported stroke
 mesh, uses it as the white eye surface, and constrains the round black pupil
-to remain fully inside it. The gaze vector is transformed into each eye's
-local rotation and scale before that constraint is applied, so mirrored or
-rotated asset components retain the same screen-space look direction. `IJKL`
-is sampled only by the local client and is not part of movement intent or
-network state. Barde is intentionally excluded for now.
+with circle-versus-polygon collision. The pupil uses the polygon centroid as
+its neutral point, or a maximum-clearance fallback when that centroid cannot
+fit the complete circle. The gaze vector is transformed through the inverse
+full eye transform hierarchy before collision, so mirrored or rotated asset
+components retain the same screen-space look direction. This presentation-only
+geometry lives in `apps/client/src/eyes.rs`. Device sampling and conversion
+into local movement/gaze presentation inputs live in `apps/client/src/input.rs`;
+`IJKL` is not part of movement intent or network state. Barde is intentionally
+excluded for now.
 
 For the initial room-transition slice, `StartingRoomGrid` is shared
 protocol-neutral domain data: its nine room coordinates map to stable

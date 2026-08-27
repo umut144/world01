@@ -13,6 +13,8 @@ use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::{CameraView, ClientPresentationPlugin};
 
 mod controller;
+mod eyes;
+mod input;
 mod polytools;
 mod prediction;
 mod presentation;
