@@ -378,7 +378,7 @@ fn validate_manifest(
     manifest: &PolyToolsManifest,
     expected_key: &str,
 ) -> Result<(), PolyToolsAssetError> {
-    if !(5..=6).contains(&manifest.schema_version) {
+    if !(5..=7).contains(&manifest.schema_version) {
         return Err(PolyToolsAssetError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version

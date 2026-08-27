@@ -1792,7 +1792,7 @@
 					]
 				]
 			},
-			"name": "orb",
+			"name": "body",
 			"parent_component_id": null,
 			"z_index": 0
 		}
@@ -1808,7 +1808,7 @@
 		"y_axis": "up"
 	},
 	"display_name": "Orb",
-	"schema_version": 6,
+	"schema_version": 7,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

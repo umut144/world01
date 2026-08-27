@@ -819,52 +819,6 @@
 			"z_index": 0
 		},
 		{
-			"component_id": "component_70",
-			"component_pivot": [
-				-0.075,
-				1.1
-			],
-			"kind": "asset_reference",
-			"local_transform": {
-				"position": [
-					-0.075,
-					1.1
-				],
-				"rotation_radians": 0.0,
-				"scale": [
-					1.0,
-					1.0
-				]
-			},
-			"name": "eye_left",
-			"parent_component_id": "component_59",
-			"source_asset_key": "plus",
-			"z_index": 0
-		},
-		{
-			"component_id": "component_73",
-			"component_pivot": [
-				0.075,
-				1.1
-			],
-			"kind": "asset_reference",
-			"local_transform": {
-				"position": [
-					0.075,
-					1.1
-				],
-				"rotation_radians": 3.14159250259399,
-				"scale": [
-					1.0,
-					-1.0
-				]
-			},
-			"name": "eye_right",
-			"parent_component_id": "component_59",
-			"source_asset_key": "plus",
-			"z_index": 0
-		},
-		{
 			"component_id": "component_55",
 			"component_pivot": [
 				0.0,
@@ -7262,6 +7216,52 @@
 			"name": "head",
 			"parent_component_id": null,
 			"z_index": 3
+		},
+		{
+			"component_id": "component_70",
+			"component_pivot": [
+				-0.075,
+				1.1
+			],
+			"kind": "asset_reference",
+			"local_transform": {
+				"position": [
+					-0.075,
+					1.1
+				],
+				"rotation_radians": 0.0,
+				"scale": [
+					1.0,
+					1.0
+				]
+			},
+			"name": "eye_left",
+			"parent_component_id": "component_59",
+			"source_asset_key": "plus",
+			"z_index": 4
+		},
+		{
+			"component_id": "component_73",
+			"component_pivot": [
+				0.075,
+				1.1
+			],
+			"kind": "asset_reference",
+			"local_transform": {
+				"position": [
+					0.075,
+					1.1
+				],
+				"rotation_radians": 3.14159250259399,
+				"scale": [
+					1.0,
+					-1.0
+				]
+			},
+			"name": "eye_right",
+			"parent_component_id": "component_59",
+			"source_asset_key": "plus",
+			"z_index": 4
 		}
 	],
 	"coordinate_system": {
@@ -7275,7 +7275,7 @@
 		"y_axis": "up"
 	},
 	"display_name": "Barde",
-	"schema_version": 6,
+	"schema_version": 7,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
