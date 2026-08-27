@@ -255,7 +255,11 @@ pub fn spawn_character_visual(
                     .spawn((
                         Mesh2d(meshes.add(bevy_mesh(mesh))),
                         MeshMaterial2d(fill_color.clone()),
-                        Transform::from_xyz(-pivot[0], -pivot[1], referenced.z_index as f32 * 0.01),
+                        Transform::from_xyz(
+                            -pivot[0],
+                            -pivot[1],
+                            (component.z_index + referenced.z_index) as f32 * 0.01,
+                        ),
                     ))
                     .id();
                 commands.entity(referenced_entity).add_child(fill);
@@ -273,7 +277,7 @@ pub fn spawn_character_visual(
                         Transform::from_xyz(
                             -pivot[0],
                             -pivot[1],
-                            referenced.z_index as f32 * 0.01 + 0.001,
+                            (component.z_index + referenced.z_index) as f32 * 0.01 + 0.001,
                         ),
                     ))
                     .id();
