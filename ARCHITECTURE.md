@@ -44,8 +44,9 @@ World data, configuration, simulation, networking, orchestration, input, and pre
 
 Owns shared protocol-neutral domain data:
 
-- `CharacterId`: validated catalog key for a character asset (currently Wizard,
-  Mage, Sorcerer, Rogue, Glavier, Barde, Chantres, and Hammerer);
+- `CharacterId`: validated catalog key for a character asset (currently
+  ArcherF, Barde, Chantres, Glavier, Hammerer, Mage, Rogue, Sorcerer, Warrior,
+  and Wizard);
 - player identity, selected character, and ownership markers;
 - standard-room and spawn data;
 - the fixed initial `3 × 3` room-grid coordinate mapping and authoritative
@@ -168,17 +169,18 @@ assignment are outside this slice.
   `polytools/world01` path prefix in its asset tree.
 - `./scripts/sync_polytools_characters.sh` copies the authoritative
   `catalog.json` and all character packages named by it from PolyTools into
-  `assets/characters/`. It validates the catalog, limits the import to the
-  confirmed five character keys, and replaces the generated destination
-  atomically so stale components cannot survive a re-export. The source World
-  directory can be overridden with `POLYTOOLS_WORLD_DIR`. New syncs require
-  PolyTools Runtime Manifest schema 8; the client temporarily retains loading
-  compatibility with the already imported schema 5 through 7 packages.
+  `assets/characters/`. It validates the catalog, imports every advertised
+  character package plus referenced Symbol packages, and replaces the generated
+  destination atomically so stale components cannot survive a re-export. The
+  source World directory can be overridden with `POLYTOOLS_WORLD_DIR`. New
+  syncs require PolyTools Runtime Manifest schema 8; the client temporarily
+  retains loading compatibility with the already imported schema 5 through 7
+  packages.
 - Client-only loading validates each imported manifest and turns its already
-  triangulated fill and contour-stroke geometry into Bevy 2D mesh presentation
-  entities. Component transforms, hierarchy, and `z_index` remain presentation
-  data; PolyTools geometry never enters simulation, networking, or replicated
-  world state.
+  triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
+  mesh presentation entities. Component transforms, hierarchy, and `z_index`
+  remain presentation data; PolyTools geometry never enters simulation,
+  networking, or replicated world state.
 - The current export contract contains geometry but no material/color data.
   The first integration applies a small client-owned temporary palette by
   character and component name. A future material export is a separate

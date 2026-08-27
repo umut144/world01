@@ -625,7 +625,10 @@ mod tests {
     fn embedded_manifests_cover_current_catalog_characters() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        assert_eq!(library.ids().len(), 9);
+        let ids = library.ids();
+
+        assert_eq!(ids.len(), 10);
+        assert!(ids.iter().any(|character| character.0 == "warrior"));
     }
 
     #[test]
