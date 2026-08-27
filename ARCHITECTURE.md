@@ -190,7 +190,7 @@ The shared authored spatial reference uses `1 m` terrain Tiles at `192 px/m`.
 Room dimensions come from `[room]` in the `configs` resource; the current
 camera test room is `50 × 50` Tiles. Visible framing is independent and comes
 from `[camera]`: preset `0` uses the explicit width/height values, while
-presets `1`–`9` select the fixed `8×5`, `16×10`, `20×12`, `24×15`, `28×18`, `32×20`, `36×22`, `40×25`, and `44×27`
+presets `1`–`8` select the fixed `8×5`, `16×10`, `21×13`, `24×15`, `32×20`, `37×23`, `40×25`, and `45×28`
 views. The active camera currently shows `22 × 20` Tiles; native-window and
 reference-window pixel sizes do not change those meter-based dimensions.
 
