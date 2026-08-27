@@ -20,7 +20,7 @@ pub struct BodyAnchor;
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
     pupil_area_ratio: f32,
-    pupil_collision_radius_ratio: f32,
+    pupil_collision_reference_radius: f32,
 }
 
 impl CharacterAssetLibrary {
@@ -34,26 +34,26 @@ impl CharacterAssetLibrary {
                 .join("../../assets/characters")
                 .as_path(),
             design.eyes.pupil_area_ratio,
-            design.eyes.pupil_collision_radius_ratio,
+            design.eyes.hammerer_collision_radius_ratio,
         )
     }
 
     pub fn load_from_directory(
         directory: &Path,
         pupil_area_ratio: f32,
-        pupil_collision_radius_ratio: f32,
+        hammerer_collision_radius_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
         if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
             return Err(PolyToolsAssetError::new(
                 "pupil area ratio must be finite and between zero and one",
             ));
         }
-        if !pupil_collision_radius_ratio.is_finite()
-            || pupil_collision_radius_ratio <= 0.0
-            || pupil_collision_radius_ratio > 1.0
+        if !hammerer_collision_radius_ratio.is_finite()
+            || hammerer_collision_radius_ratio <= 0.0
+            || hammerer_collision_radius_ratio > 1.0
         {
             return Err(PolyToolsAssetError::new(
-                "pupil collision radius ratio must be finite, greater than zero, and at most one",
+                "Hammerer collision radius ratio must be finite, greater than zero, and at most one",
             ));
         }
         let catalog_source =
@@ -85,10 +85,33 @@ impl CharacterAssetLibrary {
             ));
         }
 
+        let hammerer = characters
+            .iter()
+            .find_map(|(character, manifest)| (character.0 == "hammerer").then_some(manifest))
+            .ok_or_else(|| PolyToolsAssetError::new("character catalog is missing Hammerer"))?;
+        let hammerer_eye_region = hammerer
+            .components
+            .iter()
+            .find(|component| component.name == "eye_left" || component.name == "eye_right")
+            .and_then(|component| component.closed_region_mesh.as_ref())
+            .ok_or_else(|| {
+                PolyToolsAssetError::new(
+                    "Hammerer is missing a closed eye region for pupil normalization",
+                )
+            })?;
+        let hammerer_pupil_radius = EyeCollider::pupil_radius_from_region_mesh(
+            &hammerer_eye_region.vertices,
+            &hammerer_eye_region.indices,
+            pupil_area_ratio,
+        )
+        .ok_or_else(|| PolyToolsAssetError::new("Hammerer eye region has invalid geometry"))?;
+        let pupil_collision_reference_radius =
+            hammerer_pupil_radius * hammerer_collision_radius_ratio;
+
         Ok(Self {
             characters,
             pupil_area_ratio,
-            pupil_collision_radius_ratio,
+            pupil_collision_reference_radius,
         })
     }
 
@@ -261,7 +284,7 @@ pub fn spawn_character_visual(
                             &mesh.vertices,
                             &mesh.indices,
                             library.pupil_area_ratio,
-                            library.pupil_collision_radius_ratio,
+                            library.pupil_collision_reference_radius,
                         )
                     })
                     .or_else(|| {
@@ -272,7 +295,7 @@ pub fn spawn_character_visual(
                                         &mesh.vertices,
                                         &mesh.indices,
                                         library.pupil_area_ratio,
-                                        library.pupil_collision_radius_ratio,
+                                        library.pupil_collision_reference_radius,
                                     )
                                 })
                             })
@@ -680,7 +703,7 @@ mod tests {
                         &region.vertices,
                         &region.indices,
                         library.pupil_area_ratio,
-                        library.pupil_collision_radius_ratio,
+                        library.pupil_collision_reference_radius,
                     )
                     .is_some(),
                     "{} {} must produce an eye collider",

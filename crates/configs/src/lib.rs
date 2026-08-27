@@ -58,7 +58,7 @@ pub struct MovementConfig {
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct EyesConfig {
     pub pupil_area_ratio: f32,
-    pub pupil_collision_radius_ratio: f32,
+    pub hammerer_collision_radius_ratio: f32,
 }
 
 impl EyesConfig {
@@ -66,9 +66,9 @@ impl EyesConfig {
         self.pupil_area_ratio.is_finite()
             && self.pupil_area_ratio > 0.0
             && self.pupil_area_ratio < 1.0
-            && self.pupil_collision_radius_ratio.is_finite()
-            && self.pupil_collision_radius_ratio > 0.0
-            && self.pupil_collision_radius_ratio <= 1.0
+            && self.hammerer_collision_radius_ratio.is_finite()
+            && self.hammerer_collision_radius_ratio > 0.0
+            && self.hammerer_collision_radius_ratio <= 1.0
     }
 }
 
@@ -146,7 +146,7 @@ mod tests {
         assert_eq!(design.camera.effective_view_tiles(), Some((8, 5)));
         assert!(design.camera.is_valid());
         assert_eq!(design.eyes.pupil_area_ratio, 0.26);
-        assert_eq!(design.eyes.pupil_collision_radius_ratio, 0.35);
+        assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
@@ -163,7 +163,7 @@ mod tests {
         let design = load_embedded().expect("embedded design configuration parses");
 
         assert_eq!(design.eyes.pupil_area_ratio, 0.26);
-        assert_eq!(design.eyes.pupil_collision_radius_ratio, 0.35);
+        assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
     }
 

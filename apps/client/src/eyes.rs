@@ -32,9 +32,9 @@ impl EyeCollider {
         vertices: &[[f32; 2]],
         indices: &[u32],
         pupil_area_ratio: f32,
-        pupil_collision_radius_ratio: f32,
+        pupil_collision_reference_radius: f32,
     ) -> Option<Self> {
-        if !valid_ratios(pupil_area_ratio, pupil_collision_radius_ratio) {
+        if !valid_pupil_parameters(pupil_area_ratio, pupil_collision_reference_radius) {
             return None;
         }
         let vertices = vertices
@@ -50,28 +50,51 @@ impl EyeCollider {
         if !area.is_finite() || area <= f32::EPSILON {
             return None;
         }
-        let radius = (area * pupil_area_ratio / std::f32::consts::PI).sqrt();
+        let radius = pupil_radius_from_area(area, pupil_area_ratio)?;
         Self::from_geometry(
             region_boundary(&vertices, indices)?,
             triangles,
             radius,
-            radius * pupil_collision_radius_ratio,
+            pupil_collision_reference_radius.min(radius),
         )
+    }
+
+    pub fn pupil_radius_from_region_mesh(
+        vertices: &[[f32; 2]],
+        indices: &[u32],
+        pupil_area_ratio: f32,
+    ) -> Option<f32> {
+        if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
+            return None;
+        }
+        let vertices = vertices
+            .iter()
+            .copied()
+            .map(Vec2::from_array)
+            .collect::<Vec<_>>();
+        let area = region_triangles(&vertices, indices)?
+            .iter()
+            .map(|triangle| triangle_area(*triangle).abs())
+            .sum::<f32>();
+        pupil_radius_from_area(area, pupil_area_ratio)
     }
 
     pub fn from_outline_area_ratio(
         vertices: &[[f32; 2]],
         indices: &[u32],
         pupil_area_ratio: f32,
-        pupil_collision_radius_ratio: f32,
+        pupil_collision_reference_radius: f32,
     ) -> Option<Self> {
-        if !valid_ratios(pupil_area_ratio, pupil_collision_radius_ratio) {
+        if !valid_pupil_parameters(pupil_area_ratio, pupil_collision_reference_radius) {
             return None;
         }
         let boundary = outline_boundary(vertices, indices)?;
-        let radius =
-            (polygon_area(&boundary).abs() * pupil_area_ratio / std::f32::consts::PI).sqrt();
-        Self::from_boundary(boundary, radius, radius * pupil_collision_radius_ratio)
+        let radius = pupil_radius_from_area(polygon_area(&boundary).abs(), pupil_area_ratio)?;
+        Self::from_boundary(
+            boundary,
+            radius,
+            pupil_collision_reference_radius.min(radius),
+        )
     }
 
     pub fn center(&self) -> Vec2 {
@@ -208,13 +231,19 @@ impl EyeCollider {
     }
 }
 
-fn valid_ratios(pupil_area_ratio: f32, pupil_collision_radius_ratio: f32) -> bool {
+fn valid_pupil_parameters(pupil_area_ratio: f32, pupil_collision_reference_radius: f32) -> bool {
     pupil_area_ratio.is_finite()
         && pupil_area_ratio > 0.0
         && pupil_area_ratio < 1.0
-        && pupil_collision_radius_ratio.is_finite()
-        && pupil_collision_radius_ratio > 0.0
-        && pupil_collision_radius_ratio <= 1.0
+        && pupil_collision_reference_radius.is_finite()
+        && pupil_collision_reference_radius > 0.0
+}
+
+fn pupil_radius_from_area(area: f32, pupil_area_ratio: f32) -> Option<f32> {
+    if !area.is_finite() || area <= f32::EPSILON {
+        return None;
+    }
+    Some((area * pupil_area_ratio / std::f32::consts::PI).sqrt())
 }
 
 fn region_triangles(vertices: &[Vec2], indices: &[u32]) -> Option<Vec<[Vec2; 3]>> {
