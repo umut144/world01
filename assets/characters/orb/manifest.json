@@ -5,6 +5,7 @@
 		0.0
 	],
 	"asset_type": "symbols",
+	"attachment_frames": [],
 	"components": [
 		{
 			"component_id": "component_53",
@@ -1811,7 +1812,8 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"schema_version": 8,
+	"regions": [],
+	"schema_version": 9,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

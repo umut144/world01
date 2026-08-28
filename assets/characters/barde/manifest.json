@@ -5,6 +5,7 @@
 		0.0
 	],
 	"asset_type": "character",
+	"attachment_frames": [],
 	"components": [
 		{
 			"component_id": "component_56",
@@ -7278,7 +7279,8 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"schema_version": 8,
+	"regions": [],
+	"schema_version": 9,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

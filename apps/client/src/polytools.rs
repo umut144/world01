@@ -574,7 +574,7 @@ fn validate_manifest(
     manifest: &PolyToolsManifest,
     expected_key: &str,
 ) -> Result<(), PolyToolsAssetError> {
-    if !(5..=8).contains(&manifest.schema_version) {
+    if !(5..=9).contains(&manifest.schema_version) {
         return Err(PolyToolsAssetError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -657,7 +657,7 @@ fn validate_manifest(
             && component.closed_region_mesh.is_none()
         {
             return Err(PolyToolsAssetError::new(format!(
-                "{} is missing its schema-8 closed eye region",
+                "{} is missing its schema-8+ closed eye region",
                 component.component_id
             )));
         }
@@ -720,6 +720,40 @@ mod tests {
         assert_eq!(ids.len(), 11);
         assert!(ids.iter().any(|character| character.0 == "monk"));
         assert!(ids.iter().any(|character| character.0 == "warrior"));
+    }
+
+    #[test]
+    fn embedded_hammer_has_slice_14_authoring_contract() {
+        let hammer: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../assets/characters/hammer/manifest.json"
+        ))
+        .expect("embedded Hammer manifest is valid JSON");
+        let frame_roles = hammer["attachment_frames"]
+            .as_array()
+            .expect("Hammer attachment frames are present")
+            .iter()
+            .filter_map(|frame| frame["role"].as_str())
+            .collect::<BTreeSet<_>>();
+        let regions = hammer["regions"]
+            .as_array()
+            .expect("Hammer regions are present");
+
+        assert_eq!(hammer["schema_version"], 9);
+        assert_eq!(hammer["asset_type"], "weapons");
+        assert!(frame_roles.contains("grip_primary"));
+        assert!(frame_roles.contains("attack_point_primary"));
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0]["role"], "attack");
+        assert!(
+            regions[0]["vertices"]
+                .as_array()
+                .is_some_and(|v| v.len() >= 3)
+        );
+        assert!(
+            regions[0]["indices"]
+                .as_array()
+                .is_some_and(|i| { !i.is_empty() && i.len() % 3 == 0 })
+        );
     }
 
     #[test]

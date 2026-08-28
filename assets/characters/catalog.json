@@ -25,6 +25,12 @@
       "runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
     },
     {
+      "asset_key": "hammer",
+      "asset_type": "weapons",
+      "display_name": "Hammer",
+      "runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
+    },
+    {
       "asset_key": "hammerer",
       "asset_type": "character",
       "display_name": "Hammerer",
