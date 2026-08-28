@@ -210,10 +210,10 @@ assignment are outside this slice.
   referenced Symbol packages, then replaces the generated destination
   atomically so stale components cannot survive a re-export. The source World
   directory can be overridden with `POLYTOOLS_WORLD_DIR`. The sync requires
-  PolyTools Runtime Manifest schema 9 and validates the Hammer's required grip,
+  PolyTools Runtime Manifest schema 10 and validates the Hammer's required grip,
   attack point, and polygonal AttackRegion contract before importing it. The
-  client accepts schema 9 character packages while temporarily retaining
-  loading compatibility with the already imported schema 5 through 8 packages.
+  client accepts schema 10 character packages while temporarily retaining
+  loading compatibility with imported schema 5 through 9 packages.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
   mesh presentation entities. Component transforms, hierarchy, and `z_index`
@@ -258,20 +258,23 @@ inventory system:
   non-degenerate boundary. Exported gameplay geometry is metric and carries an
   explicit semantic role; simulation must not infer collision from a visible
   fill or contour mesh.
-- PolyTools Runtime Manifest schema 9 now adds top-level Asset-local
+- PolyTools Runtime Manifest schema 9 introduced top-level Asset-local
   `attachment_frames` and triangulated semantic `regions` arrays without
-  assigning new meaning to schema 8 fields. Hammerer and Hammer schema-9 data
+  assigning new meaning to schema 8 fields. Runtime Manifest schema 10 extends
+  those frames with `reach_limit_primary`. Hammerer and Hammer schema-10 data
   are authored, exported, validated, synced, and imported into typed client-side
   presentation data. The Hammer contract requires exactly one grip, one attack
-  point, and one triangulated AttackRegion; Hammerer requires exactly one weapon
-  socket. The Region is retained as semantic data and is not rendered.
-- PolyTools World schema 54 and Runtime Manifest schema 10 add the optional
+  point, one reach limit, and one triangulated AttackRegion; Hammerer requires
+  exactly one weapon socket. The Region is retained as semantic data and is not
+  rendered.
+- PolyTools World schema 54 and Runtime Manifest schema 10 add the
   transform-based Weapon Guide role `reach_limit_primary`. The editor route,
   Component/Group scope, Inspector, Canvas gizmo, persistence, Scale Rebase,
-  validation, and export support are implemented. The game01 sync and importer
-  deliberately remain on schema 9 until the developer authors and exports the
-  Hammer frame; the subsequent integration must upgrade the consumer to schema
-  10 and require exactly one reach limit for Hammer.
+  validation, and export support are implemented. The authored Hammer frame at
+  `(0.0, 0.2 m)` is synced into game01. The schema-10 sync and typed importer
+  require exactly one reach limit for Hammer; the maximum planted-head reach is
+  derived from its distance to `attack_point_primary` rather than from visible
+  Component geometry.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,

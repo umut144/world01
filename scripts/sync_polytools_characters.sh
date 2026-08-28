@@ -5,7 +5,7 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyTools/worlds/world01}"
 source_catalog="$source_world_dir/catalog.json"
 destination_dir="$project_root/assets/characters"
-required_schema=9
+required_schema=10
 character_keys=()
 weapon_keys=("hammer")
 symbol_keys=()
@@ -112,6 +112,7 @@ for key in "${weapon_keys[@]}"; do
     and (.components | type == "array" and length > 0)
     and ([.attachment_frames[] | select(.role == "grip_primary")] | length == 1)
     and ([.attachment_frames[] | select(.role == "attack_point_primary")] | length == 1)
+    and ([.attachment_frames[] | select(.role == "reach_limit_primary")] | length == 1)
     and ([.regions[] | select(
       .role == "attack"
       and (.vertices | type == "array" and length >= 3)

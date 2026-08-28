@@ -27,6 +27,17 @@
 			},
 			"frame_id": "guide_5",
 			"role": "grip_primary"
+		},
+		{
+			"asset_transform": {
+				"position": [
+					0.0,
+					0.2
+				],
+				"rotation_radians": 0.0
+			},
+			"frame_id": "guide_7",
+			"role": "reach_limit_primary"
 		}
 	],
 	"components": [
@@ -5648,7 +5659,7 @@
 			]
 		}
 	],
-	"schema_version": 9,
+	"schema_version": 10,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

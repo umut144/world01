@@ -314,6 +314,7 @@ const HAMMER_ASSET_KEY: &str = "hammer";
 const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
 const WEAPON_GRIP_ROLE: &str = "grip_primary";
 const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
+const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
 const ASSET_LOCAL_Z_STEP: f32 = 0.01;
 const OUTLINE_Z_OFFSET: f32 = 0.001;
 const PUPIL_Z_OFFSET: f32 = 0.002;
@@ -839,7 +840,7 @@ fn validate_manifest(
     manifest: &PolyToolsManifest,
     expected_key: &str,
 ) -> Result<(), PolyToolsAssetError> {
-    if !(5..=9).contains(&manifest.schema_version) {
+    if !(5..=10).contains(&manifest.schema_version) {
         return Err(PolyToolsAssetError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -870,17 +871,18 @@ fn validate_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
-    if manifest.schema_version != 9
+    if manifest.schema_version != 10
         || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
         return Err(PolyToolsAssetError::new(
-            "Hammer must be a schema-9 weapons manifest",
+            "Hammer must be a schema-10 weapons manifest",
         ));
     }
     validate_asset_contents(manifest)?;
     attachment_frame(manifest, WEAPON_GRIP_ROLE)?;
     attachment_frame(manifest, WEAPON_ATTACK_POINT_ROLE)?;
+    attachment_frame(manifest, WEAPON_REACH_LIMIT_ROLE)?;
     let attack_regions = manifest
         .regions
         .iter()
@@ -1069,27 +1071,39 @@ mod tests {
     }
 
     #[test]
-    fn embedded_hammer_has_slice_14_authoring_contract() {
+    fn embedded_hammer_has_current_combat_authoring_contract() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
         let hammer = &library.hammer;
         let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE).expect("Hammer grip is valid");
         let attack_point = attachment_frame(hammer, WEAPON_ATTACK_POINT_ROLE)
             .expect("Hammer attack point is valid");
+        let reach_limit =
+            attachment_frame(hammer, WEAPON_REACH_LIMIT_ROLE).expect("Hammer reach limit is valid");
         let attack_region = hammer
             .regions
             .iter()
             .find(|region| region.role == "attack")
             .expect("Hammer AttackRegion is valid");
 
-        assert_eq!(hammer.schema_version, 9);
+        assert_eq!(hammer.schema_version, 10);
         assert_eq!(hammer.asset_type, "weapons");
         assert!(finite_pair(grip.asset_transform.position));
         assert!(finite_pair(attack_point.asset_transform.position));
+        assert!(finite_pair(reach_limit.asset_transform.position));
         assert_ne!(
             grip.asset_transform.position,
             attack_point.asset_transform.position
         );
+        assert_ne!(
+            reach_limit.asset_transform.position,
+            attack_point.asset_transform.position
+        );
+        let authored_reach = Vec2::from_array(attack_point.asset_transform.position)
+            .distance(Vec2::from_array(reach_limit.asset_transform.position));
+        let held_attack_distance = Vec2::from_array(attack_point.asset_transform.position)
+            .distance(Vec2::from_array(grip.asset_transform.position));
+        assert!(authored_reach > held_attack_distance);
         assert_eq!(attack_region.vertices.len(), 8);
         assert_eq!(attack_region.indices.len(), 18);
         assert_eq!(attack_region.indices.len() % 3, 0);

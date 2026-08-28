@@ -278,8 +278,9 @@ Confirmed first-iteration direction:
   head is blocked; tangential and inward movement remain available. The desired
   reach endpoint is slightly above the current `shaft_bevel_bottom` position.
   PolyTools now provides the semantic Weapon Guide `reach_limit_primary`; its
-  exact authored Hammer position remains to be placed and exported before the
-  game treats it as a durable gameplay contract.
+  authored Hammer position is `(0.0, 0.2 m)`. Relative to
+  `attack_point_primary`, this defines a maximum planted-head reach of roughly
+  `1.6714 m` and is now part of the imported gameplay contract.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
