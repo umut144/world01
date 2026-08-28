@@ -65,14 +65,6 @@ impl PlayerInput {
         gaze: GazeIntent::ZERO,
         attack: AttackIntent::RELEASED,
     };
-
-    pub const fn new(movement: MovementIntent, gaze: GazeIntent) -> Self {
-        Self {
-            movement,
-            gaze,
-            attack: AttackIntent::RELEASED,
-        }
-    }
 }
 
 impl MapEntities for PlayerInput {

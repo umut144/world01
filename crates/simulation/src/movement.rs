@@ -2,9 +2,7 @@ use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::{
-    BodyFacing, MovementDirection, MovementIntent, MovementSpeedScale, Position,
-};
+use game01_world_data::{BodyFacing, MovementDirection, MovementIntent, Position};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -55,13 +53,9 @@ impl fmt::Display for MovementConfigError {
 
 impl Error for MovementConfigError {}
 
-pub fn move_players(
-    step: Res<MovementStep>,
-    mut players: Query<(&MovementIntent, Option<&MovementSpeedScale>, &mut Position)>,
-) {
-    for (intent, speed_scale, mut position) in &mut players {
-        let multiplier = speed_scale.map_or(1.0, |scale| scale.0);
-        let displacement = step.displacement(*intent) * multiplier;
+pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent, &mut Position)>) {
+    for (intent, mut position) in &mut players {
+        let displacement = step.displacement(*intent);
         let current = Vec2::new(position.x, position.y);
         let proposed = current + displacement;
         *position = Position::new(proposed.x, proposed.y);
@@ -69,15 +63,10 @@ pub fn move_players(
 }
 
 pub fn update_character_orientation(
-    mut players: Query<(
-        &MovementIntent,
-        Option<&MovementSpeedScale>,
-        &mut MovementDirection,
-        &mut BodyFacing,
-    )>,
+    mut players: Query<(&MovementIntent, &mut MovementDirection, &mut BodyFacing)>,
 ) {
-    for (movement, speed_scale, mut movement_direction, mut facing) in &mut players {
-        let direction = normalized_intent(*movement) * speed_scale.map_or(1.0, |scale| scale.0);
+    for (movement, mut movement_direction, mut facing) in &mut players {
+        let direction = normalized_intent(*movement);
         *movement_direction = MovementDirection::new(direction.x, direction.y);
         if direction.x.is_finite() {
             if direction.x < 0.0 {

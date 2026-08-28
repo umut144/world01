@@ -2,8 +2,7 @@ use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::{
     advance_hammer_attacks, constrain_embedded_hammer_reach, move_players,
-    resolve_hammer_movement_scale, update_character_orientation, update_gaze_direction,
-    update_weapon_aim,
+    update_character_orientation, update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -19,7 +18,6 @@ pub fn add_simulation_step(app: &mut App, schedule: impl ScheduleLabel) {
             update_gaze_direction,
             update_weapon_aim,
             advance_hammer_attacks,
-            resolve_hammer_movement_scale,
             move_players,
             constrain_embedded_hammer_reach,
             update_character_orientation,

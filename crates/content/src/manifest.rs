@@ -1,8 +1,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     error::Error,
-    fmt, fs,
-    path::Path,
+    fmt,
 };
 
 use bevy::prelude::Resource;
@@ -23,17 +22,6 @@ pub struct RuntimeContent {
 }
 
 impl RuntimeContent {
-    pub fn load_from_directory(directory: &Path) -> Result<Self, ContentError> {
-        let catalog = fs::read_to_string(directory.join("catalog.json")).map_err(|error| {
-            ContentError::new(format!("cannot read character catalog: {error}"))
-        })?;
-        Self::from_source_loader(&catalog, |asset_key| {
-            fs::read_to_string(directory.join(asset_key).join("manifest.json")).map_err(|error| {
-                ContentError::new(format!("cannot read asset {asset_key}: {error}"))
-            })
-        })
-    }
-
     pub fn load_embedded() -> Result<Self, ContentError> {
         Self::from_source_loader(
             include_str!("../../../assets/characters/catalog.json"),

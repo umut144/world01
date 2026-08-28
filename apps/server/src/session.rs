@@ -7,8 +7,8 @@ use game01_network::{
 };
 use game01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, GazeDirection, GazeIntent, HammerAttackState,
-    MovementDirection, MovementIntent, MovementSpeedScale, PlayerId, PlayerOwner, Position,
-    SelectedCharacter, StartingRoomGrid, WeaponAimState,
+    MovementDirection, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
+    WeaponAimState,
 };
 
 #[derive(Resource, Debug)]
@@ -35,11 +35,13 @@ fn accept_join_requests(
     requests: Query<(Entity, &ServerJoinRequest)>,
     players: Query<&PlayerOwner>,
     mut next_player_id: ResMut<NextPlayerId>,
-    room_grid: Res<StartingRoomGrid>,
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
     mut commands: Commands,
 ) {
+    if requests.is_empty() {
+        return;
+    }
     let mut joined_owners = players.iter().map(|owner| owner.0).collect::<HashSet<_>>();
     for (request_entity, request) in &requests {
         commands.entity(request_entity).despawn();
@@ -51,6 +53,11 @@ fn accept_join_requests(
             warn!(owner = request.owner(), "ignoring repeated join request");
             continue;
         }
+        let selected = request.character.clone();
+        let Some(maximum_health) = health.max_hp(&selected) else {
+            warn!(owner = request.owner(), character = ?selected, "ignoring join without derived character health");
+            continue;
+        };
         let player_id = next_player_id.0;
         let Some(following_id) = player_id.checked_add(1) else {
             warn!("player id space exhausted; ignoring join request");
@@ -58,8 +65,6 @@ fn accept_join_requests(
         };
         next_player_id.0 = following_id;
         let spawn = spawn_position(player_id);
-        let selected = request.character.clone();
-        let maximum_health = health.max_hp(&selected).unwrap_or(140.0);
         let mut player = commands.spawn((
             PlayerId(player_id),
             PlayerOwner(request.owner()),
@@ -68,11 +73,9 @@ fn accept_join_requests(
             GazeIntent::ZERO,
             AttackIntent::RELEASED,
             MovementDirection::ZERO,
-            MovementSpeedScale::default(),
             BodyFacing::Authored,
             GazeDirection::RIGHT,
             Position::new(spawn.x, spawn.y),
-            room_grid.starting_room(),
             CharacterHealth::full(maximum_health),
         ));
         if selected.0 == "hammerer" {

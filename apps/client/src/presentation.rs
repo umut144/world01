@@ -4,14 +4,15 @@ use bevy::{
     transform::{TransformSystems, helper::TransformHelper},
     window::PrimaryWindow,
 };
+#[cfg(feature = "dev")]
 use game01_configs::load_file;
 use game01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
 use game01_world_data::{
     CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter,
-    StartingRoomGrid,
 };
+#[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
@@ -42,6 +43,32 @@ pub struct CameraView {
     pub height_tiles: u32,
 }
 
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoomDimensions {
+    width_tiles: u32,
+    height_tiles: u32,
+}
+
+impl RoomDimensions {
+    pub const fn new(width_tiles: u32, height_tiles: u32) -> Option<Self> {
+        if width_tiles == 0 || height_tiles == 0 {
+            return None;
+        }
+        Some(Self {
+            width_tiles,
+            height_tiles,
+        })
+    }
+
+    const fn width_meters(self) -> f32 {
+        self.width_tiles as f32
+    }
+
+    const fn height_meters(self) -> f32 {
+        self.height_tiles as f32
+    }
+}
+
 impl CameraView {
     pub const fn new(width_tiles: u32, height_tiles: u32) -> Self {
         Self {
@@ -69,11 +96,7 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(
                 Update,
                 (
-                    (
-                        hot_reload_design,
-                        configure_ingame_camera,
-                        apply_letterbox_viewport,
-                    )
+                    (configure_ingame_camera, apply_letterbox_viewport)
                         .run_if(in_state(ClientScreen::InGame)),
                     (handle_selection_input, update_selection_feedback)
                         .chain()
@@ -105,6 +128,13 @@ impl Plugin for ClientPresentationPlugin {
                     .before(TransformSystems::Propagate)
                     .run_if(in_state(ClientScreen::InGame)),
             );
+        #[cfg(feature = "dev")]
+        app.add_systems(
+            Update,
+            hot_reload_design
+                .before(configure_ingame_camera)
+                .run_if(in_state(ClientScreen::InGame)),
+        );
     }
 }
 
@@ -259,10 +289,11 @@ fn apply_letterbox_viewport(
     camera.viewport = Some(letterbox_viewport(window.physical_size(), aspect));
 }
 
+#[cfg(feature = "dev")]
 fn hot_reload_design(
     mut last_modified: Local<Option<SystemTime>>,
     mut camera_view: ResMut<CameraView>,
-    mut room_grid: ResMut<StartingRoomGrid>,
+    mut room_dimensions: ResMut<RoomDimensions>,
     floor_tiles: Query<Entity, With<RoomFloorTile>>,
     mut commands: Commands,
 ) {
@@ -287,19 +318,19 @@ fn hot_reload_design(
         warn!("ignoring hot-reloaded configuration with invalid camera dimensions");
         return;
     };
-    let Some(new_grid) =
-        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
+    let Some(new_dimensions) =
+        RoomDimensions::new(design.room.width_tiles, design.room.height_tiles)
     else {
         warn!("ignoring hot-reloaded configuration with invalid room dimensions");
         return;
     };
 
     *camera_view = CameraView::new(camera_width, camera_height);
-    *room_grid = new_grid;
+    *room_dimensions = new_dimensions;
     for entity in &floor_tiles {
         commands.entity(entity).despawn();
     }
-    spawn_single_room(&mut commands, new_grid);
+    spawn_single_room(&mut commands, new_dimensions);
     info!("reloaded room and camera configuration");
 }
 
@@ -411,7 +442,7 @@ fn handle_selection_input(
         With<Button>,
     >,
     mut commands: Commands,
-    room_grid: Res<StartingRoomGrid>,
+    room_dimensions: Res<RoomDimensions>,
     character_assets: Res<CharacterAssetLibrary>,
 ) -> Result {
     if session.joining {
@@ -427,7 +458,7 @@ fn handle_selection_input(
                     &mut session,
                     &mut commands,
                     &mut next_screen,
-                    *room_grid,
+                    *room_dimensions,
                 );
             }
         }
@@ -459,7 +490,12 @@ fn handle_selection_input(
     }
 
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
-        return join_selected_character(&mut session, &mut commands, &mut next_screen, *room_grid);
+        return join_selected_character(
+            &mut session,
+            &mut commands,
+            &mut next_screen,
+            *room_dimensions,
+        );
     }
 
     Ok(())
@@ -562,7 +598,7 @@ fn join_selected_character(
     session: &mut ClientSession,
     commands: &mut Commands,
     next_screen: &mut NextState<ClientScreen>,
-    room_grid: StartingRoomGrid,
+    room_dimensions: RoomDimensions,
 ) -> Result {
     let Some(character) = session.selected.clone() else {
         return Ok(());
@@ -576,7 +612,7 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_single_room(commands, room_grid);
+    spawn_single_room(commands, room_dimensions);
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -616,12 +652,12 @@ fn repick_character(
     next_screen.set(ClientScreen::CharacterSelection);
 }
 
-fn spawn_single_room(commands: &mut Commands, room_grid: StartingRoomGrid) {
-    for row in 0..room_grid.height_meters() as u32 {
-        for column in 0..room_grid.width_meters() as u32 {
+fn spawn_single_room(commands: &mut Commands, room: RoomDimensions) {
+    for row in 0..room.height_tiles {
+        for column in 0..room.width_tiles {
             let color = checkerboard_color(IVec2::ZERO, row, column);
-            let x = column as f32 + 0.5 - room_grid.width_meters() * 0.5;
-            let y = row as f32 + 0.5 - room_grid.height_meters() * 0.5;
+            let x = column as f32 + 0.5 - room.width_meters() * 0.5;
+            let y = row as f32 + 0.5 - room.height_meters() * 0.5;
             commands.spawn((
                 Sprite::from_color(color, Vec2::ONE),
                 Transform::from_xyz(x, y, -10.0),
@@ -898,44 +934,6 @@ mod tests {
         ];
         assert_eq!(adjacent_character(None, 1, &ids), Some(ids[0].clone()));
         assert_eq!(adjacent_character(None, -1, &ids), Some(ids[1].clone()));
-    }
-
-    #[test]
-    fn controller_direction_overrides_keyboard_direction() {
-        assert_eq!(
-            crate::input::movement_direction(Vec2::X, Some(Vec2::Y)),
-            Vec2::Y
-        );
-    }
-
-    #[test]
-    fn neutral_controller_direction_uses_keyboard_fallback() {
-        assert_eq!(
-            crate::input::movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
-            Vec2::new(1.0, 1.0).normalize(),
-        );
-    }
-
-    #[test]
-    fn controller_deadzone_blocks_small_stick_drift() {
-        assert_eq!(
-            crate::input::controller_stick_direction(Vec2::new(0.15, 0.0)),
-            None
-        );
-    }
-
-    #[test]
-    fn controller_stick_preserves_partial_movement_strength() {
-        let direction = crate::input::controller_stick_direction(Vec2::new(0.575, 0.0))
-            .expect("stick outside the deadzone produces movement");
-        assert!((direction.x - 0.5).abs() < f32::EPSILON);
-        assert_eq!(direction.y, 0.0);
-    }
-
-    #[test]
-    fn standard_room_checkerboard_matches_tile_dimensions() {
-        let room = StartingRoomGrid::default();
-        assert_eq!(room.width_meters() * room.height_meters(), 135.0);
     }
 
     #[test]

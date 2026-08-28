@@ -20,7 +20,8 @@ This is the technical source of truth for architecture, dependency direction, te
 - Networking: Lightyear 0.28.
 - First deployment target: local native processes without Docker.
 - First mode: one dedicated headless server and five separately running graphical clients.
-- Server simulation frequency for the first slice: configurable fixed **30 ticks per second**.
+- Current server and owner-prediction simulation frequency: configurable fixed
+  **60 ticks per second**.
 
 ## Authority and replication model
 
@@ -58,7 +59,7 @@ modifier, or animation framework:
   transport/run conditions precede it; `simulation` owns neither `FixedUpdate`
   nor Lightyear orchestration.
 - General movement remains independent from Hammer state. Hammer-specific
-  attack transitions, movement effects, and embedded-reach constraints remain
+  attack transitions and embedded-reach constraints remain
   explicitly scoped under Hammer combat until another implemented mechanic
   proves a shared abstraction.
 - `network` owns protocol registration, transport, authenticated connection
@@ -85,7 +86,7 @@ The implemented pre-Slice-17 composition is deliberately compact:
 crates/
   configs
   content                    PolyTools import, validation, runtime derivation
-  world_data/                identity, input, movement, combat, world
+  world_data/                identity, input, movement, combat
   simulation/                schedule, movement, aim, combat/hammer source modules
   network/                   protocol, client_transport, server_transport source modules
 apps/
@@ -114,9 +115,6 @@ Owns shared protocol-neutral domain data:
   ArcherF, Barde, Chantres, Glavier, Hammerer, Mage, Monk, Rogue, Sorcerer,
   Warrior, and Wizard);
 - player identity, selected character, and ownership markers;
-- standard-room and spawn data;
-- the fixed initial `3 × 3` room-grid coordinate mapping and authoritative
-  `RoomId` assignment;
 - movement intent data passed into simulation;
 - combined tick-bound player input containing movement and gaze intent;
 - authoritative current movement direction, retained horizontal body facing,
@@ -127,10 +125,9 @@ Owns shared protocol-neutral domain data:
 Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1 supersedes that choice with the protocol-neutral `Position`; graphical transforms no longer belong to shared world state.
 
 Implemented shared data uses transport-neutral scalar identifiers and
-coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`,
-`StandardRoom`, `SpawnPoint`, `PlayerInput`, `MovementIntent`, `GazeIntent`,
-`MovementDirection`, `BodyFacing`, `GazeDirection`, `WeaponAimState`, and
-`HammerAttackState`.
+coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `PlayerInput`,
+`MovementIntent`, `GazeIntent`, `MovementDirection`, `BodyFacing`,
+`GazeDirection`, `WeaponAimState`, `HammerAttackState`, and `CharacterHealth`.
 Network-specific
 connection types stay outside `world_data`.
 
@@ -144,10 +141,14 @@ Owns explicitly requested, human-editable game-design parameters:
 - exposes the current global `0.8 m/s` movement speed and 60 Hz simulation
   cadence, the default `60°/s` weapon-aim speed with optional
   per-character overrides, plus the explicitly requested Hammer
-  charge/grip/swing/embedded/recovery timings, movement multiplier, and
-  presentation-only charge scale/pull parameters;
+  charge/grip/swing/embedded/recovery timings and presentation-only charge
+  scale/pull parameters;
 
-Later values such as mass, MaxHP, or attack values are added only when the developer explicitly requests them and the corresponding behavior enters scope. Do not expose every internal constant merely because simulation uses it.
+Later values such as mass or attack values are added only when the developer
+explicitly requests them and the corresponding behavior enters scope. MaxHP is
+derived from validated authored geometry rather than duplicated in design
+configuration. Do not expose every internal constant merely because simulation
+uses it.
 
 ### `simulation`
 
@@ -183,10 +184,10 @@ configuration. It supplies explicit speed and step duration to the simulation
 system, clamps intent to unit length, rejects non-finite intent, and directly
 updates `Position` without owning fixed-tick scheduling. The current global
 speed is `0.8 m/s` for every character. A `HammerAttackRules` resource applies
-the configured Charging multiplier to authoritative displacement; its current
-value is `1.0`, so Charging retains normal movement. During Embedded, shared
-simulation projects only proposed socket positions outside the authored
-head-centered maximum-reach circle back to its boundary.
+the deterministic attack lifecycle while general movement remains completely
+independent from Hammer phase. Charging therefore retains normal movement.
+During Embedded, shared simulation projects only proposed socket positions
+outside the authored head-centered maximum-reach circle back to its boundary.
 
 ### `network`
 
@@ -286,14 +287,15 @@ assignment are outside this slice.
   directory can be overridden with `POLYTOOLS_WORLD_DIR`. The sync requires
   PolyTools Runtime Manifest schema 12 and validates the Hammer's required
   primary and secondary grips, attack point, reach limit, and polygonal
-  AttackRegion contract before importing it. The client accepts schema 12
-  character packages while temporarily retaining loading compatibility with
-  imported schema 5 through 11 packages.
-- Client-only loading validates each imported manifest and turns its already
-  triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
-  mesh presentation entities. Component transforms, hierarchy, and `z_index`
-  remain presentation data; PolyTools geometry never enters simulation,
-  networking, or replicated world state.
+  AttackRegion contract before importing it. The shared content boundary
+  accepts schema 12 character packages while temporarily retaining loading
+  compatibility with imported schema 5 through 11 packages.
+- Both applications load the same compile-time embedded imported manifests
+  through `content`, independent of their working directory. The client turns
+  validated visual geometry into Bevy 2D mesh presentation entities; headless
+  gameplay consumes only validated semantic frames, Regions, and derived
+  values. Visual component transforms, hierarchy, and `z_index` remain
+  presentation data and are never replicated gameplay state.
 - The current export contract contains geometry but no material/color data.
   The first integration applies a small client-owned temporary palette by
   character and component name. A future material export is a separate
@@ -553,10 +555,10 @@ AttackRegion, attack point, and carried-behind-character layering.
   depth, render-transform, or frame-time input. Slice 17 extends this same
   regression with imported HurtRegions so it also compares sorted hit target
   IDs, damage, and resulting HP.
-- Max HP, base damage, charged-damage curve, impact distance, and other
+- Base damage, charged-damage curve, impact distance, and other
   explicitly requested balance parameters belong in `configs` when their
-  corresponding behavior is implemented. Charge cap, action timings, and the
-  Charging movement multiplier are already configured. Slice 15B's explicitly
+  corresponding behavior is implemented. Charge cap and action timings are
+  already configured. Slice 15B's explicitly
   requested charge-scale stages and inward-pull timing remain typed,
   discoverable presentation parameters but never simulation authority.
 
@@ -569,7 +571,7 @@ Room dimensions come from `[room]` in the `configs` resource; the current
 camera test room is `50 × 50` Tiles. Visible framing is independent and comes
 from `[camera]`: preset `0` uses the explicit width/height values, while
 presets `1`–`8` select the fixed `8×5`, `16×10`, `21×13`, `24×15`, `32×20`, `37×23`, `40×25`, and `45×28`
-views. The active camera currently shows `22 × 20` Tiles; native-window and
+views. The active camera currently shows `16 × 10` Tiles; native-window and
 reference-window pixel sizes do not change those meter-based dimensions.
 
 The current room presentation uses one client-only `Sprite` per configured
@@ -577,18 +579,14 @@ The current room presentation uses one client-only `Sprite` per configured
 aid and does not define room collision, world data, or the future floor-
 rendering system.
 
-Room dimensions are loaded from the pre-match `configs` resource and inserted
-identically into server and client. The client derives its orthographic
-projection and viewport aspect from the effective camera view, so exactly the
-configured tile count is shown and any native-window remainder is letterboxed.
-The current one-room test has no room-boundary or transition logic; movement is
-unbounded within the 50×50 presentation floor and the player spawns at origin.
-The client watches `crates/configs/design.toml` and hot-reloads valid room and
-camera changes during development.
-
-The current presentation renders one client-only checkerboard floor using the
-configured room dimensions. Each tile is one `1 × 1 m` Sprite; it is a temporary
-scale aid and has no gameplay collision authority.
+Room dimensions are loaded into a client-only presentation resource. The
+client derives its orthographic projection and viewport aspect from the
+effective camera view, so exactly the configured tile count is shown and any
+native-window remainder is letterboxed. The current implementation has no
+room-boundary, neighbor-room, transition, or replicated `RoomId` state;
+movement is unbounded within the 50×50 presentation floor. The former fixed
+`3 × 3` test grid has been removed. Development builds watch
+`crates/configs/design.toml` and hot-reload valid room and camera changes.
 
 Character eyes are client-only presentation entities. PolyTools `eye_left` and
 `eye_right` contours provide the per-character bounds and local pivots; the
@@ -649,18 +647,6 @@ motion, and converts the unchanged screen-space gaze through its inverse. A
 body flip or head shift therefore does not reverse or replace visible gaze.
 Initial `BodyFacing::Authored` and zero movement preserve the exported body
 pose, while the pupils already look right from the non-neutral spawn gaze.
-
-For the initial room-transition slice, `StartingRoomGrid` is shared
-protocol-neutral domain data: its nine room coordinates map to stable
-`RoomId`s, all internal cardinal boundaries are open, and its outer perimeter
-blocks movement. Shared simulation constrains `Position` to that grid then
-derives `RoomId` after each movement step. The server is authoritative over
-both values; `RoomId` is replicated and predicted alongside the owner’s
-`Position` so predicted movement and eventual server confirmation agree. On
-each client, only the locally controlled player's current room anchors the
-presentation camera to the complete configured room. The room-sized camera
-viewport is centered inside the native window; any remaining area is black
-letterboxing. This camera response is seamless and remains presentation-only.
 
 Phase 2 now uses five real Bevy UI `Button` entities and one UI confirmation button. Their percentage-based layout owns hit testing and interaction state; the previous window-coordinate click calculation is removed. Polygon preview entities remain world-space presentation content until the later preview-composition phase.
 

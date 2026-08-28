@@ -29,9 +29,13 @@ impl CharacterHealthCatalog {
                 }
                 total += transformed_mesh_area(component, &manifest.components)?;
             }
-            if total.is_finite() && total > 0.0 {
-                areas.insert(asset_key.clone(), total);
+            if !total.is_finite() || total <= 0.0 {
+                return Err(CharacterHealthError(format!(
+                    "{} is missing a positive body/feet area",
+                    asset_key.0
+                )));
             }
+            areas.insert(asset_key.clone(), total);
         }
         let hammerer = areas
             .get(&CharacterId("hammerer".into()))
@@ -236,6 +240,12 @@ mod tests {
             .expect("embedded Hammer frames define combat geometry");
 
         assert_eq!(health.max_hp(&CharacterId("hammerer".into())), Some(140.0));
+        assert!(
+            content
+                .ids()
+                .iter()
+                .all(|character| health.max_hp(character).is_some())
+        );
         assert!(hammer.socket_offset().is_finite());
         assert!(hammer.attack_radius(1.0) > hammer.attack_radius(0.0));
         assert!(hammer.maximum_reach() > hammer.attack_radius(1.0));

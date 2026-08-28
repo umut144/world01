@@ -9,7 +9,6 @@ use game01_network::{
 use game01_simulation::{
     HammerAttackRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
 };
-use game01_world_data::StartingRoomGrid;
 
 use crate::session::ServerSessionPlugin;
 
@@ -52,16 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(hammer_geometry)
-    .insert_resource(character_health)
-    .insert_resource(
-        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "room dimensions must be greater than zero",
-                )
-            })?,
-    );
+    .insert_resource(character_health);
     add_simulation_step(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,

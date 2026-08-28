@@ -4,8 +4,8 @@ use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_content::HammerCombatGeometry;
 use game01_world_data::{
-    AttackIntent, GazeDirection, HammerAttackPhase, HammerAttackState, MovementSpeedScale,
-    Position, SelectedCharacter, WeaponAimState,
+    AttackIntent, GazeDirection, HammerAttackPhase, HammerAttackState, Position, SelectedCharacter,
+    WeaponAimState,
 };
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -15,12 +15,11 @@ pub struct HammerAttackRules {
     swing_ticks: u32,
     embedded_ticks: u32,
     recovery_ticks: u32,
-    charging_movement_multiplier: f32,
 }
 
 impl HammerAttackRules {
     pub fn from_design(config: &DesignConfig) -> Result<Self, HammerAttackConfigError> {
-        if !config.hammer_attack.is_valid() {
+        if !config.hammer_attack.simulation_is_valid() {
             return Err(HammerAttackConfigError);
         }
         let ticks_per_second = config.simulation.ticks_per_second;
@@ -34,12 +33,15 @@ impl HammerAttackRules {
             swing_ticks: ticks(config.hammer_attack.swing_seconds),
             embedded_ticks: ticks(config.hammer_attack.embedded_seconds),
             recovery_ticks: ticks(config.hammer_attack.recovery_seconds),
-            charging_movement_multiplier: config.hammer_attack.charging_movement_multiplier,
         })
     }
 
     pub fn maximum_charge_ticks(self) -> u32 {
         self.maximum_charge_ticks
+    }
+
+    pub fn grip_reach_ticks(self) -> u32 {
+        self.grip_reach_ticks
     }
 
     pub fn swing_ticks(self) -> u32 {
@@ -54,19 +56,8 @@ impl HammerAttackRules {
         self.recovery_ticks
     }
 
-    pub fn charge_ratio(self, charge_ticks: u32) -> f32 {
-        charge_ticks.min(self.maximum_charge_ticks) as f32 / self.maximum_charge_ticks as f32
-    }
-
     pub fn grip_progress(self, charge_ticks: f32) -> f32 {
         charge_ticks.clamp(0.0, self.grip_reach_ticks as f32) / self.grip_reach_ticks as f32
-    }
-
-    fn movement_multiplier(self, attack: Option<&HammerAttackState>) -> f32 {
-        match attack.map(|state| state.phase) {
-            Some(HammerAttackPhase::Charging) => self.charging_movement_multiplier,
-            _ => 1.0,
-        }
     }
 }
 
@@ -75,20 +66,11 @@ pub struct HammerAttackConfigError;
 
 impl fmt::Display for HammerAttackConfigError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("Hammer attack timings and movement multiplier must be valid")
+        formatter.write_str("Hammer attack timings must be valid")
     }
 }
 
 impl Error for HammerAttackConfigError {}
-
-pub fn resolve_hammer_movement_scale(
-    rules: Res<HammerAttackRules>,
-    mut players: Query<(&HammerAttackState, &mut MovementSpeedScale)>,
-) {
-    for (attack, mut scale) in &mut players {
-        scale.0 = rules.movement_multiplier(Some(attack));
-    }
-}
 
 pub fn constrain_embedded_hammer_reach(
     hammer_geometry: Res<HammerCombatGeometry>,

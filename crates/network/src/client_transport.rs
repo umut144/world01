@@ -2,8 +2,7 @@ use std::{net::Ipv4Addr, time::Duration};
 
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, CharacterId, GazeIntent, MovementIntent, MovementSpeedScale, PlayerInput,
-    Position,
+    AttackIntent, CharacterId, GazeIntent, MovementIntent, PlayerInput, Position,
 };
 use lightyear::interpolation::timeline::InterpolationConfig;
 use lightyear::prediction::correction::PreviousVisual;
@@ -16,7 +15,6 @@ use lightyear::prelude::{
 };
 use lightyear::{netcode::Key, prelude::*};
 
-pub use crate::protocol::apply_tick_player_input;
 use crate::protocol::{
     JoinChannel, JoinRequest, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,
     register_game_protocol,
@@ -199,7 +197,6 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
     commands.entity(trigger.entity).insert((
         InputMarker::<PlayerInput>::default(),
         MovementIntent::ZERO,
-        MovementSpeedScale::default(),
         GazeIntent::ZERO,
         AttackIntent::RELEASED,
     ));

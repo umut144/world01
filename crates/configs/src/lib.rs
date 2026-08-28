@@ -42,14 +42,13 @@ pub struct HammerAttackConfig {
     pub swing_seconds: f32,
     pub embedded_seconds: f32,
     pub recovery_seconds: f32,
-    pub charging_movement_multiplier: f32,
     pub scale_at_full_reach: f32,
     pub scale_at_full_charge: f32,
     pub maximum_inward_pull_ratio: f32,
 }
 
 impl HammerAttackConfig {
-    pub fn is_valid(self) -> bool {
+    pub fn simulation_is_valid(self) -> bool {
         self.maximum_charge_seconds.is_finite()
             && self.maximum_charge_seconds > 0.0
             && self.grip_reach_seconds.is_finite()
@@ -61,9 +60,10 @@ impl HammerAttackConfig {
             && self.embedded_seconds > 0.0
             && self.recovery_seconds.is_finite()
             && self.recovery_seconds > 0.0
-            && self.charging_movement_multiplier.is_finite()
-            && (0.0..=1.0).contains(&self.charging_movement_multiplier)
-            && self.scale_at_full_reach.is_finite()
+    }
+
+    pub fn presentation_is_valid(self) -> bool {
+        self.scale_at_full_reach.is_finite()
             && self.scale_at_full_reach > 0.0
             && self.scale_at_full_reach <= 1.0
             && self.scale_at_full_charge.is_finite()
@@ -71,6 +71,10 @@ impl HammerAttackConfig {
             && self.scale_at_full_charge <= self.scale_at_full_reach
             && self.maximum_inward_pull_ratio.is_finite()
             && (0.0..=1.0).contains(&self.maximum_inward_pull_ratio)
+    }
+
+    pub fn is_valid(self) -> bool {
+        self.simulation_is_valid() && self.presentation_is_valid()
     }
 }
 
@@ -218,7 +222,6 @@ mod tests {
         assert_eq!(design.hammer_attack.swing_seconds, 1.15);
         assert_eq!(design.hammer_attack.embedded_seconds, 2.0);
         assert_eq!(design.hammer_attack.recovery_seconds, 1.0);
-        assert_eq!(design.hammer_attack.charging_movement_multiplier, 1.0);
         assert_eq!(design.hammer_attack.scale_at_full_reach, 0.8);
         assert_eq!(design.hammer_attack.scale_at_full_charge, 0.5);
         assert_eq!(design.hammer_attack.maximum_inward_pull_ratio, 0.05);
@@ -231,15 +234,6 @@ mod tests {
             design.network.validated_remote_interpolation_ratio(),
             Some(2.0)
         );
-    }
-
-    #[test]
-    fn embedded_eye_area_ratio_is_valid() {
-        let design = load_embedded().expect("embedded design configuration parses");
-
-        assert_eq!(design.eyes.pupil_area_ratio, 0.26);
-        assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
-        assert!(design.eyes.is_valid());
     }
 
     #[test]

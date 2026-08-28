@@ -85,6 +85,10 @@ Entscheidungen werden als zusätzliche Zeilen ergänzt.
   matched camera frame.
 - The current camera test intentionally has no neighbor-room or transition
   presentation; the character starts at the center of the single room.
+- The current playable implementation remains a single room. The former fixed
+  `3 × 3` test grid is retired and does not define current gameplay state;
+  multi-room topology returns only with a later explicitly scoped gameplay
+  slice.
 - Room transitions are intended to be completely seamless at first, without a
   visible door, threshold, or transition moment.
 

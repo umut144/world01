@@ -32,6 +32,3 @@ pub struct PlayerOwner(pub u64);
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelectedCharacter(pub CharacterId);
-
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Player;

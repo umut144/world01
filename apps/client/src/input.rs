@@ -88,6 +88,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn controller_direction_overrides_keyboard_direction() {
+        assert_eq!(movement_direction(Vec2::X, Some(Vec2::Y)), Vec2::Y);
+    }
+
+    #[test]
+    fn neutral_controller_direction_uses_keyboard_fallback() {
+        assert_eq!(
+            movement_direction(Vec2::new(1.0, 1.0), Some(Vec2::ZERO)),
+            Vec2::new(1.0, 1.0).normalize(),
+        );
+    }
+
+    #[test]
+    fn controller_deadzone_blocks_small_stick_drift() {
+        assert_eq!(controller_stick_direction(Vec2::new(0.15, 0.0)), None);
+    }
+
+    #[test]
+    fn controller_stick_preserves_partial_movement_strength() {
+        let direction = controller_stick_direction(Vec2::new(0.575, 0.0))
+            .expect("stick outside the deadzone produces movement");
+        assert!((direction.x - 0.5).abs() < f32::EPSILON);
+        assert_eq!(direction.y, 0.0);
+    }
+
+    #[test]
     fn gaze_input_is_active_only_while_a_direction_is_held() {
         let left = gaze_intent(-Vec2::X);
 

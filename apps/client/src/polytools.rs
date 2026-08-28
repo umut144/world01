@@ -5,9 +5,12 @@ use bevy::{
 };
 #[cfg(test)]
 use game01_content::RuntimeFrameTransform;
+#[cfg(test)]
+use game01_content::WEAPON_REACH_LIMIT_ROLE;
 use game01_content::{
-    AuthoredFacing, RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent, RuntimeManifest,
-    RuntimeMesh,
+    AuthoredFacing, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent,
+    RuntimeManifest, RuntimeMesh, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
+    WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
 };
 use game01_world_data::CharacterId;
 
@@ -223,13 +226,6 @@ impl fmt::Display for PolyToolsAssetError {
 
 impl Error for PolyToolsAssetError {}
 
-const HAMMER_ASSET_KEY: &str = "hammer";
-const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
-const WEAPON_GRIP_ROLE: &str = "grip_primary";
-const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
-const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
-#[cfg(test)]
-const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
 const ASSET_LOCAL_Z_STEP: f32 = 0.01;
 const OUTLINE_Z_OFFSET: f32 = 0.001;
 const PUPIL_Z_OFFSET: f32 = 0.002;

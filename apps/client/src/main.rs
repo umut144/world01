@@ -1,4 +1,4 @@
-use std::{env, error::Error, io, path::Path};
+use std::{env, error::Error, io};
 
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
@@ -6,13 +6,12 @@ use game01_configs::load_embedded;
 use game01_content::{HammerCombatGeometry, RuntimeContent};
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
-use game01_world_data::StartingRoomGrid;
 
 use crate::controller::ControllerInput;
 use crate::hammer::{HammerPresentationPlugin, HammerPresentationRules};
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
-use crate::presentation::{CameraView, ClientPresentationPlugin};
+use crate::presentation::{CameraView, ClientPresentationPlugin, RoomDimensions};
 use crate::session::ClientSessionPlugin;
 
 mod controller;
@@ -32,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
     let design = load_embedded()?;
-    let content = RuntimeContent::load_from_directory(Path::new("assets/characters"))?;
+    let content = RuntimeContent::load_embedded()?;
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
     let character_assets = CharacterAssetLibrary::from_content(
         content,
@@ -49,7 +48,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let movement_step = MovementStep::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
-    let hammer_presentation_rules = HammerPresentationRules::from_design(&design);
+    let hammer_presentation_rules =
+        HammerPresentationRules::from_design(&design, hammer_attack_rules).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Hammer presentation values must be finite and within their valid ranges",
+            )
+        })?;
     let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -93,13 +98,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hammer_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
-        StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
-            .ok_or_else(|| {
+        RoomDimensions::new(design.room.width_tiles, design.room.height_tiles).ok_or_else(
+            || {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
                     "room dimensions must be greater than zero",
                 )
-            })?,
+            },
+        )?,
     );
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);

@@ -43,20 +43,22 @@ impl ServerJoinRequest {
 }
 
 #[derive(Resource, Debug, Default)]
-pub struct ConnectionRegistry {
+struct ConnectionRegistry {
     clients: HashMap<PeerId, Entity>,
 }
 
 impl ConnectionRegistry {
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.clients.len()
     }
 
-    pub fn is_empty(&self) -> bool {
+    #[cfg(test)]
+    fn is_empty(&self) -> bool {
         self.clients.is_empty()
     }
 
-    pub fn entity(&self, peer: PeerId) -> Option<Entity> {
+    #[cfg(test)]
+    fn entity(&self, peer: PeerId) -> Option<Entity> {
         self.clients.get(&peer).copied()
     }
 

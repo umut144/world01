@@ -38,13 +38,3 @@ pub enum BodyFacing {
     Left,
     Right,
 }
-
-/// Per-tick movement scale resolved by gameplay before general movement.
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
-pub struct MovementSpeedScale(pub f32);
-
-impl Default for MovementSpeedScale {
-    fn default() -> Self {
-        Self(1.0)
-    }
-}

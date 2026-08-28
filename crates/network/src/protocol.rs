@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use game01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterId, GazeDirection, GazeIntent,
     HammerAttackState, MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner,
-    Position, RoomId, SelectedCharacter, WeaponAimState,
+    Position, SelectedCharacter, WeaponAimState,
 };
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, AppMessageExt, ChannelMode, ChannelSettings,
@@ -17,14 +17,14 @@ use lightyear::prelude::{
 use serde::{Deserialize, Serialize};
 
 pub const MAX_CLIENTS: usize = 5;
-pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
+pub(crate) const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
 pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
 
-pub struct JoinChannel;
+pub(crate) struct JoinChannel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct JoinRequest {
+pub(crate) struct JoinRequest {
     pub character: CharacterId,
 }
 
@@ -87,7 +87,6 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<PlayerId>().replicate_once();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
-    app.component::<RoomId>().replicate().predict();
     app.component::<MovementDirection>().replicate().predict();
     app.component::<BodyFacing>().replicate().predict();
     app.component::<GazeDirection>().replicate().predict();

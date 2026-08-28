@@ -7,7 +7,9 @@ pub use derived::{
     CharacterHealthCatalog, CharacterHealthError, HammerCombatGeometry, HammerCombatGeometryError,
 };
 pub use manifest::{
-    AuthoredFacing, ContentError, RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent,
-    RuntimeFrameTransform, RuntimeManifest, RuntimeMesh, RuntimePresentation, RuntimeRegionMesh,
-    RuntimeSemanticRegion, RuntimeStrokeMesh, RuntimeStrokeRun, RuntimeTransform,
+    AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,
+    RuntimeContent, RuntimeFrameTransform, RuntimeManifest, RuntimeMesh, RuntimePresentation,
+    RuntimeRegionMesh, RuntimeSemanticRegion, RuntimeStrokeMesh, RuntimeStrokeRun,
+    RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
+    WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
 };

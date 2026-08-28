@@ -8,7 +8,7 @@ mod schedule;
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
 pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, advance_hammer_attacks,
-    constrain_embedded_hammer_reach, resolve_hammer_movement_scale,
+    constrain_embedded_hammer_reach,
 };
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
 pub use schedule::{SimulationSet, add_simulation_step};
@@ -390,7 +390,6 @@ mod tests {
                 swing_seconds: 1.15,
                 embedded_seconds: 2.0,
                 recovery_seconds: 1.0,
-                charging_movement_multiplier: 1.0,
                 scale_at_full_reach: 0.8,
                 scale_at_full_charge: 0.5,
                 maximum_inward_pull_ratio: 0.05,
@@ -430,7 +429,6 @@ mod tests {
                 swing_seconds: 1.15,
                 embedded_seconds: 2.0,
                 recovery_seconds: 1.0,
-                charging_movement_multiplier: 1.0,
                 scale_at_full_reach: 0.8,
                 scale_at_full_charge: 0.5,
                 maximum_inward_pull_ratio: 0.05,
@@ -539,7 +537,6 @@ mod tests {
             swinging.direction,
             Vec2::new(released_direction.x, released_direction.y),
         );
-        assert_eq!(rules.charge_ratio(swinging.charge_ticks), 1.0);
     }
 
     #[test]
