@@ -13,6 +13,20 @@ Interpretation rules:
 - Do not implement anything unless explicitly requested.
 - Update this file when the developer makes a durable design decision.
 
+## Normierte Größenentscheidungen
+
+Diese Entscheidungen definieren Referenzgrößen für UI- und Gameplay-Darstellung.
+Sie sind von der individuellen visuellen Körpergröße eines Charakters getrennt.
+
+- **HP-Balkenlänge:** Der Mage ist die Längenreferenz und erhält den
+  Normalisierungsfaktor `1,0`. Die Balkenlänge jedes anderen Charakters wird
+  proportional zu `MaxHP / MaxHP(Mage)` bestimmt. Dadurch bleibt die Anzeige
+  datengetrieben und ändert sich automatisch mit der aus `body`/`feet`
+  abgeleiteten MaxHP.
+- Diese Normierung beschreibt zunächst nur das Verhältnis. Die konkrete
+  Darstellungslänge im Weltmaßstab bleibt eine Präsentationsentscheidung für
+  die Implementierung von Slice 16.
+
 ## Identity
 
 - Project/workspace: `game01`
