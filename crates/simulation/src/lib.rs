@@ -1119,6 +1119,45 @@ mod tests {
     }
 
     #[test]
+    fn identical_release_state_produces_the_same_headless_impact() {
+        let rules = attack_rules();
+        let geometry = hammer_geometry();
+        let resolve_impact = || {
+            let mut app = App::new();
+            app.insert_resource(rules)
+                .insert_resource(geometry)
+                .add_systems(Update, advance_hammer_attacks);
+            let player = app
+                .world_mut()
+                .spawn((
+                    character("hammerer"),
+                    AttackIntent::RELEASED,
+                    WeaponAimState::RIGHT,
+                    Position::new(-2.5, 1.75),
+                    HammerAttackState {
+                        phase: HammerAttackPhase::Swing,
+                        direction: GazeDirection::new(0.6, 0.8),
+                        phase_ticks: rules.swing_ticks() - 1,
+                        charge_ticks: 60,
+                        impact_point: Position::ZERO,
+                    },
+                ))
+                .id();
+
+            app.update();
+            *app.world()
+                .get::<HammerAttackState>(player)
+                .expect("Hammerer retains its authoritative attack state")
+        };
+
+        let first = resolve_impact();
+        let second = resolve_impact();
+
+        assert_eq!(first.phase, HammerAttackPhase::Embedded);
+        assert_eq!(first, second);
+    }
+
+    #[test]
     fn embedded_and_recovery_phases_use_the_configured_durations() {
         let rules = attack_rules();
         let mut app = App::new();

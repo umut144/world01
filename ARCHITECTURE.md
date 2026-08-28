@@ -481,6 +481,12 @@ AttackRegion, attack point, and carried-behind-character layering.
   AttackRegion from authoritative player position, locked attack direction,
   and the confirmed impact-placement rule. It does not collide the visible,
   continuously animated render mesh.
+- A headless simulation regression already executes the identical locked
+  release state twice and requires the exact same `Swing -> Embedded` state and
+  impact point. It has no client, renderer, Prism, shader, shake, projection
+  depth, render-transform, or frame-time input. Slice 17 extends this same
+  regression with imported HurtRegions so it also compares sorted hit target
+  IDs, damage, and resulting HP.
 - Max HP, base damage, charged-damage curve, impact distance, and other
   explicitly requested balance parameters belong in `configs` when their
   corresponding behavior is implemented. Charge cap, action timings, and the
