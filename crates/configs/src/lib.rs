@@ -197,7 +197,7 @@ mod tests {
         assert!(design.weapon_aim.is_valid());
         assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
         assert_eq!(design.hammer_attack.swing_seconds, 1.15);
-        assert_eq!(design.hammer_attack.recovery_seconds, 0.30);
+        assert_eq!(design.hammer_attack.recovery_seconds, 1.0);
         assert_eq!(design.hammer_attack.charging_movement_multiplier, 0.0);
         assert!(design.hammer_attack.is_valid());
         assert_eq!(

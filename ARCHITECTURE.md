@@ -393,29 +393,30 @@ AttackRegion, attack point, and carried-behind-character layering.
 - Shared simulation owns the replicated/predicted `HammerAttackState`. Slice
   15B extends its deterministic Idle, Charging, Swing/Impact, Embedded,
   Recovery lifecycle.
-  The Swing duration is 69 ticks (`1.15 s`) and Embedded lasts 120
-  ticks (`2.0 s`). This does not establish a reusable animation state machine.
+  Swing lasts 69 ticks (`1.15 s`), Embedded lasts 120 ticks (`2.0 s`), and the
+  post-Embedded Recovery/regrip lasts 60 ticks (`1.0 s`). This does not
+  establish a reusable animation state machine.
 - The owner predicts the same deterministic attack transition where needed;
   replicated semantic state lets remote and late-joining clients derive the
   corresponding Hammer pose. Visible weapon transforms are not replicated.
 - Slice 15B updates client presentation's procedural clockwise curve. Charge
   progress linearly scales the Hammer from `1.0` to
   `0.8`, presents the hand-contact transition from authored `grip_primary` to
-  `grip_secondary` linearly over 60 ticks (`1.0 s`), and pulls it inward by at
-  most 5% of the authored attack-grip-to-attack-point distance. Releasing
-  before the regrip completes starts Swing immediately while the remaining
-  contact transition continues on the original one-second timeline. The swing
-  reaches scale `1.25` at the
+  `grip_secondary` before Impact, and pulls it inward by at most 5% of the
+  authored attack-grip-to-attack-point distance. The exact timing of that
+  forward contact transition remains separate from Recovery. The swing reaches
+  scale `1.25` at the
   overhead apex and `1.0` at ground impact. It samples fixed-tick overstep for
   frame-smooth transforms.
 - The planned Embedded Impact requires a presentation anchor containing the
   world-space Hammer-head point at impact. The head remains at that point for
   `2.0 s`, with
   optional bounded `±1.5 cm` shake, while the shaft rotates so its grip stays
-  connected to the moving Hammerer. Recovery interpolates directly from this
-  constrained pose to the current carried pose with `grip_primary` realigned to
-  `weapon_socket_primary`; it must not continue the former circular path. The
-  authoritative future AttackRegion still uses
+  connected to the moving Hammerer. After the complete two-second Embedded
+  interval, Recovery interpolates for exactly one second directly from this
+  constrained pose to the current carried pose while regripping from the attack
+  contact back to `grip_primary` on `weapon_socket_primary`; it must not
+  continue the former circular path. The authoritative future AttackRegion still uses
   simulation state rather than this presentation anchor.
 - Embedded movement is constrained by a circle around the planted head. Inward
   and tangential displacement remain unchanged; only an outward displacement

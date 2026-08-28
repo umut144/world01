@@ -276,12 +276,10 @@ Confirmed first-iteration direction:
   holding it charges the same strike and releasing executes it.
 - Charging follows the current weapon aim and caps at `5.0 s`. The Hammer scales
   linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
-  at most 5% of its authored attack-grip-to-attack-point distance. Charging also
-  presents a `1.0 s` linear regrip from `grip_primary` toward
-  `grip_secondary`. A release before that second ends starts the strike
-  immediately while the remaining regrip continues; the full contact change
-  therefore completes no later than `1.0 s` after the original press and before
-  the `1.15 s` swing reaches impact.
+  at most 5% of its authored attack-grip-to-attack-point distance. The attack
+  preparation transitions the held contact from `grip_primary` to
+  `grip_secondary` before impact; its exact forward-transition timing is
+  separate from the confirmed post-Impact regrip duration.
   Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction.
@@ -289,10 +287,11 @@ Confirmed first-iteration direction:
   impact duration is `1.15 s`. On impact, the Hammer head remains embedded at
   its world-space impact point for `2.0 s` with an optional subtle shake of at
   most `±1.5 cm`. The shaft keeps rotating toward the moving Hammerer so the
-  grip remains visibly held. After the embedded interval, the Hammer returns
-  smoothly and directly to the current behind-the-Hammerer shoulder pose,
-  realigning `grip_primary` with `weapon_socket_primary`, instead of completing
-  a circular rotation. The Hammer uses scale `1.25` at the overhead apex and
+  grip remains visibly held. After the embedded interval, Recovery lasts
+  exactly `1.0 s`: the Hammer returns smoothly and directly to the current
+  behind-the-Hammerer shoulder pose while regripping from the attack contact
+  back to `grip_primary` on `weapon_socket_primary`, instead of completing a
+  circular rotation. The Hammer uses scale `1.25` at the overhead apex and
   `1.0` at impact.
 - During Embedded Impact, the Hammerer may move freely inside the Hammer's
   authored reach. At maximum reach, only movement farther away from the planted

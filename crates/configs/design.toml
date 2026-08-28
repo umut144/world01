@@ -14,7 +14,7 @@ default_degrees_per_second = 60.0
 [hammer_attack]
 maximum_charge_seconds = 5.0
 swing_seconds = 1.15
-recovery_seconds = 0.30
+recovery_seconds = 1.0
 charging_movement_multiplier = 0.0
 
 [room]
