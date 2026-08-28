@@ -6,7 +6,13 @@ snapshot_send_hz = 30
 remote_interpolation_ratio = 2.0
 
 [movement]
-speed_meters_per_second = 4.0
+speed_meters_per_second = 0.8
+
+[hammer_attack]
+maximum_charge_seconds = 5.0
+swing_seconds = 0.45
+recovery_seconds = 0.30
+charging_movement_multiplier = 0.0
 
 [room]
 width_tiles = 50

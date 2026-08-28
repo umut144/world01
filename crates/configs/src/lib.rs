@@ -8,9 +8,31 @@ pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub movement: MovementConfig,
+    pub hammer_attack: HammerAttackConfig,
     pub room: RoomConfig,
     pub camera: CameraConfig,
     pub eyes: EyesConfig,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct HammerAttackConfig {
+    pub maximum_charge_seconds: f32,
+    pub swing_seconds: f32,
+    pub recovery_seconds: f32,
+    pub charging_movement_multiplier: f32,
+}
+
+impl HammerAttackConfig {
+    pub fn is_valid(self) -> bool {
+        self.maximum_charge_seconds.is_finite()
+            && self.maximum_charge_seconds > 0.0
+            && self.swing_seconds.is_finite()
+            && self.swing_seconds > 0.0
+            && self.recovery_seconds.is_finite()
+            && self.recovery_seconds > 0.0
+            && self.charging_movement_multiplier.is_finite()
+            && (0.0..=1.0).contains(&self.charging_movement_multiplier)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -143,11 +165,17 @@ mod tests {
         assert_eq!(design.room.width_tiles, 50);
         assert_eq!(design.room.height_tiles, 50);
         assert!(design.room.is_valid());
-        assert_eq!(design.camera.effective_view_tiles(), Some((8, 5)));
+        assert_eq!(design.camera.effective_view_tiles(), Some((16, 10)));
         assert!(design.camera.is_valid());
         assert_eq!(design.eyes.pupil_area_ratio, 0.26);
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
+        assert_eq!(design.movement.speed_meters_per_second, 0.8);
+        assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
+        assert_eq!(design.hammer_attack.swing_seconds, 0.45);
+        assert_eq!(design.hammer_attack.recovery_seconds, 0.30);
+        assert_eq!(design.hammer_attack.charging_movement_multiplier, 0.0);
+        assert!(design.hammer_attack.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
             Some(Duration::from_secs_f64(1.0 / 30.0))

@@ -63,7 +63,8 @@ Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1
 Implemented shared data uses transport-neutral scalar identifiers and
 coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`,
 `StandardRoom`, `SpawnPoint`, `PlayerInput`, `MovementIntent`, `GazeIntent`,
-`MovementDirection`, `BodyFacing`, and `GazeDirection`. Network-specific
+`MovementDirection`, `BodyFacing`, `GazeDirection`, and `HammerAttackState`.
+Network-specific
 connection types stay outside `world_data`.
 
 ### `configs`
@@ -73,7 +74,9 @@ Owns explicitly requested, human-editable game-design parameters:
 - dedicated workspace crate/directory named `configs`;
 - typed configuration boundary;
 - initially backed by `design.toml`;
-- initially exposes movement speed and the confirmed 30 Hz simulation tick rate if tick rate is represented as design configuration.
+- exposes the current global `0.8 m/s` movement speed and 60 Hz simulation
+  cadence, plus the explicitly requested Hammer charge/swing/recovery timings
+  and charging movement multiplier;
 
 Later values such as mass, MaxHP, or attack values are added only when the developer explicitly requests them and the corresponding behavior enters scope. Do not expose every internal constant merely because simulation uses it.
 
@@ -102,7 +105,14 @@ velocity and mass without rewriting those outer layers.
 
 Collision is not required in the first slice, including room-boundary collision.
 
-Movement is represented by `MovementStep`, constructed from the typed design configuration. It supplies explicit speed and step duration to the simulation system, clamps intent to unit length, rejects non-finite intent, and directly updates `Position` without owning fixed-tick scheduling.
+Movement is represented by `MovementStep`, constructed from the typed design
+configuration. It supplies explicit speed and step duration to the simulation
+system, clamps intent to unit length, rejects non-finite intent, and directly
+updates `Position` without owning fixed-tick scheduling. The current global
+speed is `0.8 m/s` for every character. A `HammerAttackRules` resource applies
+the configured Charging multiplier to both authoritative displacement and
+replicated `MovementDirection`; the initial multiplier is `0.0`, so Charging
+locks movement without rewriting input state.
 
 ### `network`
 
@@ -313,10 +323,13 @@ before Rebase. The enlarged/rebased Hammer export has been synced and visually
 accepted in game with correct size, grip/socket alignment, grip pivot,
 AttackRegion, attack point, and carried-behind-character layering.
 
-### Planned Hammer attack and combat-state boundary
+### Hammer attack and combat-state boundary
 
 - `GazeDirection` is reused as the Hammerer's aim direction for the first
-  attack; no separate aim protocol is introduced yet.
+  attack; no separate aim protocol is introduced. Before the first non-zero
+  gaze, presentation retains the authored resting pose. Afterwards, Idle and
+  Charging rotate the authored grip-to-attack-point vector exactly opposite
+  the retained gaze.
 - Hammer layer switching is presentation-only. Carried and Charging keep the
   complete Hammer behind the Hammerer. At the procedural swing's overhead apex
   the Hammer root moves above the Hammerer's complete asset-local layer range,
@@ -329,18 +342,21 @@ AttackRegion, attack point, and carried-behind-character layering.
   `AttackIntent`; primary pointer/trackpad click is unbound. The native input
   history gives prediction and authoritative server processing the same
   press/release sequence.
-- Charging may follow the retained gaze direction; release freezes the attack
-  direction for the resulting swing. Exact input binding and whether movement
-  is restricted during the action remain open.
-- Shared simulation owns the semantic attack lifecycle and authoritative
-  timing. The focused first lifecycle is Idle, Charging, Swing/Impact,
-  Recovery; this does not establish a reusable animation state machine.
+- Charging follows the retained gaze direction and caps at 300 simulation ticks
+  (`5.0 s` at 60 Hz); release freezes the attack direction for the resulting
+  swing. Charging uses the configured `0.0` movement multiplier, while Swing
+  and Recovery restore normal movement.
+- Shared simulation owns the replicated/predicted `HammerAttackState` and its
+  deterministic Idle, Charging, Swing/Impact, Recovery lifecycle. The
+  provisional Swing duration is 27 ticks (`0.45 s`) and Recovery is 18 ticks
+  (`0.30 s`); this does not establish a reusable animation state machine.
 - The owner predicts the same deterministic attack transition where needed;
   replicated semantic state lets remote and late-joining clients derive the
   corresponding Hammer pose. Visible weapon transforms are not replicated.
 - Client presentation maps the semantic phase to the provisional procedural
-  curve: small and opposite the aim while charging, enlarged while crossing
-  over the head, then normal scale at ground impact.
+  clockwise curve: scale `0.7` and opposite the aim while charging, scale
+  `1.25` at the overhead apex, then scale `1.0` at ground impact. It samples
+  fixed-tick overstep for frame-smooth local transforms.
 - `attack_point_primary` is the preferred authored visual alignment reference
   for the Hammer head and AttackRegion. The exact authoritative relationship
   between that point, the grip/socket pair, and a separately configurable
@@ -352,10 +368,11 @@ AttackRegion, attack point, and carried-behind-character layering.
   AttackRegion from authoritative player position, locked attack direction,
   and the confirmed impact-placement rule. It does not collide the visible,
   continuously animated render mesh.
-- Max HP, base damage, charge cap/curve, authoritative action timings, impact
-  distance, and other explicitly requested balance parameters belong in
-  `configs` when their corresponding behavior is implemented. Purely visual
-  easing and overswing scale need not become gameplay configuration.
+- Max HP, base damage, charged-damage curve, impact distance, and other
+  explicitly requested balance parameters belong in `configs` when their
+  corresponding behavior is implemented. Charge cap, action timings, and the
+  Charging movement multiplier are already configured; purely visual easing
+  and overswing scale remain presentation constants.
 
 The 2880 × 1800 design window remains a reference size independent from the native window size. The first local client window starts at 2880 × 1800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling while matching the full design viewport out of the box. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
 
@@ -693,13 +710,19 @@ Acceptance: local fixed-tick movement is visually continuous between simulation 
 
 ### Phase 6 — unified 60 Hz cadence
 
-- The canonical `configs/design.toml` simulation rate increases from 30 to 60 ticks per second; movement speed remains 4 meters per second and therefore each tick applies half the former displacement.
+- The canonical `configs/design.toml` simulation rate increased from 30 to 60
+  ticks per second; movement speed remained 4 meters per second during this
+  historical cadence slice and each tick therefore applied half the former
+  displacement. Slice 15 later superseded the global speed with `0.8 m/s` as a
+  separate slow-paced game-design decision.
 - Server `ScheduleRunner`, server and client `Time<Fixed>`, Lightyear client/server timelines, native input buffering, prediction replay, and `ReplicationMetadata` all derive the same 16.67 ms tick duration from that design value.
 - Changed replicated positions can consequently publish at up to 60 snapshots per second. No separate snapshot-rate throttle is introduced in this phase.
 - Local render interpolation now carries at most one 60 Hz simulation step of intentional presentation delay, and Lightyear's unchanged default remote interpolation ratio operates on the shorter 60 Hz send interval.
 - Render frame rate remains independent, while movement distance per second and the Phase 5 correction half-life remain unchanged.
 
-Acceptance: server authority, client prediction, input ticks, and snapshot tick metadata advance at one shared 60 Hz cadence; one simulated second still moves a character exactly four meters.
+Acceptance at the time of this cadence change: server authority, client
+prediction, input ticks, and snapshot tick metadata advanced at one shared
+60 Hz cadence; the later Slice 15 balance change does not alter that cadence.
 
 ### Phase 7 — joint snapshot-rate and buffer tuning
 

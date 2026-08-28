@@ -18,7 +18,13 @@ use crate::pose::CharacterHead;
 pub struct BodyAnchor;
 
 #[derive(Component, Debug, Clone, Copy)]
-pub struct HammerVisual;
+pub struct HammerVisual {
+    pub owner: Entity,
+    pub rest_transform: Transform,
+    pub attack_point_from_grip: Vec2,
+    pub behind_layer: f32,
+    pub front_layer: f32,
+}
 
 #[derive(Component, Debug, Clone, Copy)]
 pub struct CharacterVisual {
@@ -348,6 +354,22 @@ fn resting_attached_weapon_layer(character: &PolyToolsManifest, weapon: &PolyToo
         * ASSET_LOCAL_Z_STEP
 }
 
+fn attacking_attached_weapon_layer(
+    character: &PolyToolsManifest,
+    weapon: &PolyToolsManifest,
+) -> f32 {
+    let character_maximum = asset_local_z_index_bounds(character)
+        .map(|(_, maximum)| maximum)
+        .unwrap_or_default();
+    let weapon_minimum = asset_local_z_index_bounds(weapon)
+        .map(|(minimum, _)| minimum)
+        .unwrap_or_default();
+    character_maximum
+        .saturating_sub(weapon_minimum)
+        .saturating_add(ATTACHED_WEAPON_LAYER_GAP_STEPS) as f32
+        * ASSET_LOCAL_Z_STEP
+}
+
 pub fn spawn_character_visual(
     commands: &mut Commands,
     root: Entity,
@@ -558,6 +580,7 @@ pub fn spawn_character_visual(
     if weapon_key_for_character(character) == Some(HAMMER_ASSET_KEY) {
         spawn_hammer_visual(
             commands,
+            root,
             anchor,
             meshes,
             materials,
@@ -571,6 +594,7 @@ pub fn spawn_character_visual(
 
 fn spawn_hammer_visual(
     commands: &mut Commands,
+    owner: Entity,
     character_anchor: Entity,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
@@ -579,10 +603,31 @@ fn spawn_hammer_visual(
 ) -> Result<(), PolyToolsAssetError> {
     let socket = attachment_frame(character, WEAPON_SOCKET_ROLE)?;
     let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE)?;
-    let layer = resting_attached_weapon_layer(character, hammer);
-    let (pose_transform, asset_transform) = hammer_attachment_transforms(socket, grip, layer);
+    let attack_point = attachment_frame(hammer, WEAPON_ATTACK_POINT_ROLE)?;
+    let behind_layer = resting_attached_weapon_layer(character, hammer);
+    let front_layer = attacking_attached_weapon_layer(character, hammer);
+    let (pose_transform, asset_transform) =
+        hammer_attachment_transforms(socket, grip, behind_layer);
+    let attack_point_from_grip = asset_transform
+        .to_matrix()
+        .transform_point3(Vec3::new(
+            attack_point.asset_transform.position[0],
+            attack_point.asset_transform.position[1],
+            0.0,
+        ))
+        .truncate();
     let pose_root = commands
-        .spawn((HammerVisual, pose_transform, Visibility::default()))
+        .spawn((
+            HammerVisual {
+                owner,
+                rest_transform: pose_transform,
+                attack_point_from_grip,
+                behind_layer,
+                front_layer,
+            },
+            pose_transform,
+            Visibility::default(),
+        ))
         .id();
     let asset_root = commands
         .spawn((asset_transform, Visibility::default()))
@@ -1081,6 +1126,27 @@ mod tests {
                 layer + component.z_index as f32 * ASSET_LOCAL_Z_STEP + OUTLINE_Z_OFFSET;
             assert!(hammer_outline_z < hammerer_minimum);
         }
+    }
+
+    #[test]
+    fn attacking_hammer_is_layered_in_front_of_the_complete_hammerer_asset() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let hammerer = library
+            .character(&CharacterId("hammerer".to_owned()))
+            .expect("Hammerer manifest is present");
+        let hammer = &library.hammer;
+        let layer = attacking_attached_weapon_layer(hammerer, hammer);
+        let hammerer_maximum = asset_local_z_index_bounds(hammerer)
+            .map(|(_, maximum)| maximum)
+            .expect("Hammerer has visual components") as f32
+            * ASSET_LOCAL_Z_STEP;
+        let hammer_minimum = asset_local_z_index_bounds(hammer)
+            .map(|(minimum, _)| minimum)
+            .expect("Hammer has visual components") as f32
+            * ASSET_LOCAL_Z_STEP;
+
+        assert!(layer + hammer_minimum > hammerer_maximum);
     }
 
     #[test]

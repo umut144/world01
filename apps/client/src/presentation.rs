@@ -15,6 +15,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
+use crate::hammer::apply_hammer_pose;
 use crate::input::{collect_attack_input, collect_gaze_input, collect_movement_input};
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
@@ -110,6 +111,7 @@ impl Plugin for ClientPresentationPlugin {
                     sync_rendered_positions,
                     follow_local_character,
                     apply_eye_gaze,
+                    apply_hammer_pose,
                 )
                     .chain()
                     .before(TransformSystems::Propagate)

@@ -12,8 +12,9 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementDirection,
-    MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId, SelectedCharacter,
+    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackState,
+    MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId,
+    SelectedCharacter,
 };
 #[cfg(feature = "server")]
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
@@ -354,6 +355,7 @@ impl GameProtocolAppExt for App {
         self.component::<MovementDirection>().replicate().predict();
         self.component::<BodyFacing>().replicate().predict();
         self.component::<GazeDirection>().replicate().predict();
+        self.component::<HammerAttackState>().replicate().predict();
         self.component::<Position>()
             .replicate()
             .predict()
@@ -564,7 +566,7 @@ fn handle_join_requests(
         next_player_id.0 = following_id;
         let spawn = spawn_position(player_id);
         let selected_character = request.character.clone();
-        commands.spawn((
+        let mut player = commands.spawn((
             PlayerId(player_id),
             PlayerOwner(owner),
             SelectedCharacter(selected_character.clone()),
@@ -584,6 +586,9 @@ fn handle_join_requests(
             PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
             InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
         ));
+        if selected_character.0 == "hammerer" {
+            player.insert(HammerAttackState::IDLE);
+        }
         info!(?connection, player_id, owner, character = ?selected_character, "authoritative player spawned");
     }
 }

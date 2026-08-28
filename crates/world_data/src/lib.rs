@@ -251,6 +251,34 @@ impl AttackIntent {
     }
 }
 
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub enum HammerAttackPhase {
+    #[default]
+    Idle,
+    Charging,
+    Swing,
+    Recovery,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct HammerAttackState {
+    pub phase: HammerAttackPhase,
+    pub direction: GazeDirection,
+    pub phase_ticks: u32,
+    pub charge_ticks: u32,
+}
+
+impl HammerAttackState {
+    pub const IDLE: Self = Self {
+        phase: HammerAttackPhase::Idle,
+        direction: GazeDirection::ZERO,
+        phase_ticks: 0,
+        charge_ticks: 0,
+    };
+}
+
 impl GazeIntent {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 

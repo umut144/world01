@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use game01_network::{apply_tick_player_input, client_input_timeline_synced};
-use game01_simulation::{move_players, update_character_orientation};
+use game01_simulation::{
+    advance_hammer_attacks, move_players, update_character_orientation, update_gaze_direction,
+};
 
 pub struct ClientPredictionPlugin;
 
@@ -10,7 +12,13 @@ impl Plugin for ClientPredictionPlugin {
             FixedUpdate,
             (
                 apply_tick_player_input,
-                (move_players, update_character_orientation),
+                (
+                    update_gaze_direction,
+                    advance_hammer_attacks,
+                    move_players,
+                    update_character_orientation,
+                )
+                    .chain(),
             )
                 .chain()
                 .run_if(client_input_timeline_synced),

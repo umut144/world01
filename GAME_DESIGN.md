@@ -31,6 +31,11 @@ Interpretation rules:
 - Players can die to other players, mobs, hazards, or the collapse of a room.
 - The winner is the final surviving solo player; a future team mode ends with one surviving team.
 - The central match experience is: explore rooms, gain power (especially through kills), react tactically to collapse, traverse a changing topology, fight over increasingly limited space, and finish in a small surviving area.
+- The Labyrinth is intentionally **slow-paced**. Provisional values for new
+  movement, combat, interaction, and timing systems should start from that
+  baseline rather than from fast action-game conventions. The current global
+  character movement speed is `0.8 m/s`, an 80% reduction from the earlier
+  `4.0 m/s` development value, and applies equally to every character.
 
 ## Match progression and desired snowballing
 
@@ -235,6 +240,10 @@ Confirmed first-iteration direction:
   Hammer is held exactly opposite that direction and appears smaller. On
   release it swings across the Hammerer, grows while passing over the head,
   and reaches the ground in the attack direction at normal scale.
+- Outside an attack, every non-zero retained gaze also turns the carried Hammer
+  exactly behind the Hammerer, opposite the gaze direction. Before the player
+  has established any gaze direction, the accepted authored resting pose is
+  retained.
 - In its carried and charging presentation the Hammer is layered behind the
   Hammerer. At the released swing's overhead apex, the complete Hammer switches
   in front of the Hammerer and remains there through ground impact. Once it
@@ -245,6 +254,14 @@ Confirmed first-iteration direction:
   preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
+- Charging follows the retained gaze and caps at `5.0 s`. Movement is fully
+  locked while Charging for the current iteration; this is represented by a
+  configured `0.0` movement multiplier so a later slow charging walk can be
+  tested without replacing the rule. Releasing freezes the attack direction,
+  while normal movement becomes available again during Swing and Recovery.
+- The first procedural swing travels clockwise. Its provisional release-to-
+  impact duration is `0.45 s`, followed by `0.30 s` Recovery. The Hammer uses
+  scale `0.7` while Charging, `1.25` at the overhead apex, and `1.0` at impact.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
@@ -346,9 +363,9 @@ The technical realization, networking model, configuration boundary, and crate r
 - Which collapse variant(s) enter iteration 1.
 - Collapse wave timing, warning semantics, and escape constraints.
 - Exact combat and abilities of all five characters.
-- Exact Hammer charge cap, swing/impact/recovery timings, impact distance,
-  AttackRegion placement rule, base damage, charged-damage curve, and movement
-  restrictions while charging or swinging.
+- Exact Hammer impact distance, AttackRegion placement rule, base damage, and
+  charged-damage curve. The current charge/swing/recovery timings and movement
+  restrictions are confirmed first-iteration values but remain balanceable.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
 - Persistence design beyond the non-persistent first slice.
