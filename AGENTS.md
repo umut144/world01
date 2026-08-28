@@ -1,8 +1,9 @@
 # Agent entry point
 
 Before planning, discussing, or changing this project, read
-`docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`, `docs/PLUGIN_GUIDE.md`,
-`ARCHITECTURE.md`, and `SLICES_AND_TASKS.md` in full. Read
+`docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`, and `TASKS.md` in full.
+Read `docs/PLUGIN_GUIDE.md` in full when a task concerns game plugins or public
+sandbox extension contracts. Read
 `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` in full only when the task
 concerns The Labyrinth.
 
@@ -17,19 +18,20 @@ decisions, open questions, and reference-art locations. Preserve the
 distinction between confirmed design and ideas still under discussion. Update
 the appropriate document when the user makes a durable decision.
 
-`ARCHITECTURE.md` is the persistent source of truth for The Labyrinth's
-implementation architecture, system boundaries, technology choices, and
-implementation-slice structure. Do not duplicate technical detail in its
-design document unless it directly changes player-facing design.
-
-`SLICES_AND_TASKS.md` is the compact project tracker. Keep it tabular and update slice status and high-level task coverage without duplicating architectural detail.
+`TASKS.md` is the short, current project tracker. Keep only active, next,
+blocked, or deliberately deferred outcomes in it. Completed implementation
+history belongs in Git rather than accumulating in the tracker. A task may
+still be planned and implemented as a vertical slice without preserving every
+finished slice as permanent documentation.
 
 `AGENTS.md`, `docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`,
 `docs/PLUGIN_GUIDE.md`, `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`,
-`ARCHITECTURE.md`, `SLICES_AND_TASKS.md`, and `TEST_FINDINGS.md` are the
-complete canonical project-document set. Do not add further context, planning,
-design, workflow, test, or architecture documents unless the user explicitly
-requests one; extend the appropriate existing document instead.
+and `TASKS.md` are the complete canonical project-document set. Do not add
+further context, planning, design, workflow, test, or architecture documents
+unless the user explicitly requests one; extend the appropriate existing
+document instead. Keep automated behavior in tests, durable sandbox-wide
+technical decisions in `docs/SANDBOX_TECHNICAL.md`, and game-owned decisions in
+the corresponding game document.
 
 The user is a solo developer. Prefer iterative, high-leverage work and avoid prematurely solving future-season problems. Do not implement gameplay merely because it is described in the design document; implementation requires an explicit user request.
 

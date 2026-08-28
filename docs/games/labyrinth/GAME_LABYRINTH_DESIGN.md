@@ -5,7 +5,7 @@
 > [`../../SANDBOX_VISION.md`](../../SANDBOX_VISION.md) and
 > [`../../SANDBOX_TECHNICAL.md`](../../SANDBOX_TECHNICAL.md).
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 ## Purpose and authority
 
@@ -461,7 +461,11 @@ The first vertical slice proves the multiplayer foundation before implementing t
 - A simple provisional polygon representation and tinting are allowed.
 - Mage is female; Wizard, Sorcerer, Rogue, and Glavier are male.
 
-The technical realization, networking model, configuration boundary, and crate responsibilities for this slice are specified in `ARCHITECTURE.md`.
+Shared networking, configuration, content, and dependency boundaries are
+specified in [`../../SANDBOX_TECHNICAL.md`](../../SANDBOX_TECHNICAL.md).
+Labyrinth-specific implementation behavior is preserved by the code, focused
+tests, this document's durable game decisions, and Git history rather than a
+separate implementation chronicle.
 
 ## Open design questions
 

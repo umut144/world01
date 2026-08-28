@@ -1,6 +1,6 @@
 # game01 Sandbox — Technical Specification
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 ## Purpose and authority
 
@@ -66,6 +66,17 @@ A plugin declares its replicated components, messages, ownership checks, and
 whether an entity participates in prediction/interpolation. It must keep its
 simulation deterministic for server and owner-prediction reuse. No default
 matchmaking, persistence, damage, or team model is part of this protocol.
+
+### Current validated transport baseline
+
+The existing implementation uses a remote interpolation ratio of `2.0` and
+bounded presentation-only extrapolation of at most two snapshot intervals.
+Local five-client trials at approximately 100 ms round-trip latency, 20 ms
+jitter, and 2% packet loss found this smoother than the earlier `1.5` ratio
+while retaining acceptable delay. These values document the current validated
+default; they are not mandatory rules for every game plugin. Authoritative
+state, owner prediction, and reconciliation never consume the extrapolated
+presentation position.
 
 ## Asset pipeline
 
