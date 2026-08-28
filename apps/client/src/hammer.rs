@@ -1,11 +1,12 @@
 use std::f32::consts::PI;
 
 use bevy::{
+    asset::{load_internal_asset, uuid_handle},
     prelude::*,
     reflect::TypePath,
     render::render_resource::{AsBindGroup, ShaderType},
-    shader::ShaderRef,
-    sprite_render::{AlphaMode2d, Material2d},
+    shader::{Shader, ShaderRef},
+    sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
 };
 use game01_simulation::HammerAttackRules;
 use game01_world_data::{GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState};
@@ -15,7 +16,21 @@ use crate::polytools::HammerVisual;
 const APEX_SCALE: f32 = 1.25;
 const IMPACT_SCALE: f32 = 1.0;
 const EMBEDDED_SHAKE_METERS: f32 = 0.006;
-const HAMMER_SHADER_PATH: &str = "shaders/hammer_presentation.wgsl";
+const HAMMER_SHADER_HANDLE: Handle<Shader> = uuid_handle!("41caa612-7608-4bb0-80c0-aa418ba2c56a");
+
+pub struct HammerPresentationPlugin;
+
+impl Plugin for HammerPresentationPlugin {
+    fn build(&self, app: &mut App) {
+        load_internal_asset!(
+            app,
+            HAMMER_SHADER_HANDLE,
+            "../../../assets/shaders/hammer_presentation.wgsl",
+            Shader::from_wgsl
+        );
+        app.add_plugins(Material2dPlugin::<HammerPresentationMaterial>::default());
+    }
+}
 
 #[derive(Debug, Clone, Copy, ShaderType)]
 struct HammerPresentationUniform {
@@ -52,11 +67,11 @@ impl HammerPresentationMaterial {
 
 impl Material2d for HammerPresentationMaterial {
     fn vertex_shader() -> ShaderRef {
-        HAMMER_SHADER_PATH.into()
+        ShaderRef::Handle(HAMMER_SHADER_HANDLE.clone())
     }
 
     fn fragment_shader() -> ShaderRef {
-        HAMMER_SHADER_PATH.into()
+        ShaderRef::Handle(HAMMER_SHADER_HANDLE.clone())
     }
 
     fn alpha_mode(&self) -> AlphaMode2d {

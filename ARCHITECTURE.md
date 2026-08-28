@@ -435,7 +435,10 @@ AttackRegion, attack point, and carried-behind-character layering.
   grip-to-head extent weight the displacement from zero at the hand toward its
   maximum at the head. Shader parameters and displaced vertices are client-only
   presentation state and never feed simulation, replication, impact timing, or
-  future AttackRegion evaluation.
+  future AttackRegion evaluation. The shader source is registered as an
+  internal compile-time asset by the Hammer presentation plugin, so shader
+  availability does not depend on whether the client starts from the workspace
+  root, `apps/client`, or an IDE-specific working directory.
 - Embedded Impact stores a replicated/predicted world-space Hammer-head point
   in `HammerAttackState` at the end of Swing. Client presentation anchors the
   authored attack point there for `2.0 s`, with optional bounded `±1.5 cm`
