@@ -393,7 +393,7 @@ AttackRegion, attack point, and carried-behind-character layering.
 - Shared simulation owns the replicated/predicted `HammerAttackState`. Slice
   15B extends its deterministic Idle, Charging, Swing/Impact, Embedded,
   Recovery lifecycle.
-  The provisional Swing duration is 27 ticks (`0.45 s`) and Embedded lasts 120
+  The Swing duration is 69 ticks (`1.15 s`) and Embedded lasts 120
   ticks (`2.0 s`). This does not establish a reusable animation state machine.
 - The owner predicts the same deterministic attack transition where needed;
   replicated semantic state lets remote and late-joining clients derive the
@@ -401,9 +401,11 @@ AttackRegion, attack point, and carried-behind-character layering.
 - Slice 15B updates client presentation's procedural clockwise curve. Charge
   progress linearly scales the Hammer from `1.0` to
   `0.8`, presents the hand-contact transition from authored `grip_primary` to
-  `grip_secondary`, and pulls it inward by at most 5% of the authored
-  attack-grip-to-attack-point distance. The exact regrip interpolation timing
-  remains local presentation tuning. The swing reaches scale `1.25` at the
+  `grip_secondary` linearly over 60 ticks (`1.0 s`), and pulls it inward by at
+  most 5% of the authored attack-grip-to-attack-point distance. Releasing
+  before the regrip completes starts Swing immediately while the remaining
+  contact transition continues on the original one-second timeline. The swing
+  reaches scale `1.25` at the
   overhead apex and `1.0` at ground impact. It samples fixed-tick overstep for
   frame-smooth transforms.
 - The planned Embedded Impact requires a presentation anchor containing the
@@ -411,8 +413,9 @@ AttackRegion, attack point, and carried-behind-character layering.
   `2.0 s`, with
   optional bounded `±1.5 cm` shake, while the shaft rotates so its grip stays
   connected to the moving Hammerer. Recovery interpolates directly from this
-  constrained pose to the current carried pose; it must not continue the
-  former circular path. The authoritative future AttackRegion still uses
+  constrained pose to the current carried pose with `grip_primary` realigned to
+  `weapon_socket_primary`; it must not continue the former circular path. The
+  authoritative future AttackRegion still uses
   simulation state rather than this presentation anchor.
 - Embedded movement is constrained by a circle around the planted head. Inward
   and tangential displacement remain unchanged; only an outward displacement
