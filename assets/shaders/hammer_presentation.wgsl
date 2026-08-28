@@ -63,7 +63,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let shake_weight = clamp(distance_from_grip / max(material.shake_extent, 0.0001), 0.0, 1.0);
     out.world_position.x += material.shake_offset.x * shake_weight;
     out.world_position.y += material.shake_offset.y * shake_weight;
-    out.world_position.z = material.presentation_layer + material.authored_layer + out.world_position.z;
+    // Projection depth changes only the visible XY silhouette. Contextual
+    // behind/front ordering remains authoritative for presentation and must
+    // not inherit the temporary geometric Z produced by the depth rotation.
+    out.world_position.z = material.presentation_layer + material.authored_layer;
     out.position = mesh_functions::mesh2d_position_world_to_clip(out.world_position);
 #endif
 
