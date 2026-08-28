@@ -2,150 +2,244 @@
 
 Last updated: 2026-08-29
 
-## Purpose and authority
+## Purpose and interpretation
 
-This is the technical contract for the genre-neutral multiplayer sandbox described in
-[`SANDBOX_VISION.md`](SANDBOX_VISION.md). It defines responsibilities and
-extension boundaries, not rules for a particular game. Game-specific choices
-are documented with the owning game and implemented in its plugins.
+This document records the technical foundation for the multiplayer sandbox
+described in [`SANDBOX_VISION.md`](SANDBOX_VISION.md). It distinguishes two
+kinds of statement:
 
-## Workspace and dependency direction
+- **Current verified baseline** describes behavior and boundaries that exist in
+  the repository today.
+- **Confirmed shared direction** describes constraints that must hold when a
+  capability is extracted into the shared `main` foundation. It does not imply
+  that a corresponding public API already exists.
 
-The current workspace provides these reusable boundaries:
+The current codebase grew from The Labyrinth and remains partly game-specific.
+Physical separation into crates is not by itself proof that their complete
+contents are already genre-neutral or reusable. This document is neither an
+implementation roadmap nor a promise to build speculative framework APIs.
+
+## Current workspace and dependencies
+
+The workspace currently has these physical boundaries:
 
 ```text
 apps/
-  client/                 graphical composition and presentation host
-  server/                 headless authoritative composition host
+  client/                 graphical Labyrinth application and composition
+  server/                 headless authoritative Labyrinth application
 crates/
-  configs/                explicitly exposed, typed configuration
+  configs/                typed configuration
   content/                PolyTools import, validation, runtime derivation
-  world_data/             protocol-neutral state, identities, input data
-  simulation/             deterministic game-step scheduling helpers
-  network/                Lightyear protocol, transport, replication adapters
+  world_data/             protocol-neutral serializable/domain components
+  simulation/             deterministic movement, aim, and Hammer systems
+  network/                Lightyear protocol and client/server transport
 ```
 
 The baseline is stable Rust, Bevy 0.19, and Lightyear 0.28. Bevy default
-features remain disabled. The server must remain independent of rendering,
-windowing, audio, and input-device features.
+features are disabled. The server has no direct rendering, windowing, audio, or
+input-device features.
 
-Dependency direction is deliberately one-way:
+In the following graph, `A -> B` means **B directly depends on A**:
 
 ```text
-content ───────┐
-configs ───────┼──> simulation ──> application composition
-world_data ────┘          ▲
-                           │
-network ───────────────> world_data
-client/server ──────────> all required shared crates
-game plugins ───────────> sandbox public contracts
+configs --------------------------------> simulation
+world_data ----+------------------------> simulation
+               +----> content ----------> simulation
+               +----> network
+
+configs + content + world_data + simulation + network ----> client/server
 ```
 
-`world_data` must not parse asset formats or expose transport types.
-`simulation` must not read hardware input, send packets, or create visual
-entities. `network` transports validated intent and state; it does not choose
-genre rules. New crates are warranted only for a stable shared dependency
-boundary; otherwise use modules.
+There is no direct dependency from `network` to `simulation` or `content`.
+Both applications currently depend directly on all five shared crates and own
+their final schedule and plugin composition.
 
-## Network model
+### Current game-specific coupling
 
-Multiplayer networking is a foundational sandbox capability. Games built from
-the shared base use a server-authoritative model:
+The physical boundaries are useful, but their current contents still include
+Labyrinth behavior:
 
-- clients submit input/requests, never authoritative gameplay outcomes;
-- the server validates ownership and requests, runs simulation, and owns
-  authoritative entity lifecycle;
-- replicated components are explicit protocol-neutral data; visual `Transform`
-  values are derived presentation state;
-- an owning client may predict only the state explicitly registered for that
-  purpose; confirmed server state reconciles it;
-- remote interpolation and any presentation smoothing remain client-only;
-- disconnect cleanup and late-join replication are shared lifecycle concerns.
+- `configs` contains movement, weapon aim, Hammer attack, room, camera, and eye
+  values in one design configuration.
+- `content` requires the current character catalog and Hammer package and
+  derives Hammer combat geometry and character HP.
+- `world_data` is free of Lightyear and asset parsing, but includes
+  `SelectedCharacter`, `CharacterHealth`, weapon aim, and Hammer attack state.
+- `simulation` contains deterministic general movement alongside gaze, weapon
+  aim, and Hammer rules; its canonical step currently schedules all of them.
+- `network` has separate client/server transport modules, but its internal
+  protocol registration is fixed to the current join request, `PlayerInput`,
+  character state, health, and Hammer state.
+- `apps/client` and `apps/server` compose a concrete Labyrinth session,
+  including character selection, five-player spawning, room presentation,
+  health bars, eyes, and Hammer presentation.
 
-A plugin declares its replicated components, messages, ownership checks, and
-whether an entity participates in prediction/interpolation. It must keep its
-simulation deterministic for server and owner-prediction reuse. No default
-matchmaking, persistence, damage, or team model is part of this protocol.
+These are facts about the starting implementation, not requirements that every
+future multiplayer game must inherit.
 
-### Current validated transport baseline
+## Confirmed dependency and authority boundaries
 
-The existing implementation uses a remote interpolation ratio of `2.0` and
-bounded presentation-only extrapolation of at most two snapshot intervals.
-Local five-client trials at approximately 100 ms round-trip latency, 20 ms
-jitter, and 2% packet loss found this smoother than the earlier `1.5` ratio
-while retaining acceptable delay. These values document the current validated
-default; they are not mandatory rules for every game plugin. Authoritative
-state, owner prediction, and reconciliation never consume the extrapolated
-presentation position.
+When behavior is promoted into the shared sandbox foundation, these boundaries
+must remain true:
 
-## Asset pipeline
+- `world_data` contains protocol-neutral data and must not parse asset formats
+  or expose Lightyear/transport types.
+- simulation consumes explicit typed state and intent. It must not sample
+  hardware, send packets, own application tick-loop orchestration, or create
+  presentation entities.
+- the network boundary owns Lightyear-specific protocol, transport,
+  replication, prediction, interpolation, and connection adapters. Genre rules
+  and game-specific spawn composition do not become transport policy.
+- client and server applications compose shared facilities with the active game
+  branch; presentation never becomes gameplay authority.
+- introduce another crate only when a stable shared dependency boundary needs
+  independent dependencies or reuse. Otherwise prefer a module.
 
-PolyTools Runtime Export is the canonical authored-asset interchange format.
-The repository consumes imported copies below `assets/`, never the sibling
-authoring project at runtime.
+## Multiplayer network model
 
-`content` is the sole parsing and validation boundary. It validates manifests,
-resolves referenced runtime content, converts it to typed data, and caches the
-validated result for consumers. Client presentation may convert visual geometry
-to Bevy meshes; headless plugins consume only semantic data they explicitly
-need. Parsed JSON, raw file paths, visual mesh hierarchy, and material policy
-must not leak into simulation.
+### Current verified baseline
 
-The existing PolyTools synchronization script remains the controlled import
-step. A game plugin may add an asset contract and validation rules, but must do
-so through `content` and only import its declared packages. Asset identity is a
-stable key, not an implicit filename convention.
+The existing application uses a server-authoritative model:
 
-## Entity and character capability
+- clients send input and join requests, never authoritative gameplay outcomes;
+- the server validates ownership and joins, owns entity lifecycle, runs the
+  authoritative simulation, and publishes replicated state;
+- replicated gameplay components use protocol-neutral types from
+  `world_data`; Bevy `Transform` remains derived client presentation;
+- the owning client predicts explicitly registered state and reconciles to
+  confirmed server state;
+- remote interpolation, correction smoothing, and bounded extrapolation are
+  presentation-only;
+- disconnect cleanup and late-join replication are implemented.
 
-The sandbox provides a generic entity-instantiation path with explicit identity,
-ownership, protocol-neutral position/state, and an optional presentation root.
-“Character” is a reusable presentation/capability term, not a promise of a
-class system, combatant, or player avatar.
+Protocol registration is currently internal and Labyrinth-specific. A game
+plugin cannot yet register arbitrary replicated components, messages,
+ownership checks, or prediction/interpolation policies through a stable public
+sandbox extension point.
 
-A plugin may define the components that make an entity controllable or
-otherwise interactive. It supplies spawn rules, simulation behavior, and
-replication registration. The client derives visual transforms and asset
-attachments from authoritative, predicted, or interpolated state; no visual
-component becomes gameplay authority.
+The current transport baseline uses a remote interpolation ratio of `2.0` and
+presentation-only extrapolation of at most two snapshot intervals. Local
+five-client trials at approximately 100 ms round-trip latency, 20 ms jitter,
+and 2% packet loss found this smoother than the earlier `1.5` ratio while
+retaining acceptable delay. Authoritative state, prediction, and reconciliation
+never consume the extrapolated presentation position.
 
-## Camera and room service
+### Confirmed shared direction
 
-The graphical host supplies a configurable orthographic 2D camera, aspect-safe
-viewport calculation, and letterboxing. A room/frame service may expose
-configured extents and temporary spatial presentation for games that choose to
-use them.
+Multiplayer networking is a foundational sandbox capability. A reusable game
+extension must be able to declare its own protocol state and server-side input
+validation without placing its genre rules inside the transport layer. The
+shape of that registration API is not yet established and should emerge from a
+concrete extraction slice. The sandbox does not prescribe matchmaking,
+persistence, combat, damage, or team rules merely because the current game has
+related domain state.
 
-This service does not define a grid, room adjacency, transition behavior,
-collision, encounter contents, or world topology. A plugin can provide any of
-those policies, including choosing not to use rooms at all. Camera-follow
-selection is likewise a plugin policy expressed through the public camera
-target contract.
+## PolyTools content boundary
 
-## Input abstraction
+### Current verified baseline
 
-The client collects keyboard and controller state into device-neutral action
-values. The sandbox owns device sampling, binding/configuration plumbing, focus
-loss safety, and conversion into tick-bound network input where applicable.
+PolyTools Runtime Export is the current authored-asset interchange format. The
+repository consumes synchronized copies below `assets/` and does not read the
+sibling authoring project at runtime.
 
-Plugins register named actions and interpret their values in their own systems.
-An action can be digital, one-dimensional, or two-dimensional. Bindings must
-be replaceable without exposing device APIs to simulation. The same action data
-feeds local prediction and authoritative network input; transport adaptation
-occurs outside genre logic.
+`content` is the sole current JSON parsing, manifest validation, reference
+resolution, and typed conversion boundary. The applications construct a
+validated `RuntimeContent` value and either retain it or derive their runtime
+resources from it. Loading uses a temporary source map while resolving
+references; there is not yet a generic persistent asset-cache service.
 
-## Plugin integration requirements
+The existing loader is deliberately specific: it recognizes the character
+catalog, requires Hammer content, validates Hammer attachment/Region contracts,
+and exposes Labyrinth-derived health and combat geometry. Asset keys provide
+stable identity inside this contract, while the set of supported package roles
+is not yet plugin-extensible.
 
-A game plugin must:
+### Confirmed shared direction
 
-1. depend only on documented sandbox public contracts;
-2. register game-owned schedules, components, resources, and events in its
-   plugin build function;
-3. keep authoritative rules in simulation-compatible systems and presentation
-   in client-only systems;
-4. declare any networked state and validate its server-side inputs;
-5. register asset requirements through `content` rather than loading raw
-   PolyTools data directly.
+Raw PolyTools JSON and schema handling remain confined to `content`. Consumers
+receive validated typed data; simulation consumes only semantic data it
+explicitly needs, while visible mesh hierarchy and material policy remain in
+presentation. A future game-owned asset contract must extend this boundary
+rather than parse raw manifests elsewhere. No general asset-contract
+registration API exists yet.
 
-The exact Rust shape and a minimal example are in
-[`PLUGIN_GUIDE.md`](PLUGIN_GUIDE.md).
+## Entity and character state
+
+### Current verified baseline
+
+Reusable pieces already exist for numeric player identity, ownership,
+protocol-neutral position, and selected asset identity. However, there is no
+generic sandbox entity-instantiation path today. Server session code currently
+turns a character join request into a Labyrinth player with movement, gaze,
+health, and optional Hammer components at one of five fixed spawn positions.
+The presentation root and asset attachment flow are private client-app
+implementation details rather than a public sandbox contract.
+
+### Confirmed shared direction
+
+A future shared instantiation boundary may assemble explicit identity,
+ownership, protocol-neutral state, and an optional presentation attachment.
+The active game branch must continue to own spawn rules and game-specific
+components. “Character” does not by itself imply a combatant, class, inventory,
+or fixed player-avatar model. Visual components never become authoritative
+state. The exact public API is not yet established.
+
+## Camera and room presentation
+
+### Current verified baseline
+
+The graphical client implements a configurable orthographic camera,
+aspect-safe viewport calculation, letterboxing, camera follow, and a temporary
+tile-based room presentation. These facilities live inside the Labyrinth client
+application. There is no public reusable camera service, room service, or
+camera-target contract today.
+
+### Confirmed shared direction
+
+If extracted, shared camera/frame presentation may provide orthographic
+framing, aspect handling, and explicit follow targets. It must not silently
+define grids, room adjacency, transitions, collision, encounters, or world
+topology. Those policies remain game-owned. Extraction should follow a concrete
+reuse need rather than create a speculative service in advance.
+
+## Input boundary
+
+### Current verified baseline
+
+Keyboard and controller sampling are client-only and are converted into the
+protocol-neutral `PlayerInput` sent through Lightyear's tick-bound native input
+path. The current input shape is fixed to movement, gaze, and attack. Keyboard
+bindings and controller mappings are hard-coded in the client. There is no
+named-action registry, one-dimensional action type, configurable binding
+service, or explicit generic focus-loss contract yet.
+
+### Confirmed shared direction
+
+Simulation must remain independent of device APIs. A reusable input layer may
+eventually expose replaceable digital, one-dimensional, and two-dimensional
+actions that feed both owner prediction and authoritative server input. Games
+interpret those actions as their own intent. This is a confirmed boundary
+direction, not a description of an existing registration API.
+
+## Game-plugin integration status
+
+The repository does not yet expose a complete stable sandbox plugin API. The
+existing Bevy plugins primarily organize the current client, server, prediction,
+session, and Hammer presentation code. The example in
+[`PLUGIN_GUIDE.md`](PLUGIN_GUIDE.md) is design guidance and uses illustrative
+names; it is not guaranteed to compile against current public APIs.
+
+When a concrete game branch is separated from the shared foundation, its
+plugins must:
+
+1. keep game-owned simulation rules deterministic and independent of input
+   devices, transport, and presentation;
+2. keep presentation client-only and derived from authoritative, predicted, or
+   interpolated state;
+3. validate game-owned requests and ownership on the server;
+4. obtain authored content through the shared `content` boundary;
+5. depend only on public shared contracts rather than application-private
+   implementation details.
+
+These constraints are stable. The specific traits, registries, events, and
+plugin split should be introduced only by a concrete implementation need.
