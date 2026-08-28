@@ -317,7 +317,10 @@ Confirmed first-iteration direction:
   that depth-rotation axis follows the screen-space tangent perpendicular to
   the locked attack direction. At the `90°` midpoint the current flat authored
   Hammer is intentionally visible only edge-on. Authorable projection depth or
-  side thickness is deferred to a later PolyTools slice.
+  side thickness is deferred to a later PolyTools slice. The authored depth is
+  independent of component and asset scale; its visible contribution follows
+  `|sin(θ)|`, growing naturally to its maximum at `90°` and returning to zero
+  at `180°`, while the original 2D geometry follows `|cos(θ)|`.
 - Release-to-impact duration remains `1.15 s`. The authoritative impact occurs
   only on the fixed-tick `Swing -> Embedded` transition; the visible depth
   swing can never produce an earlier hit. On impact, the Hammer head remains
