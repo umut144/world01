@@ -265,6 +265,13 @@ inventory system:
   presentation data. The Hammer contract requires exactly one grip, one attack
   point, and one triangulated AttackRegion; Hammerer requires exactly one weapon
   socket. The Region is retained as semantic data and is not rendered.
+- PolyTools World schema 54 and Runtime Manifest schema 10 add the optional
+  transform-based Weapon Guide role `reach_limit_primary`. The editor route,
+  Component/Group scope, Inspector, Canvas gizmo, persistence, Scale Rebase,
+  validation, and export support are implemented. The game01 sync and importer
+  deliberately remain on schema 9 until the developer authors and exports the
+  Hammer frame; the subsequent integration must upgrade the consumer to schema
+  10 and require exactly one reach limit for Hammer.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,

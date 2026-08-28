@@ -276,8 +276,10 @@ Confirmed first-iteration direction:
 - During Embedded Impact, the Hammerer may move freely inside the Hammer's
   authored reach. At maximum reach, only movement farther away from the planted
   head is blocked; tangential and inward movement remain available. The desired
-  reach endpoint is the current `shaft_bevel_bottom` position. It should become
-  a semantic Weapon Guide before being treated as a durable gameplay contract.
+  reach endpoint is slightly above the current `shaft_bevel_bottom` position.
+  PolyTools now provides the semantic Weapon Guide `reach_limit_primary`; its
+  exact authored Hammer position remains to be placed and exported before the
+  game treats it as a durable gameplay contract.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
