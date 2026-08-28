@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 use bevy::{
     prelude::*,
     reflect::TypePath,
-    render::render_resource::AsBindGroup,
+    render::render_resource::{AsBindGroup, ShaderType},
     shader::ShaderRef,
     sprite_render::{AlphaMode2d, Material2d},
 };
@@ -17,31 +17,35 @@ const IMPACT_SCALE: f32 = 1.0;
 const EMBEDDED_SHAKE_METERS: f32 = 0.006;
 const HAMMER_SHADER_PATH: &str = "shaders/hammer_presentation.wgsl";
 
+#[derive(Debug, Clone, Copy, ShaderType)]
+struct HammerPresentationUniform {
+    color: Vec4,
+    shake_offset: Vec2,
+    shake_pivot: Vec2,
+    shake_extent: f32,
+    authored_layer: f32,
+    presentation_layer: f32,
+    padding: f32,
+}
+
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct HammerPresentationMaterial {
     #[uniform(0)]
-    color: Vec4,
-    #[uniform(1)]
-    shake_offset: Vec2,
-    #[uniform(2)]
-    shake_pivot: Vec2,
-    #[uniform(3)]
-    shake_extent: f32,
-    #[uniform(4)]
-    authored_layer: f32,
-    #[uniform(5)]
-    presentation_layer: f32,
+    uniform: HammerPresentationUniform,
 }
 
 impl HammerPresentationMaterial {
-    pub fn from_color(color: Color, authored_layer: f32) -> Self {
+    pub fn from_color(color: Color, authored_layer: f32, presentation_layer: f32) -> Self {
         Self {
-            color: color.to_linear().to_vec4(),
-            shake_offset: Vec2::ZERO,
-            shake_pivot: Vec2::ZERO,
-            shake_extent: 1.0,
-            authored_layer,
-            presentation_layer: 0.0,
+            uniform: HammerPresentationUniform {
+                color: color.to_linear().to_vec4(),
+                shake_offset: Vec2::ZERO,
+                shake_pivot: Vec2::ZERO,
+                shake_extent: 1.0,
+                authored_layer,
+                presentation_layer,
+                padding: 0.0,
+            },
         }
     }
 }
@@ -92,10 +96,10 @@ pub fn apply_hammer_pose(
             .length();
         for handle in &hammer.material_handles {
             if let Some(mut material) = materials.get_mut(handle) {
-                material.shake_offset = shake;
-                material.shake_pivot = shake_pivot;
-                material.shake_extent = shake_extent.max(f32::EPSILON);
-                material.presentation_layer =
+                material.uniform.shake_offset = shake;
+                material.uniform.shake_pivot = shake_pivot;
+                material.uniform.shake_extent = shake_extent.max(f32::EPSILON);
+                material.uniform.presentation_layer =
                     owner_transform.translation.z + next_transform.translation.z;
             }
         }

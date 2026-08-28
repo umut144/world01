@@ -663,6 +663,7 @@ fn spawn_hammer_visual(
             let material = hammer_materials.add(HammerPresentationMaterial::from_color(
                 hammer_component_color(&component.name),
                 z,
+                behind_layer,
             ));
             material_handles.push(material.clone());
             let fill = commands
@@ -680,6 +681,7 @@ fn spawn_hammer_visual(
             let material = hammer_materials.add(HammerPresentationMaterial::from_color(
                 Color::srgb(0.045, 0.04, 0.055),
                 z + OUTLINE_Z_OFFSET,
+                behind_layer,
             ));
             material_handles.push(material.clone());
             let outline = commands

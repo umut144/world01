@@ -14,12 +14,17 @@
 #import bevy_render::color_operations::linear_rgb_to_oklab
 #endif
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material_color: vec4<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> shake_offset: vec2<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(2) var<uniform> shake_pivot: vec2<f32>;
-@group(#{MATERIAL_BIND_GROUP}) @binding(3) var<uniform> shake_extent: f32;
-@group(#{MATERIAL_BIND_GROUP}) @binding(4) var<uniform> authored_layer: f32;
-@group(#{MATERIAL_BIND_GROUP}) @binding(5) var<uniform> presentation_layer: f32;
+struct HammerPresentationMaterial {
+    color: vec4<f32>,
+    shake_offset: vec2<f32>,
+    shake_pivot: vec2<f32>,
+    shake_extent: f32,
+    authored_layer: f32,
+    presentation_layer: f32,
+    padding: f32,
+};
+
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: HammerPresentationMaterial;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -53,11 +58,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         world_from_local,
         vec4<f32>(vertex.position, 1.0)
     );
-    let distance_from_grip = distance(out.world_position.xy, shake_pivot);
-    let shake_weight = clamp(distance_from_grip / max(shake_extent, 0.0001), 0.0, 1.0);
-    out.world_position.x += shake_offset.x * shake_weight;
-    out.world_position.y += shake_offset.y * shake_weight;
-    out.world_position.z = presentation_layer + authored_layer;
+    let distance_from_grip = distance(out.world_position.xy, material.shake_pivot);
+    let shake_weight = clamp(distance_from_grip / max(material.shake_extent, 0.0001), 0.0, 1.0);
+    out.world_position.x += material.shake_offset.x * shake_weight;
+    out.world_position.y += material.shake_offset.y * shake_weight;
+    out.world_position.z = material.presentation_layer + material.authored_layer;
     out.position = mesh_functions::mesh2d_position_world_to_clip(out.world_position);
 #endif
 
@@ -83,7 +88,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
 @fragment
 fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
-    var output_color = material_color;
+    var output_color = material.color;
 #ifdef VERTEX_COLORS
     output_color *= mesh.color;
 #endif
