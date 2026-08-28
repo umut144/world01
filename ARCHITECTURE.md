@@ -342,21 +342,37 @@ AttackRegion, attack point, and carried-behind-character layering.
   `AttackIntent`; primary pointer/trackpad click is unbound. The native input
   history gives prediction and authoritative server processing the same
   press/release sequence.
-- Charging follows the retained gaze direction and caps at 300 simulation ticks
-  (`5.0 s` at 60 Hz); release freezes the attack direction for the resulting
-  swing. Charging uses the configured `0.0` movement multiplier, while Swing
-  and Recovery restore normal movement.
-- Shared simulation owns the replicated/predicted `HammerAttackState` and its
-  deterministic Idle, Charging, Swing/Impact, Recovery lifecycle. The
-  provisional Swing duration is 27 ticks (`0.45 s`) and Recovery is 18 ticks
-  (`0.30 s`); this does not establish a reusable animation state machine.
+- The initial direct gaze assignment is provisional. Slice 15A replaces it with
+  a deterministic, server-authoritative and predicted angular-motion model.
+  Its state must be suitable for character-specific turning parameters without
+  coupling input devices to simulation. Whether directional input represents
+  an absolute target angle or angular acceleration remains explicitly open.
+- Slice 15B makes Charging follow the evolving inertial gaze with a
+  presentation-level Hammer lag and retains the 300-tick (`5.0 s` at 60 Hz)
+  cap; release freezes the attack direction for the resulting swing. That
+  refinement removes the current Charging movement lock so character movement
+  remains at normal global speed.
+- Shared simulation owns the replicated/predicted `HammerAttackState`. Slice
+  15B extends its deterministic Idle, Charging, Swing/Impact, Embedded,
+  Recovery lifecycle.
+  The provisional Swing duration is 27 ticks (`0.45 s`) and Embedded lasts 120
+  ticks (`2.0 s`). This does not establish a reusable animation state machine.
 - The owner predicts the same deterministic attack transition where needed;
   replicated semantic state lets remote and late-joining clients derive the
   corresponding Hammer pose. Visible weapon transforms are not replicated.
-- Client presentation maps the semantic phase to the provisional procedural
-  clockwise curve: scale `0.7` and opposite the aim while charging, scale
-  `1.25` at the overhead apex, then scale `1.0` at ground impact. It samples
-  fixed-tick overstep for frame-smooth local transforms.
+- Slice 15B updates client presentation's procedural clockwise curve. Charge
+  progress linearly scales the Hammer from `1.0` to
+  `0.8` and pulls it inward by at most 5% of the authored grip-to-attack-point
+  distance. The swing reaches scale `1.25` at the overhead apex and `1.0` at
+  ground impact. It samples fixed-tick overstep for frame-smooth transforms.
+- The planned Embedded Impact requires a presentation anchor containing the
+  world-space Hammer-head point at impact. The head remains at that point for
+  `2.0 s`, with
+  optional bounded `±1.5 cm` shake, while the shaft rotates so its grip stays
+  connected to the moving Hammerer. Recovery interpolates directly from this
+  constrained pose to the current carried pose; it must not continue the
+  former circular path. The authoritative future AttackRegion still uses
+  simulation state rather than this presentation anchor.
 - `attack_point_primary` is the preferred authored visual alignment reference
   for the Hammer head and AttackRegion. The exact authoritative relationship
   between that point, the grip/socket pair, and a separately configurable

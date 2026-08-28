@@ -236,8 +236,11 @@ Confirmed first-iteration direction:
   alignment, grip-centered pivot, AttackRegion, and `attack_point_primary` are
   visually accepted. The size remains authored Asset data rather than a
   hard-coded game multiplier.
-- `GazeDirection` is the Hammerer's attack direction. While charging, the
-  Hammer is held exactly opposite that direction and appears smaller. On
+- `GazeDirection` is the Hammerer's attack direction. It will be driven by a
+  character-specific inertial turning model rather than snapping directly to
+  raw input. While charging, the Hammer continues following that changing gaze
+  with its own visible lag, is held opposite the direction, and appears
+  smaller. On
   release it swings across the Hammerer, grows while passing over the head,
   and reaches the ground in the attack direction at normal scale.
 - Outside an attack, every non-zero retained gaze also turns the carried Hammer
@@ -254,14 +257,20 @@ Confirmed first-iteration direction:
   preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
-- Charging follows the retained gaze and caps at `5.0 s`. Movement is fully
-  locked while Charging for the current iteration; this is represented by a
-  configured `0.0` movement multiplier so a later slow charging walk can be
-  tested without replacing the rule. Releasing freezes the attack direction,
-  while normal movement becomes available again during Swing and Recovery.
+- Charging follows the retained gaze and caps at `5.0 s`. The Hammer scales
+  linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
+  at most 5% of the authored `grip_primary`-to-`attack_point_primary` distance.
+  The Hammer may visibly lag behind the inertial gaze while Charging.
+- The Hammerer retains normal global movement speed during Charging, Swing,
+  embedded Impact, and Recovery. Releasing freezes the attack direction.
 - The first procedural swing travels clockwise. Its provisional release-to-
-  impact duration is `0.45 s`, followed by `0.30 s` Recovery. The Hammer uses
-  scale `0.7` while Charging, `1.25` at the overhead apex, and `1.0` at impact.
+  impact duration is `0.45 s`. On impact, the Hammer head remains embedded at
+  its world-space impact point for `2.0 s` with an optional subtle shake of at
+  most `±1.5 cm`. The shaft keeps rotating toward the moving Hammerer so the
+  grip remains visibly held. After the embedded interval, the Hammer returns
+  smoothly and directly to the current behind-the-Hammerer shoulder pose
+  instead of completing a circular rotation. The Hammer uses scale `1.25` at
+  the overhead apex and `1.0` at impact.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
