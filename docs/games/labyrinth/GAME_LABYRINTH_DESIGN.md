@@ -333,7 +333,11 @@ Confirmed first-iteration direction:
   presentation with authored contours. The authored depth is independent of
   component and asset scale; its visible contribution follows
   `|sin(θ)|`, growing naturally to its maximum at `90°` and returning to zero
-  at `180°`, while the original 2D geometry follows `|cos(θ)|`.
+  at `180°`, while the original 2D geometry follows `|cos(θ)|`. During the
+  final `0.15 s` of Embedded, the depth form rolls around the planted
+  grip-to-head axis into the normal flat-polygon parity while keeping the head
+  anchored. The flat Recovery visual replaces it only after both projections
+  match, so asymmetric Hammer geometry cannot mirror-pop at the phase change.
 - Release-to-impact duration remains `1.15 s`. The authoritative impact occurs
   only on the fixed-tick `Swing -> Embedded` transition; the visible depth
   swing can never produce an earlier hit. On impact, the Hammer head remains
@@ -341,14 +345,22 @@ Confirmed first-iteration direction:
   deterministic presentation-only shake of at most `±1.5 cm`. The first custom
   Hammer vertex shader applies this displacement with zero weight at the held
   grip and increasing weight toward the head. Simulation state and the
-  authoritative impact point never shake. The shaft keeps rotating toward the
-  moving Hammerer so the grip remains visibly held. After the embedded interval,
+  authoritative impact point never shake. The shake amplitude eases to exactly
+  zero during the final Embedded roll. The shaft keeps rotating toward the
+  moving Hammerer so the grip remains visibly held. If the Hammerer's socket
+  crosses the planted head, presentation retains its last stable shaft
+  direction inside a `2 cm` proximity and releases it smoothly only after
+  leaving a `4 cm` proximity; this singularity guard never changes movement,
+  reach, or the authoritative impact point. After the embedded interval,
   Recovery lasts
   exactly `1.0 s`: the Hammer returns smoothly and directly to the current
   behind-the-Hammerer shoulder pose while regripping from the attack contact
   reached at release back to `grip_primary` on `weapon_socket_primary`, instead
-  of completing a circular rotation. The Hammer uses scale `1.25` at the
-  overhead apex and `1.0` at impact.
+  of completing a circular rotation. Recovery captures its visible world-space
+  start pose once, keeps its chosen half-turn direction continuous across the
+  `180°` angle seam, and follows the live shoulder target without rewriting
+  that start when body movement or render correction changes. The Hammer uses
+  scale `1.25` at the overhead apex and `1.0` at impact.
 - During Embedded Impact, the Hammerer may move freely inside the Hammer's
   authored reach. At maximum reach, only movement farther away from the planted
   head is blocked; tangential and inward movement remain available. The desired

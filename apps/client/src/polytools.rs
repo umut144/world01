@@ -15,7 +15,7 @@ use game01_content::{
 use game01_world_data::CharacterId;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
-use crate::hammer::HammerPresentationMaterial;
+use crate::hammer::{HammerPresentationMaterial, HammerPresentationState};
 use crate::pose::CharacterHead;
 
 #[derive(Component)]
@@ -623,18 +623,21 @@ fn spawn_hammer_visual(
         }
     }
 
-    commands.entity(pose_root).insert(HammerVisual {
-        owner,
-        rest_transform: pose_transform,
-        attack_point_from_grip,
-        secondary_grip_from_primary,
-        owner_asset_pivot: Vec2::from_array(character.asset_pivot),
-        material_handles,
-        flat_visuals,
-        swing_depth_visuals,
-        behind_layer,
-        front_layer,
-    });
+    commands.entity(pose_root).insert((
+        HammerVisual {
+            owner,
+            rest_transform: pose_transform,
+            attack_point_from_grip,
+            secondary_grip_from_primary,
+            owner_asset_pivot: Vec2::from_array(character.asset_pivot),
+            material_handles,
+            flat_visuals,
+            swing_depth_visuals,
+            behind_layer,
+            front_layer,
+        },
+        HammerPresentationState::default(),
+    ));
 
     Ok(())
 }
