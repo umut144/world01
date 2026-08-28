@@ -232,11 +232,9 @@ Confirmed first-iteration direction:
   the Hammer rotates around its grip instead of around its visual center.
 - The Hammer has an authored polygonal `AttackRegion`, drawn with PolyTools'
   existing Bezier/closed-loop interaction rather than approximated by a circle.
-- The Hammer's complete authored Asset has been uniformly enlarged and rebased
-  in PolyTools once already. A further visual enlargement is now confirmed
-  before Slice 15B; it will again be authored and rebased in PolyTools so the
-  geometry, AttackRegion, and every Weapon frame scale together rather than
-  receiving a hard-coded game multiplier.
+- The Hammer's complete authored Asset has been further enlarged and rebased in
+  PolyTools for Slice 15B. The synced geometry, AttackRegion, and every Weapon
+  frame share that authored scale; game01 applies no hard-coded size multiplier.
 - `grip_primary` remains the Hammer's carried contact aligned to the Hammerer's
   `weapon_socket_primary`. The attack regrips the same hand to a separately
   authored weapon-local `grip_secondary`; neither existing role is renamed.
@@ -296,10 +294,12 @@ Confirmed first-iteration direction:
   authored reach. At maximum reach, only movement farther away from the planted
   head is blocked; tangential and inward movement remain available. The desired
   reach endpoint is slightly above the current `shaft_bevel_bottom` position.
-  PolyTools now provides the semantic Weapon Guide `reach_limit_primary`; its
-  authored Hammer position is `(0.0, 0.2 m)`. Relative to
-  `attack_point_primary`, this defines a maximum planted-head reach of roughly
-  `1.6714 m` and is now part of the imported gameplay contract.
+  PolyTools provides the semantic Weapon Guide `reach_limit_primary`; its
+  further-scaled authored Hammer position is approximately `(0.0, 0.23 m)`.
+  Relative to `attack_point_primary`, the further-enlarged schema-11 Hammer now
+  defines a maximum planted-head reach of roughly `1.9221 m`. Its carried
+  grip-to-head distance is roughly `1.4021 m`, while the authored secondary
+  attack grip produces a full impact radius of roughly `1.6021 m`.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.

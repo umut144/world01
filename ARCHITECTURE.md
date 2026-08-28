@@ -216,10 +216,11 @@ assignment are outside this slice.
   referenced Symbol packages, then replaces the generated destination
   atomically so stale components cannot survive a re-export. The source World
   directory can be overridden with `POLYTOOLS_WORLD_DIR`. The sync requires
-  PolyTools Runtime Manifest schema 10 and validates the Hammer's required grip,
-  attack point, and polygonal AttackRegion contract before importing it. The
-  client accepts schema 10 character packages while temporarily retaining
-  loading compatibility with imported schema 5 through 9 packages.
+  PolyTools Runtime Manifest schema 11 and validates the Hammer's required
+  primary and secondary grips, attack point, reach limit, and polygonal
+  AttackRegion contract before importing it. The client accepts schema 11
+  character packages while temporarily retaining loading compatibility with
+  imported schema 5 through 10 packages.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
   mesh presentation entities. Component transforms, hierarchy, and `z_index`
@@ -286,10 +287,13 @@ inventory system:
 - PolyTools World schema 55 and Runtime Manifest schema 11 add the optional
   transform-based `grip_secondary` role. Editor menu, Component/Group scope,
   transform gizmo, Inspector, persistence, Root Scale Rebase, strict export,
-  and regressions are implemented in PolyTools. game01 deliberately remains on
-  its currently synced schema-10 package until the further-enlarged Hammer and
-  its authored secondary grip are exported; consumer/schema upgrade follows
-  that authored handoff rather than inventing a frame locally.
+  and regressions are implemented in PolyTools. The further-enlarged Hammer and
+  its authored secondary grip are exported and synced. game01 now requires
+  exactly one secondary grip for Hammer while preserving schema 5 through 10
+  loading compatibility for older non-Hammer character packages. Current
+  authored distances are approximately `1.4021 m` from primary grip to head,
+  `1.6021 m` from secondary grip to head, and `1.9221 m` from reach limit to
+  head.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,
