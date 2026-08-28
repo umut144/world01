@@ -274,16 +274,21 @@ Confirmed first-iteration direction:
   preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
-- Charging follows the current weapon aim and caps at `5.0 s`. The Hammer scales
-  linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
-  at most 5% of its authored attack-grip-to-attack-point distance. Independently
-  of that five-second visual/power charge, the held contact moves linearly from
-  `grip_primary` to `grip_secondary` during the first `2.0 s`. Releasing attack
-  freezes the exact intermediate grip reached at that moment; it does not keep
-  sliding during Swing. A release after `1.0 s` therefore uses the midpoint
-  between both authored grips and an impact radius halfway between the primary-
-  and secondary-grip radii. At `2.0 s` and beyond, reach remains capped at
-  `grip_secondary` while the remaining charge may continue toward `5.0 s`.
+- Charging follows the current weapon aim and caps at `5.0 s`. Three independent
+  progress curves run during it:
+  - From `0.0–2.0 s`, the held contact moves linearly from `grip_primary` to
+    `grip_secondary`, selecting attack reach. Releasing freezes the exact
+    intermediate grip; a `1.0 s` release therefore uses half the authored reach
+    extension, while reach remains capped at `grip_secondary` from `2.0 s` on.
+  - Visible Hammer scale moves linearly from `1.0` to `0.8` during `0.0–2.0 s`,
+    then linearly from `0.8` to `0.5` during `2.0–5.0 s`.
+  - The visible inward pull begins only at `2.0 s` and grows linearly to at most
+    5% of the authored secondary-grip-to-attack-point distance at `5.0 s`.
+- Charge scale and inward pull are presentation-only anticipation. They do not
+  change the locked attack grip, authoritative impact length, polygonal
+  AttackRegion size, or damage area. Swing restores the Hammer to its confirmed
+  apex/Impact scale curve, and authoritative Impact always evaluates the
+  authored AttackRegion at normal scale.
   Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction,

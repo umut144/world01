@@ -401,18 +401,21 @@ AttackRegion, attack point, and carried-behind-character layering.
   replicated semantic state lets remote and late-joining clients derive the
   corresponding Hammer pose. Visible weapon transforms are not replicated.
 - Slice 15B updates client presentation's procedural clockwise curve. Charge
-  progress linearly scales the Hammer from `1.0` to
-  `0.8`, presents the hand-contact transition from authored `grip_primary` to
-  `grip_secondary` linearly over the first 120 charge ticks (`2.0 s`), and pulls
-  it inward by at most 5% of the authored attack-grip-to-attack-point distance.
-  The five-second charge and two-second grip interpolation are independent
-  normalized progress values. Release locks
+  presentation uses separate deterministic curves. The hand-contact transition
+  from authored `grip_primary` to `grip_secondary` is linear over the first 120
+  charge ticks (`2.0 s`). Visible uniform scale is piecewise linear: `1.0 ->
+  0.8` over ticks `0–120`, then `0.8 -> 0.5` over ticks `120–300`. Presentation-
+  only inward pull remains zero through tick 120, then grows linearly to 5% of
+  the authored secondary-grip-to-attack-point distance at tick 300. These are
+  independent normalized progress values. Release locks
   `lerp(grip_primary, grip_secondary, min(charge_ticks / 120, 1))`; Swing uses
   that fixed weapon-local contact and derives its full-scale impact vector to
   `attack_point_primary`, so a one-second release produces exactly half of the
-  authored reach extension. The swing reaches scale `1.25` at the
-  overhead apex and `1.0` at ground impact. It samples fixed-tick overstep for
-  frame-smooth transforms.
+  authored reach extension. Charge scale and pull never enter simulation,
+  AttackRegion transforms, impact length, or damage area. The swing reaches
+  visible scale `1.25` at the overhead apex and `1.0` at ground impact, while
+  authoritative Impact uses the authored AttackRegion at scale `1.0`. Client
+  presentation samples fixed-tick overstep for frame-smooth transforms.
 - The planned Embedded Impact requires a presentation anchor containing the
   world-space Hammer-head point at impact. The head remains at that point for
   `2.0 s`, with
@@ -446,8 +449,9 @@ AttackRegion, attack point, and carried-behind-character layering.
 - Max HP, base damage, charged-damage curve, impact distance, and other
   explicitly requested balance parameters belong in `configs` when their
   corresponding behavior is implemented. Charge cap, action timings, and the
-  Charging movement multiplier are already configured; purely visual easing
-  and overswing scale remain presentation constants.
+  Charging movement multiplier are already configured. Slice 15B's explicitly
+  requested charge-scale stages and inward-pull timing remain typed,
+  discoverable presentation parameters but never simulation authority.
 
 The 2880 × 1800 design window remains a reference size independent from the native window size. The first local client window starts at 2880 × 1800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling while matching the full design viewport out of the box. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
 
