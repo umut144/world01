@@ -1,13 +1,62 @@
 //! Input-, transport-, and presentation-independent game simulation.
 
-use std::{error::Error, fmt};
+use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_world_data::{
-    AttackIntent, BodyFacing, GazeDirection, GazeIntent, HammerAttackPhase, HammerAttackState,
-    MovementDirection, MovementIntent, Position, SelectedCharacter,
+    AttackIntent, BodyFacing, GazeDirection, GazeIntent, GazeState, GazeTurnDirection,
+    HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent, Position,
+    SelectedCharacter,
 };
+
+const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct GazeRules {
+    default_radians_per_tick: f32,
+    character_radians_per_tick: HashMap<String, f32>,
+}
+
+impl GazeRules {
+    pub fn from_design(config: &DesignConfig) -> Result<Self, GazeConfigError> {
+        if config.simulation.ticks_per_second == 0 || !config.gaze.is_valid() {
+            return Err(GazeConfigError);
+        }
+
+        let ticks_per_second = config.simulation.ticks_per_second as f32;
+        let radians_per_tick =
+            |degrees_per_second: f32| degrees_per_second.to_radians() / ticks_per_second;
+        Ok(Self {
+            default_radians_per_tick: radians_per_tick(config.gaze.default_degrees_per_second),
+            character_radians_per_tick: config
+                .gaze
+                .character_degrees_per_second
+                .iter()
+                .map(|(character, speed)| (character.clone(), radians_per_tick(*speed)))
+                .collect(),
+        })
+    }
+
+    fn radians_per_tick(&self, character: &SelectedCharacter) -> f32 {
+        self.character_radians_per_tick
+            .get(&character.0.0)
+            .copied()
+            .unwrap_or(self.default_radians_per_tick)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GazeConfigError;
+
+impl fmt::Display for GazeConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .write_str("gaze speeds must be finite and positive and tick rate must be non-zero")
+    }
+}
+
+impl Error for GazeConfigError {}
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -143,7 +192,7 @@ pub fn advance_hammer_attacks(
     mut players: Query<(
         &SelectedCharacter,
         &AttackIntent,
-        &GazeDirection,
+        &GazeState,
         &mut HammerAttackState,
     )>,
 ) {
@@ -153,7 +202,7 @@ pub fn advance_hammer_attacks(
             continue;
         }
 
-        let gaze = valid_direction(*gaze);
+        let gaze = valid_direction(gaze.direction());
         match state.phase {
             HammerAttackPhase::Idle => {
                 if attack.pressed {
@@ -227,14 +276,39 @@ pub fn update_character_orientation(
     }
 }
 
-pub fn update_gaze_direction(mut players: Query<(&GazeIntent, &mut GazeDirection)>) {
-    for (gaze, mut gaze_direction) in &mut players {
-        let gaze = Vec2::new(gaze.x, gaze.y);
-        if gaze.is_finite() && gaze != Vec2::ZERO {
-            let gaze = gaze.normalize();
-            *gaze_direction = GazeDirection::new(gaze.x, gaze.y);
+pub fn update_gaze_state(
+    rules: Res<GazeRules>,
+    mut players: Query<(&SelectedCharacter, &GazeIntent, &mut GazeState)>,
+) {
+    for (character, gaze, mut state) in &mut players {
+        let target = Vec2::new(gaze.x, gaze.y);
+        if !target.is_finite() || target == Vec2::ZERO || !state.angle_radians.is_finite() {
+            continue;
         }
+
+        let target_angle = target.to_angle();
+        let delta = shortest_angle_delta(state.angle_radians, target_angle);
+        if delta.abs() <= f32::EPSILON {
+            state.angle_radians = target_angle.rem_euclid(2.0 * PI);
+            continue;
+        }
+
+        let turn_direction = if (delta.abs() - PI).abs() <= OPPOSITE_ANGLE_EPSILON {
+            state.last_turn_direction
+        } else if delta < 0.0 {
+            GazeTurnDirection::Clockwise
+        } else {
+            GazeTurnDirection::CounterClockwise
+        };
+        let maximum_step = rules.radians_per_tick(character);
+        let signed_step = turn_direction.angle_sign() * maximum_step.min(delta.abs());
+        state.angle_radians = (state.angle_radians + signed_step).rem_euclid(2.0 * PI);
+        state.last_turn_direction = turn_direction;
     }
+}
+
+fn shortest_angle_delta(current: f32, target: f32) -> f32 {
+    (target - current + PI).rem_euclid(2.0 * PI) - PI
 }
 
 fn valid_direction(direction: GazeDirection) -> Option<GazeDirection> {
@@ -258,7 +332,7 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update};
     use game01_configs::{
-        EyesConfig, HammerAttackConfig, MovementConfig, NetworkConfig, RoomConfig,
+        EyesConfig, GazeConfig, HammerAttackConfig, MovementConfig, NetworkConfig, RoomConfig,
         SimulationConfig, load_embedded,
     };
     use game01_world_data::CharacterId;
@@ -274,6 +348,23 @@ mod tests {
         let config = load_embedded().expect("embedded design configuration parses");
         HammerAttackRules::from_design(&config)
             .expect("embedded Hammer attack configuration is valid")
+    }
+
+    fn gaze_rules() -> GazeRules {
+        let config = load_embedded().expect("embedded design configuration parses");
+        GazeRules::from_design(&config).expect("embedded gaze configuration is valid")
+    }
+
+    fn character(name: &str) -> SelectedCharacter {
+        SelectedCharacter(CharacterId(name.to_owned()))
+    }
+
+    fn assert_direction(actual: GazeDirection, expected: Vec2) {
+        let actual = Vec2::new(actual.x, actual.y);
+        assert!(
+            actual.distance(expected) < EPSILON,
+            "{actual:?} != {expected:?}"
+        );
     }
 
     #[test]
@@ -343,20 +434,16 @@ mod tests {
     }
 
     #[test]
-    fn orientation_follows_horizontal_movement_and_retains_last_gaze() {
+    fn orientation_follows_horizontal_movement() {
         let mut app = App::new();
-        app.insert_resource(attack_rules()).add_systems(
-            Update,
-            (update_gaze_direction, update_character_orientation).chain(),
-        );
+        app.insert_resource(attack_rules())
+            .add_systems(Update, update_character_orientation);
         let player = app
             .world_mut()
             .spawn((
                 MovementIntent::new(1.0, 0.0),
-                GazeIntent::new(-1.0, 1.0),
                 MovementDirection::ZERO,
                 BodyFacing::Authored,
-                GazeDirection::ZERO,
             ))
             .id();
 
@@ -370,18 +457,9 @@ mod tests {
             app.world().get::<MovementDirection>(player),
             Some(&MovementDirection::new(1.0, 0.0))
         );
-        let diagonal = 1.0 / 2.0_f32.sqrt();
-        assert_eq!(
-            app.world().get::<GazeDirection>(player),
-            Some(&GazeDirection::new(-diagonal, diagonal))
-        );
-
         *app.world_mut()
             .get_mut::<MovementIntent>(player)
             .expect("player retains movement intent") = MovementIntent::new(0.0, 1.0);
-        *app.world_mut()
-            .get_mut::<GazeIntent>(player)
-            .expect("player retains gaze intent") = GazeIntent::ZERO;
         app.update();
 
         assert_eq!(
@@ -392,27 +470,19 @@ mod tests {
             app.world().get::<MovementDirection>(player),
             Some(&MovementDirection::new(0.0, 1.0))
         );
-        assert_eq!(
-            app.world().get::<GazeDirection>(player),
-            Some(&GazeDirection::new(-diagonal, diagonal))
-        );
     }
 
     #[test]
     fn invalid_orientation_input_does_not_replace_valid_state() {
         let mut app = App::new();
-        app.insert_resource(attack_rules()).add_systems(
-            Update,
-            (update_gaze_direction, update_character_orientation).chain(),
-        );
+        app.insert_resource(attack_rules())
+            .add_systems(Update, update_character_orientation);
         let player = app
             .world_mut()
             .spawn((
                 MovementIntent::new(f32::NAN, 0.0),
-                GazeIntent::new(f32::INFINITY, 0.0),
                 MovementDirection::new(1.0, 0.0),
                 BodyFacing::Left,
-                GazeDirection::new(0.0, -1.0),
             ))
             .id();
 
@@ -426,10 +496,143 @@ mod tests {
             app.world().get::<MovementDirection>(player),
             Some(&MovementDirection::ZERO)
         );
-        assert_eq!(
-            app.world().get::<GazeDirection>(player),
-            Some(&GazeDirection::new(0.0, -1.0))
+    }
+
+    #[test]
+    fn gaze_starts_right_and_turns_linearly_at_180_degrees_per_second() {
+        let mut app = App::new();
+        app.insert_resource(gaze_rules())
+            .add_systems(Update, update_gaze_state);
+        let player = app
+            .world_mut()
+            .spawn((character("wizard"), GazeIntent::ZERO, GazeState::RIGHT))
+            .id();
+
+        app.update();
+        assert_direction(
+            app.world().get::<GazeState>(player).unwrap().direction(),
+            Vec2::X,
         );
+
+        *app.world_mut().get_mut::<GazeIntent>(player).unwrap() = GazeIntent::new(0.0, 1.0);
+        for _ in 0..15 {
+            app.update();
+        }
+        assert_direction(
+            app.world().get::<GazeState>(player).unwrap().direction(),
+            Vec2::from_angle(PI / 4.0),
+        );
+        for _ in 0..15 {
+            app.update();
+        }
+        assert_direction(
+            app.world().get::<GazeState>(player).unwrap().direction(),
+            Vec2::Y,
+        );
+    }
+
+    #[test]
+    fn zero_or_invalid_gaze_target_retains_the_current_angle() {
+        let mut app = App::new();
+        app.insert_resource(gaze_rules())
+            .add_systems(Update, update_gaze_state);
+        let initial = GazeState::new(PI / 3.0, GazeTurnDirection::CounterClockwise);
+        let player = app
+            .world_mut()
+            .spawn((character("mage"), GazeIntent::ZERO, initial))
+            .id();
+
+        app.update();
+        assert_eq!(app.world().get::<GazeState>(player), Some(&initial));
+        *app.world_mut().get_mut::<GazeIntent>(player).unwrap() =
+            GazeIntent::new(f32::INFINITY, 0.0);
+        app.update();
+        assert_eq!(app.world().get::<GazeState>(player), Some(&initial));
+    }
+
+    #[test]
+    fn opposite_target_continues_the_last_turn_direction() {
+        let mut app = App::new();
+        app.insert_resource(gaze_rules())
+            .add_systems(Update, update_gaze_state);
+        let clockwise = app
+            .world_mut()
+            .spawn((
+                character("mage"),
+                GazeIntent::new(-1.0, 0.0),
+                GazeState::RIGHT,
+            ))
+            .id();
+        let counterclockwise = app
+            .world_mut()
+            .spawn((
+                character("rogue"),
+                GazeIntent::new(-1.0, 0.0),
+                GazeState::new(0.0, GazeTurnDirection::CounterClockwise),
+            ))
+            .id();
+
+        app.update();
+
+        let clockwise = app.world().get::<GazeState>(clockwise).unwrap();
+        assert_eq!(clockwise.last_turn_direction, GazeTurnDirection::Clockwise);
+        assert!((clockwise.angle_radians - (2.0 * PI - PI / 60.0)).abs() < EPSILON);
+        let counterclockwise = app.world().get::<GazeState>(counterclockwise).unwrap();
+        assert_eq!(
+            counterclockwise.last_turn_direction,
+            GazeTurnDirection::CounterClockwise
+        );
+        assert!((counterclockwise.angle_radians - PI / 60.0).abs() < EPSILON);
+    }
+
+    #[test]
+    fn character_override_changes_only_that_characters_linear_speed() {
+        let mut config = load_embedded().expect("embedded design configuration parses");
+        config
+            .gaze
+            .character_degrees_per_second
+            .insert("hammerer".to_owned(), 90.0);
+        let rules = GazeRules::from_design(&config).expect("gaze override is valid");
+
+        assert!((rules.radians_per_tick(&character("wizard")) - PI / 60.0).abs() < EPSILON);
+        assert!((rules.radians_per_tick(&character("hammerer")) - PI / 120.0).abs() < EPSILON);
+    }
+
+    #[test]
+    fn all_eight_absolute_input_targets_settle_exactly() {
+        let targets = [
+            Vec2::X,
+            Vec2::new(1.0, 1.0),
+            Vec2::Y,
+            Vec2::new(-1.0, 1.0),
+            Vec2::NEG_X,
+            Vec2::new(-1.0, -1.0),
+            Vec2::NEG_Y,
+            Vec2::new(1.0, -1.0),
+        ];
+
+        for target in targets {
+            let mut app = App::new();
+            app.insert_resource(gaze_rules())
+                .add_systems(Update, update_gaze_state);
+            let player = app
+                .world_mut()
+                .spawn((
+                    character("wizard"),
+                    GazeIntent::new(target.x, target.y),
+                    GazeState::RIGHT,
+                ))
+                .id();
+
+            for _ in 0..60 {
+                app.update();
+            }
+
+            assert_direction(
+                app.world().get::<GazeState>(player).unwrap().direction(),
+                target.normalize(),
+            );
+        }
     }
 
     #[test]
@@ -444,6 +647,10 @@ mod tests {
             },
             movement: MovementConfig {
                 speed_meters_per_second: 4.0,
+            },
+            gaze: GazeConfig {
+                default_degrees_per_second: 180.0,
+                character_degrees_per_second: HashMap::new(),
             },
             hammer_attack: HammerAttackConfig {
                 maximum_charge_seconds: 5.0,
@@ -476,6 +683,10 @@ mod tests {
             movement: MovementConfig {
                 speed_meters_per_second: -1.0,
             },
+            gaze: GazeConfig {
+                default_degrees_per_second: 180.0,
+                character_degrees_per_second: HashMap::new(),
+            },
             hammer_attack: HammerAttackConfig {
                 maximum_charge_seconds: 5.0,
                 swing_seconds: 0.45,
@@ -505,6 +716,10 @@ mod tests {
             MovementStep::from_design(&negative_speed),
             Err(MovementConfigError::InvalidSpeed(-1.0))
         );
+        assert_eq!(
+            GazeRules::from_design(&zero_tick_rate),
+            Err(GazeConfigError)
+        );
     }
 
     #[test]
@@ -515,17 +730,16 @@ mod tests {
         assert_eq!(rules.recovery_ticks(), 18);
 
         let mut app = App::new();
-        app.insert_resource(rules).add_systems(
-            Update,
-            (update_gaze_direction, advance_hammer_attacks).chain(),
-        );
+        app.insert_resource(rules)
+            .insert_resource(gaze_rules())
+            .add_systems(Update, (update_gaze_state, advance_hammer_attacks).chain());
         let player = app
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".to_owned())),
                 AttackIntent::PRESSED,
                 GazeIntent::new(1.0, 0.0),
-                GazeDirection::new(1.0, 0.0),
+                GazeState::RIGHT,
                 HammerAttackState::IDLE,
             ))
             .id();
@@ -543,7 +757,7 @@ mod tests {
             .expect("Hammerer has attack state");
         assert_eq!(charging.phase, HammerAttackPhase::Charging);
         assert_eq!(charging.charge_ticks, 300);
-        assert_eq!(charging.direction, GazeDirection::new(0.0, 1.0));
+        assert_direction(charging.direction, Vec2::Y);
 
         *app.world_mut()
             .get_mut::<AttackIntent>(player)
@@ -552,6 +766,11 @@ mod tests {
             .get_mut::<GazeIntent>(player)
             .expect("Hammerer has gaze input") = GazeIntent::new(-1.0, 0.0);
         app.update();
+        let released_direction = app
+            .world()
+            .get::<GazeState>(player)
+            .expect("Hammerer has gaze state")
+            .direction();
         *app.world_mut()
             .get_mut::<GazeIntent>(player)
             .expect("Hammerer has gaze input") = GazeIntent::new(0.0, -1.0);
@@ -562,7 +781,10 @@ mod tests {
             .get::<HammerAttackState>(player)
             .expect("Hammerer has attack state");
         assert_eq!(swinging.phase, HammerAttackPhase::Swing);
-        assert_eq!(swinging.direction, GazeDirection::new(-1.0, 0.0));
+        assert_direction(
+            swinging.direction,
+            Vec2::new(released_direction.x, released_direction.y),
+        );
         assert_eq!(rules.charge_ratio(swinging.charge_ticks), 1.0);
     }
 

@@ -6,8 +6,8 @@ use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{
-    HammerAttackRules, MovementStep, advance_hammer_attacks, move_players,
-    update_character_orientation, update_gaze_direction,
+    GazeRules, HammerAttackRules, MovementStep, advance_hammer_attacks, move_players,
+    update_character_orientation, update_gaze_state,
 };
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 
@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let gaze_rules = GazeRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
     let snapshot_interval = design
         .network
@@ -43,6 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     ))?)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
+    .insert_resource(gaze_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
@@ -56,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .add_systems(
         FixedUpdate,
         (
-            update_gaze_direction,
+            update_gaze_state,
             advance_hammer_attacks,
             move_players,
             update_character_orientation,

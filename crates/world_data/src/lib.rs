@@ -6,6 +6,7 @@ use bevy::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::f32::consts::TAU;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CharacterId(pub String);
@@ -291,6 +292,52 @@ impl GazeIntent {
 pub struct GazeDirection {
     pub x: f32,
     pub y: f32,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
+pub enum GazeTurnDirection {
+    #[default]
+    Clockwise,
+    CounterClockwise,
+}
+
+impl GazeTurnDirection {
+    pub const fn angle_sign(self) -> f32 {
+        match self {
+            Self::Clockwise => -1.0,
+            Self::CounterClockwise => 1.0,
+        }
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct GazeState {
+    pub angle_radians: f32,
+    pub last_turn_direction: GazeTurnDirection,
+}
+
+impl GazeState {
+    pub const RIGHT: Self = Self {
+        angle_radians: 0.0,
+        last_turn_direction: GazeTurnDirection::Clockwise,
+    };
+
+    pub fn new(angle_radians: f32, last_turn_direction: GazeTurnDirection) -> Self {
+        Self {
+            angle_radians: angle_radians.rem_euclid(TAU),
+            last_turn_direction,
+        }
+    }
+
+    pub fn direction(self) -> GazeDirection {
+        GazeDirection::new(self.angle_radians.cos(), self.angle_radians.sin())
+    }
+}
+
+impl Default for GazeState {
+    fn default() -> Self {
+        Self::RIGHT
+    }
 }
 
 impl GazeDirection {

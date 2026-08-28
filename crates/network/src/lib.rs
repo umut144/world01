@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackState,
+    AttackIntent, BodyFacing, CharacterId, GazeIntent, GazeState, HammerAttackState,
     MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId,
     SelectedCharacter,
 };
@@ -354,7 +354,7 @@ impl GameProtocolAppExt for App {
         self.component::<RoomId>().replicate().predict();
         self.component::<MovementDirection>().replicate().predict();
         self.component::<BodyFacing>().replicate().predict();
-        self.component::<GazeDirection>().replicate().predict();
+        self.component::<GazeState>().replicate().predict();
         self.component::<HammerAttackState>().replicate().predict();
         self.component::<Position>()
             .replicate()
@@ -575,7 +575,7 @@ fn handle_join_requests(
             AttackIntent::RELEASED,
             MovementDirection::ZERO,
             BodyFacing::Authored,
-            GazeDirection::ZERO,
+            GazeState::RIGHT,
             Position::new(spawn.x, spawn.y),
             room_grid.starting_room(),
             ControlledBy {

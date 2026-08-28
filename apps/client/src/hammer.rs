@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use game01_simulation::HammerAttackRules;
-use game01_world_data::{GazeDirection, HammerAttackPhase, HammerAttackState};
+use game01_world_data::{GazeDirection, GazeState, HammerAttackPhase, HammerAttackState};
 
 use crate::polytools::HammerVisual;
 
@@ -13,7 +13,7 @@ const IMPACT_SCALE: f32 = 1.0;
 pub fn apply_hammer_pose(
     fixed_time: Res<Time<Fixed>>,
     rules: Res<HammerAttackRules>,
-    players: Query<(&GazeDirection, &HammerAttackState)>,
+    players: Query<(&GazeState, &HammerAttackState)>,
     mut hammers: Query<(&HammerVisual, &mut Transform)>,
 ) {
     let overstep = fixed_time.overstep_fraction();
@@ -21,7 +21,7 @@ pub fn apply_hammer_pose(
         let Ok((gaze, attack)) = players.get(hammer.owner) else {
             continue;
         };
-        *transform = hammer_pose(hammer, *gaze, *attack, rules.as_ref(), overstep);
+        *transform = hammer_pose(hammer, gaze.direction(), *attack, rules.as_ref(), overstep);
     }
 }
 

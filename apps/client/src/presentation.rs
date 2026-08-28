@@ -10,7 +10,7 @@ use game01_network::{
     configure_client, connect_client,
 };
 use game01_world_data::{
-    CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
+    CharacterId, GazeState, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
@@ -765,7 +765,7 @@ fn follow_local_character(
 }
 
 fn apply_eye_gaze(
-    players: Query<&GazeDirection>,
+    players: Query<&GazeState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut pupils: ParamSet<(
         TransformHelper,
@@ -792,6 +792,7 @@ fn apply_eye_gaze(
         let Ok((_, pupil, mesh_handle, mut transform)) = pupil_query.get_mut(entity) else {
             continue;
         };
+        let gaze = gaze.direction();
         let position = pupil.position_for_world_gaze(Vec2::new(gaze.x, gaze.y), &global_transform);
         if transform.translation.truncate().distance_squared(position) <= f32::EPSILON {
             continue;

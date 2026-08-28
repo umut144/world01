@@ -186,12 +186,19 @@ Reference drawings:
 - Pupil movement uses the Hammerer's **35.0%** pupil-radius collision as its normalization reference. Every other eye uses the same absolute collision radius, capped at its own pupil radius: smaller pupils therefore clip less deeply relative to their size, while larger pupils such as Warrior's clip more deeply. Every closed-region edge remains a collision boundary, but only edges with a visible outline clip the pupil; hidden outline edges may therefore retain a round pupil overlap. The contour remains visually in front, and eyes have no separate visible fill.
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left,
   `K` down, and `L` right. Cardinal keys may be combined for diagonal gaze.
-  Before the first gaze input the pupils are neutral; after that, releasing the
-  keys retains the last non-neutral gaze direction.
+  Every character starts looking right; there is no neutral runtime gaze.
+  Directional input selects an absolute target angle and releasing the keys
+  retains that target.
 - Gaze is gameplay-relevant authoritative state. The controlling client sends
-  its gaze intent to the server, and the resulting gaze direction is replicated
-  so every client sees the same look direction. Gaze remains independent from
-  movement and body facing.
+  its gaze intent to the server. The current first-iteration model turns toward
+  the target at a constant `180°/s`, without acceleration or braking. This
+  speed begins equal for all characters but is individually configurable. The
+  resulting angle and last turn direction are replicated so every client sees
+  the same look direction. Gaze remains independent from movement and body
+  facing.
+- When the target is exactly `180°` from the current gaze, turning continues in
+  the last non-zero turn direction. The initial fallback is clockwise, matching
+  the right-facing spawn state.
 - Each character keeps its own eye geometry, eye positions, and eye pivots. Pupil movement is constrained by that eye's geometry rather than the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.
 
@@ -236,19 +243,18 @@ Confirmed first-iteration direction:
   alignment, grip-centered pivot, AttackRegion, and `attack_point_primary` are
   visually accepted. The size remains authored Asset data rather than a
   hard-coded game multiplier.
-- `GazeDirection` is the Hammerer's attack direction. It will be driven by a
-  character-specific inertial target-angle model rather than snapping directly
-  to raw input. Directional input chooses an absolute target direction; the
-  current view angle accelerates, turns with bounded angular velocity, brakes,
-  and settles on that target. While charging, the Hammer continues following that changing gaze
-  with its own visible lag, is held opposite the direction, and appears
-  smaller. On
-  release it swings across the Hammerer, grows while passing over the head,
-  and reaches the ground in the attack direction at normal scale.
-- Outside an attack, every non-zero retained gaze also turns the carried Hammer
-  exactly behind the Hammerer, opposite the gaze direction. Before the player
-  has established any gaze direction, the accepted authored resting pose is
-  retained.
+- The current gaze angle is the Hammerer's attack direction. It is driven by
+  the shared character-configurable linear target-angle model rather than
+  snapping directly to raw input. While charging, the Hammer continues
+  following that changing gaze with its own visible lag, is held opposite the
+  direction, and appears smaller. On release it swings across the Hammerer,
+  grows while passing over the head, and reaches the ground in the attack
+  direction at normal scale.
+- Outside an attack, the carried Hammer points exactly behind the Hammerer,
+  opposite the current gaze direction, including the initial right-facing
+  spawn gaze. This opposite placement is Hammerer-specific rather than a
+  general weapon rule. Other characters may present their weapons differently;
+  ArcherF's Bow is intended to be held in front in her gaze direction.
 - In its carried and charging presentation the Hammer is layered behind the
   Hammerer. At the released swing's overhead apex, the complete Hammer switches
   in front of the Hammerer and remains there through ground impact. Once it
@@ -262,7 +268,7 @@ Confirmed first-iteration direction:
 - Charging follows the retained gaze and caps at `5.0 s`. The Hammer scales
   linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
   at most 5% of the authored `grip_primary`-to-`attack_point_primary` distance.
-  The Hammer may visibly lag behind the inertial gaze while Charging.
+  The Hammer may visibly lag behind the linearly turning gaze while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction.
 - The first procedural swing travels clockwise. Its provisional release-to-

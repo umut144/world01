@@ -1,17 +1,38 @@
 use serde::Deserialize;
-use std::{path::Path, time::Duration};
+use std::{collections::HashMap, path::Path, time::Duration};
 
 const DESIGN_TOML: &str = include_str!("../design.toml");
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub movement: MovementConfig,
+    pub gaze: GazeConfig,
     pub hammer_attack: HammerAttackConfig,
     pub room: RoomConfig,
     pub camera: CameraConfig,
     pub eyes: EyesConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct GazeConfig {
+    pub default_degrees_per_second: f32,
+    #[serde(default)]
+    pub character_degrees_per_second: HashMap<String, f32>,
+}
+
+impl GazeConfig {
+    pub fn is_valid(&self) -> bool {
+        self.default_degrees_per_second.is_finite()
+            && self.default_degrees_per_second > 0.0
+            && self
+                .character_degrees_per_second
+                .iter()
+                .all(|(character, speed)| {
+                    !character.is_empty() && speed.is_finite() && *speed > 0.0
+                })
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
@@ -171,6 +192,9 @@ mod tests {
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
         assert_eq!(design.movement.speed_meters_per_second, 0.8);
+        assert_eq!(design.gaze.default_degrees_per_second, 180.0);
+        assert!(design.gaze.character_degrees_per_second.is_empty());
+        assert!(design.gaze.is_valid());
         assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
         assert_eq!(design.hammer_attack.swing_seconds, 0.45);
         assert_eq!(design.hammer_attack.recovery_seconds, 0.30);

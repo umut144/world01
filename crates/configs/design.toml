@@ -8,6 +8,9 @@ remote_interpolation_ratio = 2.0
 [movement]
 speed_meters_per_second = 0.8
 
+[gaze]
+default_degrees_per_second = 180.0
+
 [hammer_attack]
 maximum_charge_seconds = 5.0
 swing_seconds = 0.45
