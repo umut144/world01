@@ -345,10 +345,16 @@ Confirmed authoring aids:
   duplicate impact-distance balance value is introduced for this iteration.
 
 The first combat-value slice introduces server-authoritative current/max HP.
-A simple health bar above each character is deliberately allowed as a temporary
-development visualization so multi-client damage and charged-damage behavior
-can be verified. It is not the intended final HP presentation and does not
-replace the diegetic/minimal-UI direction below.
+Each character's maximum HP is derived from the summed area of its triangulated
+PolyTools fill meshes for the semantic `body` component and, when present, the
+semantic `feet` component. The Hammerer is the normalization reference at
+`140 HP`; all other values use the same HP-per-square-meter ratio. Contours,
+outlines, eyes, clothing, weapons, and auxiliary overlays such as Warrior's
+`body_side_*` components are excluded. No MaxHP value is duplicated in
+`design.toml`. A simple health bar above each character is deliberately allowed
+as a temporary development visualization so multi-client damage and
+charged-damage behavior can be verified. It is not the intended final HP
+presentation and does not replace the diegetic/minimal-UI direction below.
 
 ## Diegetic / minimal UI philosophy
 
