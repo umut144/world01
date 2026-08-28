@@ -1,6 +1,6 @@
 # The Labyrinth — persistent technical architecture
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 ## Purpose and authority
 
@@ -186,7 +186,7 @@ produces proportionally slower movement.
 Controller-driven selection, actions, rumble, rebinding, and multi-controller
 assignment are outside this slice.
 
-### PolyTools character-asset boundary
+### PolyTools runtime-asset boundary
 
 - PolyTools Runtime Export is the canonical interchange format for character
   presentations; the synced catalog determines which character IDs are valid.
@@ -211,6 +211,86 @@ assignment are outside this slice.
   The first integration applies a small client-owned temporary palette by
   character and component name. A future material export is a separate
   PolyTools contract decision.
+
+The Hammerer weapon slices extend this boundary without introducing a general
+inventory system:
+
+- PolyTools remains authoritative for the Hammer's visible geometry,
+  attachment frames, and polygonal AttackRegion.
+- Slice 14 directly associates the catalogued Hammerer with the catalogued
+  Hammer. This fixed association is derived from character identity on every
+  client and requires no replicated equipment state yet.
+- The import/sync path expands from characters plus referenced Symbols to the
+  explicitly required `weapons` package. It must not import unrelated catalog
+  categories speculatively.
+- Attachment frames are not ordinary Bezier Guides. They are oriented local
+  frames with position and rotation, scoped to and inheriting the transform of
+  an authored component (or an authored group when that scope is supported).
+  PolyTools presents them with a transform-like gizmo rather than as an
+  unoriented point. Parent scale is inherited; no independent non-uniform
+  attachment scale is required for the first contract.
+- The initial Weapon Guide menu exposes `weapon_socket_primary` for a character,
+  `grip_primary` for a weapon, and the planned `attack_point_primary` alignment
+  frame. The intended editor route is `Guide -> Weapon -> ...` from the selected
+  component or group.
+- `weapon_socket_primary` is authored under the Hammerer's body hierarchy.
+  `grip_primary` is authored at the held part of the Hammer shaft. The planned
+  `attack_point_primary` is authored at the Hammer head, initially at the
+  geometric center of the `head` group.
+- PolyTools Regions are non-rendering semantic geometry distinct from visible
+  Components and from spine-like Guides. The immediate required role is
+  `AttackRegion`; additional roles such as physical collision or damage-
+  receiving regions enter only with corresponding gameplay scope.
+- A Region reuses PolyTools' Bezier topology and Closed Loop drawing workflow,
+  but the first runtime contract accepts exactly one valid, closed,
+  non-degenerate boundary. Exported gameplay geometry is metric and carries an
+  explicit semantic role; simulation must not infer collision from a visible
+  fill or contour mesh.
+- Adding attachment frames and gameplay Regions changes the Runtime Manifest
+  contract and therefore requires an explicit schema-version transition rather
+  than silently assigning new meaning to schema 8 fields. The game may retain
+  older character-presentation compatibility while requiring the new schema
+  for weapon packages.
+
+The Hammer visible entity is attached by aligning `grip_primary` with
+`weapon_socket_primary`. The client derives its local translation, rotation,
+scale animation, and presentation layer from the authored frames plus the
+semantic attack state. These transforms never become server authority.
+
+### Planned Hammer attack and combat-state boundary
+
+- `GazeDirection` is reused as the Hammerer's aim direction for the first
+  attack; no separate aim protocol is introduced yet.
+- Attack input travels through the existing tick-bound native input path. A
+  quick press/release and a held charge are the same action with different held
+  durations.
+- Charging may follow the retained gaze direction; release freezes the attack
+  direction for the resulting swing. Exact input binding and whether movement
+  is restricted during the action remain open.
+- Shared simulation owns the semantic attack lifecycle and authoritative
+  timing. The focused first lifecycle is Idle, Charging, Swing/Impact,
+  Recovery; this does not establish a reusable animation state machine.
+- The owner predicts the same deterministic attack transition where needed;
+  replicated semantic state lets remote and late-joining clients derive the
+  corresponding Hammer pose. Visible weapon transforms are not replicated.
+- Client presentation maps the semantic phase to the provisional procedural
+  curve: small and opposite the aim while charging, enlarged while crossing
+  over the head, then normal scale at ground impact.
+- `attack_point_primary` is the preferred authored visual alignment reference
+  for the Hammer head and AttackRegion. The exact authoritative relationship
+  between that point, the grip/socket pair, and a separately configurable
+  impact distance is deliberately still open.
+- Server-authoritative current/max HP enters before damaging attacks. Clients
+  receive the replicated values and temporarily render a simple bar above each
+  character solely for multiplayer combat validation.
+- At the impact tick, simulation places and evaluates the authored polygonal
+  AttackRegion from authoritative player position, locked attack direction,
+  and the confirmed impact-placement rule. It does not collide the visible,
+  continuously animated render mesh.
+- Max HP, base damage, charge cap/curve, authoritative action timings, impact
+  distance, and other explicitly requested balance parameters belong in
+  `configs` when their corresponding behavior is implemented. Purely visual
+  easing and overswing scale need not become gameplay configuration.
 
 The 2880 × 1800 design window remains a reference size independent from the native window size. The first local client window starts at 2880 × 1800 logical units with the same 16:10 aspect ratio, allowing macOS Retina scaling while matching the full design viewport out of the box. The window is resizable and supports macOS fullscreen; the client derives a camera viewport matching the active room's aspect and centers it in every physical window size. Remaining area is black letterboxing, so resizing or fullscreen never distorts the room or reveals part of another room through the camera frame.
 

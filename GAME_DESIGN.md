@@ -1,6 +1,6 @@
 # The Labyrinth — persistent AI design context
 
-Last updated: 2026-08-27
+Last updated: 2026-08-28
 
 ## Purpose and authority
 
@@ -213,6 +213,46 @@ Reference drawings:
 - Body facing and gaze are retained and replicated independently. A late-joining
   client receives their current authoritative values.
 
+## Hammerer: first weapon and attack direction
+
+The Hammerer is the first character used to establish weapons and combat. This
+does not confirm complete kits or roles for the other catalogued characters.
+
+Confirmed first-iteration direction:
+
+- The Hammerer carries the existing Hammer weapon authored in PolyTools.
+- The Hammerer's `weapon_socket_primary` and the Hammer's `grip_primary` are
+  authored attachment frames. They carry orientation as well as position so
+  the Hammer rotates around its grip instead of around its visual center.
+- The Hammer has an authored polygonal `AttackRegion`, drawn with PolyTools'
+  existing Bezier/closed-loop interaction rather than approximated by a circle.
+- `GazeDirection` is the Hammerer's attack direction. While charging, the
+  Hammer is held exactly opposite that direction and appears smaller. On
+  release it swings across the Hammerer, grows while passing over the head,
+  and reaches the ground in the attack direction at normal scale.
+- Pressing and quickly releasing the attack input produces the basic strike;
+  holding it charges the same strike and releasing executes it.
+- The first swing uses a focused procedural transform curve rather than a
+  general-purpose animation state machine.
+- Simulation and presentation remain separate: the visible Hammer transform is
+  not authoritative collision state, while the server evaluates the authored
+  attack geometry at the authoritative impact pose.
+
+Planned authoring aid:
+
+- An `attack_point_primary` attachment frame is placed at the Hammer head,
+  initially at the geometric center of its authored `head` group. It gives the
+  swing and AttackRegion an explicit alignment reference independent from the
+  grip. Whether the authoritative impact distance is derived directly from the
+  authored grip-to-attack-point distance or remains a separately tunable design
+  value is still open.
+
+The first combat-value slice introduces server-authoritative current/max HP.
+A simple health bar above each character is deliberately allowed as a temporary
+development visualization so multi-client damage and charged-damage behavior
+can be verified. It is not the intended final HP presentation and does not
+replace the diegetic/minimal-UI direction below.
+
 ## Diegetic / minimal UI philosophy
 
 - The developer categorically dislikes conventional camera-lens HUD: text, numbers, floating bars, and overlays should appear only when absolutely necessary or genuinely useful.
@@ -290,6 +330,9 @@ The technical realization, networking model, configuration boundary, and crate r
 - Which collapse variant(s) enter iteration 1.
 - Collapse wave timing, warning semantics, and escape constraints.
 - Exact combat and abilities of all five characters.
+- Exact Hammer charge cap, swing/impact/recovery timings, impact distance,
+  AttackRegion placement rule, base damage, charged-damage curve, and movement
+  restrictions while charging or swinging.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
 - Persistence design beyond the non-persistent first slice.
