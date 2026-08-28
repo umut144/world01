@@ -264,9 +264,13 @@ For Slice 14, only Hammerer receives the fixed Hammer association. Its
 presentation hierarchy places a weapon-pose root at the authored socket and an
 inverse grip transform beneath it, so the visible geometry aligns exactly while
 future pose rotation and scale occur around the grip. The hierarchy inherits
-the character's outer transform and orientation, while the Hammer is placed one
-presentation layer above the character's highest authored component. No attack
-state or gameplay equipment component is introduced.
+the character's outer transform and orientation. PolyTools `z_index` is
+asset-local semantic ordering, not a global Bevy Z coordinate: the client
+currently maps adjacent authored values to `0.01`-spaced local layers beneath
+an Asset root. That root places the complete ordered range relative to other
+Assets. In the carried pose, the Hammer root is offset so its highest local
+visual layer remains below the Hammerer's lowest local visual layer. No attack
+state or gameplay equipment component is introduced in Slice 14.
 
 ### PolyTools root Asset scale and Rebase slice
 
@@ -312,6 +316,12 @@ remain authoring steps.
 
 - `GazeDirection` is reused as the Hammerer's aim direction for the first
   attack; no separate aim protocol is introduced yet.
+- Hammer layer switching is presentation-only. Carried and Charging keep the
+  complete Hammer behind the Hammerer. At the procedural swing's overhead apex
+  the Hammer root moves above the Hammerer's complete asset-local layer range,
+  remains in front through Impact, and returns behind only when Recovery
+  restores the carried hand pose. PolyTools Component order inside each Asset
+  is never rewritten for this transition.
 - Attack input travels through the existing tick-bound native input path. A
   quick press/release and a held charge are the same action with different held
   durations.

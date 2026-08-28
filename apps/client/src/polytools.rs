@@ -308,9 +308,44 @@ const HAMMER_ASSET_KEY: &str = "hammer";
 const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
 const WEAPON_GRIP_ROLE: &str = "grip_primary";
 const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
+const ASSET_LOCAL_Z_STEP: f32 = 0.01;
+const OUTLINE_Z_OFFSET: f32 = 0.001;
+const PUPIL_Z_OFFSET: f32 = 0.002;
+const DYNAMIC_EYE_OUTLINE_Z_OFFSET: f32 = 0.003;
+const ATTACHED_WEAPON_LAYER_GAP_STEPS: i32 = 1;
 
 fn weapon_key_for_character(character: &CharacterId) -> Option<&'static str> {
     (character.0 == "hammerer").then_some(HAMMER_ASSET_KEY)
+}
+
+fn asset_local_z_index_bounds(manifest: &PolyToolsManifest) -> Option<(i32, i32)> {
+    let mut bounds: Option<(i32, i32)> = None;
+    for component in &manifest.components {
+        let mut include = |z_index: i32| {
+            bounds = Some(match bounds {
+                Some((minimum, maximum)) => (minimum.min(z_index), maximum.max(z_index)),
+                None => (z_index, z_index),
+            });
+        };
+        include(component.z_index);
+        for referenced in &component.referenced_components {
+            include(component.z_index.saturating_add(referenced.z_index));
+        }
+    }
+    bounds
+}
+
+fn resting_attached_weapon_layer(character: &PolyToolsManifest, weapon: &PolyToolsManifest) -> f32 {
+    let character_minimum = asset_local_z_index_bounds(character)
+        .map(|(minimum, _)| minimum)
+        .unwrap_or_default();
+    let weapon_maximum = asset_local_z_index_bounds(weapon)
+        .map(|(_, maximum)| maximum)
+        .unwrap_or_default();
+    character_minimum
+        .saturating_sub(weapon_maximum)
+        .saturating_sub(ATTACHED_WEAPON_LAYER_GAP_STEPS) as f32
+        * ASSET_LOCAL_Z_STEP
 }
 
 pub fn spawn_character_visual(
@@ -414,7 +449,7 @@ pub fn spawn_character_visual(
         let mesh_transform = Transform::from_xyz(
             -component.local_pivot.unwrap_or([0.0, 0.0])[0],
             -component.local_pivot.unwrap_or([0.0, 0.0])[1],
-            component.z_index as f32 * 0.01,
+            component.z_index as f32 * ASSET_LOCAL_Z_STEP,
         );
 
         if let Some(eye_collider) = eye_collider {
@@ -430,7 +465,7 @@ pub fn spawn_character_visual(
                     Transform::from_xyz(
                         local_collider.center().x,
                         local_collider.center().y,
-                        component.z_index as f32 * 0.01 + 0.002,
+                        component.z_index as f32 * ASSET_LOCAL_Z_STEP + PUPIL_Z_OFFSET,
                     ),
                 ))
                 .id();
@@ -461,8 +496,12 @@ pub fn spawn_character_visual(
                     Transform::from_xyz(
                         -component.local_pivot.unwrap_or([0.0, 0.0])[0],
                         -component.local_pivot.unwrap_or([0.0, 0.0])[1],
-                        component.z_index as f32 * 0.01
-                            + if is_dynamic_eye { 0.003 } else { 0.001 },
+                        component.z_index as f32 * ASSET_LOCAL_Z_STEP
+                            + if is_dynamic_eye {
+                                DYNAMIC_EYE_OUTLINE_Z_OFFSET
+                            } else {
+                                OUTLINE_Z_OFFSET
+                            },
                     ),
                 ))
                 .id();
@@ -487,7 +526,7 @@ pub fn spawn_character_visual(
                         Transform::from_xyz(
                             -pivot[0],
                             -pivot[1],
-                            (component.z_index + referenced.z_index) as f32 * 0.01,
+                            (component.z_index + referenced.z_index) as f32 * ASSET_LOCAL_Z_STEP,
                         ),
                     ))
                     .id();
@@ -506,7 +545,8 @@ pub fn spawn_character_visual(
                         Transform::from_xyz(
                             -pivot[0],
                             -pivot[1],
-                            (component.z_index + referenced.z_index) as f32 * 0.01 + 0.001,
+                            (component.z_index + referenced.z_index) as f32 * ASSET_LOCAL_Z_STEP
+                                + OUTLINE_Z_OFFSET,
                         ),
                     ))
                     .id();
@@ -539,14 +579,7 @@ fn spawn_hammer_visual(
 ) -> Result<(), PolyToolsAssetError> {
     let socket = attachment_frame(character, WEAPON_SOCKET_ROLE)?;
     let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE)?;
-    let layer = character
-        .components
-        .iter()
-        .map(|component| component.z_index)
-        .max()
-        .unwrap_or_default()
-        .saturating_add(1) as f32
-        * 0.01;
+    let layer = resting_attached_weapon_layer(character, hammer);
     let (pose_transform, asset_transform) = hammer_attachment_transforms(socket, grip, layer);
     let pose_root = commands
         .spawn((HammerVisual, pose_transform, Visibility::default()))
@@ -575,7 +608,7 @@ fn spawn_hammer_visual(
         commands.entity(parent).add_child(component_entity);
 
         let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
-        let z = component.z_index as f32 * 0.01;
+        let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
         if let Some(mesh) = component.mesh.as_ref() {
             let fill = commands
                 .spawn((
@@ -596,7 +629,7 @@ fn spawn_hammer_visual(
                         indices: stroke.indices.clone(),
                     }))),
                     MeshMaterial2d(materials.add(Color::srgb(0.045, 0.04, 0.055))),
-                    Transform::from_xyz(-pivot[0], -pivot[1], z + 0.001),
+                    Transform::from_xyz(-pivot[0], -pivot[1], z + OUTLINE_Z_OFFSET),
                 ))
                 .id();
             commands.entity(component_entity).add_child(outline);
@@ -1027,6 +1060,27 @@ mod tests {
             weapon_key_for_character(&CharacterId("mage".to_owned())),
             None
         );
+    }
+
+    #[test]
+    fn resting_hammer_is_layered_behind_the_complete_hammerer_asset() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let hammerer = library
+            .character(&CharacterId("hammerer".to_owned()))
+            .expect("Hammerer manifest is present");
+        let hammer = &library.hammer;
+        let layer = resting_attached_weapon_layer(hammerer, hammer);
+        let hammerer_minimum = asset_local_z_index_bounds(hammerer)
+            .map(|(minimum, _)| minimum)
+            .expect("Hammerer has visual components") as f32
+            * ASSET_LOCAL_Z_STEP;
+
+        for component in &hammer.components {
+            let hammer_outline_z =
+                layer + component.z_index as f32 * ASSET_LOCAL_Z_STEP + OUTLINE_Z_OFFSET;
+            assert!(hammer_outline_z < hammerer_minimum);
+        }
     }
 
     #[test]

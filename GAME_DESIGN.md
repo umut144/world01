@@ -235,6 +235,14 @@ Confirmed first-iteration direction:
   Hammer is held exactly opposite that direction and appears smaller. On
   release it swings across the Hammerer, grows while passing over the head,
   and reaches the ground in the attack direction at normal scale.
+- In its carried and charging presentation the Hammer is layered behind the
+  Hammerer. At the released swing's overhead apex, the complete Hammer switches
+  in front of the Hammerer and remains there through ground impact. Once it
+  returns to the carried hand pose, it switches behind the Hammerer again.
+- PolyTools `z_index` values express only ordering among parts of the same
+  authored Asset. They are not absolute game-world Z coordinates; gameplay
+  presentation places each Asset into a contextual layer range while
+  preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
 - The first swing uses a focused procedural transform curve rather than a
