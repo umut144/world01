@@ -578,10 +578,7 @@ pub fn spawn_character_visual(
         if let Some(mesh) = component.mesh.as_ref() {
             let fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh_with_depth(
-                        mesh,
-                        component.projection_depth_meters,
-                    ))),
+                    Mesh2d(meshes.add(bevy_mesh(mesh))),
                     MeshMaterial2d(fill_color),
                     mesh_transform,
                 ))
@@ -746,7 +743,10 @@ fn spawn_hammer_visual(
             material_handles.push(material.clone());
             let fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(mesh))),
+                    Mesh2d(meshes.add(bevy_mesh_with_depth(
+                        mesh,
+                        component.projection_depth_meters,
+                    ))),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
