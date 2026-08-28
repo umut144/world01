@@ -1,4 +1,11 @@
-# The Labyrinth — Slices and Tasks
+# game01 Sandbox — Slices and Tasks
+
+The active sandbox documentation baseline is
+[`docs/SANDBOX_VISION.md`](docs/SANDBOX_VISION.md),
+[`docs/SANDBOX_TECHNICAL.md`](docs/SANDBOX_TECHNICAL.md), and
+[`docs/PLUGIN_GUIDE.md`](docs/PLUGIN_GUIDE.md). The rows below preserve the
+implementation history and pending work for the Labyrinth reference game; they
+do not define sandbox-wide genre requirements.
 
 | Slice | Goal | Status | Tasks / phases |
 |---|---|---|---|

@@ -1,10 +1,15 @@
-# The Labyrinth — persistent AI design context
+# The Labyrinth — game-specific design context
+
+> This is a game-specific design document built on the game01 sandbox. It is
+> not an active specification for the sandbox. Sandbox-wide contracts live in
+> [`../../SANDBOX_VISION.md`](../../SANDBOX_VISION.md) and
+> [`../../SANDBOX_TECHNICAL.md`](../../SANDBOX_TECHNICAL.md).
 
 Last updated: 2026-08-28
 
 ## Purpose and authority
 
-This is compact continuity context for AI agents after a chat/context switch. It records the solo developer's current intent, not a polished pitch or a frozen specification.
+This is compact continuity context for AI agents after a chat/context switch. It records the solo developer's current intent for The Labyrinth, not a polished pitch or a frozen specification.
 
 Interpretation rules:
 

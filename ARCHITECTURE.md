@@ -1,12 +1,21 @@
-# The Labyrinth — persistent technical architecture
+# The Labyrinth — implementation architecture reference
 
 Last updated: 2026-08-28
 
 ## Purpose and authority
 
-This is the technical source of truth for architecture, dependency direction, technology choices, system boundaries, and implementation-slice structure.
+This document preserves the implementation architecture of **The Labyrinth**.
+It is not the active technical specification for the genre-neutral sandbox;
+that specification is [`docs/SANDBOX_TECHNICAL.md`](docs/SANDBOX_TECHNICAL.md).
+Labyrinth's game-specific design is
+[`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`](docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md).
 
-- `GAME_DESIGN.md` owns player-facing rules, experience, scope, and art direction.
+For Labyrinth work, it remains the source of truth for architecture, dependency
+direction, technology choices, system boundaries, and implementation-slice
+structure.
+
+- `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` owns Labyrinth's player-facing
+  rules, experience, scope, and art direction.
 - `ARCHITECTURE.md` owns how confirmed requirements are represented and separated technically.
 - `SLICES_AND_TASKS.md` owns the compact tabular slice status and task overview.
 - `AGENTS.md` owns code-agent workflow, validation, editing, and Git rules.

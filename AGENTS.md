@@ -1,14 +1,35 @@
 # Agent entry point
 
-Before planning, discussing, or changing this project, read `GAME_DESIGN.md`, `ARCHITECTURE.md`, and `SLICES_AND_TASKS.md` in full.
+Before planning, discussing, or changing this project, read
+`docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`, `docs/PLUGIN_GUIDE.md`,
+`ARCHITECTURE.md`, and `SLICES_AND_TASKS.md` in full. Read
+`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` in full only when the task
+concerns The Labyrinth.
 
-`GAME_DESIGN.md` is the persistent source of truth for the current game-design intent, scope boundaries, confirmed decisions, open questions, and reference-art locations. Preserve the distinction between confirmed design and ideas still under discussion. Update it when the user makes a durable design decision.
+`docs/SANDBOX_VISION.md` is the persistent source of truth for sandbox purpose,
+scope boundaries, confirmed decisions, and extension principles.
+`docs/SANDBOX_TECHNICAL.md` is the persistent source of truth for the
+genre-neutral technical sandbox contracts. `docs/PLUGIN_GUIDE.md` explains how
+game implementations extend those contracts.
+`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` is the persistent source of
+truth for The Labyrinth's game-design intent, scope boundaries, confirmed
+decisions, open questions, and reference-art locations. Preserve the
+distinction between confirmed design and ideas still under discussion. Update
+the appropriate document when the user makes a durable decision.
 
-`ARCHITECTURE.md` is the persistent source of truth for confirmed technical architecture, system boundaries, technology choices, and implementation-slice structure. Update it when the user makes a durable architecture decision. Do not duplicate technical detail in `GAME_DESIGN.md` unless it directly changes player-facing design.
+`ARCHITECTURE.md` is the persistent source of truth for The Labyrinth's
+implementation architecture, system boundaries, technology choices, and
+implementation-slice structure. Do not duplicate technical detail in its
+design document unless it directly changes player-facing design.
 
 `SLICES_AND_TASKS.md` is the compact project tracker. Keep it tabular and update slice status and high-level task coverage without duplicating architectural detail.
 
-`AGENTS.md`, `GAME_DESIGN.md`, `ARCHITECTURE.md`, `SLICES_AND_TASKS.md`, and `TEST_FINDINGS.md` are the complete canonical project-document set. Do not add further context, planning, design, workflow, test, or architecture documents unless the user explicitly requests one; extend the appropriate existing document instead.
+`AGENTS.md`, `docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`,
+`docs/PLUGIN_GUIDE.md`, `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`,
+`ARCHITECTURE.md`, `SLICES_AND_TASKS.md`, and `TEST_FINDINGS.md` are the
+complete canonical project-document set. Do not add further context, planning,
+design, workflow, test, or architecture documents unless the user explicitly
+requests one; extend the appropriate existing document instead.
 
 The user is a solo developer. Prefer iterative, high-leverage work and avoid prematurely solving future-season problems. Do not implement gameplay merely because it is described in the design document; implementation requires an explicit user request.
 
