@@ -293,11 +293,24 @@ Confirmed first-iteration direction:
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction,
   charge duration, and current interpolated attack grip.
-- The first procedural swing travels clockwise. Its provisional release-to-
-  impact duration is `1.15 s`. On impact, the Hammer head remains embedded at
-  its world-space impact point for `2.0 s` with an optional subtle shake of at
-  most `±1.5 cm`. The shaft keeps rotating toward the moving Hammerer so the
-  grip remains visibly held. After the embedded interval, Recovery lasts
+- The first procedural swing crosses over the Hammerer's body through depth
+  rather than circling around it in the screen plane. From a left-carried
+  `180°` pose toward a rightward `0°` impact, it is projected like an exact
+  `180°` rotation around the screen-space Y axis. For arbitrary attack angles,
+  that depth-rotation axis follows the screen-space tangent perpendicular to
+  the locked attack direction. At the `90°` midpoint the current flat authored
+  Hammer is intentionally visible only edge-on. Authorable projection depth or
+  side thickness is deferred to a later PolyTools slice.
+- Release-to-impact duration remains `1.15 s`. The authoritative impact occurs
+  only on the fixed-tick `Swing -> Embedded` transition; the visible depth
+  swing can never produce an earlier hit. On impact, the Hammer head remains
+  embedded at its world-space impact point for `2.0 s` with a subtle,
+  deterministic presentation-only shake of at most `±1.5 cm`. The first custom
+  Hammer vertex shader applies this displacement with zero weight at the held
+  grip and increasing weight toward the head. Simulation state and the
+  authoritative impact point never shake. The shaft keeps rotating toward the
+  moving Hammerer so the grip remains visibly held. After the embedded interval,
+  Recovery lasts
   exactly `1.0 s`: the Hammer returns smoothly and directly to the current
   behind-the-Hammerer shoulder pose while regripping from the attack contact
   reached at release back to `grip_primary` on `weapon_socket_primary`, instead
@@ -316,8 +329,9 @@ Confirmed first-iteration direction:
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
-- The first swing uses a focused procedural transform curve rather than a
-  general-purpose animation state machine.
+- The first swing uses a focused procedural 3D transform curve and a
+  Hammer-specific presentation shader rather than a general-purpose animation
+  state machine.
 - Simulation and presentation remain separate: the visible Hammer transform is
   not authoritative collision state, while the server evaluates the authored
   attack geometry at the authoritative impact pose.

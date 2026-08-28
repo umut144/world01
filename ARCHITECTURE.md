@@ -402,7 +402,7 @@ AttackRegion, attack point, and carried-behind-character layering.
 - The owner predicts the same deterministic attack transition where needed;
   replicated semantic state lets remote and late-joining clients derive the
   corresponding Hammer pose. Visible weapon transforms are not replicated.
-- Slice 15B updates client presentation's procedural clockwise curve. Charge
+- Slice 15B updates client presentation's procedural charge curve. Charge
   presentation uses separate deterministic curves. The hand-contact transition
   from authored `grip_primary` to `grip_secondary` is linear over the first 120
   charge ticks (`2.0 s`). Visible uniform scale is piecewise linear: `1.0 ->
@@ -418,6 +418,24 @@ AttackRegion, attack point, and carried-behind-character layering.
   visible scale `1.25` at the overhead apex and `1.0` at ground impact, while
   authoritative Impact uses the authored AttackRegion at scale `1.0`. Client
   presentation samples fixed-tick overstep for frame-smooth transforms.
+- Slice 15C replaces the former screen-plane circular Swing with a true
+  presentation-only `180°` depth rotation. The pose root first aligns the
+  authored grip-to-head axis opposite the locked attack direction, then rotates
+  around the screen-space tangent perpendicular to that direction. Orthographic
+  projection therefore places the Hammer edge-on at the `90°` midpoint and at
+  the authoritative impact pose after `180°`. Presentation layer compensation
+  keeps the first half behind and the second half in front of the complete
+  Hammerer while preserving PolyTools' internal Asset-local ordering. The
+  simulation lifecycle, impact direction, radius, and 69-tick duration do not
+  depend on this transform.
+- Slice 15C also introduces the project's first custom `Material2d` vertex
+  shader, scoped to Hammer fill and outline meshes. Its only dynamic effect is
+  the deterministic Embedded shake derived from replicated/predicted phase
+  ticks plus render overstep. A world-space grip pivot and authored
+  grip-to-head extent weight the displacement from zero at the hand toward its
+  maximum at the head. Shader parameters and displaced vertices are client-only
+  presentation state and never feed simulation, replication, impact timing, or
+  future AttackRegion evaluation.
 - Embedded Impact stores a replicated/predicted world-space Hammer-head point
   in `HammerAttackState` at the end of Swing. Client presentation anchors the
   authored attack point there for `2.0 s`, with optional bounded `±1.5 cm`

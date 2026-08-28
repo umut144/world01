@@ -1,6 +1,12 @@
 use std::f32::consts::PI;
 
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    reflect::TypePath,
+    render::render_resource::AsBindGroup,
+    shader::ShaderRef,
+    sprite_render::{AlphaMode2d, Material2d},
+};
 use game01_simulation::HammerAttackRules;
 use game01_world_data::{GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState};
 
@@ -9,19 +15,64 @@ use crate::polytools::HammerVisual;
 const APEX_SCALE: f32 = 1.25;
 const IMPACT_SCALE: f32 = 1.0;
 const EMBEDDED_SHAKE_METERS: f32 = 0.006;
+const HAMMER_SHADER_PATH: &str = "shaders/hammer_presentation.wgsl";
+
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
+pub struct HammerPresentationMaterial {
+    #[uniform(0)]
+    color: Vec4,
+    #[uniform(1)]
+    shake_offset: Vec2,
+    #[uniform(2)]
+    shake_pivot: Vec2,
+    #[uniform(3)]
+    shake_extent: f32,
+    #[uniform(4)]
+    authored_layer: f32,
+    #[uniform(5)]
+    presentation_layer: f32,
+}
+
+impl HammerPresentationMaterial {
+    pub fn from_color(color: Color, authored_layer: f32) -> Self {
+        Self {
+            color: color.to_linear().to_vec4(),
+            shake_offset: Vec2::ZERO,
+            shake_pivot: Vec2::ZERO,
+            shake_extent: 1.0,
+            authored_layer,
+            presentation_layer: 0.0,
+        }
+    }
+}
+
+impl Material2d for HammerPresentationMaterial {
+    fn vertex_shader() -> ShaderRef {
+        HAMMER_SHADER_PATH.into()
+    }
+
+    fn fragment_shader() -> ShaderRef {
+        HAMMER_SHADER_PATH.into()
+    }
+
+    fn alpha_mode(&self) -> AlphaMode2d {
+        AlphaMode2d::Opaque
+    }
+}
 
 pub fn apply_hammer_pose(
     fixed_time: Res<Time<Fixed>>,
     rules: Res<HammerAttackRules>,
     players: Query<(&WeaponAimState, &HammerAttackState, &Transform), Without<HammerVisual>>,
     mut hammers: Query<(&HammerVisual, &mut Transform), With<HammerVisual>>,
+    mut materials: ResMut<Assets<HammerPresentationMaterial>>,
 ) {
     let overstep = fixed_time.overstep_fraction();
     for (hammer, mut transform) in &mut hammers {
         let Ok((weapon_aim, attack, owner_transform)) = players.get(hammer.owner) else {
             continue;
         };
-        *transform = hammer_pose(
+        let next_transform = hammer_pose(
             hammer,
             owner_transform.translation.truncate(),
             weapon_aim.direction(),
@@ -29,6 +80,26 @@ pub fn apply_hammer_pose(
             rules.as_ref(),
             overstep,
         );
+        let shake = match attack.phase {
+            HammerAttackPhase::Embedded => embedded_shake(*attack, overstep),
+            _ => Vec2::ZERO,
+        };
+        let grip_progress = rules.grip_progress(attack.charge_ticks as f32);
+        let shake_pivot = owner_transform.translation.truncate() - hammer.owner_asset_pivot
+            + hammer.rest_transform.translation.truncate();
+        let shake_extent = (hammer.attack_point_from_grip
+            - hammer.secondary_grip_from_primary * grip_progress)
+            .length();
+        for handle in &hammer.material_handles {
+            if let Some(mut material) = materials.get_mut(handle) {
+                material.shake_offset = shake;
+                material.shake_pivot = shake_pivot;
+                material.shake_extent = shake_extent.max(f32::EPSILON);
+                material.presentation_layer =
+                    owner_transform.translation.z + next_transform.translation.z;
+            }
+        }
+        *transform = next_transform;
     }
 }
 
@@ -63,43 +134,70 @@ fn hammer_pose(
             let Some(aim) = direction(attack.direction) else {
                 return hammer.rest_transform;
             };
-            let angle = (-aim).to_angle() - PI * progress;
             let charge_ticks = attack.charge_ticks as f32;
             let scale = swing_scale(rules.charge_scale(charge_ticks), progress);
             let pull_ratio = rules.inward_pull_ratio(charge_ticks) * (1.0 - smoothstep(progress));
-            let layer = if progress < 0.5 {
-                hammer.behind_layer
-            } else {
-                hammer.front_layer
-            };
-            posed_transform(
+            depth_swing_transform(
                 hammer,
-                Vec2::from_angle(angle),
+                aim,
                 scale,
                 rules.grip_progress(charge_ticks),
                 pull_ratio,
-                layer,
+                progress,
             )
         }
-        HammerAttackPhase::Embedded => embedded_transform(
-            hammer,
-            owner_position,
-            attack,
-            rules,
-            embedded_shake(attack, overstep),
-        ),
+        HammerAttackPhase::Embedded => embedded_transform(hammer, owner_position, attack, rules),
         HammerAttackPhase::Recovery => {
             let progress = smoothstep(phase_progress(
                 attack.phase_ticks,
                 rules.recovery_ticks(),
                 overstep,
             ));
-            let source = embedded_transform(hammer, owner_position, attack, rules, Vec2::ZERO);
+            let source = embedded_transform(hammer, owner_position, attack, rules);
             let target = direction(weapon_aim).map_or(hammer.rest_transform, |aim| {
                 posed_transform(hammer, -aim, 1.0, 0.0, 0.0, hammer.behind_layer)
             });
             interpolate_transform(source, target, progress, hammer.front_layer)
         }
+    }
+}
+
+fn depth_swing_transform(
+    hammer: &HammerVisual,
+    attack_direction: Vec2,
+    scale: f32,
+    grip_progress: f32,
+    inward_pull_ratio: f32,
+    progress: f32,
+) -> Transform {
+    let progress = progress.clamp(0.0, 1.0);
+    let start_direction = -attack_direction;
+    let source_angle = hammer.attack_point_from_grip.to_angle();
+    let screen_alignment = Quat::from_rotation_z(start_direction.to_angle() - source_angle);
+    let depth_axis = Vec3::new(-attack_direction.y, attack_direction.x, 0.0).normalize();
+    let depth_rotation = Quat::from_axis_angle(depth_axis, PI * progress);
+    let rotation = depth_rotation * screen_alignment;
+    let effective_grip = hammer.secondary_grip_from_primary * grip_progress.clamp(0.0, 1.0);
+    let rotated_grip = rotation.mul_vec3((effective_grip * scale).extend(0.0));
+    let pull_distance = (hammer.attack_point_from_grip - hammer.secondary_grip_from_primary)
+        .length()
+        * inward_pull_ratio.clamp(0.0, 1.0);
+    let projected_direction = depth_rotation.mul_vec3(start_direction.extend(0.0));
+    let socket = hammer.rest_transform.translation;
+    let layer = if progress < 0.5 {
+        hammer.behind_layer
+    } else {
+        hammer.front_layer
+    };
+
+    Transform {
+        translation: Vec3::new(
+            socket.x - rotated_grip.x - projected_direction.x * pull_distance,
+            socket.y - rotated_grip.y - projected_direction.y * pull_distance,
+            layer,
+        ),
+        rotation,
+        scale: Vec3::new(scale, scale, 1.0),
     }
 }
 
@@ -135,23 +233,26 @@ fn embedded_transform(
     owner_position: Vec2,
     attack: HammerAttackState,
     rules: &HammerAttackRules,
-    shake: Vec2,
 ) -> Transform {
     let head = Vec2::new(attack.impact_point.x, attack.impact_point.y) - owner_position
-        + hammer.owner_asset_pivot
-        + shake;
+        + hammer.owner_asset_pivot;
     let socket = hammer.rest_transform.translation.truncate();
     let head_to_socket = socket - head;
     let grip_progress = rules.grip_progress(attack.charge_ticks as f32);
     let effective_grip = hammer.secondary_grip_from_primary * grip_progress;
-    let source_head_to_grip = effective_grip - hammer.attack_point_from_grip;
+    let source_grip_to_head = hammer.attack_point_from_grip - effective_grip;
     if head_to_socket.length_squared() <= f32::EPSILON
-        || source_head_to_grip.length_squared() <= f32::EPSILON
+        || source_grip_to_head.length_squared() <= f32::EPSILON
     {
         return hammer.rest_transform;
     }
-    let rotation =
-        Quat::from_rotation_z(head_to_socket.to_angle() - source_head_to_grip.to_angle());
+    let desired_head_direction = -head_to_socket.normalize();
+    let screen_alignment = Quat::from_rotation_z(
+        (-desired_head_direction).to_angle() - source_grip_to_head.to_angle(),
+    );
+    let depth_axis =
+        Vec3::new(-desired_head_direction.y, desired_head_direction.x, 0.0).normalize();
+    let rotation = Quat::from_axis_angle(depth_axis, PI) * screen_alignment;
     let rotated_attack_point = rotation
         .mul_vec3(hammer.attack_point_from_grip.extend(0.0))
         .truncate();
@@ -225,6 +326,7 @@ mod tests {
             attack_point_from_grip: Vec2::X,
             secondary_grip_from_primary: Vec2::new(-0.25, 0.0),
             owner_asset_pivot: Vec2::ZERO,
+            material_handles: Vec::new(),
             behind_layer: -0.2,
             front_layer: 0.3,
         }
@@ -243,15 +345,24 @@ mod tests {
     }
 
     #[test]
-    fn clockwise_swing_runs_from_opposite_to_attack_direction() {
-        let aim = Vec2::Y;
-        let start = Vec2::from_angle((-aim).to_angle());
-        let apex = Vec2::from_angle((-aim).to_angle() - PI * 0.5);
-        let impact = Vec2::from_angle((-aim).to_angle() - PI);
+    fn depth_swing_projects_from_opposite_through_edge_on_to_impact() {
+        let hammer = hammer_visual();
+        let aim = Vec2::X;
+        let start = depth_swing_transform(&hammer, aim, 1.0, 0.0, 0.0, 0.0);
+        let edge_on = depth_swing_transform(&hammer, aim, 1.0, 0.0, 0.0, 0.5);
+        let impact = depth_swing_transform(&hammer, aim, 1.0, 0.0, 0.0, 1.0);
+        let projected_head = |transform: Transform| {
+            transform
+                .rotation
+                .mul_vec3(hammer.attack_point_from_grip.extend(0.0))
+        };
 
-        assert!(start.distance(-aim) < 0.000_01);
-        assert!(apex.distance(Vec2::NEG_X) < 0.000_01);
-        assert!(impact.distance(aim) < 0.000_01);
+        assert!(projected_head(start).truncate().normalize().distance(-aim) < 0.000_01);
+        assert!(projected_head(edge_on).truncate().length() < 0.000_01);
+        assert!(projected_head(edge_on).z.abs() > 0.9);
+        assert!(projected_head(impact).truncate().normalize().distance(aim) < 0.000_01);
+        assert_eq!(start.translation.z, hammer.behind_layer);
+        assert!((impact.translation.z - hammer.front_layer).abs() < 0.000_01);
     }
 
     #[test]
@@ -324,7 +435,7 @@ mod tests {
             charge_ticks: 120,
             impact_point: game01_world_data::Position::new(impact.x, impact.y),
         };
-        let pose = embedded_transform(&hammer, owner, attack, &rules, Vec2::ZERO);
+        let pose = embedded_transform(&hammer, owner, attack, &rules);
         let local_head = pose
             .to_matrix()
             .transform_point3(hammer.attack_point_from_grip.extend(0.0))
@@ -332,5 +443,34 @@ mod tests {
         let world_head = owner - hammer.owner_asset_pivot + local_head;
 
         assert!(world_head.distance(impact) < 0.000_01);
+    }
+
+    #[test]
+    fn depth_swing_and_embedded_pose_meet_without_an_impact_snap() {
+        let hammer = hammer_visual();
+        let rules = attack_rules();
+        let aim = Vec2::X;
+        let swing = depth_swing_transform(&hammer, aim, 1.0, 1.0, 0.0, 1.0);
+        let impact = swing
+            .to_matrix()
+            .transform_point3(hammer.attack_point_from_grip.extend(0.0))
+            .truncate();
+        let attack = HammerAttackState {
+            phase: HammerAttackPhase::Embedded,
+            direction: GazeDirection::RIGHT,
+            phase_ticks: 0,
+            charge_ticks: 120,
+            impact_point: game01_world_data::Position::new(impact.x, impact.y),
+        };
+        let embedded = embedded_transform(&hammer, Vec2::ZERO, attack, &rules);
+
+        assert!(
+            swing
+                .translation
+                .truncate()
+                .distance(embedded.translation.truncate())
+                < 0.000_01
+        );
+        assert!(swing.rotation.dot(embedded.rotation).abs() > 0.999_99);
     }
 }

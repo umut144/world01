@@ -12,18 +12,20 @@ use game01_world_data::CharacterId;
 use serde::Deserialize;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
+use crate::hammer::HammerPresentationMaterial;
 use crate::pose::CharacterHead;
 
 #[derive(Component)]
 pub struct BodyAnchor;
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct HammerVisual {
     pub owner: Entity,
     pub rest_transform: Transform,
     pub attack_point_from_grip: Vec2,
     pub secondary_grip_from_primary: Vec2,
     pub owner_asset_pivot: Vec2,
+    pub material_handles: Vec<Handle<HammerPresentationMaterial>>,
     pub behind_layer: f32,
     pub front_layer: f32,
 }
@@ -379,6 +381,7 @@ pub fn spawn_character_visual(
     root: Entity,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
+    hammer_materials: &mut Assets<HammerPresentationMaterial>,
     library: &CharacterAssetLibrary,
     character: &CharacterId,
 ) -> Result<(), PolyToolsAssetError> {
@@ -587,7 +590,7 @@ pub fn spawn_character_visual(
             root,
             anchor,
             meshes,
-            materials,
+            hammer_materials,
             manifest,
             &library.hammer,
         )?;
@@ -601,7 +604,7 @@ fn spawn_hammer_visual(
     owner: Entity,
     character_anchor: Entity,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<ColorMaterial>,
+    hammer_materials: &mut Assets<HammerPresentationMaterial>,
     character: &PolyToolsManifest,
     hammer: &PolyToolsManifest,
 ) -> Result<(), PolyToolsAssetError> {
@@ -629,21 +632,7 @@ fn spawn_hammer_visual(
             0.0,
         ))
         .truncate();
-    let pose_root = commands
-        .spawn((
-            HammerVisual {
-                owner,
-                rest_transform: pose_transform,
-                attack_point_from_grip,
-                secondary_grip_from_primary,
-                owner_asset_pivot: Vec2::from_array(character.asset_pivot),
-                behind_layer,
-                front_layer,
-            },
-            pose_transform,
-            Visibility::default(),
-        ))
-        .id();
+    let pose_root = commands.spawn((pose_transform, Visibility::default())).id();
     let asset_root = commands
         .spawn((asset_transform, Visibility::default()))
         .id();
@@ -651,6 +640,7 @@ fn spawn_hammer_visual(
     commands.entity(pose_root).add_child(asset_root);
 
     let mut component_entities = HashMap::new();
+    let mut material_handles = Vec::new();
     for component in &hammer.components {
         let entity = commands
             .spawn((component_transform(component), Visibility::default()))
@@ -670,11 +660,16 @@ fn spawn_hammer_visual(
         let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
         let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
         if let Some(mesh) = component.mesh.as_ref() {
+            let material = hammer_materials.add(HammerPresentationMaterial::from_color(
+                hammer_component_color(&component.name),
+                z,
+            ));
+            material_handles.push(material.clone());
             let fill = commands
                 .spawn((
                     Mesh2d(meshes.add(bevy_mesh(mesh))),
-                    MeshMaterial2d(materials.add(hammer_component_color(&component.name))),
-                    Transform::from_xyz(-pivot[0], -pivot[1], z),
+                    MeshMaterial2d(material),
+                    Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
                 .id();
             commands.entity(component_entity).add_child(fill);
@@ -682,19 +677,35 @@ fn spawn_hammer_visual(
         if let Some(stroke) = component.contour_stroke_mesh.as_ref()
             && stroke.has_outline
         {
+            let material = hammer_materials.add(HammerPresentationMaterial::from_color(
+                Color::srgb(0.045, 0.04, 0.055),
+                z + OUTLINE_Z_OFFSET,
+            ));
+            material_handles.push(material.clone());
             let outline = commands
                 .spawn((
                     Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
                         vertices: stroke.vertices.clone(),
                         indices: stroke.indices.clone(),
                     }))),
-                    MeshMaterial2d(materials.add(Color::srgb(0.045, 0.04, 0.055))),
-                    Transform::from_xyz(-pivot[0], -pivot[1], z + OUTLINE_Z_OFFSET),
+                    MeshMaterial2d(material),
+                    Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
                 .id();
             commands.entity(component_entity).add_child(outline);
         }
     }
+
+    commands.entity(pose_root).insert(HammerVisual {
+        owner,
+        rest_transform: pose_transform,
+        attack_point_from_grip,
+        secondary_grip_from_primary,
+        owner_asset_pivot: Vec2::from_array(character.asset_pivot),
+        material_handles,
+        behind_layer,
+        front_layer,
+    });
 
     Ok(())
 }

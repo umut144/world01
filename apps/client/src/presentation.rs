@@ -15,7 +15,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
-use crate::hammer::apply_hammer_pose;
+use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
 use crate::input::{collect_attack_input, collect_gaze_input, collect_movement_input};
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
@@ -173,6 +173,7 @@ fn setup_selection(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut hammer_materials: ResMut<Assets<HammerPresentationMaterial>>,
     character_assets: Res<CharacterAssetLibrary>,
     cameras: Query<(), With<PresentationCamera>>,
 ) {
@@ -208,6 +209,7 @@ fn setup_selection(
             root,
             &mut meshes,
             &mut materials,
+            &mut hammer_materials,
             &character_assets,
             &character,
         ) {
@@ -653,6 +655,7 @@ fn render_new_players(
     players: Query<(Entity, &SelectedCharacter, &Position), Without<RenderedCharacter>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut hammer_materials: ResMut<Assets<HammerPresentationMaterial>>,
     character_assets: Res<CharacterAssetLibrary>,
 ) {
     for (entity, character, position) in &players {
@@ -667,6 +670,7 @@ fn render_new_players(
             entity,
             &mut meshes,
             &mut materials,
+            &mut hammer_materials,
             &character_assets,
             &character.0,
         ) {

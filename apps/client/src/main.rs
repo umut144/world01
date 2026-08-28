@@ -1,6 +1,7 @@
 use std::{env, error::Error, io, path::Path};
 
 use bevy::prelude::*;
+use bevy::sprite_render::Material2dPlugin;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
@@ -8,6 +9,7 @@ use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
 use game01_world_data::{CharacterCatalog, HammerCombatGeometry, StartingRoomGrid};
 
 use crate::controller::ControllerInput;
+use crate::hammer::HammerPresentationMaterial;
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::{CameraView, ClientPresentationPlugin};
@@ -82,6 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }),
         ..default()
     }));
+    app.add_plugins(Material2dPlugin::<HammerPresentationMaterial>::default());
     app.insert_resource(movement_step);
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
