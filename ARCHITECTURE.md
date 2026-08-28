@@ -251,13 +251,22 @@ inventory system:
 - PolyTools Runtime Manifest schema 9 now adds top-level Asset-local
   `attachment_frames` and triangulated semantic `regions` arrays without
   assigning new meaning to schema 8 fields. Hammerer and Hammer schema-9 data
-  are authored, exported, validated, and synced. Importing those new semantic
-  fields into the game-side weapon presentation model remains a Slice 14 task.
+  are authored, exported, validated, synced, and imported into typed client-side
+  presentation data. The Hammer contract requires exactly one grip, one attack
+  point, and one triangulated AttackRegion; Hammerer requires exactly one weapon
+  socket. The Region is retained as semantic data and is not rendered.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,
 scale animation, and presentation layer from the authored frames plus the
 semantic attack state. These transforms never become server authority.
+For Slice 14, only Hammerer receives the fixed Hammer association. Its
+presentation hierarchy places a weapon-pose root at the authored socket and an
+inverse grip transform beneath it, so the visible geometry aligns exactly while
+future pose rotation and scale occur around the grip. The hierarchy inherits
+the character's outer transform and orientation, while the Hammer is placed one
+presentation layer above the character's highest authored component. No attack
+state or gameplay equipment component is introduced.
 
 ### Planned Hammer attack and combat-state boundary
 

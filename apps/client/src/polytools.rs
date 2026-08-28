@@ -18,6 +18,9 @@ use crate::pose::CharacterHead;
 pub struct BodyAnchor;
 
 #[derive(Component, Debug, Clone, Copy)]
+pub struct HammerVisual;
+
+#[derive(Component, Debug, Clone, Copy)]
 pub struct CharacterVisual {
     pub orientation_root: Entity,
     pub authored_facing: AuthoredFacing,
@@ -29,6 +32,7 @@ pub struct CharacterVisualOrientation;
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
     characters: HashMap<CharacterId, PolyToolsManifest>,
+    hammer: PolyToolsManifest,
     pupil_area_ratio: f32,
     pupil_collision_reference_radius: f32,
 }
@@ -89,6 +93,12 @@ impl CharacterAssetLibrary {
             characters.insert(character.clone(), manifest);
         }
 
+        let hammer_source = fs::read_to_string(directory.join("hammer/manifest.json"))
+            .map_err(|error| PolyToolsAssetError::new(format!("cannot read hammer: {error}")))?;
+        let hammer: PolyToolsManifest = serde_json::from_str(&hammer_source)
+            .map_err(|error| PolyToolsAssetError::new(format!("cannot parse hammer: {error}")))?;
+        validate_hammer_manifest(&hammer)?;
+
         if characters.is_empty() {
             return Err(PolyToolsAssetError::new(
                 "character catalog contains no loadable character manifests",
@@ -120,6 +130,7 @@ impl CharacterAssetLibrary {
 
         Ok(Self {
             characters,
+            hammer,
             pupil_area_ratio,
             pupil_collision_reference_radius,
         })
@@ -199,6 +210,32 @@ struct PolyToolsManifest {
     #[serde(default)]
     presentation: PolyToolsPresentation,
     components: Vec<PolyToolsComponent>,
+    #[serde(default)]
+    attachment_frames: Vec<PolyToolsAttachmentFrame>,
+    #[serde(default)]
+    regions: Vec<PolyToolsSemanticRegion>,
+}
+
+#[derive(Clone, Deserialize)]
+struct PolyToolsAttachmentFrame {
+    frame_id: String,
+    role: String,
+    asset_transform: PolyToolsFrameTransform,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+struct PolyToolsFrameTransform {
+    position: [f32; 2],
+    rotation_radians: f32,
+}
+
+#[derive(Clone, Deserialize)]
+struct PolyToolsSemanticRegion {
+    region_id: String,
+    name: String,
+    role: String,
+    vertices: Vec<[f32; 2]>,
+    indices: Vec<u32>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -265,6 +302,15 @@ struct PolyToolsStrokeMesh {
 #[derive(Clone, Deserialize)]
 struct PolyToolsStrokeRun {
     closed: bool,
+}
+
+const HAMMER_ASSET_KEY: &str = "hammer";
+const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
+const WEAPON_GRIP_ROLE: &str = "grip_primary";
+const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
+
+fn weapon_key_for_character(character: &CharacterId) -> Option<&'static str> {
+    (character.0 == "hammerer").then_some(HAMMER_ASSET_KEY)
 }
 
 pub fn spawn_character_visual(
@@ -469,7 +515,140 @@ pub fn spawn_character_visual(
         }
     }
 
+    if weapon_key_for_character(character) == Some(HAMMER_ASSET_KEY) {
+        spawn_hammer_visual(
+            commands,
+            anchor,
+            meshes,
+            materials,
+            manifest,
+            &library.hammer,
+        )?;
+    }
+
     Ok(())
+}
+
+fn spawn_hammer_visual(
+    commands: &mut Commands,
+    character_anchor: Entity,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    character: &PolyToolsManifest,
+    hammer: &PolyToolsManifest,
+) -> Result<(), PolyToolsAssetError> {
+    let socket = attachment_frame(character, WEAPON_SOCKET_ROLE)?;
+    let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE)?;
+    let layer = character
+        .components
+        .iter()
+        .map(|component| component.z_index)
+        .max()
+        .unwrap_or_default()
+        .saturating_add(1) as f32
+        * 0.01;
+    let (pose_transform, asset_transform) = hammer_attachment_transforms(socket, grip, layer);
+    let pose_root = commands
+        .spawn((HammerVisual, pose_transform, Visibility::default()))
+        .id();
+    let asset_root = commands
+        .spawn((asset_transform, Visibility::default()))
+        .id();
+    commands.entity(character_anchor).add_child(pose_root);
+    commands.entity(pose_root).add_child(asset_root);
+
+    let mut component_entities = HashMap::new();
+    for component in &hammer.components {
+        let entity = commands
+            .spawn((component_transform(component), Visibility::default()))
+            .id();
+        component_entities.insert(component.component_id.as_str(), entity);
+    }
+
+    for component in &hammer.components {
+        let component_entity = component_entities[component.component_id.as_str()];
+        let parent = component
+            .parent_component_id
+            .as_deref()
+            .and_then(|parent_id| component_entities.get(parent_id).copied())
+            .unwrap_or(asset_root);
+        commands.entity(parent).add_child(component_entity);
+
+        let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
+        let z = component.z_index as f32 * 0.01;
+        if let Some(mesh) = component.mesh.as_ref() {
+            let fill = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_mesh(mesh))),
+                    MeshMaterial2d(materials.add(hammer_component_color(&component.name))),
+                    Transform::from_xyz(-pivot[0], -pivot[1], z),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(fill);
+        }
+        if let Some(stroke) = component.contour_stroke_mesh.as_ref()
+            && stroke.has_outline
+        {
+            let outline = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                        vertices: stroke.vertices.clone(),
+                        indices: stroke.indices.clone(),
+                    }))),
+                    MeshMaterial2d(materials.add(Color::srgb(0.045, 0.04, 0.055))),
+                    Transform::from_xyz(-pivot[0], -pivot[1], z + 0.001),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(outline);
+        }
+    }
+
+    Ok(())
+}
+
+fn attachment_frame<'a>(
+    manifest: &'a PolyToolsManifest,
+    role: &str,
+) -> Result<&'a PolyToolsAttachmentFrame, PolyToolsAssetError> {
+    let mut matches = manifest
+        .attachment_frames
+        .iter()
+        .filter(|frame| frame.role == role);
+    let Some(frame) = matches.next() else {
+        return Err(PolyToolsAssetError::new(format!(
+            "{} is missing attachment frame {role}",
+            manifest.asset_key
+        )));
+    };
+    if matches.next().is_some() {
+        return Err(PolyToolsAssetError::new(format!(
+            "{} has duplicate attachment frame {role}",
+            manifest.asset_key
+        )));
+    }
+    Ok(frame)
+}
+
+fn hammer_attachment_transforms(
+    socket: &PolyToolsAttachmentFrame,
+    grip: &PolyToolsAttachmentFrame,
+    layer: f32,
+) -> (Transform, Transform) {
+    let socket_transform = Transform::from_xyz(
+        socket.asset_transform.position[0],
+        socket.asset_transform.position[1],
+        layer,
+    )
+    .with_rotation(Quat::from_rotation_z(
+        socket.asset_transform.rotation_radians,
+    ));
+    let inverse_grip_rotation = -grip.asset_transform.rotation_radians;
+    let inverse_grip_position = Vec2::from_angle(inverse_grip_rotation)
+        .rotate(-Vec2::from_array(grip.asset_transform.position));
+    let asset_transform =
+        Transform::from_xyz(inverse_grip_position.x, inverse_grip_position.y, 0.0)
+            .with_rotation(Quat::from_rotation_z(inverse_grip_rotation));
+    (socket_transform, asset_transform)
 }
 
 fn component_transform(component: &PolyToolsComponent) -> Transform {
@@ -519,6 +698,14 @@ fn component_color(character: &CharacterId, component_name: &str) -> Color {
             Color::srgb(0.035, 0.03, 0.04)
         }
         _ => character_color(character),
+    }
+}
+
+fn hammer_component_color(component_name: &str) -> Color {
+    if component_name.starts_with("head") {
+        Color::srgb(0.42, 0.46, 0.52)
+    } else {
+        Color::srgb(0.34, 0.18, 0.08)
     }
 }
 
@@ -585,7 +772,52 @@ fn validate_manifest(
             "manifest asset key does not match its package",
         ));
     }
-    if manifest.asset_type != "character" || !finite_pair(manifest.asset_pivot) {
+    validate_asset_contents(manifest)?;
+    if manifest.schema_version >= 9 && expected_key == "hammerer" {
+        attachment_frame(manifest, WEAPON_SOCKET_ROLE)?;
+    }
+    for component in &manifest.components {
+        if manifest.schema_version >= 8
+            && expected_key != "barde"
+            && (component.name == "eye_left" || component.name == "eye_right")
+            && component.closed_region_mesh.is_none()
+        {
+            return Err(PolyToolsAssetError::new(format!(
+                "{} is missing its schema-8+ closed eye region",
+                component.component_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_hammer_manifest(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
+    if manifest.schema_version != 9
+        || manifest.asset_key != HAMMER_ASSET_KEY
+        || manifest.asset_type != "weapons"
+    {
+        return Err(PolyToolsAssetError::new(
+            "Hammer must be a schema-9 weapons manifest",
+        ));
+    }
+    validate_asset_contents(manifest)?;
+    attachment_frame(manifest, WEAPON_GRIP_ROLE)?;
+    attachment_frame(manifest, WEAPON_ATTACK_POINT_ROLE)?;
+    let attack_regions = manifest
+        .regions
+        .iter()
+        .filter(|region| region.role == "attack")
+        .count();
+    if attack_regions != 1 {
+        return Err(PolyToolsAssetError::new(
+            "Hammer must contain exactly one AttackRegion",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_asset_contents(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
+    if !finite_pair(manifest.asset_pivot) || manifest.components.is_empty() {
         return Err(PolyToolsAssetError::new(format!(
             "{} has invalid asset metadata",
             manifest.asset_key
@@ -651,16 +883,6 @@ fn validate_manifest(
             }
             validate_mesh_parts(&region.vertices, &region.indices, &component.component_id)?;
         }
-        if manifest.schema_version >= 8
-            && expected_key != "barde"
-            && (component.name == "eye_left" || component.name == "eye_right")
-            && component.closed_region_mesh.is_none()
-        {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} is missing its schema-8+ closed eye region",
-                component.component_id
-            )));
-        }
         if let Some(contour_stroke_mesh) = component.contour_stroke_mesh.as_ref() {
             let stroke = PolyToolsMesh {
                 vertices: contour_stroke_mesh.vertices.clone(),
@@ -675,6 +897,52 @@ fn validate_manifest(
                 )));
             }
         }
+    }
+
+    let frame_ids = manifest
+        .attachment_frames
+        .iter()
+        .map(|frame| frame.frame_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let frame_roles = manifest
+        .attachment_frames
+        .iter()
+        .map(|frame| frame.role.as_str())
+        .collect::<BTreeSet<_>>();
+    if frame_ids.len() != manifest.attachment_frames.len()
+        || frame_roles.len() != manifest.attachment_frames.len()
+        || manifest.attachment_frames.iter().any(|frame| {
+            frame.frame_id.is_empty()
+                || frame.role.is_empty()
+                || !finite_pair(frame.asset_transform.position)
+                || !frame.asset_transform.rotation_radians.is_finite()
+        })
+    {
+        return Err(PolyToolsAssetError::new(format!(
+            "{} has invalid attachment frames",
+            manifest.asset_key
+        )));
+    }
+
+    let region_ids = manifest
+        .regions
+        .iter()
+        .map(|region| region.region_id.as_str())
+        .collect::<BTreeSet<_>>();
+    if region_ids.len() != manifest.regions.len() {
+        return Err(PolyToolsAssetError::new(format!(
+            "{} has duplicate semantic Region identities",
+            manifest.asset_key
+        )));
+    }
+    for region in &manifest.regions {
+        if region.region_id.is_empty() || region.name.is_empty() || region.role.is_empty() {
+            return Err(PolyToolsAssetError::new(format!(
+                "{} has invalid semantic Region metadata",
+                manifest.asset_key
+            )));
+        }
+        validate_mesh_parts(&region.vertices, &region.indices, &region.region_id)?;
     }
     Ok(())
 }
@@ -724,36 +992,108 @@ mod tests {
 
     #[test]
     fn embedded_hammer_has_slice_14_authoring_contract() {
-        let hammer: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../assets/characters/hammer/manifest.json"
-        ))
-        .expect("embedded Hammer manifest is valid JSON");
-        let frame_roles = hammer["attachment_frames"]
-            .as_array()
-            .expect("Hammer attachment frames are present")
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let hammer = &library.hammer;
+        let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE).expect("Hammer grip is valid");
+        let attack_point = attachment_frame(hammer, WEAPON_ATTACK_POINT_ROLE)
+            .expect("Hammer attack point is valid");
+        let attack_region = hammer
+            .regions
             .iter()
-            .filter_map(|frame| frame["role"].as_str())
-            .collect::<BTreeSet<_>>();
-        let regions = hammer["regions"]
-            .as_array()
-            .expect("Hammer regions are present");
+            .find(|region| region.role == "attack")
+            .expect("Hammer AttackRegion is valid");
 
-        assert_eq!(hammer["schema_version"], 9);
-        assert_eq!(hammer["asset_type"], "weapons");
-        assert!(frame_roles.contains("grip_primary"));
-        assert!(frame_roles.contains("attack_point_primary"));
-        assert_eq!(regions.len(), 1);
-        assert_eq!(regions[0]["role"], "attack");
-        assert!(
-            regions[0]["vertices"]
-                .as_array()
-                .is_some_and(|v| v.len() >= 3)
+        assert_eq!(hammer.schema_version, 9);
+        assert_eq!(hammer.asset_type, "weapons");
+        assert!(finite_pair(grip.asset_transform.position));
+        assert!(finite_pair(attack_point.asset_transform.position));
+        assert_ne!(
+            grip.asset_transform.position,
+            attack_point.asset_transform.position
         );
-        assert!(
-            regions[0]["indices"]
-                .as_array()
-                .is_some_and(|i| { !i.is_empty() && i.len() % 3 == 0 })
+        assert_eq!(attack_region.vertices.len(), 8);
+        assert_eq!(attack_region.indices.len(), 18);
+        assert_eq!(attack_region.indices.len() % 3, 0);
+    }
+
+    #[test]
+    fn only_hammerer_receives_the_fixed_hammer_association() {
+        assert_eq!(
+            weapon_key_for_character(&CharacterId("hammerer".to_owned())),
+            Some("hammer")
         );
+        assert_eq!(
+            weapon_key_for_character(&CharacterId("mage".to_owned())),
+            None
+        );
+    }
+
+    #[test]
+    fn hammer_grip_aligns_to_socket_and_remains_the_pose_pivot() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let hammerer = library
+            .character(&CharacterId("hammerer".to_owned()))
+            .expect("Hammerer manifest is present");
+        let authored_socket = attachment_frame(hammerer, WEAPON_SOCKET_ROLE)
+            .expect("Hammerer weapon socket is valid");
+        let authored_grip =
+            attachment_frame(&library.hammer, WEAPON_GRIP_ROLE).expect("Hammer grip is valid");
+        let socket = PolyToolsAttachmentFrame {
+            frame_id: authored_socket.frame_id.clone(),
+            role: authored_socket.role.clone(),
+            asset_transform: PolyToolsFrameTransform {
+                position: authored_socket.asset_transform.position,
+                rotation_radians: 0.6,
+            },
+        };
+        let grip = PolyToolsAttachmentFrame {
+            frame_id: authored_grip.frame_id.clone(),
+            role: authored_grip.role.clone(),
+            asset_transform: PolyToolsFrameTransform {
+                position: authored_grip.asset_transform.position,
+                rotation_radians: -0.25,
+            },
+        };
+        let (pose, asset) = hammer_attachment_transforms(&socket, &grip, 0.05);
+        let grip_position = Vec3::new(
+            grip.asset_transform.position[0],
+            grip.asset_transform.position[1],
+            0.0,
+        );
+        let grip_at_pose_origin = asset.to_matrix().transform_point3(grip_position);
+        let aligned_grip = pose.to_matrix().transform_point3(grip_at_pose_origin);
+
+        assert!(grip_at_pose_origin.length() < 0.000_001);
+        assert!((aligned_grip.x - socket.asset_transform.position[0]).abs() < 0.000_001);
+        assert!((aligned_grip.y - socket.asset_transform.position[1]).abs() < 0.000_001);
+        assert!((aligned_grip.z - 0.05).abs() < 0.000_001);
+        let grip_direction = Vec3::new(
+            grip.asset_transform.rotation_radians.cos(),
+            grip.asset_transform.rotation_radians.sin(),
+            0.0,
+        );
+        let aligned_direction = pose
+            .to_matrix()
+            .transform_vector3(asset.to_matrix().transform_vector3(grip_direction));
+        let socket_direction = Vec3::new(
+            socket.asset_transform.rotation_radians.cos(),
+            socket.asset_transform.rotation_radians.sin(),
+            0.0,
+        );
+        assert!(aligned_direction.distance(socket_direction) < 0.000_001);
+
+        let parent = Transform::from_xyz(2.0, -1.0, 3.0)
+            .with_rotation(Quat::from_rotation_z(0.4))
+            .with_scale(Vec3::new(-1.5, 1.5, 1.0));
+        let inherited_grip = parent.to_matrix().transform_point3(aligned_grip);
+        let inherited_socket = parent.to_matrix().transform_point3(Vec3::new(
+            socket.asset_transform.position[0],
+            socket.asset_transform.position[1],
+            0.05,
+        ));
+        assert!(inherited_grip.distance(inherited_socket) < 0.000_001);
     }
 
     #[test]
