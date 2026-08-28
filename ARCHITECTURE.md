@@ -268,6 +268,44 @@ the character's outer transform and orientation, while the Hammer is placed one
 presentation layer above the character's highest authored component. No attack
 state or gameplay equipment component is introduced.
 
+### PolyTools root Asset scale and Rebase slice
+
+Before Slice 14 visual acceptance, PolyTools gains one explicit positive,
+uniform root Asset Scale in the root Asset Inspector. It is an authoring
+transform around the Asset Pivot, defaults to `1`, and previews the complete
+Asset consistently: visible Components, nested Component/Group hierarchy,
+References, ordinary Guides, Weapon attachment frames, semantic Regions, and
+their Canvas selection/gizmo geometry. Non-uniform root scaling and root-level
+mirroring are outside this focused slice; those remain explicit Component-level
+operations.
+
+Root Asset Scale is not permitted to leak into Runtime Export. A dedicated
+atomic Rebase bakes the factor into all owned coordinate-bearing authoring data,
+resets root Scale exactly to `1`, and preserves the complete visible and
+semantic result around the unchanged Asset Pivot. In particular, grip,
+attack-point, socket, and Region relationships must remain identical after the
+Rebase. References retain coherent instance placement without modifying their
+source Assets. Existing Component Scale Rebase must still work before or after
+the root operation.
+
+The editor reference-image metadata is a calibration backdrop rather than
+runtime Asset content and remains unchanged, allowing the scaled drawing to be
+judged against it. To keep this slice bounded, a non-default authored Motion
+document blocks root Rebase unless its scale-sensitive coordinates are covered
+by an exact preservation path and focused tests; motion data is never adjusted
+partially or silently.
+
+The operation is one undoable change. Unsupported or invalid content blocks the
+entire Rebase with a precise reason; there is no partial bake. Derived Mesh, UV,
+SDF, and Runtime Export artifacts are invalidated and rebuilt from the rebased
+canonical source rather than numerically scaling stale bakes. Runtime Export
+rejects a non-unit root Asset Scale and directs the author to Rebase.
+
+Acceptance covers nested and rotated hierarchy, primitives and Bézier geometry,
+semantic Regions, Component- and Group-scoped Guides/Weapon frames, References,
+Asset Pivot behavior, save/load round trips, undo/redo, post-Rebase Component
+Scale Rebase, and an unchanged schema-9 semantic relationship after export.
+
 ### Planned Hammer attack and combat-state boundary
 
 - `GazeDirection` is reused as the Hammerer's aim direction for the first
