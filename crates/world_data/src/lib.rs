@@ -5,7 +5,12 @@ use bevy::{
     prelude::{Component, Reflect, Resource, Vec2},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, error::Error, f32::consts::TAU, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    f32::consts::TAU,
+    fmt,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CharacterId(pub String);
@@ -62,6 +67,174 @@ impl CharacterCatalog {
 
     pub fn ids(&self) -> impl Iterator<Item = &CharacterId> {
         self.ids.iter()
+    }
+}
+
+/// Runtime-derived health values. Areas come from the current exported meshes;
+/// no character-specific HP table is stored in design configuration.
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct CharacterHealthCatalog {
+    max_hp: HashMap<CharacterId, f32>,
+}
+
+impl CharacterHealthCatalog {
+    pub fn from_manifests<'a>(
+        manifests: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, CharacterHealthError> {
+        let mut areas = HashMap::new();
+        for source in manifests {
+            let manifest: HealthManifest = serde_json::from_str(source).map_err(|error| {
+                CharacterHealthError(format!("invalid character manifest: {error}"))
+            })?;
+            let Some(asset_key) = CharacterId::new(manifest.asset_key) else {
+                continue;
+            };
+            let mut total = 0.0;
+            for component in &manifest.components {
+                if component.name != "body" && component.name != "feet" {
+                    continue;
+                }
+                total += transformed_mesh_area(component, &manifest.components)?;
+            }
+            if total.is_finite() && total > 0.0 {
+                areas.insert(asset_key, total);
+            }
+        }
+        let hammerer = areas
+            .get(&CharacterId("hammerer".into()))
+            .copied()
+            .ok_or_else(|| CharacterHealthError("missing Hammerer body area".into()))?;
+        Ok(Self {
+            max_hp: areas
+                .into_iter()
+                .map(|(id, area)| (id, area / hammerer * 140.0))
+                .collect(),
+        })
+    }
+
+    pub fn max_hp(&self, character: &CharacterId) -> Option<f32> {
+        self.max_hp.get(character).copied()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CharacterHealthError(String);
+impl fmt::Display for CharacterHealthError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl Error for CharacterHealthError {}
+
+#[derive(Deserialize)]
+struct HealthManifest {
+    asset_key: String,
+    components: Vec<HealthComponent>,
+}
+#[derive(Deserialize)]
+struct HealthComponent {
+    component_id: String,
+    name: String,
+    parent_component_id: Option<String>,
+    local_transform: HealthTransform,
+    mesh: Option<HealthMesh>,
+}
+#[derive(Deserialize)]
+struct HealthTransform {
+    position: [f32; 2],
+    rotation_radians: f32,
+    scale: [f32; 2],
+}
+#[derive(Deserialize)]
+struct HealthMesh {
+    vertices: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+fn transformed_mesh_area(
+    component: &HealthComponent,
+    components: &[HealthComponent],
+) -> Result<f32, CharacterHealthError> {
+    let Some(mesh) = &component.mesh else {
+        return Ok(0.0);
+    };
+    if mesh.indices.len() % 3 != 0
+        || mesh
+            .indices
+            .iter()
+            .any(|&i| i as usize >= mesh.vertices.len())
+    {
+        return Err(CharacterHealthError(format!(
+            "invalid mesh for component {}",
+            component.name
+        )));
+    }
+    let transform = component_world_transform(component, components, &mut HashSet::new())?;
+    let mut area = 0.0;
+    for triangle in mesh.indices.chunks_exact(3) {
+        let a = transform_point(transform, mesh.vertices[triangle[0] as usize]);
+        let b = transform_point(transform, mesh.vertices[triangle[1] as usize]);
+        let c = transform_point(transform, mesh.vertices[triangle[2] as usize]);
+        area += ((b - a).perp_dot(c - a)).abs() * 0.5;
+    }
+    Ok(area)
+}
+
+type Affine2 = (Vec2, Vec2, Vec2); // columns and translation
+fn component_world_transform(
+    component: &HealthComponent,
+    components: &[HealthComponent],
+    visiting: &mut HashSet<String>,
+) -> Result<Affine2, CharacterHealthError> {
+    if !visiting.insert(component.component_id.clone()) {
+        return Err(CharacterHealthError("component transform cycle".into()));
+    }
+    let local = local_affine(&component.local_transform);
+    let world = if let Some(parent_id) = &component.parent_component_id {
+        let parent = components
+            .iter()
+            .find(|c| &c.component_id == parent_id)
+            .ok_or_else(|| CharacterHealthError(format!("missing parent component {parent_id}")))?;
+        compose(
+            component_world_transform(parent, components, visiting)?,
+            local,
+        )
+    } else {
+        local
+    };
+    visiting.remove(&component.component_id);
+    Ok(world)
+}
+fn local_affine(t: &HealthTransform) -> Affine2 {
+    let (s, c) = t.rotation_radians.sin_cos();
+    (
+        Vec2::new(c * t.scale[0], s * t.scale[0]),
+        Vec2::new(-s * t.scale[1], c * t.scale[1]),
+        Vec2::from_array(t.position),
+    )
+}
+fn compose(a: Affine2, b: Affine2) -> Affine2 {
+    (
+        a.0 * b.0.x + a.1 * b.0.y,
+        a.0 * b.1.x + a.1 * b.1.y,
+        a.0 * b.2.x + a.1 * b.2.y + a.2,
+    )
+}
+fn transform_point(t: Affine2, p: [f32; 2]) -> Vec2 {
+    t.0 * p[0] + t.1 * p[1] + t.2
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct CharacterHealth {
+    pub current: f32,
+    pub maximum: f32,
+}
+impl CharacterHealth {
+    pub fn full(maximum: f32) -> Self {
+        Self {
+            current: maximum,
+            maximum,
+        }
     }
 }
 

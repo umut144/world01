@@ -12,12 +12,12 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackState,
-    MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId,
-    SelectedCharacter, WeaponAimState,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterId, GazeDirection, GazeIntent,
+    HammerAttackState, MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner,
+    Position, RoomId, SelectedCharacter, WeaponAimState,
 };
 #[cfg(feature = "server")]
-use game01_world_data::{CharacterCatalog, StartingRoomGrid};
+use game01_world_data::{CharacterCatalog, CharacterHealthCatalog, StartingRoomGrid};
 #[cfg(feature = "server")]
 use lightyear::connection::client::Disconnecting;
 #[cfg(feature = "client")]
@@ -357,6 +357,7 @@ impl GameProtocolAppExt for App {
         self.component::<GazeDirection>().replicate().predict();
         self.component::<WeaponAimState>().replicate().predict();
         self.component::<HammerAttackState>().replicate().predict();
+        self.component::<CharacterHealth>().replicate();
         self.component::<Position>()
             .replicate()
             .predict()
@@ -538,6 +539,7 @@ fn handle_join_requests(
     mut next_player_id: ResMut<NextPlayerId>,
     room_grid: Res<StartingRoomGrid>,
     catalog: Option<Res<CharacterCatalog>>,
+    health_catalog: Option<Res<CharacterHealthCatalog>>,
     mut commands: Commands,
 ) {
     for (connection, remote, mut receiver) in &mut clients {
@@ -567,6 +569,10 @@ fn handle_join_requests(
         next_player_id.0 = following_id;
         let spawn = spawn_position(player_id);
         let selected_character = request.character.clone();
+        let maximum_health = health_catalog
+            .as_ref()
+            .and_then(|catalog| catalog.max_hp(&selected_character))
+            .unwrap_or(140.0);
         let mut player = commands.spawn((
             PlayerId(player_id),
             PlayerOwner(owner),
@@ -587,6 +593,7 @@ fn handle_join_requests(
             PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
             InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
         ));
+        player.insert(CharacterHealth::full(maximum_health));
         if selected_character.0 == "hammerer" {
             player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));
         }

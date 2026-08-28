@@ -5,7 +5,9 @@ use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
-use game01_world_data::{CharacterCatalog, HammerCombatGeometry, StartingRoomGrid};
+use game01_world_data::{
+    CharacterCatalog, CharacterHealthCatalog, HammerCombatGeometry, StartingRoomGrid,
+};
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationPlugin;
@@ -48,6 +50,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         include_str!("../../../assets/characters/hammerer/manifest.json"),
         include_str!("../../../assets/characters/hammer/manifest.json"),
     )?;
+    let character_health = CharacterHealthCatalog::from_manifests([
+        include_str!("../../../assets/characters/archerf/manifest.json"),
+        include_str!("../../../assets/characters/barde/manifest.json"),
+        include_str!("../../../assets/characters/chantres/manifest.json"),
+        include_str!("../../../assets/characters/glavier/manifest.json"),
+        include_str!("../../../assets/characters/hammerer/manifest.json"),
+        include_str!("../../../assets/characters/mage/manifest.json"),
+        include_str!("../../../assets/characters/monk/manifest.json"),
+        include_str!("../../../assets/characters/rogue/manifest.json"),
+        include_str!("../../../assets/characters/sorcerer/manifest.json"),
+        include_str!("../../../assets/characters/warrior/manifest.json"),
+        include_str!("../../../assets/characters/wizard/manifest.json"),
+    ])?;
     let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -88,6 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
     app.insert_resource(hammer_geometry);
+    app.insert_resource(character_health);
     app.insert_resource(CharacterCatalog::from_json(include_str!(
         "../../../assets/characters/catalog.json"
     ))?);

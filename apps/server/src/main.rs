@@ -9,7 +9,9 @@ use game01_simulation::{
     HammerAttackRules, MovementStep, WeaponAimRules, advance_hammer_attacks, move_players,
     update_character_orientation, update_gaze_direction, update_weapon_aim,
 };
-use game01_world_data::{CharacterCatalog, HammerCombatGeometry, StartingRoomGrid};
+use game01_world_data::{
+    CharacterCatalog, CharacterHealthCatalog, HammerCombatGeometry, StartingRoomGrid,
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
@@ -27,6 +29,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         include_str!("../../../assets/characters/hammerer/manifest.json"),
         include_str!("../../../assets/characters/hammer/manifest.json"),
     )?;
+    let character_health = CharacterHealthCatalog::from_manifests([
+        include_str!("../../../assets/characters/archerf/manifest.json"),
+        include_str!("../../../assets/characters/barde/manifest.json"),
+        include_str!("../../../assets/characters/chantres/manifest.json"),
+        include_str!("../../../assets/characters/glavier/manifest.json"),
+        include_str!("../../../assets/characters/hammerer/manifest.json"),
+        include_str!("../../../assets/characters/mage/manifest.json"),
+        include_str!("../../../assets/characters/monk/manifest.json"),
+        include_str!("../../../assets/characters/rogue/manifest.json"),
+        include_str!("../../../assets/characters/sorcerer/manifest.json"),
+        include_str!("../../../assets/characters/warrior/manifest.json"),
+        include_str!("../../../assets/characters/wizard/manifest.json"),
+    ])?;
     let snapshot_interval = design
         .network
         .snapshot_interval_for(design.simulation)
@@ -51,6 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(hammer_geometry)
+    .insert_resource(character_health)
     .insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
             .ok_or_else(|| {

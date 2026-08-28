@@ -10,7 +10,8 @@ use game01_network::{
     configure_client, connect_client,
 };
 use game01_world_data::{
-    CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter, StartingRoomGrid,
+    CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter,
+    StartingRoomGrid,
 };
 use std::{path::Path, time::SystemTime};
 
@@ -109,6 +110,7 @@ impl Plugin for ClientPresentationPlugin {
                 PostUpdate,
                 (
                     sync_rendered_positions,
+                    update_health_bars,
                     follow_local_character,
                     apply_eye_gaze,
                     apply_hammer_pose,
@@ -156,6 +158,9 @@ struct ConfirmButtonLabel;
 
 #[derive(Component)]
 struct RenderedCharacter;
+
+#[derive(Component)]
+struct HealthBarFill(Entity);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct BodyPivot(Vec2);
@@ -665,6 +670,14 @@ fn render_new_players(
             Visibility::default(),
             Transform::from_xyz(position.x, position.y, 0.0),
         ));
+        let bar = commands
+            .spawn((
+                Sprite::from_color(Color::srgb(0.85, 0.12, 0.08), Vec2::ONE),
+                Transform::from_xyz(-0.4, 1.05, 20.0).with_scale(Vec3::new(0.8, 0.06, 1.0)),
+                HealthBarFill(entity),
+            ))
+            .id();
+        commands.entity(entity).add_child(bar);
         if let Err(error) = spawn_character_visual(
             &mut commands,
             entity,
@@ -676,6 +689,24 @@ fn render_new_players(
         ) {
             error!("cannot spawn PolyTools player visual: {error}");
         }
+    }
+}
+
+fn update_health_bars(
+    health: Query<&CharacterHealth>,
+    mut bars: Query<(&HealthBarFill, &mut Transform)>,
+) {
+    for (HealthBarFill(owner), mut transform) in &mut bars {
+        let Ok(value) = health.get(*owner) else {
+            continue;
+        };
+        let ratio = if value.maximum > 0.0 {
+            (value.current / value.maximum).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        transform.translation.x = -0.4 * (1.0 - ratio);
+        transform.scale.x = 0.8 * ratio;
     }
 }
 
