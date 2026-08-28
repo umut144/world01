@@ -673,7 +673,12 @@ fn render_new_players(
         let bar = commands
             .spawn((
                 Sprite::from_color(Color::srgb(0.85, 0.12, 0.08), Vec2::ONE),
-                Transform::from_xyz(-0.4, 1.05, 20.0).with_scale(Vec3::new(0.8, 0.06, 1.0)),
+                Transform::from_xyz(
+                    -0.4,
+                    character_assets.health_bar_offset_y(&character.0),
+                    20.0,
+                )
+                .with_scale(Vec3::new(0.8, 0.06, 1.0)),
                 HealthBarFill(entity),
             ))
             .id();

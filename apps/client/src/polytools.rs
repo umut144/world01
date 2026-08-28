@@ -169,12 +169,80 @@ impl CharacterAssetLibrary {
             .unwrap_or(Vec2::ZERO)
     }
 
+    /// Highest rendered fill vertex in the character root's local space,
+    /// including the asset-pivot correction used by the presentation tree.
+    pub fn health_bar_offset_y(&self, character: &CharacterId) -> f32 {
+        let Some(manifest) = self.character(character) else {
+            return 1.05;
+        };
+        let mut highest = f32::NEG_INFINITY;
+        for component in &manifest.components {
+            let world = component_world_transform(component, &manifest.components)
+                .unwrap_or_else(|| component_transform(component));
+            highest = highest.max(mesh_highest_y(
+                component.mesh.as_ref(),
+                world,
+                component.local_pivot,
+            ));
+            for referenced in &component.referenced_components {
+                let referenced_world = world.mul_transform(component_transform(referenced));
+                highest = highest.max(mesh_highest_y(
+                    referenced.mesh.as_ref(),
+                    referenced_world,
+                    referenced.local_pivot,
+                ));
+            }
+        }
+        if highest.is_finite() {
+            highest - manifest.asset_pivot[1] + 0.08
+        } else {
+            1.05
+        }
+    }
+
     #[cfg(test)]
     fn authored_facing(&self, character: &CharacterId) -> AuthoredFacing {
         self.character(character)
             .map(|manifest| manifest.presentation.authored_facing)
             .unwrap_or_default()
     }
+}
+
+fn component_world_transform(
+    component: &PolyToolsComponent,
+    components: &[PolyToolsComponent],
+) -> Option<Transform> {
+    let local = component_transform(component);
+    component
+        .parent_component_id
+        .as_ref()
+        .and_then(|parent_id| {
+            components
+                .iter()
+                .find(|parent| &parent.component_id == parent_id)
+                .and_then(|parent| component_world_transform(parent, components))
+                .map(|parent| parent.mul_transform(local))
+        })
+        .or(Some(local))
+}
+
+fn mesh_highest_y(
+    mesh: Option<&PolyToolsMesh>,
+    transform: Transform,
+    pivot: Option<[f32; 2]>,
+) -> f32 {
+    mesh.map(|mesh| {
+        let pivot = pivot.unwrap_or([0.0, 0.0]);
+        mesh.vertices
+            .iter()
+            .map(|vertex| {
+                transform
+                    .transform_point(Vec3::new(vertex[0] - pivot[0], vertex[1] - pivot[1], 0.0))
+                    .y
+            })
+            .fold(f32::NEG_INFINITY, f32::max)
+    })
+    .unwrap_or(f32::NEG_INFINITY)
 }
 
 #[derive(Debug)]
