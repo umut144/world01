@@ -75,9 +75,9 @@ Owns explicitly requested, human-editable game-design parameters:
 - typed configuration boundary;
 - initially backed by `design.toml`;
 - exposes the current global `0.8 m/s` movement speed and 60 Hz simulation
-  cadence, the default `180°/s` linear gaze speed with optional per-character
-  overrides, plus the explicitly requested Hammer charge/swing/recovery
-  timings and charging movement multiplier;
+  cadence, the default `60°/s` target-approach gaze speed with optional
+  per-character overrides, plus the explicitly requested Hammer
+  charge/swing/recovery timings and charging movement multiplier;
 
 Later values such as mass, MaxHP, or attack values are added only when the developer explicitly requests them and the corresponding behavior enters scope. Do not expose every internal constant merely because simulation uses it.
 
@@ -98,10 +98,10 @@ The simulation mutates protocol-neutral `Position`, `MovementDirection`,
 finite movement intent becomes a unit-clamped current `MovementDirection` and
 zero or invalid intent becomes zero. Horizontal movement intent updates
 retained Left/Right body facing; zero horizontal intent preserves it. A finite
-non-zero gaze intent selects an absolute target angle; zero or invalid gaze
-preserves the previous target/state. Shared simulation advances the current
-angle by the character's configured constant per-tick step without acceleration
-or braking. A mass/velocity movement model
+non-zero gaze intent selects one of eight target directions; zero or invalid
+gaze preserves the previous target/state. Shared simulation advances the
+current angle by the character's configured constant per-tick step without
+acceleration or braking. A mass/velocity movement model
 will be required soon and does not need to follow real-world physics. Keep the
 simulation interface and network/input flow suitable for adding explicit
 velocity and mass without rewriting those outer layers.
@@ -357,16 +357,17 @@ AttackRegion, attack point, and carried-behind-character layering.
   history gives prediction and authoritative server processing the same
   press/release sequence.
 - Slice 15A replaces direct gaze assignment with deterministic,
-  server-authoritative and predicted linear angular motion. `GazeState` stores
+  server-authoritative and predicted target-angle motion. `GazeState` stores
   the wrapped current angle and last non-zero turn direction; it always derives
   a valid direction and spawns looking right. Directional input represents an
-  absolute target angle. Simulation advances at the configured constant
-  `180°/s` baseline (exactly `3°` per 60 Hz tick), with no acceleration or
-  braking. A per-character override map permits later tuning without changing
-  input or protocol structure. Exact-opposite targets retain the previous turn
-  direction; the right-facing initial state uses clockwise as its deterministic
-  fallback.
-- Slice 15B makes Charging follow the evolving linear gaze with a
+  target direction without directly setting the current angle. Simulation
+  approaches it at the configured constant `60°/s` baseline (exactly `1°` per
+  60 Hz tick), with no acceleration or braking, and clamps to the exact target
+  when the remaining difference is at most one tick step. A per-character
+  override map permits later tuning without changing input or protocol
+  structure. Exact-opposite targets retain the previous turn direction; the
+  right-facing initial state uses clockwise as its deterministic fallback.
+- Slice 15B makes Charging follow the evolving target-approach gaze with a
   presentation-level Hammer lag and retains the 300-tick (`5.0 s` at 60 Hz)
   cap; release freezes the attack direction for the resulting swing. That
   refinement removes the current Charging movement lock so character movement

@@ -11,6 +11,7 @@ use game01_world_data::{
 };
 
 const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
+const TARGET_CLAMP_EPSILON: f32 = 0.000_1;
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct GazeRules {
@@ -301,9 +302,13 @@ pub fn update_gaze_state(
             GazeTurnDirection::CounterClockwise
         };
         let maximum_step = rules.radians_per_tick(character);
-        let signed_step = turn_direction.angle_sign() * maximum_step.min(delta.abs());
-        state.angle_radians = (state.angle_radians + signed_step).rem_euclid(2.0 * PI);
         state.last_turn_direction = turn_direction;
+        if delta.abs() <= maximum_step + TARGET_CLAMP_EPSILON {
+            state.angle_radians = target_angle.rem_euclid(2.0 * PI);
+        } else {
+            let signed_step = turn_direction.angle_sign() * maximum_step;
+            state.angle_radians = (state.angle_radians + signed_step).rem_euclid(2.0 * PI);
+        }
     }
 }
 
@@ -499,7 +504,7 @@ mod tests {
     }
 
     #[test]
-    fn gaze_starts_right_and_turns_linearly_at_180_degrees_per_second() {
+    fn gaze_starts_right_and_approaches_target_at_60_degrees_per_second() {
         let mut app = App::new();
         app.insert_resource(gaze_rules())
             .add_systems(Update, update_gaze_state);
@@ -515,14 +520,14 @@ mod tests {
         );
 
         *app.world_mut().get_mut::<GazeIntent>(player).unwrap() = GazeIntent::new(0.0, 1.0);
-        for _ in 0..15 {
+        for _ in 0..45 {
             app.update();
         }
         assert_direction(
             app.world().get::<GazeState>(player).unwrap().direction(),
             Vec2::from_angle(PI / 4.0),
         );
-        for _ in 0..15 {
+        for _ in 0..45 {
             app.update();
         }
         assert_direction(
@@ -576,13 +581,13 @@ mod tests {
 
         let clockwise = app.world().get::<GazeState>(clockwise).unwrap();
         assert_eq!(clockwise.last_turn_direction, GazeTurnDirection::Clockwise);
-        assert!((clockwise.angle_radians - (2.0 * PI - PI / 60.0)).abs() < EPSILON);
+        assert!((clockwise.angle_radians - (2.0 * PI - PI / 180.0)).abs() < EPSILON);
         let counterclockwise = app.world().get::<GazeState>(counterclockwise).unwrap();
         assert_eq!(
             counterclockwise.last_turn_direction,
             GazeTurnDirection::CounterClockwise
         );
-        assert!((counterclockwise.angle_radians - PI / 60.0).abs() < EPSILON);
+        assert!((counterclockwise.angle_radians - PI / 180.0).abs() < EPSILON);
     }
 
     #[test]
@@ -591,11 +596,35 @@ mod tests {
         config
             .gaze
             .character_degrees_per_second
-            .insert("hammerer".to_owned(), 90.0);
+            .insert("hammerer".to_owned(), 30.0);
         let rules = GazeRules::from_design(&config).expect("gaze override is valid");
 
-        assert!((rules.radians_per_tick(&character("wizard")) - PI / 60.0).abs() < EPSILON);
-        assert!((rules.radians_per_tick(&character("hammerer")) - PI / 120.0).abs() < EPSILON);
+        assert!((rules.radians_per_tick(&character("wizard")) - PI / 180.0).abs() < EPSILON);
+        assert!((rules.radians_per_tick(&character("hammerer")) - PI / 360.0).abs() < EPSILON);
+    }
+
+    #[test]
+    fn target_within_one_degree_clamps_to_the_exact_angle() {
+        let mut app = App::new();
+        app.insert_resource(gaze_rules())
+            .add_systems(Update, update_gaze_state);
+        let player = app
+            .world_mut()
+            .spawn((
+                character("wizard"),
+                GazeIntent::new(0.0, 1.0),
+                GazeState::new(
+                    PI / 2.0 - 0.5_f32.to_radians(),
+                    GazeTurnDirection::CounterClockwise,
+                ),
+            ))
+            .id();
+
+        app.update();
+
+        let state = app.world().get::<GazeState>(player).unwrap();
+        assert_eq!(state.angle_radians, PI / 2.0);
+        assert_direction(state.direction(), Vec2::Y);
     }
 
     #[test]
@@ -624,7 +653,7 @@ mod tests {
                 ))
                 .id();
 
-            for _ in 0..60 {
+            for _ in 0..180 {
                 app.update();
             }
 
@@ -649,7 +678,7 @@ mod tests {
                 speed_meters_per_second: 4.0,
             },
             gaze: GazeConfig {
-                default_degrees_per_second: 180.0,
+                default_degrees_per_second: 60.0,
                 character_degrees_per_second: HashMap::new(),
             },
             hammer_attack: HammerAttackConfig {
@@ -684,7 +713,7 @@ mod tests {
                 speed_meters_per_second: -1.0,
             },
             gaze: GazeConfig {
-                default_degrees_per_second: 180.0,
+                default_degrees_per_second: 60.0,
                 character_degrees_per_second: HashMap::new(),
             },
             hammer_attack: HammerAttackConfig {

@@ -187,15 +187,16 @@ Reference drawings:
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left,
   `K` down, and `L` right. Cardinal keys may be combined for diagonal gaze.
   Every character starts looking right; there is no neutral runtime gaze.
-  Directional input selects an absolute target angle and releasing the keys
-  retains that target.
+  Directional input chooses one of the eight target directions but does not set
+  the current angle directly. Releasing the keys retains the chosen target.
 - Gaze is gameplay-relevant authoritative state. The controlling client sends
-  its gaze intent to the server. The current first-iteration model turns toward
-  the target at a constant `180°/s`, without acceleration or braking. This
-  speed begins equal for all characters but is individually configurable. The
-  resulting angle and last turn direction are replicated so every client sees
-  the same look direction. Gaze remains independent from movement and body
-  facing.
+  its target-direction intent to the server. The current first-iteration model
+  approaches that target at a constant `60°/s`, exactly `1°` per 60 Hz tick,
+  without acceleration or braking. At a remaining difference of at most `1°`,
+  it clamps to the exact target. This speed begins equal for all characters but
+  is individually configurable. The resulting angle and last turn direction
+  are replicated so every client sees the same look direction. Gaze remains
+  independent from movement and body facing.
 - When the target is exactly `180°` from the current gaze, turning continues in
   the last non-zero turn direction. The initial fallback is clockwise, matching
   the right-facing spawn state.
@@ -244,8 +245,8 @@ Confirmed first-iteration direction:
   visually accepted. The size remains authored Asset data rather than a
   hard-coded game multiplier.
 - The current gaze angle is the Hammerer's attack direction. It is driven by
-  the shared character-configurable linear target-angle model rather than
-  snapping directly to raw input. While charging, the Hammer continues
+  the shared character-configurable target-angle approach rather than snapping
+  directly to raw input. While charging, the Hammer continues
   following that changing gaze with its own visible lag, is held opposite the
   direction, and appears smaller. On release it swings across the Hammerer,
   grows while passing over the head, and reaches the ground in the attack
@@ -268,7 +269,7 @@ Confirmed first-iteration direction:
 - Charging follows the retained gaze and caps at `5.0 s`. The Hammer scales
   linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
   at most 5% of the authored `grip_primary`-to-`attack_point_primary` distance.
-  The Hammer may visibly lag behind the linearly turning gaze while Charging.
+  The Hammer may visibly lag behind the target-approaching gaze while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction.
 - The first procedural swing travels clockwise. Its provisional release-to-

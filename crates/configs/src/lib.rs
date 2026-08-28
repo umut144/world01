@@ -192,7 +192,7 @@ mod tests {
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
         assert_eq!(design.movement.speed_meters_per_second, 0.8);
-        assert_eq!(design.gaze.default_degrees_per_second, 180.0);
+        assert_eq!(design.gaze.default_degrees_per_second, 60.0);
         assert!(design.gaze.character_degrees_per_second.is_empty());
         assert!(design.gaze.is_valid());
         assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
