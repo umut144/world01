@@ -233,10 +233,16 @@ Confirmed first-iteration direction:
 - The Hammer has an authored polygonal `AttackRegion`, drawn with PolyTools'
   existing Bezier/closed-loop interaction rather than approximated by a circle.
 - The Hammer's complete authored Asset has been uniformly enlarged and rebased
-  in PolyTools. Its current size relative to the Hammerer, grip/socket
-  alignment, grip-centered pivot, AttackRegion, and `attack_point_primary` are
-  visually accepted. The size remains authored Asset data rather than a
-  hard-coded game multiplier.
+  in PolyTools once already. A further visual enlargement is now confirmed
+  before Slice 15B; it will again be authored and rebased in PolyTools so the
+  geometry, AttackRegion, and every Weapon frame scale together rather than
+  receiving a hard-coded game multiplier.
+- `grip_primary` remains the Hammer's carried contact aligned to the Hammerer's
+  `weapon_socket_primary`. The attack regrips the same hand to a separately
+  authored weapon-local `grip_secondary`; neither existing role is renamed.
+  The released strike's full-length impact radius is derived from
+  `grip_secondary` to `attack_point_primary` after the new Hammer export is
+  synced.
 - The Hammerer has a weapon-aim angle independent from gaze. While an IJKL
   direction is held, that angle approaches the immediately selected gaze at a
   constant `60°/s`, exactly `1°` per 60 Hz tick, without acceleration or
@@ -272,7 +278,9 @@ Confirmed first-iteration direction:
   holding it charges the same strike and releasing executes it.
 - Charging follows the current weapon aim and caps at `5.0 s`. The Hammer scales
   linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
-  at most 5% of the authored `grip_primary`-to-`attack_point_primary` distance.
+  at most 5% of its authored attack-grip-to-attack-point distance. Charging also
+  presents the regrip from `grip_primary` toward `grip_secondary`; its exact
+  interpolation timing remains part of Slice 15B implementation tuning.
   Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction.
@@ -301,14 +309,13 @@ Confirmed first-iteration direction:
   not authoritative collision state, while the server evaluates the authored
   attack geometry at the authoritative impact pose.
 
-Planned authoring aid:
+Confirmed authoring aids:
 
-- An `attack_point_primary` attachment frame is placed at the Hammer head,
-  initially at the geometric center of its authored `head` group. It gives the
-  swing and AttackRegion an explicit alignment reference independent from the
-  grip. Whether the authoritative impact distance is derived directly from the
-  authored grip-to-attack-point distance or remains a separately tunable design
-  value is still open.
+- `attack_point_primary` is placed at the Hammer head's authored center and
+  gives the swing and AttackRegion an explicit alignment reference.
+- `grip_secondary` is authored on the Hammer shaft as the attack contact. The
+  impact radius is derived from this frame to `attack_point_primary`; no
+  duplicate impact-distance balance value is introduced for this iteration.
 
 The first combat-value slice introduces server-authoritative current/max HP.
 A simple health bar above each character is deliberately allowed as a temporary
@@ -393,9 +400,9 @@ The technical realization, networking model, configuration boundary, and crate r
 - Which collapse variant(s) enter iteration 1.
 - Collapse wave timing, warning semantics, and escape constraints.
 - Exact combat and abilities of all five characters.
-- Exact Hammer impact distance, AttackRegion placement rule, base damage, and
-  charged-damage curve. The current charge/swing/recovery timings and movement
-  restrictions are confirmed first-iteration values but remain balanceable.
+- Exact AttackRegion placement/overlap rule, base damage, and charged-damage
+  curve. Hammer impact distance is authored by `grip_secondary` and
+  `attack_point_primary`; current action timings remain balanceable.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
 - Persistence design beyond the non-persistent first slice.

@@ -252,7 +252,9 @@ inventory system:
   frame. The intended editor route is `Guide -> Weapon -> ...` from the selected
   component or group.
 - `weapon_socket_primary` is authored under the Hammerer's body hierarchy.
-  `grip_primary` is authored at the held part of the Hammer shaft. The planned
+  `grip_primary` is authored at the carried contact on the Hammer shaft.
+  `grip_secondary` is a second Hammer-local contact for the attack regrip; both
+  align to the same character-owned socket in their respective poses.
   `attack_point_primary` is authored at the Hammer head, initially at the
   geometric center of the `head` group.
 - PolyTools Regions are non-rendering semantic geometry distinct from visible
@@ -281,6 +283,13 @@ inventory system:
   require exactly one reach limit for Hammer; the maximum planted-head reach is
   derived from its distance to `attack_point_primary` rather than from visible
   Component geometry.
+- PolyTools World schema 55 and Runtime Manifest schema 11 add the optional
+  transform-based `grip_secondary` role. Editor menu, Component/Group scope,
+  transform gizmo, Inspector, persistence, Root Scale Rebase, strict export,
+  and regressions are implemented in PolyTools. game01 deliberately remains on
+  its currently synced schema-10 package until the further-enlarged Hammer and
+  its authored secondary grip are exported; consumer/schema upgrade follows
+  that authored handoff rather than inventing a frame locally.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,
@@ -387,9 +396,12 @@ AttackRegion, attack point, and carried-behind-character layering.
   corresponding Hammer pose. Visible weapon transforms are not replicated.
 - Slice 15B updates client presentation's procedural clockwise curve. Charge
   progress linearly scales the Hammer from `1.0` to
-  `0.8` and pulls it inward by at most 5% of the authored grip-to-attack-point
-  distance. The swing reaches scale `1.25` at the overhead apex and `1.0` at
-  ground impact. It samples fixed-tick overstep for frame-smooth transforms.
+  `0.8`, presents the hand-contact transition from authored `grip_primary` to
+  `grip_secondary`, and pulls it inward by at most 5% of the authored
+  attack-grip-to-attack-point distance. The exact regrip interpolation timing
+  remains local presentation tuning. The swing reaches scale `1.25` at the
+  overhead apex and `1.0` at ground impact. It samples fixed-tick overstep for
+  frame-smooth transforms.
 - The planned Embedded Impact requires a presentation anchor containing the
   world-space Hammer-head point at impact. The head remains at that point for
   `2.0 s`, with
@@ -405,10 +417,11 @@ AttackRegion, attack point, and carried-behind-character layering.
   pivot named `shaft_bevel_bottom` at asset position `(0, 0.03119038)`. A
   semantic Weapon Guide at that position is preferred before shared simulation
   imports it as authoritative reach data.
-- `attack_point_primary` is the preferred authored visual alignment reference
-  for the Hammer head and AttackRegion. The exact authoritative relationship
-  between that point, the grip/socket pair, and a separately configurable
-  impact distance is deliberately still open.
+- `attack_point_primary` is the authored Hammer-head and AttackRegion alignment
+  reference. Slice 15B derives the full-length impact radius from the synced
+  `grip_secondary`-to-`attack_point_primary` vector rather than duplicating it
+  as a design configuration value. The authoritative AttackRegion placement
+  and overlap rule remains deferred to Slice 17.
 - Server-authoritative current/max HP enters before damaging attacks. Clients
   receive the replicated values and temporarily render a simple bar above each
   character solely for multiplayer combat validation.
