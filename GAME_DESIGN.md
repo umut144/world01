@@ -13,6 +13,23 @@ Interpretation rules:
 - Do not implement anything unless explicitly requested.
 - Update this file when the developer makes a durable design decision.
 
+## Normierte Größenentscheidungen
+
+Diese Tabelle enthält bestätigte Referenzgrößen. Einzelne Charaktere, Assets
+und UI-Elemente werden relativ zu diesen Referenzen skaliert. Neue
+Entscheidungen werden als zusätzliche Zeilen ergänzt.
+
+| Bereich | Referenz | Normwert | Ableitung / Anwendung | Status |
+|---|---|---:|---|---|
+| Weltmaßstab | Tile / Raumgeometrie | `1 m = 192 px` | Einheitliche Umrechnung zwischen Spielwelt und Darstellung | Bestätigt |
+| Kamera | Standard-Viewport | `2880 × 1800 px` | Andere Fensterformate werden über Letterboxing angepasst | Bestätigt |
+| Bewegung | Alle Charaktere | `0,8 m/s` | Globaler Slow-Paced-Basiswert | Bestätigt |
+| MaxHP | Hammerer | `140 HP` | Referenz für die flächenbasierte HP-Normierung | Bestätigt |
+| MaxHP | Alle Charaktere | `Body + optional Feet` | Fläche aus exportierten triangulierten Fill-Meshes; automatisch datengetrieben | Bestätigt |
+| HP-Balkenlänge | Mage | Faktor `1,0` | Andere Balken: `MaxHP / MaxHP(Mage)` | Bestätigt, Implementierung offen |
+| Pupillenfläche | Jeder Charakter | `26,0 %` | Pupillenfläche relativ zur jeweiligen Augenregion | Bestätigt |
+| Pupillenkollision | Hammerer | `35,0 %` | Gemeinsame Kollisionsreferenz für alle Charaktere | Bestätigt |
+
 ## Identity
 
 - Project/workspace: `game01`
