@@ -111,11 +111,11 @@ pub fn apply_hammer_pose(
             HammerAttackPhase::Embedded => embedded_shake(*attack, overstep),
             _ => Vec2::ZERO,
         };
-        let swinging = attack.phase == HammerAttackPhase::Swing;
-        set_visual_visibility(&hammer.flat_visuals, !swinging, &mut visual_visibility);
+        let uses_depth = uses_depth_visual(attack.phase);
+        set_visual_visibility(&hammer.flat_visuals, !uses_depth, &mut visual_visibility);
         set_visual_visibility(
             &hammer.swing_depth_visuals,
-            swinging,
+            uses_depth,
             &mut visual_visibility,
         );
         let grip_progress = rules.grip_progress(attack.charge_ticks as f32);
@@ -135,6 +135,13 @@ pub fn apply_hammer_pose(
         }
         *transform = next_transform;
     }
+}
+
+fn uses_depth_visual(phase: HammerAttackPhase) -> bool {
+    matches!(
+        phase,
+        HammerAttackPhase::Swing | HammerAttackPhase::Embedded
+    )
 }
 
 fn hammer_pose(
@@ -550,6 +557,15 @@ mod tests {
             assert!(transform.rotation.mul_vec3(Vec3::X).z.abs() < 0.000_01);
             assert!(transform.rotation.mul_vec3(Vec3::Y).z.abs() < 0.000_01);
         }
+    }
+
+    #[test]
+    fn depth_visual_lasts_through_embedded_shake_only() {
+        assert!(!uses_depth_visual(HammerAttackPhase::Idle));
+        assert!(!uses_depth_visual(HammerAttackPhase::Charging));
+        assert!(uses_depth_visual(HammerAttackPhase::Swing));
+        assert!(uses_depth_visual(HammerAttackPhase::Embedded));
+        assert!(!uses_depth_visual(HammerAttackPhase::Recovery));
     }
 
     #[test]

@@ -318,8 +318,10 @@ Confirmed first-iteration direction:
   the locked attack direction. PolyTools authors a Component-local projection
   depth in centimeters. During Swing, the visible Hammer uses that depth as a
   closed side silhouette, so the `90°` midpoint shows the authored thickness
-  rather than disappearing. Idle, Charging, Embedded, and Recovery retain the
-  normal flat polygon presentation. The authored depth is independent of
+  rather than disappearing. This contourless depth form remains active through
+  the complete Embedded shake and visually distinguishes the Hammer's attack
+  state. Idle, Charging, and Recovery retain the normal flat polygon
+  presentation with authored contours. The authored depth is independent of
   component and asset scale; its visible contribution follows
   `|sin(θ)|`, growing naturally to its maximum at `90°` and returning to zero
   at `180°`, while the original 2D geometry follows `|cos(θ)|`.
