@@ -16,6 +16,8 @@ use crate::polytools::HammerVisual;
 const APEX_SCALE: f32 = 1.25;
 const IMPACT_SCALE: f32 = 1.0;
 const EMBEDDED_SHAKE_METERS: f32 = 0.006;
+// Temporary screenshot aid; remove after capturing the exact edge-on pose.
+const TEMPORARY_FREEZE_AT_EDGE_ON: bool = true;
 const HAMMER_SHADER_HANDLE: Handle<Shader> = uuid_handle!("41caa612-7608-4bb0-80c0-aa418ba2c56a");
 
 pub struct HammerPresentationPlugin;
@@ -196,7 +198,11 @@ fn depth_swing_transform(
     inward_pull_ratio: f32,
     progress: f32,
 ) -> Transform {
-    let progress = progress.clamp(0.0, 1.0);
+    let progress = if TEMPORARY_FREEZE_AT_EDGE_ON {
+        0.5
+    } else {
+        progress.clamp(0.0, 1.0)
+    };
     let start_direction = -attack_direction;
     let source_angle = hammer.attack_point_from_grip.to_angle();
     let screen_alignment = Quat::from_rotation_z(start_direction.to_angle() - source_angle);
