@@ -475,12 +475,12 @@ impl HammerCombatGeometry {
         let hammer: CombatManifest = serde_json::from_str(hammer_source).map_err(|error| {
             HammerCombatGeometryError::new(format!("invalid Hammer manifest: {error}"))
         })?;
-        if hammerer.schema_version != 11 || hammerer.asset_key != "hammerer" {
+        if !matches!(hammerer.schema_version, 11 | 12) || hammerer.asset_key != "hammerer" {
             return Err(HammerCombatGeometryError::new(
                 "Hammerer combat geometry requires its schema-11 manifest",
             ));
         }
-        if hammer.schema_version != 11 || hammer.asset_key != "hammer" {
+        if !matches!(hammer.schema_version, 11 | 12) || hammer.asset_key != "hammer" {
             return Err(HammerCombatGeometryError::new(
                 "Hammer combat geometry requires its schema-11 manifest",
             ));

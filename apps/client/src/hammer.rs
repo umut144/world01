@@ -40,6 +40,7 @@ struct HammerPresentationUniform {
     shake_extent: f32,
     authored_layer: f32,
     presentation_layer: f32,
+    projection_depth_meters: f32,
     padding: f32,
 }
 
@@ -50,7 +51,12 @@ pub struct HammerPresentationMaterial {
 }
 
 impl HammerPresentationMaterial {
-    pub fn from_color(color: Color, authored_layer: f32, presentation_layer: f32) -> Self {
+    pub fn from_color(
+        color: Color,
+        authored_layer: f32,
+        presentation_layer: f32,
+        projection_depth_meters: f32,
+    ) -> Self {
         Self {
             uniform: HammerPresentationUniform {
                 color: color.to_linear().to_vec4(),
@@ -59,6 +65,7 @@ impl HammerPresentationMaterial {
                 shake_extent: 1.0,
                 authored_layer,
                 presentation_layer,
+                projection_depth_meters,
                 padding: 0.0,
             },
         }

@@ -337,6 +337,8 @@ struct PolyToolsComponent {
     #[serde(default)]
     local_pivot: Option<[f32; 2]>,
     local_transform: PolyToolsTransform,
+    #[serde(default = "default_projection_depth_meters")]
+    projection_depth_meters: f32,
     mesh: Option<PolyToolsMesh>,
     #[serde(default)]
     closed_region_mesh: Option<PolyToolsRegionMesh>,
@@ -346,6 +348,10 @@ struct PolyToolsComponent {
     source_asset_key: Option<String>,
     #[serde(skip)]
     referenced_components: Vec<PolyToolsComponent>,
+}
+
+fn default_projection_depth_meters() -> f32 {
+    0.1
 }
 
 #[derive(Clone, Deserialize)]
@@ -572,7 +578,10 @@ pub fn spawn_character_visual(
         if let Some(mesh) = component.mesh.as_ref() {
             let fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(mesh))),
+                    Mesh2d(meshes.add(bevy_mesh_with_depth(
+                        mesh,
+                        component.projection_depth_meters,
+                    ))),
                     MeshMaterial2d(fill_color),
                     mesh_transform,
                 ))
@@ -732,6 +741,7 @@ fn spawn_hammer_visual(
                 hammer_component_color(&component.name),
                 z,
                 behind_layer,
+                component.projection_depth_meters,
             ));
             material_handles.push(material.clone());
             let fill = commands
@@ -750,14 +760,18 @@ fn spawn_hammer_visual(
                 Color::srgb(0.045, 0.04, 0.055),
                 z + OUTLINE_Z_OFFSET,
                 behind_layer,
+                component.projection_depth_meters,
             ));
             material_handles.push(material.clone());
             let outline = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
-                        vertices: stroke.vertices.clone(),
-                        indices: stroke.indices.clone(),
-                    }))),
+                    Mesh2d(meshes.add(bevy_mesh_with_depth(
+                        &PolyToolsMesh {
+                            vertices: stroke.vertices.clone(),
+                            indices: stroke.indices.clone(),
+                        },
+                        component.projection_depth_meters,
+                    ))),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
@@ -845,22 +859,39 @@ fn bevy_mesh(mesh: &PolyToolsMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
 
+fn bevy_mesh_with_depth(mesh: &PolyToolsMesh, depth_meters: f32) -> Mesh {
+    let half_depth = depth_meters.max(0.0) * 0.5;
+    let mut vertices = Vec::with_capacity(mesh.vertices.len() * 2);
+    for vertex in &mesh.vertices {
+        vertices.push([vertex[0], vertex[1], -half_depth]);
+    }
+    for vertex in &mesh.vertices {
+        vertices.push([vertex[0], vertex[1], half_depth]);
+    }
+    let offset = mesh.vertices.len() as u32;
+    let mut indices = mesh.indices.clone();
+    indices.extend(mesh.indices.iter().map(|index| index + offset));
+    bevy_mesh_from_parts_3d(&vertices, &indices)
+}
+
 pub(crate) fn bevy_pupil_mesh(geometry: &PupilGeometry) -> Mesh {
     bevy_mesh_from_parts(&geometry.vertices, &geometry.indices)
 }
 
 fn bevy_mesh_from_parts(vertices: &[[f32; 2]], indices: &[u32]) -> Mesh {
+    let vertices = vertices
+        .iter()
+        .map(|vertex| [vertex[0], vertex[1], 0.0])
+        .collect::<Vec<_>>();
+    bevy_mesh_from_parts_3d(&vertices, indices)
+}
+
+fn bevy_mesh_from_parts_3d(vertices: &[[f32; 3]], indices: &[u32]) -> Mesh {
     let mut bevy_mesh = Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD,
     );
-    bevy_mesh.insert_attribute(
-        Mesh::ATTRIBUTE_POSITION,
-        vertices
-            .iter()
-            .map(|vertex| [vertex[0], vertex[1], 0.0])
-            .collect::<Vec<_>>(),
-    );
+    bevy_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices.to_vec());
     bevy_mesh.insert_indices(Indices::U32(indices.to_vec()));
     bevy_mesh
 }
@@ -935,7 +966,7 @@ fn validate_manifest(
     manifest: &PolyToolsManifest,
     expected_key: &str,
 ) -> Result<(), PolyToolsAssetError> {
-    if !(5..=11).contains(&manifest.schema_version) {
+    if !(5..=12).contains(&manifest.schema_version) {
         return Err(PolyToolsAssetError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -966,7 +997,7 @@ fn validate_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
-    if manifest.schema_version != 11
+    if !matches!(manifest.schema_version, 11 | 12)
         || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
