@@ -245,9 +245,9 @@ Confirmed first-iteration direction:
   preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
-- Primary pointer input (including a normal Mac trackpad click) and the Xbox
-  right trigger invoke the primary attack. Space is an equal development
-  fallback so the attack remains testable without a mouse or controller.
+- Space invokes the primary attack during keyboard development. The Xbox right
+  trigger invokes the same action when a controller is available. Primary
+  pointer/trackpad click is deliberately not bound.
 - The first swing uses a focused procedural transform curve rather than a
   general-purpose animation state machine.
 - Simulation and presentation remain separate: the visible Hammer transform is

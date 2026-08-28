@@ -36,20 +36,18 @@ pub fn collect_gaze_input(
 
 pub fn collect_attack_input(
     keyboard: Res<ButtonInput<KeyCode>>,
-    pointer: Res<ButtonInput<MouseButton>>,
     mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientPlayerInput>,
 ) {
     let pressed = attack_pressed(
         keyboard.pressed(KeyCode::Space),
-        pointer.pressed(MouseButton::Left),
         controller_input.right_trigger_pressed(),
     );
     input.0.attack = AttackIntent::new(pressed);
 }
 
-fn attack_pressed(space: bool, primary_pointer: bool, right_trigger: bool) -> bool {
-    space || primary_pointer || right_trigger
+fn attack_pressed(space: bool, right_trigger: bool) -> bool {
+    space || right_trigger
 }
 
 fn retained_gaze(current: GazeIntent, direction: Vec2) -> GazeIntent {
@@ -110,10 +108,9 @@ mod tests {
     }
 
     #[test]
-    fn attack_accepts_trackpad_click_space_and_right_trigger_equally() {
-        assert!(attack_pressed(false, true, false));
-        assert!(attack_pressed(true, false, false));
-        assert!(attack_pressed(false, false, true));
-        assert!(!attack_pressed(false, false, false));
+    fn attack_accepts_space_and_right_trigger_equally() {
+        assert!(attack_pressed(true, false));
+        assert!(attack_pressed(false, true));
+        assert!(!attack_pressed(false, false));
     }
 }
