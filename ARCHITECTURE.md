@@ -345,8 +345,10 @@ AttackRegion, attack point, and carried-behind-character layering.
 - The initial direct gaze assignment is provisional. Slice 15A replaces it with
   a deterministic, server-authoritative and predicted angular-motion model.
   Its state must be suitable for character-specific turning parameters without
-  coupling input devices to simulation. Whether directional input represents
-  an absolute target angle or angular acceleration remains explicitly open.
+  coupling input devices to simulation. Directional input is confirmed to
+  represent an absolute target angle. Simulation integrates current angle and
+  angular velocity using character-specific maximum speed, acceleration, and
+  braking parameters, then derives `GazeDirection` from that angle.
 - Slice 15B makes Charging follow the evolving inertial gaze with a
   presentation-level Hammer lag and retains the 300-tick (`5.0 s` at 60 Hz)
   cap; release freezes the attack direction for the resulting swing. That
@@ -373,6 +375,13 @@ AttackRegion, attack point, and carried-behind-character layering.
   constrained pose to the current carried pose; it must not continue the
   former circular path. The authoritative future AttackRegion still uses
   simulation state rather than this presentation anchor.
+- Embedded movement is constrained by a circle around the planted head. Inward
+  and tangential displacement remain unchanged; only an outward displacement
+  crossing the authored maximum reach is projected to the boundary. The current
+  Hammer manifest exposes the intended endpoint only as the visual Component
+  pivot named `shaft_bevel_bottom` at asset position `(0, 0.03119038)`. A
+  semantic Weapon Guide at that position is preferred before shared simulation
+  imports it as authoritative reach data.
 - `attack_point_primary` is the preferred authored visual alignment reference
   for the Hammer head and AttackRegion. The exact authoritative relationship
   between that point, the grip/socket pair, and a separately configurable

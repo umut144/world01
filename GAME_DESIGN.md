@@ -237,8 +237,10 @@ Confirmed first-iteration direction:
   visually accepted. The size remains authored Asset data rather than a
   hard-coded game multiplier.
 - `GazeDirection` is the Hammerer's attack direction. It will be driven by a
-  character-specific inertial turning model rather than snapping directly to
-  raw input. While charging, the Hammer continues following that changing gaze
+  character-specific inertial target-angle model rather than snapping directly
+  to raw input. Directional input chooses an absolute target direction; the
+  current view angle accelerates, turns with bounded angular velocity, brakes,
+  and settles on that target. While charging, the Hammer continues following that changing gaze
   with its own visible lag, is held opposite the direction, and appears
   smaller. On
   release it swings across the Hammerer, grows while passing over the head,
@@ -271,6 +273,11 @@ Confirmed first-iteration direction:
   smoothly and directly to the current behind-the-Hammerer shoulder pose
   instead of completing a circular rotation. The Hammer uses scale `1.25` at
   the overhead apex and `1.0` at impact.
+- During Embedded Impact, the Hammerer may move freely inside the Hammer's
+  authored reach. At maximum reach, only movement farther away from the planted
+  head is blocked; tangential and inward movement remain available. The desired
+  reach endpoint is the current `shaft_bevel_bottom` position. It should become
+  a semantic Weapon Guide before being treated as a durable gameplay contract.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.
