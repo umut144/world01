@@ -86,8 +86,8 @@ crates/
   configs
   content                    PolyTools import, validation, runtime derivation
   world_data/                identity, input, movement, combat, world
-  simulation/                schedule plus movement, aim, combat::hammer APIs
-  network/                   protocol, client_transport, server_transport APIs
+  simulation/                schedule, movement, aim, combat/hammer source modules
+  network/                   protocol, client_transport, server_transport source modules
 apps/
   server/                    main composition, session Join-to-domain assembly
   client/                    input, prediction, session, presentation
@@ -97,6 +97,14 @@ apps/
 consume it while `world_data` must remain free of JSON/schema dependencies. The
 other new boundaries remain modules because they do not need independent
 dependency graphs or reuse outside their owning crate/application.
+
+`simulation/src/lib.rs` is only the stable public re-export boundary plus the
+existing crate-wide deterministic regression suite; production systems and
+rules live in their responsibility modules. `network/src/lib.rs` is only its
+feature-gated public re-export boundary. Network tests live with protocol,
+client transport, or server transport respectively. Cross-system simulation
+regressions intentionally remain together because they exercise several
+ordered gameplay systems rather than one isolated implementation module.
 
 ### `world_data`
 
