@@ -6,7 +6,7 @@ use bevy::{
 };
 use game01_configs::load_file;
 use game01_network::{
-    ClientPositionCorrection, NetworkSimulationProfile, RemotePositionExtrapolation,
+    Client, ClientPositionCorrection, NetworkSimulationProfile, RemotePositionExtrapolation,
     configure_client, connect_client,
 };
 use game01_world_data::{
@@ -77,7 +77,7 @@ impl Plugin for ClientPresentationPlugin {
             })
             .insert_resource(self.character_assets.clone())
             .init_resource::<PoseSettings>()
-            .add_systems(Startup, setup_selection)
+            .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
@@ -100,6 +100,7 @@ impl Plugin for ClientPresentationPlugin {
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
+                    repick_character.run_if(in_state(ClientScreen::InGame)),
                 ),
             )
             .add_systems(
@@ -626,6 +627,24 @@ fn cleanup_room_floor(floor_tiles: Query<Entity, With<RoomFloorTile>>, mut comma
     for entity in &floor_tiles {
         commands.entity(entity).despawn();
     }
+}
+
+fn repick_character(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut session: ResMut<ClientSession>,
+    mut next_screen: ResMut<NextState<ClientScreen>>,
+    clients: Query<Entity, With<Client>>,
+    mut commands: Commands,
+) {
+    if !keyboard.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+    for client in &clients {
+        commands.entity(client).despawn();
+    }
+    session.selected = None;
+    session.joining = false;
+    next_screen.set(ClientScreen::CharacterSelection);
 }
 
 fn spawn_single_room(commands: &mut Commands, room_grid: StartingRoomGrid) {

@@ -25,6 +25,8 @@ use lightyear::interpolation::timeline::InterpolationConfig;
 #[cfg(feature = "client")]
 use lightyear::prediction::correction::PreviousVisual;
 #[cfg(feature = "client")]
+pub use lightyear::prelude::Client;
+#[cfg(feature = "client")]
 use lightyear::prelude::input::native::InputMarker;
 use lightyear::prelude::input::native::{ActionState, InputPlugin as NativeInputPlugin};
 #[cfg(feature = "server")]
