@@ -1,14 +1,18 @@
-# game01 Sandbox — Vision
+# game01 Multiplayer Sandbox — Vision
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 ## Purpose and audience
 
 This document defines the product and scope boundary of the `game01` sandbox
-for developers. The sandbox is a reusable technical foundation for several
-games set in **“Secrets, Room's & Travels'”**. It provides shared runtime
-capabilities and asset conventions; it does not define a game, genre, ruleset,
-or player progression.
+for developers. The sandbox is the shared, runnable technical foundation for
+several **multiplayer games** set in **“Secrets, Room's & Travels'”**. It
+provides common runtime capabilities and asset conventions; it does not define
+a particular game, genre, ruleset, or player progression.
+
+“Sandbox” means a reusable development and integration base from which concrete
+games can grow. It does not mean a disposable prototype, a standalone game, or
+an attempt to build a universal engine.
 
 Game-specific rules belong in game plugins and their design documents. The
 Labyrinth reference design is deliberately isolated at
@@ -19,68 +23,39 @@ defines how a game extends those contracts.
 
 ## Scope
 
-The sandbox supports multiple 2D games that can share world theme, authored
-assets, networking conventions, and presentation infrastructure. A game may
-be single-player or networked and may use rooms, larger spaces, characters, or
-other entities. None of these optional concepts imply combat, a match loop, or
-progression.
+The sandbox supports multiple 2D multiplayer games that can share world theme,
+authored assets, networking conventions, and presentation infrastructure. A
+game may use rooms, larger spaces, characters, or other entities without those
+concepts implying a particular genre or gameplay loop.
 
 The sandbox owns stable boundaries rather than genre behavior:
 
 - Bevy application composition and ECS scheduling;
 - protocol-neutral shared state and deterministic simulation entry points;
-- optional server-authoritative networking and replication;
+- server-authoritative networking, ownership, prediction, replication, and
+  reconciliation boundaries;
 - PolyTools runtime-asset import, validation, and caching;
 - 2D camera framing and optional room presentation primitives;
 - device-independent input actions and bindings;
 - character/entity instantiation and presentation attachment.
 
-## Minimal viable sandbox — iteration 1
+## Extension and repository model
 
-Iteration 1 must establish a small, working vertical base that plugins can
-reuse and test independently:
+The repository uses `main` as the canonical shared multiplayer base. A concrete
+game or game genre may be developed on a dedicated branch created from that
+base. Such a branch may contain its own plugins, rules, assets, configuration,
+and documentation without requiring those game-specific concerns to coexist on
+`main`.
 
-1. A Cargo workspace with headless server and graphical client entry points.
-2. A Bevy ECS boundary that keeps simulation separate from input, networking,
-   and presentation.
-3. Optional server-authoritative entity lifecycle, ownership, and replicated
-   state using the existing Lightyear integration.
-4. A validated PolyTools runtime-asset pipeline that loads imported assets from
-   `assets/` and exposes typed runtime data without requiring the authoring
-   project at runtime.
-5. A generic controllable-entity path: instantiate an entity, accept mapped
-   local input, and present replicated state. Its behavior is selected by a
-   game plugin.
-6. A configurable 2D camera and room/frame presentation service that works
-   without asserting topology, transitions, or collision semantics.
-7. Keyboard and controller input mapping with a single action-level interface.
+A generally useful capability may originate while building one game. When the
+capability is clearly reusable, its contract is separated from the originating
+game's semantics and merged back into `main`. Other game branches can then take
+that shared improvement from the common base. Game-specific rules remain on
+their owning branch. `main` therefore evolves through concrete needs discovered
+by games, not through speculative framework work.
 
-The goal is a reliable extension point, not a feature-complete engine. Existing
-Labyrinth behavior may temporarily exercise this base, but does not become a
-sandbox requirement merely because it already exists.
-
-## Explicit exclusions
-
-Iteration 1 does not own or prescribe:
-
-- combat, health, damage, weapons, abilities, targeting, or AI;
-- victory conditions, matches, rounds, quests, cards, tactics, or economic
-  systems;
-- progression, seasons, accounts, persistence, matchmaking, or rankings;
-- room-graph generation, collapse, hazards, puzzles, portals, or traversal
-  rules;
-- character classes, kits, inventories, or an equipment model;
-- animation systems, VFX, audio, UI polish, final materials, or final art
-  direction;
-- physics/collision policy beyond facilities explicitly added by a plugin.
-
-These omissions keep the base useful to Battle Royale, MMORPG, MOBA, card, and
-tactics implementations without forcing their assumptions on one another.
-
-## Extension model
-
-A game is composed as one or more Bevy plugins. The sandbox exposes narrow
-contracts for game plugins to:
+Within a game branch, the game is composed as one or more Bevy plugins. The
+sandbox exposes narrow contracts for game plugins to:
 
 - register game-owned components, resources, events, and schedules;
 - define game input actions and map them from sandbox device state;
@@ -90,15 +65,17 @@ contracts for game plugins to:
 - add camera/room policies and presentation systems;
 - load game-local content without bypassing the shared asset boundary.
 
-The sandbox remains the owner of shared lifecycle, transport, runtime-asset,
-and presentation boundaries. Plugins own genre semantics and must not make
-client-visible state authoritative. Detailed conventions and a minimal plugin
-are in [`PLUGIN_GUIDE.md`](PLUGIN_GUIDE.md).
+The sandbox remains the owner of shared multiplayer lifecycle, transport,
+runtime-asset, and presentation boundaries. Plugins own genre semantics and
+must not make client-visible state authoritative. Detailed conventions and a
+minimal plugin are in [`PLUGIN_GUIDE.md`](PLUGIN_GUIDE.md).
 
 ## Decision principles
 
-- Add a shared abstraction only after two current game implementations need
-  the same stable contract.
+- Promote a game-originated capability to `main` only when it has concrete
+  cross-game value and a stable contract free of the originating game's rules.
+- Do not generalize hypothetical needs in advance; let concrete game work
+  reveal useful shared behavior.
 - Prefer typed, explicit data crossing boundaries over plugin access to another
   plugin's internal state.
 - Keep headless simulation free of rendering, windowing, audio, and device

@@ -1,6 +1,6 @@
-# game01 Sandbox — Plugin Guide
+# game01 Multiplayer Sandbox — Plugin Guide
 
-Last updated: 2026-08-28
+Last updated: 2026-08-29
 
 ## Purpose and audience
 
@@ -9,6 +9,11 @@ Read [`SANDBOX_VISION.md`](SANDBOX_VISION.md) and
 [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md) first. A game plugin owns its
 genre rules; it reuses sandbox services without changing their authority
 boundaries.
+
+A game normally lives on its own branch from the shared `main` baseline. Its
+plugins and genre rules remain on that branch. A capability should return to
+`main` only after its game-specific semantics have been removed and its
+cross-game contract is concrete and stable.
 
 ## Set up a game plugin
 
@@ -41,7 +46,7 @@ the contracts needed by its game:
 | Presentation | Derive visuals from authoritative/predicted state. | client host and camera service |
 | Camera/rooms | Provide follow, extent, topology, or transition policy when needed. | camera/room service |
 
-For a networked game, authoritative systems must run on the server and use the
+Authoritative systems must run on the server and use the
 same deterministic state transition on an owning predicted client only when
 that state is intentionally registered for prediction. Do not let input
 collection, rendering, UI, or mesh transforms define game state.
@@ -108,4 +113,5 @@ reaching into transport internals.
 - Are replicated state, messages, and ownership validation explicit?
 
 If a required shared facility does not exist, keep the implementation local to
-the game until a second concrete game proves a stable common contract.
+the game until concrete cross-game value and a stable common contract are
+demonstrated.

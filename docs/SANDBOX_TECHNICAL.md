@@ -1,10 +1,10 @@
-# game01 Sandbox — Technical Specification
+# game01 Multiplayer Sandbox — Technical Specification
 
 Last updated: 2026-08-29
 
 ## Purpose and authority
 
-This is the technical contract for the genre-neutral sandbox described in
+This is the technical contract for the genre-neutral multiplayer sandbox described in
 [`SANDBOX_VISION.md`](SANDBOX_VISION.md). It defines responsibilities and
 extension boundaries, not rules for a particular game. Game-specific choices
 are documented with the owning game and implemented in its plugins.
@@ -49,8 +49,8 @@ boundary; otherwise use modules.
 
 ## Network model
 
-Networking is optional for a game, but networked games use a
-server-authoritative model:
+Multiplayer networking is a foundational sandbox capability. Games built from
+the shared base use a server-authoritative model:
 
 - clients submit input/requests, never authoritative gameplay outcomes;
 - the server validates ownership and requests, runs simulation, and owns
@@ -131,8 +131,8 @@ loss safety, and conversion into tick-bound network input where applicable.
 Plugins register named actions and interpret their values in their own systems.
 An action can be digital, one-dimensional, or two-dimensional. Bindings must
 be replaceable without exposing device APIs to simulation. The same action data
-is used by local-only and networked plugins; transport adaptation occurs outside
-genre logic.
+feeds local prediction and authoritative network input; transport adaptation
+occurs outside genre logic.
 
 ## Plugin integration requirements
 
