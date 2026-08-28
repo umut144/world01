@@ -198,10 +198,11 @@ assignment are outside this slice.
   `assets/characters/`. It validates the catalog, imports every advertised
   character package plus referenced Symbol packages, and replaces the generated
   destination atomically so stale components cannot survive a re-export. The
-  source World directory can be overridden with `POLYTOOLS_WORLD_DIR`. New
-  syncs require PolyTools Runtime Manifest schema 8; the client temporarily
-  retains loading compatibility with the already imported schema 5 through 7
-  packages.
+  source World directory can be overridden with `POLYTOOLS_WORLD_DIR`. The
+  current game-side sync still requires PolyTools Runtime Manifest schema 8;
+  Slice 14 will move it to schema 9 after the new authored data exists. The
+  client temporarily retains loading compatibility with the already imported
+  schema 5 through 7 packages.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
   mesh presentation entities. Component transforms, hierarchy, and `z_index`
@@ -246,11 +247,12 @@ inventory system:
   non-degenerate boundary. Exported gameplay geometry is metric and carries an
   explicit semantic role; simulation must not infer collision from a visible
   fill or contour mesh.
-- Adding attachment frames and gameplay Regions changes the Runtime Manifest
-  contract and therefore requires an explicit schema-version transition rather
-  than silently assigning new meaning to schema 8 fields. The game may retain
-  older character-presentation compatibility while requiring the new schema
-  for weapon packages.
+- PolyTools Runtime Manifest schema 9 now adds top-level Asset-local
+  `attachment_frames` and triangulated semantic `regions` arrays without
+  assigning new meaning to schema 8 fields. The game-side Slice 14 importer and
+  sync transition remains pending until the Hammerer and Hammer data have been
+  authored and exported. The game may retain older character-presentation
+  compatibility while requiring schema 9 for weapon packages.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
 `weapon_socket_primary`. The client derives its local translation, rotation,
