@@ -8,7 +8,7 @@ pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub movement: MovementConfig,
-    pub gaze: GazeConfig,
+    pub weapon_aim: WeaponAimConfig,
     pub hammer_attack: HammerAttackConfig,
     pub room: RoomConfig,
     pub camera: CameraConfig,
@@ -16,13 +16,13 @@ pub struct DesignConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct GazeConfig {
+pub struct WeaponAimConfig {
     pub default_degrees_per_second: f32,
     #[serde(default)]
     pub character_degrees_per_second: HashMap<String, f32>,
 }
 
-impl GazeConfig {
+impl WeaponAimConfig {
     pub fn is_valid(&self) -> bool {
         self.default_degrees_per_second.is_finite()
             && self.default_degrees_per_second > 0.0
@@ -192,9 +192,9 @@ mod tests {
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
         assert_eq!(design.movement.speed_meters_per_second, 0.8);
-        assert_eq!(design.gaze.default_degrees_per_second, 60.0);
-        assert!(design.gaze.character_degrees_per_second.is_empty());
-        assert!(design.gaze.is_valid());
+        assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
+        assert!(design.weapon_aim.character_degrees_per_second.is_empty());
+        assert!(design.weapon_aim.is_valid());
         assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
         assert_eq!(design.hammer_attack.swing_seconds, 0.45);
         assert_eq!(design.hammer_attack.recovery_seconds, 0.30);

@@ -187,19 +187,12 @@ Reference drawings:
 - `IJKL` controls the local character's gaze direction: `I` up, `J` left,
   `K` down, and `L` right. Cardinal keys may be combined for diagonal gaze.
   Every character starts looking right; there is no neutral runtime gaze.
-  Directional input chooses one of the eight target directions but does not set
-  the current angle directly. Releasing the keys retains the chosen target.
+  Directional input sets the gaze immediately to one of the eight directions.
+  Releasing the keys retains that visible gaze direction.
 - Gaze is gameplay-relevant authoritative state. The controlling client sends
-  its target-direction intent to the server. The current first-iteration model
-  approaches that target at a constant `60°/s`, exactly `1°` per 60 Hz tick,
-  without acceleration or braking. At a remaining difference of at most `1°`,
-  it clamps to the exact target. This speed begins equal for all characters but
-  is individually configurable. The resulting angle and last turn direction
-  are replicated so every client sees the same look direction. Gaze remains
-  independent from movement and body facing.
-- When the target is exactly `180°` from the current gaze, turning continues in
-  the last non-zero turn direction. The initial fallback is clockwise, matching
-  the right-facing spawn state.
+  its currently held direction to the server, which immediately updates and
+  replicates the retained gaze. Gaze remains independent from movement, body
+  facing, and weapon orientation.
 - Each character keeps its own eye geometry, eye positions, and eye pivots. Pupil movement is constrained by that eye's geometry rather than the character's overall pivot; rotated or mirrored eye assets must retain the same visible look direction.
 - Barde is temporarily excluded from the eye/pupil implementation.
 
@@ -244,18 +237,29 @@ Confirmed first-iteration direction:
   alignment, grip-centered pivot, AttackRegion, and `attack_point_primary` are
   visually accepted. The size remains authored Asset data rather than a
   hard-coded game multiplier.
-- The current gaze angle is the Hammerer's attack direction. It is driven by
-  the shared character-configurable target-angle approach rather than snapping
-  directly to raw input. While charging, the Hammer continues
-  following that changing gaze with its own visible lag, is held opposite the
-  direction, and appears smaller. On release it swings across the Hammerer,
-  grows while passing over the head, and reaches the ground in the attack
-  direction at normal scale.
+- The Hammerer has a weapon-aim angle independent from gaze. While an IJKL
+  direction is held, that angle approaches the immediately selected gaze at a
+  constant `60°/s`, exactly `1°` per 60 Hz tick, without acceleration or
+  braking. At a remaining difference of at most `1°`, it clamps to the exact
+  target. Releasing every IJKL key immediately stops weapon rotation at its
+  current angle while the eyes retain their last gaze.
+- Weapon-aim speed begins equal for all characters but is individually
+  configurable. At an exact `180°` difference it continues in the last non-zero
+  weapon-turn direction; the initial fallback is clockwise.
+- The carried Hammer is displayed opposite the weapon-aim direction. On attack
+  release, the actual weapon aim—not gaze—is frozen as the attack direction.
+  For example, a Hammer visually carried at `210°` attacks toward `30°` even
+  while the Hammerer's eyes continue looking up at `90°`.
+- While charging, the Hammer follows the changing weapon aim, is held opposite
+  it, and appears smaller. On release it swings across the Hammerer, grows while
+  passing over the head, and reaches the ground in the locked attack direction
+  at normal scale.
 - Outside an attack, the carried Hammer points exactly behind the Hammerer,
-  opposite the current gaze direction, including the initial right-facing
-  spawn gaze. This opposite placement is Hammerer-specific rather than a
-  general weapon rule. Other characters may present their weapons differently;
-  ArcherF's Bow is intended to be held in front in her gaze direction.
+  opposite its current weapon-aim direction. Both gaze and weapon aim start
+  right, so the Hammer initially appears left/behind. This opposite placement
+  is Hammerer-specific rather than a general weapon rule. Other characters may
+  present their weapons differently; ArcherF's Bow is intended to be held in
+  front in her weapon-aim direction.
 - In its carried and charging presentation the Hammer is layered behind the
   Hammerer. At the released swing's overhead apex, the complete Hammer switches
   in front of the Hammerer and remains there through ground impact. Once it
@@ -266,10 +270,10 @@ Confirmed first-iteration direction:
   preserving its internal authored order.
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
-- Charging follows the retained gaze and caps at `5.0 s`. The Hammer scales
+- Charging follows the current weapon aim and caps at `5.0 s`. The Hammer scales
   linearly from `1.0` on press to `0.8` at full charge and is pulled inward by
   at most 5% of the authored `grip_primary`-to-`attack_point_primary` distance.
-  The Hammer may visibly lag behind the target-approaching gaze while Charging.
+  Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction.
 - The first procedural swing travels clockwise. Its provisional release-to-

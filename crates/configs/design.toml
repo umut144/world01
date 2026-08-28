@@ -8,7 +8,7 @@ remote_interpolation_ratio = 2.0
 [movement]
 speed_meters_per_second = 0.8
 
-[gaze]
+[weapon_aim]
 default_degrees_per_second = 60.0
 
 [hammer_attack]

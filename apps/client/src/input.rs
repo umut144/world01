@@ -31,7 +31,7 @@ pub fn collect_gaze_input(
         axis(&keyboard, KeyCode::KeyL, KeyCode::KeyJ),
         axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
     );
-    input.0.gaze = retained_gaze(input.0.gaze, direction);
+    input.0.gaze = gaze_intent(direction);
 }
 
 pub fn collect_attack_input(
@@ -50,13 +50,9 @@ fn attack_pressed(space: bool, right_trigger: bool) -> bool {
     space || right_trigger
 }
 
-fn retained_gaze(current: GazeIntent, direction: Vec2) -> GazeIntent {
+fn gaze_intent(direction: Vec2) -> GazeIntent {
     let direction = direction.normalize_or_zero();
-    if direction == Vec2::ZERO {
-        current
-    } else {
-        GazeIntent::new(direction.x, direction.y)
-    }
+    GazeIntent::new(direction.x, direction.y)
 }
 
 fn axis(keyboard: &ButtonInput<KeyCode>, positive: KeyCode, negative: KeyCode) -> f32 {
@@ -92,16 +88,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gaze_input_retains_the_last_direction_after_release() {
-        let left = retained_gaze(GazeIntent::ZERO, -Vec2::X);
+    fn gaze_input_is_active_only_while_a_direction_is_held() {
+        let left = gaze_intent(-Vec2::X);
 
         assert_eq!(left, GazeIntent::new(-1.0, 0.0));
-        assert_eq!(retained_gaze(left, Vec2::ZERO), left);
+        assert_eq!(gaze_intent(Vec2::ZERO), GazeIntent::ZERO);
     }
 
     #[test]
     fn gaze_input_normalizes_diagonals() {
-        let diagonal = retained_gaze(GazeIntent::ZERO, Vec2::new(1.0, 1.0));
+        let diagonal = gaze_intent(Vec2::new(1.0, 1.0));
         let expected = 1.0 / 2.0_f32.sqrt();
 
         assert_eq!(diagonal, GazeIntent::new(expected, expected));

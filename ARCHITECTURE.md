@@ -54,7 +54,7 @@ Owns shared protocol-neutral domain data:
 - movement intent data passed into simulation;
 - combined tick-bound player input containing movement and gaze intent;
 - authoritative current movement direction, retained horizontal body facing,
-  and retained gaze direction;
+  retained gaze direction, and independent weapon-aim state;
 - authoritative two-dimensional `Position` in meters;
 - replicated gameplay components that are not transport-specific.
 
@@ -63,7 +63,8 @@ Slice 1 used `Transform` directly as provisional movement state. Slice 2 Phase 1
 Implemented shared data uses transport-neutral scalar identifiers and
 coordinates: `PlayerId`, `PlayerOwner`, `SelectedCharacter`, `Player`, `RoomId`,
 `StandardRoom`, `SpawnPoint`, `PlayerInput`, `MovementIntent`, `GazeIntent`,
-`MovementDirection`, `BodyFacing`, `GazeState`, and `HammerAttackState`.
+`MovementDirection`, `BodyFacing`, `GazeDirection`, `WeaponAimState`, and
+`HammerAttackState`.
 Network-specific
 connection types stay outside `world_data`.
 
@@ -75,7 +76,7 @@ Owns explicitly requested, human-editable game-design parameters:
 - typed configuration boundary;
 - initially backed by `design.toml`;
 - exposes the current global `0.8 m/s` movement speed and 60 Hz simulation
-  cadence, the default `60°/s` target-approach gaze speed with optional
+  cadence, the default `60°/s` weapon-aim speed with optional
   per-character overrides, plus the explicitly requested Hammer
   charge/swing/recovery timings and charging movement multiplier;
 
@@ -94,14 +95,16 @@ Owns transport-, input-device-, and presentation-independent game rules:
 - does not render, animate, play audio, or manage UI.
 
 The simulation mutates protocol-neutral `Position`, `MovementDirection`,
-`BodyFacing`, and `GazeState`, never presentation `Transform`. Every tick,
+`BodyFacing`, `GazeDirection`, and `WeaponAimState`, never presentation
+`Transform`. Every tick,
 finite movement intent becomes a unit-clamped current `MovementDirection` and
 zero or invalid intent becomes zero. Horizontal movement intent updates
 retained Left/Right body facing; zero horizontal intent preserves it. A finite
-non-zero gaze intent selects one of eight target directions; zero or invalid
-gaze preserves the previous target/state. Shared simulation advances the
-current angle by the character's configured constant per-tick step without
-acceleration or braking. A mass/velocity movement model
+non-zero gaze intent immediately replaces retained `GazeDirection`; zero or
+invalid intent preserves it. For entities with `WeaponAimState`, the same
+non-zero intent also gates a constant per-tick approach toward gaze. Zero input
+immediately stops weapon rotation without changing either retained state. A
+mass/velocity movement model
 will be required soon and does not need to follow real-world physics. Keep the
 simulation interface and network/input flow suitable for adding explicit
 velocity and mass without rewriting those outer layers.
@@ -338,12 +341,14 @@ AttackRegion, attack point, and carried-behind-character layering.
 
 ### Hammer attack and combat-state boundary
 
-- The direction derived from `GazeState` is reused as the Hammerer's aim
-  direction for the first attack; no separate aim protocol is introduced.
-  Idle and Charging rotate the authored grip-to-attack-point vector exactly
-  opposite the current gaze, including the initial right-facing spawn gaze.
-  This is a Hammerer presentation rule, not a universal weapon orientation;
-  future weapon integrations define their own relationship to gaze.
+- `GazeDirection` and `WeaponAimState` are separate replicated/predicted
+  gameplay states. Gaze updates immediately from held IJKL input and remains
+  retained after release. The weapon aim approaches gaze only while non-zero
+  IJKL input is present and stops immediately when it becomes zero.
+- The Hammerer's authored grip-to-attack-point vector is presented exactly
+  opposite the direction derived from `WeaponAimState`. This is a Hammerer
+  presentation rule, not a universal weapon orientation; future weapon
+  integrations define their own relationship to weapon aim.
 - Hammer layer switching is presentation-only. Carried and Charging keep the
   complete Hammer behind the Hammerer. At the procedural swing's overhead apex
   the Hammer root moves above the Hammerer's complete asset-local layer range,
@@ -356,20 +361,20 @@ AttackRegion, attack point, and carried-behind-character layering.
   `AttackIntent`; primary pointer/trackpad click is unbound. The native input
   history gives prediction and authoritative server processing the same
   press/release sequence.
-- Slice 15A replaces direct gaze assignment with deterministic,
-  server-authoritative and predicted target-angle motion. `GazeState` stores
-  the wrapped current angle and last non-zero turn direction; it always derives
-  a valid direction and spawns looking right. Directional input represents an
-  target direction without directly setting the current angle. Simulation
-  approaches it at the configured constant `60°/s` baseline (exactly `1°` per
-  60 Hz tick), with no acceleration or braking, and clamps to the exact target
-  when the remaining difference is at most one tick step. A per-character
-  override map permits later tuning without changing input or protocol
-  structure. Exact-opposite targets retain the previous turn direction; the
-  right-facing initial state uses clockwise as its deterministic fallback.
-- Slice 15B makes Charging follow the evolving target-approach gaze with a
-  presentation-level Hammer lag and retains the 300-tick (`5.0 s` at 60 Hz)
-  cap; release freezes the attack direction for the resulting swing. That
+- Slice 15A keeps immediate retained `GazeDirection` for eyes and introduces
+  deterministic, server-authoritative and predicted `WeaponAimState`. The
+  latter stores a wrapped current angle and last non-zero weapon-turn direction;
+  both states spawn looking right. While IJKL input remains non-zero, weapon aim
+  approaches gaze at the configured constant `60°/s` baseline (exactly `1°`
+  per 60 Hz tick), with no acceleration or braking, and clamps to the exact
+  target within one tick step. Releasing IJKL clears the transient intent and
+  stops the weapon angle immediately. A per-character override map permits
+  later tuning without changing input or protocol structure. Exact-opposite
+  targets retain the previous weapon-turn direction; the initial fallback is
+  clockwise.
+- Slice 15B makes Charging follow the evolving weapon aim and retains the
+  300-tick (`5.0 s` at 60 Hz) cap; attack release freezes the actual weapon-aim
+  direction, never gaze, for the resulting swing. That
   refinement removes the current Charging movement lock so character movement
   remains at normal global speed.
 - Shared simulation owns the replicated/predicted `HammerAttackState`. Slice
@@ -458,8 +463,10 @@ full eye transform hierarchy before collision, so mirrored or rotated asset
 components retain the same screen-space look direction. This presentation-only
 geometry lives in `apps/client/src/eyes.rs`. Device sampling and conversion
 into the combined local movement/gaze input live in `apps/client/src/input.rs`.
-`IJKL` updates only non-zero gaze intent, so releasing the keys retains the
-previous direction. Barde is intentionally excluded for now.
+`IJKL` writes a normalized direction only while held and writes zero on release.
+Shared simulation retains `GazeDirection` but uses zero intent to stop
+`WeaponAimState`. Barde is intentionally excluded from pupil presentation for
+now.
 The configured `[eyes].pupil_area_ratio` is currently `0.26`; each visible pupil
 radius is derived from the schema-8 `closed_region_mesh` area. At asset-library
 load time, `[eyes].hammerer_collision_radius_ratio = 0.35` is applied to the
@@ -483,9 +490,10 @@ only that orientation root, never the player `Transform`, authoritative
 `Position`, simulation state, or network state.
 
 The server derives current `MovementDirection` and retained `BodyFacing` from
-movement intent plus the current angle and last turn direction in `GazeState`
-from gaze intent. All three components replicate to remote clients and are
-predicted for the controlling client using the same shared simulation system.
+movement intent, immediately retained `GazeDirection` from non-zero gaze
+intent, and the independently gated `WeaponAimState` for weapon-bearing
+characters. These components replicate to remote clients and are predicted for
+the controlling client using the same shared simulation system.
 Client-only `pose.rs` owns all
 movement-dependent visual transforms. Authored Left and Right poses convert
 `BodyFacing` into an orientation-root x scale of `1` or `-1`; Top and Down
@@ -496,7 +504,7 @@ provisional 0.05-second half-life. The body remains unflipped and zero movement
 returns the head to its authored transform. These values live together in the
 client-only `PoseSettings` resource for focused visual tuning.
 
-Eye gaze is derived from the independently replicated/predicted `GazeState`.
+Eye gaze reads the independently replicated/predicted `GazeDirection` directly.
 Before normal transform propagation, the eye system computes each pupil's
 current full hierarchy transform, including body orientation and neutral-head
 motion, and converts the unchanged screen-space gaze through its inverse. A
@@ -538,7 +546,8 @@ server-owned entity ActionState<PlayerInput>
         │  MovementIntent + GazeIntent
         ▼
 simulation system
-        │  authoritative Position + MovementDirection + BodyFacing + GazeState
+        │  Position + MovementDirection + BodyFacing + GazeDirection
+        │  + optional WeaponAimState
         ▼
 Lightyear state replication / owner prediction
         │

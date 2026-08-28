@@ -2,7 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::prelude::*;
 use game01_simulation::HammerAttackRules;
-use game01_world_data::{GazeDirection, GazeState, HammerAttackPhase, HammerAttackState};
+use game01_world_data::{GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState};
 
 use crate::polytools::HammerVisual;
 
@@ -13,29 +13,36 @@ const IMPACT_SCALE: f32 = 1.0;
 pub fn apply_hammer_pose(
     fixed_time: Res<Time<Fixed>>,
     rules: Res<HammerAttackRules>,
-    players: Query<(&GazeState, &HammerAttackState)>,
+    players: Query<(&WeaponAimState, &HammerAttackState)>,
     mut hammers: Query<(&HammerVisual, &mut Transform)>,
 ) {
     let overstep = fixed_time.overstep_fraction();
     for (hammer, mut transform) in &mut hammers {
-        let Ok((gaze, attack)) = players.get(hammer.owner) else {
+        let Ok((weapon_aim, attack)) = players.get(hammer.owner) else {
             continue;
         };
-        *transform = hammer_pose(hammer, gaze.direction(), *attack, rules.as_ref(), overstep);
+        *transform = hammer_pose(
+            hammer,
+            weapon_aim.direction(),
+            *attack,
+            rules.as_ref(),
+            overstep,
+        );
     }
 }
 
 fn hammer_pose(
     hammer: &HammerVisual,
-    gaze: GazeDirection,
+    weapon_aim: GazeDirection,
     attack: HammerAttackState,
     rules: &HammerAttackRules,
     overstep: f32,
 ) -> Transform {
     match attack.phase {
-        HammerAttackPhase::Idle => direction(gaze).map_or(hammer.rest_transform, |gaze| {
-            posed_transform(hammer, -gaze, 1.0, hammer.behind_layer)
-        }),
+        HammerAttackPhase::Idle => direction(weapon_aim)
+            .map_or(hammer.rest_transform, |weapon_aim| {
+                posed_transform(hammer, -weapon_aim, 1.0, hammer.behind_layer)
+            }),
         HammerAttackPhase::Charging => direction(attack.direction)
             .map_or(hammer.rest_transform, |aim| {
                 posed_transform(hammer, -aim, CHARGING_SCALE, hammer.behind_layer)
@@ -145,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn idle_pose_points_authored_attack_point_opposite_the_gaze() {
+    fn idle_pose_points_authored_attack_point_opposite_the_weapon_aim() {
         let hammer = hammer_visual();
         let pose = hammer_pose(
             &hammer,

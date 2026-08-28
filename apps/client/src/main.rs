@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
-use game01_simulation::{GazeRules, HammerAttackRules, MovementStep};
+use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
 
 use crate::controller::ControllerInput;
@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
-    let gaze_rules = GazeRules::from_design(&design)?;
+    let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
     let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ..default()
     }));
     app.insert_resource(movement_step);
-    app.insert_resource(gaze_rules);
+    app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
     app.insert_resource(CharacterCatalog::from_json(include_str!(
         "../../../assets/characters/catalog.json"

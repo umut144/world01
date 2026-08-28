@@ -12,9 +12,9 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterId, GazeIntent, GazeState, HammerAttackState,
+    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackState,
     MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId,
-    SelectedCharacter,
+    SelectedCharacter, WeaponAimState,
 };
 #[cfg(feature = "server")]
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
@@ -354,7 +354,8 @@ impl GameProtocolAppExt for App {
         self.component::<RoomId>().replicate().predict();
         self.component::<MovementDirection>().replicate().predict();
         self.component::<BodyFacing>().replicate().predict();
-        self.component::<GazeState>().replicate().predict();
+        self.component::<GazeDirection>().replicate().predict();
+        self.component::<WeaponAimState>().replicate().predict();
         self.component::<HammerAttackState>().replicate().predict();
         self.component::<Position>()
             .replicate()
@@ -575,7 +576,7 @@ fn handle_join_requests(
             AttackIntent::RELEASED,
             MovementDirection::ZERO,
             BodyFacing::Authored,
-            GazeState::RIGHT,
+            GazeDirection::RIGHT,
             Position::new(spawn.x, spawn.y),
             room_grid.starting_room(),
             ControlledBy {
@@ -587,7 +588,7 @@ fn handle_join_requests(
             InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
         ));
         if selected_character.0 == "hammerer" {
-            player.insert(HammerAttackState::IDLE);
+            player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));
         }
         info!(?connection, player_id, owner, character = ?selected_character, "authoritative player spawned");
     }

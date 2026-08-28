@@ -295,13 +295,13 @@ pub struct GazeDirection {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize)]
-pub enum GazeTurnDirection {
+pub enum WeaponTurnDirection {
     #[default]
     Clockwise,
     CounterClockwise,
 }
 
-impl GazeTurnDirection {
+impl WeaponTurnDirection {
     pub const fn angle_sign(self) -> f32 {
         match self {
             Self::Clockwise => -1.0,
@@ -311,18 +311,18 @@ impl GazeTurnDirection {
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect, Serialize, Deserialize)]
-pub struct GazeState {
+pub struct WeaponAimState {
     pub angle_radians: f32,
-    pub last_turn_direction: GazeTurnDirection,
+    pub last_turn_direction: WeaponTurnDirection,
 }
 
-impl GazeState {
+impl WeaponAimState {
     pub const RIGHT: Self = Self {
         angle_radians: 0.0,
-        last_turn_direction: GazeTurnDirection::Clockwise,
+        last_turn_direction: WeaponTurnDirection::Clockwise,
     };
 
-    pub fn new(angle_radians: f32, last_turn_direction: GazeTurnDirection) -> Self {
+    pub fn new(angle_radians: f32, last_turn_direction: WeaponTurnDirection) -> Self {
         Self {
             angle_radians: angle_radians.rem_euclid(TAU),
             last_turn_direction,
@@ -334,7 +334,7 @@ impl GazeState {
     }
 }
 
-impl Default for GazeState {
+impl Default for WeaponAimState {
     fn default() -> Self {
         Self::RIGHT
     }
@@ -342,6 +342,7 @@ impl Default for GazeState {
 
 impl GazeDirection {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
+    pub const RIGHT: Self = Self { x: 1.0, y: 0.0 };
 
     pub const fn new(x: f32, y: f32) -> Self {
         Self { x, y }
