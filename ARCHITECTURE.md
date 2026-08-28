@@ -270,8 +270,8 @@ state or gameplay equipment component is introduced.
 
 ### PolyTools root Asset scale and Rebase slice
 
-Before Slice 14 visual acceptance, PolyTools gains one explicit positive,
-uniform root Asset Scale in the root Asset Inspector. It is an authoring
+PolyTools World schema 53 provides one explicit positive, uniform root Asset
+Scale in the root Asset Inspector. It is an authoring
 transform around the Asset Pivot, defaults to `1`, and previews the complete
 Asset consistently: visible Components, nested Component/Group hierarchy,
 References, ordinary Guides, Weapon attachment frames, semantic Regions, and
@@ -301,10 +301,12 @@ SDF, and Runtime Export artifacts are invalidated and rebuilt from the rebased
 canonical source rather than numerically scaling stale bakes. Runtime Export
 rejects a non-unit root Asset Scale and directs the author to Rebase.
 
-Acceptance covers nested and rotated hierarchy, primitives and Bézier geometry,
-semantic Regions, Component- and Group-scoped Guides/Weapon frames, References,
-Asset Pivot behavior, save/load round trips, undo/redo, post-Rebase Component
-Scale Rebase, and an unchanged schema-9 semantic relationship after export.
+Automated PolyTools acceptance covers nested and rotated hierarchy, primitives
+and Bézier geometry, semantic Regions, Component- and Group-scoped
+Guides/Weapon frames, References, Asset Pivot behavior, save/load round trips,
+undo/redo, post-Rebase Component Scale Rebase, and Runtime Export rejection
+before Rebase. Final Hammer sizing, re-export, game sync, and visual acceptance
+remain authoring steps.
 
 ### Planned Hammer attack and combat-state boundary
 
