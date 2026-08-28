@@ -32,6 +32,10 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 - Do not implement speculative future-season systems.
 - Documentation-only and asset-only changes do not require Rust validation.
 
+### Stateful gameplay planning
+
+- For stateful gameplay work, use a compact state matrix during planning when it materially clarifies Input, Simulation, Presentation, and Constraints. Treat it as a working aid, not persistent documentation; record only resulting durable decisions in the appropriate canonical document.
+
 ### Bevy and Rust version
 
 - Target stable Rust and Bevy 0.19 APIs exclusively.
