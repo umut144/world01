@@ -235,6 +235,22 @@ pub struct GazeIntent {
     pub y: f32,
 }
 
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub struct AttackIntent {
+    pub pressed: bool,
+}
+
+impl AttackIntent {
+    pub const RELEASED: Self = Self { pressed: false };
+    pub const PRESSED: Self = Self { pressed: true };
+
+    pub const fn new(pressed: bool) -> Self {
+        Self { pressed }
+    }
+}
+
 impl GazeIntent {
     pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 
@@ -271,16 +287,22 @@ pub enum BodyFacing {
 pub struct PlayerInput {
     pub movement: MovementIntent,
     pub gaze: GazeIntent,
+    pub attack: AttackIntent,
 }
 
 impl PlayerInput {
     pub const ZERO: Self = Self {
         movement: MovementIntent::ZERO,
         gaze: GazeIntent::ZERO,
+        attack: AttackIntent::RELEASED,
     };
 
     pub const fn new(movement: MovementIntent, gaze: GazeIntent) -> Self {
-        Self { movement, gaze }
+        Self {
+            movement,
+            gaze,
+            attack: AttackIntent::RELEASED,
+        }
     }
 }
 

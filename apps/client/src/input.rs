@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use game01_network::ClientPlayerInput;
-use game01_world_data::{GazeIntent, MovementIntent};
+use game01_world_data::{AttackIntent, GazeIntent, MovementIntent};
 
 use crate::controller::ControllerInput;
 
@@ -32,6 +32,24 @@ pub fn collect_gaze_input(
         axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
     );
     input.0.gaze = retained_gaze(input.0.gaze, direction);
+}
+
+pub fn collect_attack_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    pointer: Res<ButtonInput<MouseButton>>,
+    mut controller_input: NonSendMut<ControllerInput>,
+    mut input: ResMut<ClientPlayerInput>,
+) {
+    let pressed = attack_pressed(
+        keyboard.pressed(KeyCode::Space),
+        pointer.pressed(MouseButton::Left),
+        controller_input.right_trigger_pressed(),
+    );
+    input.0.attack = AttackIntent::new(pressed);
+}
+
+fn attack_pressed(space: bool, primary_pointer: bool, right_trigger: bool) -> bool {
+    space || primary_pointer || right_trigger
 }
 
 fn retained_gaze(current: GazeIntent, direction: Vec2) -> GazeIntent {
@@ -89,5 +107,13 @@ mod tests {
         let expected = 1.0 / 2.0_f32.sqrt();
 
         assert_eq!(diagonal, GazeIntent::new(expected, expected));
+    }
+
+    #[test]
+    fn attack_accepts_trackpad_click_space_and_right_trigger_equally() {
+        assert!(attack_pressed(false, true, false));
+        assert!(attack_pressed(true, false, false));
+        assert!(attack_pressed(false, false, true));
+        assert!(!attack_pressed(false, false, false));
     }
 }

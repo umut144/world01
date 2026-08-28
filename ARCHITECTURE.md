@@ -325,7 +325,10 @@ AttackRegion, attack point, and carried-behind-character layering.
   is never rewritten for this transition.
 - Attack input travels through the existing tick-bound native input path. A
   quick press/release and a held charge are the same action with different held
-  durations.
+  durations. The client merges primary pointer/trackpad click, Space, and Xbox
+  right trigger into one boolean `AttackIntent`; the native input history gives
+  prediction and authoritative server processing the same press/release
+  sequence.
 - Charging may follow the retained gaze direction; release freezes the attack
   direction for the resulting swing. Exact input binding and whether movement
   is restricted during the action remain open.

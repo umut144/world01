@@ -15,7 +15,7 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
-use crate::input::{collect_gaze_input, collect_movement_input};
+use crate::input::{collect_attack_input, collect_gaze_input, collect_movement_input};
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
 
@@ -93,6 +93,7 @@ impl Plugin for ClientPresentationPlugin {
                         .run_if(in_state(ClientScreen::CharacterSelection)),
                     collect_movement_input,
                     collect_gaze_input,
+                    collect_attack_input,
                     (apply_body_facing, apply_neutral_head_motion),
                     (render_new_players, initialize_local_render_history)
                         .chain()

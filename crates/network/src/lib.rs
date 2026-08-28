@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementDirection, MovementIntent,
-    PlayerId, PlayerInput, PlayerOwner, Position, RoomId, SelectedCharacter,
+    AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, MovementDirection,
+    MovementIntent, PlayerId, PlayerInput, PlayerOwner, Position, RoomId, SelectedCharacter,
 };
 #[cfg(feature = "server")]
 use game01_world_data::{CharacterCatalog, StartingRoomGrid};
@@ -505,6 +505,7 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
         InputMarker::<PlayerInput>::default(),
         MovementIntent::ZERO,
         GazeIntent::ZERO,
+        AttackIntent::RELEASED,
     ));
 }
 
@@ -569,6 +570,7 @@ fn handle_join_requests(
             SelectedCharacter(selected_character.clone()),
             MovementIntent::ZERO,
             GazeIntent::ZERO,
+            AttackIntent::RELEASED,
             MovementDirection::ZERO,
             BodyFacing::Authored,
             GazeDirection::ZERO,
@@ -605,11 +607,13 @@ pub fn apply_tick_player_input(
         &ActionState<PlayerInput>,
         &mut MovementIntent,
         &mut GazeIntent,
+        &mut AttackIntent,
     )>,
 ) {
-    for (action_state, mut movement, mut gaze) in &mut players {
+    for (action_state, mut movement, mut gaze, mut attack) in &mut players {
         *movement = action_state.0.movement;
         *gaze = action_state.0.gaze;
+        *attack = action_state.0.attack;
     }
 }
 
@@ -881,18 +885,20 @@ mod tests {
     }
 
     #[test]
-    fn tick_input_applies_movement_and_gaze_without_timeout() {
+    fn tick_input_applies_movement_gaze_and_attack_without_timeout() {
         let mut app = App::new();
         app.add_systems(FixedUpdate, apply_tick_player_input);
         let player = app
             .world_mut()
             .spawn((
-                ActionState(PlayerInput::new(
-                    MovementIntent::new(1.0, 0.0),
-                    GazeIntent::new(-1.0, 0.0),
-                )),
+                ActionState(PlayerInput {
+                    movement: MovementIntent::new(1.0, 0.0),
+                    gaze: GazeIntent::new(-1.0, 0.0),
+                    attack: AttackIntent::PRESSED,
+                }),
                 MovementIntent::ZERO,
                 GazeIntent::ZERO,
+                AttackIntent::RELEASED,
             ))
             .id();
 
@@ -904,6 +910,10 @@ mod tests {
         assert_eq!(
             app.world().get::<GazeIntent>(player),
             Some(&GazeIntent::new(-1.0, 0.0))
+        );
+        assert_eq!(
+            app.world().get::<AttackIntent>(player),
+            Some(&AttackIntent::PRESSED)
         );
 
         app.world_mut()
@@ -918,6 +928,10 @@ mod tests {
         assert_eq!(
             app.world().get::<GazeIntent>(player),
             Some(&GazeIntent::ZERO)
+        );
+        assert_eq!(
+            app.world().get::<AttackIntent>(player),
+            Some(&AttackIntent::RELEASED)
         );
     }
 }
