@@ -8,7 +8,7 @@ use bevy::{
     shader::{Shader, ShaderRef},
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
 };
-use game01_simulation::HammerAttackRules;
+use game01_configs::DesignConfig;
 use game01_world_data::{GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState};
 
 use crate::polytools::HammerVisual;
@@ -29,6 +29,73 @@ impl Plugin for HammerPresentationPlugin {
             Shader::from_wgsl
         );
         app.add_plugins(Material2dPlugin::<HammerPresentationMaterial>::default());
+    }
+}
+
+#[derive(Resource, Debug, Clone, Copy)]
+pub struct HammerPresentationRules {
+    maximum_charge_ticks: u32,
+    grip_reach_ticks: u32,
+    swing_ticks: u32,
+    recovery_ticks: u32,
+    scale_at_full_reach: f32,
+    scale_at_full_charge: f32,
+    maximum_inward_pull_ratio: f32,
+}
+
+impl HammerPresentationRules {
+    pub fn from_design(config: &DesignConfig) -> Self {
+        let ticks_per_second = config.simulation.ticks_per_second.max(1) as f32;
+        let ticks = |seconds: f32| (seconds * ticks_per_second).round().max(1.0) as u32;
+        Self {
+            maximum_charge_ticks: ticks(config.hammer_attack.maximum_charge_seconds),
+            grip_reach_ticks: ticks(config.hammer_attack.grip_reach_seconds),
+            swing_ticks: ticks(config.hammer_attack.swing_seconds),
+            recovery_ticks: ticks(config.hammer_attack.recovery_seconds),
+            scale_at_full_reach: config.hammer_attack.scale_at_full_reach,
+            scale_at_full_charge: config.hammer_attack.scale_at_full_charge,
+            maximum_inward_pull_ratio: config.hammer_attack.maximum_inward_pull_ratio,
+        }
+    }
+
+    fn grip_progress(self, charge_ticks: f32) -> f32 {
+        charge_ticks.clamp(0.0, self.grip_reach_ticks as f32) / self.grip_reach_ticks as f32
+    }
+
+    fn charge_scale(self, charge_ticks: f32) -> f32 {
+        let charge_ticks = charge_ticks.clamp(0.0, self.maximum_charge_ticks as f32);
+        if charge_ticks <= self.grip_reach_ticks as f32 {
+            let progress = charge_ticks / self.grip_reach_ticks as f32;
+            return 1.0 + (self.scale_at_full_reach - 1.0) * progress;
+        }
+        let remaining = self
+            .maximum_charge_ticks
+            .saturating_sub(self.grip_reach_ticks)
+            .max(1);
+        let progress = (charge_ticks - self.grip_reach_ticks as f32).clamp(0.0, remaining as f32)
+            / remaining as f32;
+        self.scale_at_full_reach + (self.scale_at_full_charge - self.scale_at_full_reach) * progress
+    }
+
+    fn inward_pull_ratio(self, charge_ticks: f32) -> f32 {
+        if charge_ticks <= self.grip_reach_ticks as f32 {
+            return 0.0;
+        }
+        let remaining = self
+            .maximum_charge_ticks
+            .saturating_sub(self.grip_reach_ticks)
+            .max(1);
+        let progress = (charge_ticks - self.grip_reach_ticks as f32).clamp(0.0, remaining as f32)
+            / remaining as f32;
+        self.maximum_inward_pull_ratio * progress
+    }
+
+    fn swing_ticks(self) -> u32 {
+        self.swing_ticks
+    }
+
+    fn recovery_ticks(self) -> u32 {
+        self.recovery_ticks
     }
 }
 
@@ -88,7 +155,7 @@ impl Material2d for HammerPresentationMaterial {
 
 pub fn apply_hammer_pose(
     fixed_time: Res<Time<Fixed>>,
-    rules: Res<HammerAttackRules>,
+    rules: Res<HammerPresentationRules>,
     players: Query<(&WeaponAimState, &HammerAttackState, &Transform), Without<HammerVisual>>,
     mut hammers: Query<(&HammerVisual, &mut Transform), With<HammerVisual>>,
     mut visual_visibility: Query<&mut Visibility, Without<HammerVisual>>,
@@ -149,7 +216,7 @@ fn hammer_pose(
     owner_position: Vec2,
     weapon_aim: GazeDirection,
     attack: HammerAttackState,
-    rules: &HammerAttackRules,
+    rules: &HammerPresentationRules,
     overstep: f32,
 ) -> Transform {
     match attack.phase {
@@ -292,7 +359,7 @@ fn embedded_transform(
     hammer: &HammerVisual,
     owner_position: Vec2,
     attack: HammerAttackState,
-    rules: &HammerAttackRules,
+    rules: &HammerPresentationRules,
 ) -> Transform {
     let head = Vec2::new(attack.impact_point.x, attack.impact_point.y) - owner_position
         + hammer.owner_asset_pivot;
@@ -328,7 +395,7 @@ fn planar_recovery_source(
     hammer: &HammerVisual,
     owner_position: Vec2,
     attack: HammerAttackState,
-    rules: &HammerAttackRules,
+    rules: &HammerPresentationRules,
 ) -> Transform {
     let head = Vec2::new(attack.impact_point.x, attack.impact_point.y) - owner_position
         + hammer.owner_asset_pivot;
@@ -426,9 +493,9 @@ mod tests {
         }
     }
 
-    fn attack_rules() -> HammerAttackRules {
+    fn attack_rules() -> HammerPresentationRules {
         let config = game01_configs::load_embedded().expect("embedded design config parses");
-        HammerAttackRules::from_design(&config).expect("Hammer attack config is valid")
+        HammerPresentationRules::from_design(&config)
     }
 
     #[test]

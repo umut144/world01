@@ -40,6 +40,64 @@ This is the technical source of truth for architecture, dependency direction, te
 
 World data, configuration, simulation, networking, orchestration, input, and presentation are separate concerns.
 
+### Pre-Slice-17 architecture boundary cleanup
+
+Before authoritative polygonal impact and damage are added, the existing
+boundaries are tightened without introducing a general weapon, ability,
+modifier, or animation framework:
+
+- `content` is the only PolyTools Runtime Manifest parsing, schema-validation,
+  reference-resolution, and typed runtime-content boundary. It contains no
+  rendering, input, Lightyear, or gameplay-tick systems. Client presentation
+  converts validated visual content into Bevy meshes and entities; headless
+  gameplay consumes the same validated semantic attachment frames and Regions.
+- `world_data` contains only protocol-neutral domain state, replicated state,
+  simulation input, and shared world types. It does not parse PolyTools JSON.
+- `simulation` owns the canonical internal order of one gameplay simulation
+  step. Server and owner prediction choose when that step runs and which
+  transport/run conditions precede it; `simulation` owns neither `FixedUpdate`
+  nor Lightyear orchestration.
+- General movement remains independent from Hammer state. Hammer-specific
+  attack transitions, movement effects, and embedded-reach constraints remain
+  explicitly scoped under Hammer combat until another implemented mechanic
+  proves a shared abstraction.
+- `network` owns protocol registration, transport, authenticated connection
+  context, input adaptation, replication metadata, prediction adapters, and
+  interpolation adapters. It does not choose character kits, MaxHP, spawn
+  positions, or Hammer gameplay components.
+- Server session orchestration turns an authenticated Join request into a
+  validated domain player, chooses its stable identity and spawn, and assembles
+  its character-specific components. Lightyear-specific player replication
+  metadata remains attached through the server transport boundary.
+- Presentation-only Hammer scale and pull curves remain outside authoritative
+  simulation rules even though they are driven by replicated/predicted attack
+  phase and tick state.
+
+The intended dependency direction is `content -> world_data`, `simulation ->
+configs + content + world_data`, and `network -> world_data`; the server and
+client applications compose those crates. Internal Rust modules are preferred
+over additional crates unless a boundary needs independent dependencies and is
+shared by both applications.
+
+The implemented pre-Slice-17 composition is deliberately compact:
+
+```text
+crates/
+  configs
+  content                    PolyTools import, validation, runtime derivation
+  world_data/                identity, input, movement, combat, world
+  simulation/                schedule plus movement, aim, combat::hammer APIs
+  network/                   protocol, client_transport, server_transport APIs
+apps/
+  server/                    main composition, session Join-to-domain assembly
+  client/                    input, prediction, session, presentation
+```
+
+`content` is a separate crate because both graphical and headless applications
+consume it while `world_data` must remain free of JSON/schema dependencies. The
+other new boundaries remain modules because they do not need independent
+dependency graphs or reuse outside their owning crate/application.
+
 ### `world_data`
 
 Owns shared protocol-neutral domain data:

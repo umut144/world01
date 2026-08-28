@@ -11,13 +11,13 @@ use std::collections::HashMap;
 #[cfg(feature = "server")]
 use bevy::log::warn;
 use bevy::{log::info, prelude::*};
+#[cfg(feature = "client")]
+use game01_world_data::MovementSpeedScale;
 use game01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterId, GazeDirection, GazeIntent,
     HammerAttackState, MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner,
     Position, RoomId, SelectedCharacter, WeaponAimState,
 };
-#[cfg(feature = "server")]
-use game01_world_data::{CharacterCatalog, CharacterHealthCatalog, StartingRoomGrid};
 #[cfg(feature = "server")]
 use lightyear::connection::client::Disconnecting;
 #[cfg(feature = "client")]
@@ -52,6 +52,26 @@ pub const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHO
 pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
 #[cfg(feature = "client")]
 const MAX_REMOTE_EXTRAPOLATION_INTERVALS: f32 = 2.0;
+
+pub mod protocol {
+    pub use crate::{JoinChannel, JoinRequest};
+}
+
+#[cfg(feature = "client")]
+pub mod client_transport {
+    pub use crate::{
+        Client, ClientPlayerInput, ClientPositionCorrection, RemotePositionExtrapolation,
+        apply_tick_player_input, client_input_timeline_synced, configure_client, connect_client,
+    };
+}
+
+#[cfg(feature = "server")]
+pub mod server_transport {
+    pub use crate::{
+        ConnectionRegistry, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
+        configure_server,
+    };
+}
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum NetworkSimulationProfile {
@@ -136,6 +156,7 @@ struct RemoteExtrapolationConfig {
 #[cfg(feature = "server")]
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ServerNetworkSet {
+    ReceiveRequests,
     PrepareSimulation,
 }
 
@@ -144,13 +165,18 @@ pub enum ServerNetworkSet {
 struct PendingJoin(CharacterId);
 
 #[cfg(feature = "server")]
-#[derive(Resource, Debug)]
-struct NextPlayerId(u64);
+#[derive(Component, Debug, Clone)]
+pub struct ServerJoinRequest {
+    pub character: CharacterId,
+    owner: u64,
+    connection: Entity,
+    peer: PeerId,
+}
 
 #[cfg(feature = "server")]
-impl Default for NextPlayerId {
-    fn default() -> Self {
-        Self(1)
+impl ServerJoinRequest {
+    pub fn owner(&self) -> u64 {
+        self.owner
     }
 }
 
@@ -215,10 +241,12 @@ pub fn configure_server(
         .insert_resource(ReplicationMetadata::new(snapshot_interval))
         .insert_resource(network_simulation)
         .init_resource::<ConnectionRegistry>()
-        .init_resource::<NextPlayerId>()
         .register_game_protocol()
         .add_systems(Startup, start_server)
-        .add_systems(Update, handle_join_requests)
+        .add_systems(
+            Update,
+            receive_join_requests.in_set(ServerNetworkSet::ReceiveRequests),
+        )
         .add_systems(
             FixedUpdate,
             apply_tick_player_input.in_set(ServerNetworkSet::PrepareSimulation),
@@ -510,6 +538,7 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
     commands.entity(trigger.entity).insert((
         InputMarker::<PlayerInput>::default(),
         MovementIntent::ZERO,
+        MovementSpeedScale::default(),
         GazeIntent::ZERO,
         AttackIntent::RELEASED,
     ));
@@ -532,75 +561,41 @@ fn send_join_when_connected(
 }
 
 #[cfg(feature = "server")]
-fn handle_join_requests(
+fn receive_join_requests(
     mut clients: Query<
         (Entity, &RemoteId, &mut MessageReceiver<JoinRequest>),
         (With<ClientOf>, With<Connected>),
     >,
-    players: Query<&PlayerOwner>,
-    mut next_player_id: ResMut<NextPlayerId>,
-    room_grid: Res<StartingRoomGrid>,
-    catalog: Option<Res<CharacterCatalog>>,
-    health_catalog: Option<Res<CharacterHealthCatalog>>,
     mut commands: Commands,
 ) {
     for (connection, remote, mut receiver) in &mut clients {
         let Some(request) = receiver.receive().next() else {
             continue;
         };
-        if let Some(catalog) = catalog.as_ref()
-            && !catalog.contains(&request.character)
-        {
-            warn!(peer = ?remote.0, character = ?request.character, "ignoring join for unknown character");
-            continue;
-        }
         let PeerId::Netcode(owner) = remote.0 else {
             warn!(peer = ?remote.0, "ignoring join from unsupported peer identity");
             continue;
         };
-        if players.iter().any(|player_owner| player_owner.0 == owner) {
-            warn!(peer = ?remote.0, "ignoring repeated join request");
-            continue;
-        }
-
-        let player_id = next_player_id.0;
-        let Some(following_id) = player_id.checked_add(1) else {
-            warn!("player id space exhausted; ignoring join request");
-            continue;
-        };
-        next_player_id.0 = following_id;
-        let spawn = spawn_position(player_id);
-        let selected_character = request.character.clone();
-        let maximum_health = health_catalog
-            .as_ref()
-            .and_then(|catalog| catalog.max_hp(&selected_character))
-            .unwrap_or(140.0);
-        let mut player = commands.spawn((
-            PlayerId(player_id),
-            PlayerOwner(owner),
-            SelectedCharacter(selected_character.clone()),
-            MovementIntent::ZERO,
-            GazeIntent::ZERO,
-            AttackIntent::RELEASED,
-            MovementDirection::ZERO,
-            BodyFacing::Authored,
-            GazeDirection::RIGHT,
-            Position::new(spawn.x, spawn.y),
-            room_grid.starting_room(),
-            ControlledBy {
-                owner: connection,
-                lifetime: Lifetime::SessionBased,
-            },
-            Replicate::to_clients(NetworkTarget::All),
-            PredictionTarget::to_clients(NetworkTarget::Single(remote.0)),
-            InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(remote.0)),
-        ));
-        player.insert(CharacterHealth::full(maximum_health));
-        if selected_character.0 == "hammerer" {
-            player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));
-        }
-        info!(?connection, player_id, owner, character = ?selected_character, "authoritative player spawned");
+        commands.spawn(ServerJoinRequest {
+            character: request.character,
+            owner,
+            connection,
+            peer: remote.0,
+        });
     }
+}
+
+#[cfg(feature = "server")]
+pub fn configure_replicated_player(player: &mut EntityCommands<'_>, request: &ServerJoinRequest) {
+    player.insert((
+        ControlledBy {
+            owner: request.connection,
+            lifetime: Lifetime::SessionBased,
+        },
+        Replicate::to_clients(NetworkTarget::All),
+        PredictionTarget::to_clients(NetworkTarget::Single(request.peer)),
+        InterpolationTarget::to_clients(NetworkTarget::AllExceptSingle(request.peer)),
+    ));
 }
 
 #[cfg(feature = "client")]
@@ -637,19 +632,6 @@ pub fn client_input_timeline_synced(
     clients: Query<(), (With<Client>, With<IsSynced<InputTimeline>>)>,
 ) -> bool {
     !clients.is_empty()
-}
-
-#[cfg(feature = "server")]
-fn spawn_position(player_id: u64) -> Vec2 {
-    const POSITIONS: [Vec2; MAX_CLIENTS] = [
-        Vec2::new(-4.0, 0.0),
-        Vec2::new(-2.0, 0.0),
-        Vec2::new(0.0, 0.0),
-        Vec2::new(2.0, 0.0),
-        Vec2::new(4.0, 0.0),
-    ];
-    let index = (player_id.saturating_sub(1) % POSITIONS.len() as u64) as usize;
-    POSITIONS[index]
 }
 
 #[cfg(feature = "client")]
@@ -888,15 +870,6 @@ mod tests {
         assert!(!registry.unregister(peer, duplicate));
 
         assert_eq!(registry.entity(peer), Some(original));
-    }
-
-    #[test]
-    fn spawn_positions_are_separated_and_repeat_safely() {
-        let first: Vec2 = spawn_position(1);
-        let second = spawn_position(2);
-
-        assert_ne!(first, second);
-        assert_eq!(first, spawn_position(6));
     }
 
     #[test]

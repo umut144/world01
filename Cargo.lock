@@ -3070,12 +3070,11 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "game01-configs",
+ "game01-content",
  "game01-network",
  "game01-simulation",
  "game01-world-data",
  "gilrs",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -3084,6 +3083,16 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "toml",
+]
+
+[[package]]
+name = "game01-content"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "game01-world-data",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3102,6 +3111,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "game01-configs",
+ "game01-content",
  "game01-network",
  "game01-simulation",
  "game01-world-data",
@@ -3113,6 +3123,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "game01-configs",
+ "game01-content",
  "game01-world-data",
 ]
 
@@ -3122,7 +3133,6 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "serde",
- "serde_json",
 ]
 
 [[package]]

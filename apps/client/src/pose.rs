@@ -1,7 +1,9 @@
 use bevy::prelude::*;
 use game01_world_data::{BodyFacing, MovementDirection};
 
-use crate::polytools::{AuthoredFacing, CharacterVisual, CharacterVisualOrientation};
+use game01_content::AuthoredFacing;
+
+use crate::polytools::{CharacterVisual, CharacterVisualOrientation};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct PoseSettings {

@@ -3,17 +3,17 @@ use std::{env, error::Error, io, path::Path};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
+use game01_content::{HammerCombatGeometry, RuntimeContent};
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
-use game01_world_data::{
-    CharacterCatalog, CharacterHealthCatalog, HammerCombatGeometry, StartingRoomGrid,
-};
+use game01_world_data::StartingRoomGrid;
 
 use crate::controller::ControllerInput;
-use crate::hammer::HammerPresentationPlugin;
+use crate::hammer::{HammerPresentationPlugin, HammerPresentationRules};
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::{CameraView, ClientPresentationPlugin};
+use crate::session::ClientSessionPlugin;
 
 mod controller;
 mod eyes;
@@ -23,6 +23,7 @@ mod polytools;
 mod pose;
 mod prediction;
 mod presentation;
+mod session;
 
 const INITIAL_WINDOW_WIDTH: u32 = 2880;
 const INITIAL_WINDOW_HEIGHT: u32 = 1800;
@@ -31,8 +32,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
     let design = load_embedded()?;
-    let character_assets = CharacterAssetLibrary::load_from_directory(
-        Path::new("assets/characters"),
+    let content = RuntimeContent::load_from_directory(Path::new("assets/characters"))?;
+    let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
+    let character_assets = CharacterAssetLibrary::from_content(
+        content,
         design.eyes.pupil_area_ratio,
         design.eyes.hammerer_collision_radius_ratio,
     )?;
@@ -46,23 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let movement_step = MovementStep::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
-    let hammer_geometry = HammerCombatGeometry::from_runtime_manifests(
-        include_str!("../../../assets/characters/hammerer/manifest.json"),
-        include_str!("../../../assets/characters/hammer/manifest.json"),
-    )?;
-    let character_health = CharacterHealthCatalog::from_manifests([
-        include_str!("../../../assets/characters/archerf/manifest.json"),
-        include_str!("../../../assets/characters/barde/manifest.json"),
-        include_str!("../../../assets/characters/chantres/manifest.json"),
-        include_str!("../../../assets/characters/glavier/manifest.json"),
-        include_str!("../../../assets/characters/hammerer/manifest.json"),
-        include_str!("../../../assets/characters/mage/manifest.json"),
-        include_str!("../../../assets/characters/monk/manifest.json"),
-        include_str!("../../../assets/characters/rogue/manifest.json"),
-        include_str!("../../../assets/characters/sorcerer/manifest.json"),
-        include_str!("../../../assets/characters/warrior/manifest.json"),
-        include_str!("../../../assets/characters/wizard/manifest.json"),
-    ])?;
+    let hammer_presentation_rules = HammerPresentationRules::from_design(&design);
     let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -102,11 +89,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(movement_step);
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
+    app.insert_resource(hammer_presentation_rules);
     app.insert_resource(hammer_geometry);
-    app.insert_resource(character_health);
-    app.insert_resource(CharacterCatalog::from_json(include_str!(
-        "../../../assets/characters/catalog.json"
-    ))?);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
@@ -119,14 +103,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
-    app.add_plugins(ClientPresentationPlugin {
+    app.add_plugins(ClientSessionPlugin {
         client_id,
         tick_duration,
         snapshot_interval,
         remote_interpolation_ratio,
         network_simulation,
-        character_assets,
     });
+    app.add_plugins(ClientPresentationPlugin { character_assets });
     app.run();
     Ok(())
 }

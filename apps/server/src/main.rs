@@ -2,19 +2,22 @@ use std::{env, error::Error, io};
 
 use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use game01_configs::load_embedded;
+use game01_content::{CharacterHealthCatalog, HammerCombatGeometry, RuntimeContent};
 use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{
-    HammerAttackRules, MovementStep, WeaponAimRules, advance_hammer_attacks, move_players,
-    update_character_orientation, update_gaze_direction, update_weapon_aim,
+    HammerAttackRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
 };
-use game01_world_data::{
-    CharacterCatalog, CharacterHealthCatalog, HammerCombatGeometry, StartingRoomGrid,
-};
+use game01_world_data::StartingRoomGrid;
+
+use crate::session::ServerSessionPlugin;
+
+mod session;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
+    let content = RuntimeContent::load_embedded()?;
     let network_simulation = network_simulation_from_env()?;
     let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -25,23 +28,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let movement_step = MovementStep::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
-    let hammer_geometry = HammerCombatGeometry::from_runtime_manifests(
-        include_str!("../../../assets/characters/hammerer/manifest.json"),
-        include_str!("../../../assets/characters/hammer/manifest.json"),
-    )?;
-    let character_health = CharacterHealthCatalog::from_manifests([
-        include_str!("../../../assets/characters/archerf/manifest.json"),
-        include_str!("../../../assets/characters/barde/manifest.json"),
-        include_str!("../../../assets/characters/chantres/manifest.json"),
-        include_str!("../../../assets/characters/glavier/manifest.json"),
-        include_str!("../../../assets/characters/hammerer/manifest.json"),
-        include_str!("../../../assets/characters/mage/manifest.json"),
-        include_str!("../../../assets/characters/monk/manifest.json"),
-        include_str!("../../../assets/characters/rogue/manifest.json"),
-        include_str!("../../../assets/characters/sorcerer/manifest.json"),
-        include_str!("../../../assets/characters/warrior/manifest.json"),
-        include_str!("../../../assets/characters/wizard/manifest.json"),
-    ])?;
+    let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
+    let character_health = CharacterHealthCatalog::from_content(&content)?;
     let snapshot_interval = design
         .network
         .snapshot_interval_for(design.simulation)
@@ -58,9 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         LogPlugin::default(),
         StatesPlugin,
     ))
-    .insert_resource(CharacterCatalog::from_json(include_str!(
-        "../../../assets/characters/catalog.json"
-    ))?)
+    .insert_resource(content)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
     .insert_resource(weapon_aim_rules)
@@ -75,19 +61,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                     "room dimensions must be greater than zero",
                 )
             })?,
-    )
-    .add_systems(
-        FixedUpdate,
-        (
-            update_gaze_direction,
-            update_weapon_aim,
-            advance_hammer_attacks,
-            move_players,
-            update_character_orientation,
-        )
-            .chain()
-            .after(ServerNetworkSet::PrepareSimulation),
     );
+    add_simulation_step(&mut app, FixedUpdate);
+    app.configure_sets(
+        FixedUpdate,
+        SimulationSet::GameplayStep.after(ServerNetworkSet::PrepareSimulation),
+    );
+    app.add_plugins(ServerSessionPlugin);
     configure_server(
         &mut app,
         tick_duration,

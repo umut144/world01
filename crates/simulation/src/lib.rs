@@ -4,11 +4,37 @@ use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
+use game01_content::HammerCombatGeometry;
 use game01_world_data::{
     AttackIntent, BodyFacing, GazeDirection, GazeIntent, HammerAttackPhase, HammerAttackState,
-    HammerCombatGeometry, MovementDirection, MovementIntent, Position, SelectedCharacter,
+    MovementDirection, MovementIntent, MovementSpeedScale, Position, SelectedCharacter,
     WeaponAimState, WeaponTurnDirection,
 };
+
+mod schedule;
+
+pub use schedule::{SimulationSet, add_simulation_step};
+
+pub mod movement {
+    pub use crate::{
+        MovementConfigError, MovementStep, move_players, update_character_orientation,
+    };
+}
+
+pub mod aim {
+    pub use crate::{
+        WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim,
+    };
+}
+
+pub mod combat {
+    pub mod hammer {
+        pub use crate::{
+            HammerAttackConfigError, HammerAttackRules, advance_hammer_attacks,
+            constrain_embedded_hammer_reach, resolve_hammer_movement_scale,
+        };
+    }
+}
 
 const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
 const TARGET_CLAMP_EPSILON: f32 = 0.000_1;
@@ -89,10 +115,6 @@ impl MovementStep {
     pub fn displacement(self, intent: MovementIntent) -> Vec2 {
         normalized_intent(intent) * self.speed_meters_per_second * self.seconds_per_tick
     }
-
-    fn displacement_scaled(self, intent: MovementIntent, multiplier: f32) -> Vec2 {
-        self.displacement(intent) * multiplier
-    }
 }
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -103,9 +125,6 @@ pub struct HammerAttackRules {
     embedded_ticks: u32,
     recovery_ticks: u32,
     charging_movement_multiplier: f32,
-    scale_at_full_reach: f32,
-    scale_at_full_charge: f32,
-    maximum_inward_pull_ratio: f32,
 }
 
 impl HammerAttackRules {
@@ -126,9 +145,6 @@ impl HammerAttackRules {
             embedded_ticks: ticks(config.hammer_attack.embedded_seconds),
             recovery_ticks: ticks(config.hammer_attack.recovery_seconds),
             charging_movement_multiplier: config.hammer_attack.charging_movement_multiplier,
-            scale_at_full_reach: config.hammer_attack.scale_at_full_reach,
-            scale_at_full_charge: config.hammer_attack.scale_at_full_charge,
-            maximum_inward_pull_ratio: config.hammer_attack.maximum_inward_pull_ratio,
         })
     }
 
@@ -154,39 +170,6 @@ impl HammerAttackRules {
 
     pub fn grip_progress(self, charge_ticks: f32) -> f32 {
         charge_ticks.clamp(0.0, self.grip_reach_ticks as f32) / self.grip_reach_ticks as f32
-    }
-
-    pub fn charge_scale(self, charge_ticks: f32) -> f32 {
-        let charge_ticks = charge_ticks.clamp(0.0, self.maximum_charge_ticks as f32);
-        if charge_ticks <= self.grip_reach_ticks as f32 {
-            let progress = charge_ticks / self.grip_reach_ticks as f32;
-            1.0 + (self.scale_at_full_reach - 1.0) * progress
-        } else {
-            let second_stage_ticks = self
-                .maximum_charge_ticks
-                .saturating_sub(self.grip_reach_ticks)
-                .max(1);
-            let progress = (charge_ticks - self.grip_reach_ticks as f32)
-                .clamp(0.0, second_stage_ticks as f32)
-                / second_stage_ticks as f32;
-            self.scale_at_full_reach
-                + (self.scale_at_full_charge - self.scale_at_full_reach) * progress
-        }
-    }
-
-    pub fn inward_pull_ratio(self, charge_ticks: f32) -> f32 {
-        let charge_ticks = charge_ticks.clamp(0.0, self.maximum_charge_ticks as f32);
-        if charge_ticks <= self.grip_reach_ticks as f32 {
-            return 0.0;
-        }
-        let second_stage_ticks = self
-            .maximum_charge_ticks
-            .saturating_sub(self.grip_reach_ticks)
-            .max(1);
-        let progress = (charge_ticks - self.grip_reach_ticks as f32)
-            .clamp(0.0, second_stage_ticks as f32)
-            / second_stage_ticks as f32;
-        self.maximum_inward_pull_ratio * progress
     }
 
     fn movement_multiplier(self, attack: Option<&HammerAttackState>) -> f32 {
@@ -232,26 +215,40 @@ impl Error for MovementConfigError {}
 
 pub fn move_players(
     step: Res<MovementStep>,
-    attack_rules: Res<HammerAttackRules>,
-    hammer_geometry: Res<HammerCombatGeometry>,
-    mut players: Query<(&MovementIntent, Option<&HammerAttackState>, &mut Position)>,
+    mut players: Query<(&MovementIntent, Option<&MovementSpeedScale>, &mut Position)>,
 ) {
-    for (intent, attack, mut position) in &mut players {
-        let displacement =
-            step.displacement_scaled(*intent, attack_rules.movement_multiplier(attack));
+    for (intent, speed_scale, mut position) in &mut players {
+        let multiplier = speed_scale.map_or(1.0, |scale| scale.0);
+        let displacement = step.displacement(*intent) * multiplier;
         let current = Vec2::new(position.x, position.y);
         let proposed = current + displacement;
-        let constrained = match attack {
-            Some(state) if state.phase == HammerAttackPhase::Embedded => {
-                constrain_embedded_position(
-                    proposed,
-                    Vec2::new(state.impact_point.x, state.impact_point.y),
-                    hammer_geometry.socket_offset(),
-                    hammer_geometry.maximum_reach(),
-                )
-            }
-            _ => proposed,
-        };
+        *position = Position::new(proposed.x, proposed.y);
+    }
+}
+
+pub fn resolve_hammer_movement_scale(
+    rules: Res<HammerAttackRules>,
+    mut players: Query<(&HammerAttackState, &mut MovementSpeedScale)>,
+) {
+    for (attack, mut scale) in &mut players {
+        scale.0 = rules.movement_multiplier(Some(attack));
+    }
+}
+
+pub fn constrain_embedded_hammer_reach(
+    hammer_geometry: Res<HammerCombatGeometry>,
+    mut players: Query<(&HammerAttackState, &mut Position)>,
+) {
+    for (attack, mut position) in &mut players {
+        if attack.phase != HammerAttackPhase::Embedded {
+            continue;
+        }
+        let constrained = constrain_embedded_position(
+            Vec2::new(position.x, position.y),
+            Vec2::new(attack.impact_point.x, attack.impact_point.y),
+            hammer_geometry.socket_offset(),
+            hammer_geometry.maximum_reach(),
+        );
         *position = Position::new(constrained.x, constrained.y);
     }
 }
@@ -364,16 +361,15 @@ pub fn advance_hammer_attacks(
 }
 
 pub fn update_character_orientation(
-    attack_rules: Res<HammerAttackRules>,
     mut players: Query<(
         &MovementIntent,
-        Option<&HammerAttackState>,
+        Option<&MovementSpeedScale>,
         &mut MovementDirection,
         &mut BodyFacing,
     )>,
 ) {
-    for (movement, attack, mut movement_direction, mut facing) in &mut players {
-        let direction = normalized_intent(*movement) * attack_rules.movement_multiplier(attack);
+    for (movement, speed_scale, mut movement_direction, mut facing) in &mut players {
+        let direction = normalized_intent(*movement) * speed_scale.map_or(1.0, |scale| scale.0);
         *movement_direction = MovementDirection::new(direction.x, direction.y);
 
         if direction.x.is_finite() {
@@ -489,11 +485,10 @@ mod tests {
     }
 
     fn hammer_geometry() -> HammerCombatGeometry {
-        HammerCombatGeometry::from_runtime_manifests(
-            include_str!("../../../assets/characters/hammerer/manifest.json"),
-            include_str!("../../../assets/characters/hammer/manifest.json"),
-        )
-        .expect("synced Hammer manifests define valid combat geometry")
+        let content = game01_content::RuntimeContent::load_embedded()
+            .expect("embedded runtime content is valid");
+        HammerCombatGeometry::from_content(&content)
+            .expect("synced Hammer manifests define valid combat geometry")
     }
 
     fn character(name: &str) -> SelectedCharacter {

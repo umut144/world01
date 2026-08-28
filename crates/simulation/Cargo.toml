@@ -7,4 +7,5 @@ rust-version.workspace = true
 [dependencies]
 bevy = { workspace = true, features = ["std"] }
 game01-configs = { path = "../configs" }
+game01-content = { path = "../content" }
 game01-world-data = { path = "../world_data" }

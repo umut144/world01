@@ -1,9 +1,11 @@
 [package]
-name = "game01-world-data"
+name = "game01-content"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
 bevy = { workspace = true, features = ["std"] }
+game01-world-data = { path = "../world_data" }
 serde.workspace = true
+serde_json.workspace = true

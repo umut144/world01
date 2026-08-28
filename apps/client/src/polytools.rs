@@ -1,15 +1,15 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    error::Error,
-    fmt, fs,
-    path::Path,
-};
+use std::{collections::HashMap, error::Error, fmt};
 
 use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
+#[cfg(test)]
+use game01_content::RuntimeFrameTransform;
+use game01_content::{
+    AuthoredFacing, RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent, RuntimeManifest,
+    RuntimeMesh,
+};
 use game01_world_data::CharacterId;
-use serde::Deserialize;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
 use crate::hammer::HammerPresentationMaterial;
@@ -43,8 +43,7 @@ pub struct CharacterVisualOrientation;
 
 #[derive(Resource, Clone)]
 pub struct CharacterAssetLibrary {
-    characters: HashMap<CharacterId, PolyToolsManifest>,
-    hammer: PolyToolsManifest,
+    content: RuntimeContent,
     pupil_area_ratio: f32,
     pupil_collision_reference_radius: f32,
 }
@@ -55,17 +54,16 @@ impl CharacterAssetLibrary {
         let design = game01_configs::load_embedded().map_err(|error| {
             PolyToolsAssetError::new(format!("cannot load embedded eye design: {error}"))
         })?;
-        Self::load_from_directory(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../assets/characters")
-                .as_path(),
+        Self::from_content(
+            RuntimeContent::load_embedded()
+                .map_err(|error| PolyToolsAssetError::new(error.to_string()))?,
             design.eyes.pupil_area_ratio,
             design.eyes.hammerer_collision_radius_ratio,
         )
     }
 
-    pub fn load_from_directory(
-        directory: &Path,
+    pub fn from_content(
+        content: RuntimeContent,
         pupil_area_ratio: f32,
         hammerer_collision_radius_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
@@ -82,44 +80,8 @@ impl CharacterAssetLibrary {
                 "Hammerer collision radius ratio must be finite, greater than zero, and at most one",
             ));
         }
-        let catalog_source =
-            fs::read_to_string(directory.join("catalog.json")).map_err(|error| {
-                PolyToolsAssetError::new(format!("cannot read character catalog: {error}"))
-            })?;
-        let catalog =
-            game01_world_data::CharacterCatalog::from_json(&catalog_source).map_err(|error| {
-                PolyToolsAssetError::new(format!("cannot parse character catalog: {error}"))
-            })?;
-        let mut characters = HashMap::new();
-        for character in catalog.ids() {
-            let source = fs::read_to_string(directory.join(&character.0).join("manifest.json"))
-                .map_err(|error| {
-                    PolyToolsAssetError::new(format!("cannot read {}: {error}", character.0))
-                })?;
-            let manifest: PolyToolsManifest = serde_json::from_str(&source).map_err(|error| {
-                PolyToolsAssetError::new(format!("cannot parse {}: {error}", character.0))
-            })?;
-            let mut manifest = manifest;
-            resolve_asset_references(&mut manifest, directory)?;
-            validate_manifest(&manifest, &character.0)?;
-            characters.insert(character.clone(), manifest);
-        }
-
-        let hammer_source = fs::read_to_string(directory.join("hammer/manifest.json"))
-            .map_err(|error| PolyToolsAssetError::new(format!("cannot read hammer: {error}")))?;
-        let hammer: PolyToolsManifest = serde_json::from_str(&hammer_source)
-            .map_err(|error| PolyToolsAssetError::new(format!("cannot parse hammer: {error}")))?;
-        validate_hammer_manifest(&hammer)?;
-
-        if characters.is_empty() {
-            return Err(PolyToolsAssetError::new(
-                "character catalog contains no loadable character manifests",
-            ));
-        }
-
-        let hammerer = characters
-            .iter()
-            .find_map(|(character, manifest)| (character.0 == "hammerer").then_some(manifest))
+        let hammerer = content
+            .character(&CharacterId("hammerer".into()))
             .ok_or_else(|| PolyToolsAssetError::new("character catalog is missing Hammerer"))?;
         let hammerer_eye_region = hammerer
             .components
@@ -141,21 +103,18 @@ impl CharacterAssetLibrary {
             hammerer_pupil_radius * hammerer_collision_radius_ratio;
 
         Ok(Self {
-            characters,
-            hammer,
+            content,
             pupil_area_ratio,
             pupil_collision_reference_radius,
         })
     }
 
     pub fn ids(&self) -> Vec<CharacterId> {
-        let mut ids = self.characters.keys().cloned().collect::<Vec<_>>();
-        ids.sort_by(|a, b| a.0.cmp(&b.0));
-        ids
+        self.content.ids()
     }
 
-    fn character(&self, character: &CharacterId) -> Option<&PolyToolsManifest> {
-        self.characters.get(character)
+    fn character(&self, character: &CharacterId) -> Option<&RuntimeManifest> {
+        self.content.character(character)
     }
 
     pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
@@ -211,8 +170,8 @@ impl CharacterAssetLibrary {
 }
 
 fn component_world_transform(
-    component: &PolyToolsComponent,
-    components: &[PolyToolsComponent],
+    component: &RuntimeComponent,
+    components: &[RuntimeComponent],
 ) -> Option<Transform> {
     let local = component_transform(component);
     component
@@ -229,7 +188,7 @@ fn component_world_transform(
 }
 
 fn mesh_highest_y(
-    mesh: Option<&PolyToolsMesh>,
+    mesh: Option<&RuntimeMesh>,
     transform: Transform,
     pivot: Option<[f32; 2]>,
 ) -> f32 {
@@ -264,137 +223,12 @@ impl fmt::Display for PolyToolsAssetError {
 
 impl Error for PolyToolsAssetError {}
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum AuthoredFacing {
-    Left,
-    Right,
-    #[default]
-    Neutral,
-    Top,
-    Down,
-}
-
-#[derive(Clone, Default, Deserialize)]
-struct PolyToolsPresentation {
-    #[serde(default)]
-    authored_facing: AuthoredFacing,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsManifest {
-    schema_version: u32,
-    asset_key: String,
-    asset_type: String,
-    asset_pivot: [f32; 2],
-    #[serde(default)]
-    presentation: PolyToolsPresentation,
-    components: Vec<PolyToolsComponent>,
-    #[serde(default)]
-    attachment_frames: Vec<PolyToolsAttachmentFrame>,
-    #[serde(default)]
-    regions: Vec<PolyToolsSemanticRegion>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsAttachmentFrame {
-    frame_id: String,
-    role: String,
-    asset_transform: PolyToolsFrameTransform,
-}
-
-#[derive(Clone, Copy, Deserialize)]
-struct PolyToolsFrameTransform {
-    position: [f32; 2],
-    rotation_radians: f32,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsSemanticRegion {
-    region_id: String,
-    name: String,
-    role: String,
-    vertices: Vec<[f32; 2]>,
-    indices: Vec<u32>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsSymbolManifest {
-    #[serde(alias = "asset_key")]
-    key: String,
-    #[serde(rename = "type", alias = "asset_type")]
-    asset_kind: String,
-    #[serde(default)]
-    components: Vec<PolyToolsComponent>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsComponent {
-    component_id: String,
-    name: String,
-    parent_component_id: Option<String>,
-    z_index: i32,
-    #[serde(default)]
-    component_pivot: Option<[f32; 2]>,
-    #[serde(default)]
-    local_pivot: Option<[f32; 2]>,
-    local_transform: PolyToolsTransform,
-    #[serde(default = "default_projection_depth_meters")]
-    projection_depth_meters: f32,
-    mesh: Option<PolyToolsMesh>,
-    #[serde(default)]
-    closed_region_mesh: Option<PolyToolsRegionMesh>,
-    #[serde(default)]
-    contour_stroke_mesh: Option<PolyToolsStrokeMesh>,
-    #[serde(default)]
-    source_asset_key: Option<String>,
-    #[serde(skip)]
-    referenced_components: Vec<PolyToolsComponent>,
-}
-
-fn default_projection_depth_meters() -> f32 {
-    0.1
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsTransform {
-    position: [f32; 2],
-    rotation_radians: f32,
-    scale: [f32; 2],
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsMesh {
-    vertices: Vec<[f32; 2]>,
-    indices: Vec<u32>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsRegionMesh {
-    role: String,
-    vertices: Vec<[f32; 2]>,
-    indices: Vec<u32>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsStrokeMesh {
-    has_outline: bool,
-    vertices: Vec<[f32; 2]>,
-    indices: Vec<u32>,
-    #[serde(default)]
-    runs: Vec<PolyToolsStrokeRun>,
-}
-
-#[derive(Clone, Deserialize)]
-struct PolyToolsStrokeRun {
-    closed: bool,
-}
-
 const HAMMER_ASSET_KEY: &str = "hammer";
 const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
 const WEAPON_GRIP_ROLE: &str = "grip_primary";
 const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
+#[cfg(test)]
 const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
 const ASSET_LOCAL_Z_STEP: f32 = 0.01;
 const OUTLINE_Z_OFFSET: f32 = 0.001;
@@ -406,7 +240,7 @@ fn weapon_key_for_character(character: &CharacterId) -> Option<&'static str> {
     (character.0 == "hammerer").then_some(HAMMER_ASSET_KEY)
 }
 
-fn asset_local_z_index_bounds(manifest: &PolyToolsManifest) -> Option<(i32, i32)> {
+fn asset_local_z_index_bounds(manifest: &RuntimeManifest) -> Option<(i32, i32)> {
     let mut bounds: Option<(i32, i32)> = None;
     for component in &manifest.components {
         let mut include = |z_index: i32| {
@@ -423,7 +257,7 @@ fn asset_local_z_index_bounds(manifest: &PolyToolsManifest) -> Option<(i32, i32)
     bounds
 }
 
-fn resting_attached_weapon_layer(character: &PolyToolsManifest, weapon: &PolyToolsManifest) -> f32 {
+fn resting_attached_weapon_layer(character: &RuntimeManifest, weapon: &RuntimeManifest) -> f32 {
     let character_minimum = asset_local_z_index_bounds(character)
         .map(|(minimum, _)| minimum)
         .unwrap_or_default();
@@ -436,10 +270,7 @@ fn resting_attached_weapon_layer(character: &PolyToolsManifest, weapon: &PolyToo
         * ASSET_LOCAL_Z_STEP
 }
 
-fn attacking_attached_weapon_layer(
-    character: &PolyToolsManifest,
-    weapon: &PolyToolsManifest,
-) -> f32 {
+fn attacking_attached_weapon_layer(character: &RuntimeManifest, weapon: &RuntimeManifest) -> f32 {
     let character_maximum = asset_local_z_index_bounds(character)
         .map(|(_, maximum)| maximum)
         .unwrap_or_default();
@@ -593,7 +424,7 @@ pub fn spawn_character_visual(
         {
             let outline = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                    Mesh2d(meshes.add(bevy_mesh(&RuntimeMesh {
                         vertices: stroke_mesh.vertices.clone(),
                         indices: stroke_mesh.indices.clone(),
                     }))),
@@ -642,7 +473,7 @@ pub fn spawn_character_visual(
             {
                 let outline = commands
                     .spawn((
-                        Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                        Mesh2d(meshes.add(bevy_mesh(&RuntimeMesh {
                             vertices: stroke_mesh.vertices.clone(),
                             indices: stroke_mesh.indices.clone(),
                         }))),
@@ -668,7 +499,7 @@ pub fn spawn_character_visual(
             meshes,
             hammer_materials,
             manifest,
-            &library.hammer,
+            library.content.hammer(),
         )?;
     }
 
@@ -681,8 +512,8 @@ fn spawn_hammer_visual(
     character_anchor: Entity,
     meshes: &mut Assets<Mesh>,
     hammer_materials: &mut Assets<HammerPresentationMaterial>,
-    character: &PolyToolsManifest,
-    hammer: &PolyToolsManifest,
+    character: &RuntimeManifest,
+    hammer: &RuntimeManifest,
 ) -> Result<(), PolyToolsAssetError> {
     let socket = attachment_frame(character, WEAPON_SOCKET_ROLE)?;
     let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE)?;
@@ -782,7 +613,7 @@ fn spawn_hammer_visual(
             material_handles.push(material.clone());
             let outline = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                    Mesh2d(meshes.add(bevy_mesh(&RuntimeMesh {
                         vertices: stroke.vertices.clone(),
                         indices: stroke.indices.clone(),
                     }))),
@@ -813,9 +644,9 @@ fn spawn_hammer_visual(
 }
 
 fn attachment_frame<'a>(
-    manifest: &'a PolyToolsManifest,
+    manifest: &'a RuntimeManifest,
     role: &str,
-) -> Result<&'a PolyToolsAttachmentFrame, PolyToolsAssetError> {
+) -> Result<&'a RuntimeAttachmentFrame, PolyToolsAssetError> {
     let mut matches = manifest
         .attachment_frames
         .iter()
@@ -836,8 +667,8 @@ fn attachment_frame<'a>(
 }
 
 fn hammer_attachment_transforms(
-    socket: &PolyToolsAttachmentFrame,
-    grip: &PolyToolsAttachmentFrame,
+    socket: &RuntimeAttachmentFrame,
+    grip: &RuntimeAttachmentFrame,
     layer: f32,
 ) -> (Transform, Transform) {
     let socket_transform = Transform::from_xyz(
@@ -857,7 +688,7 @@ fn hammer_attachment_transforms(
     (socket_transform, asset_transform)
 }
 
-fn component_transform(component: &PolyToolsComponent) -> Transform {
+fn component_transform(component: &RuntimeComponent) -> Transform {
     Transform::from_xyz(
         component.local_transform.position[0],
         component.local_transform.position[1],
@@ -873,16 +704,16 @@ fn component_transform(component: &PolyToolsComponent) -> Transform {
     ))
 }
 
-fn bevy_mesh(mesh: &PolyToolsMesh) -> Mesh {
+fn bevy_mesh(mesh: &RuntimeMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
 
-fn bevy_closed_prism_mesh(mesh: &PolyToolsMesh, depth_meters: f32) -> Mesh {
+fn bevy_closed_prism_mesh(mesh: &RuntimeMesh, depth_meters: f32) -> Mesh {
     let (vertices, indices) = closed_prism_parts(mesh, depth_meters);
     bevy_mesh_from_parts_3d(&vertices, &indices)
 }
 
-fn closed_prism_parts(mesh: &PolyToolsMesh, depth_meters: f32) -> (Vec<[f32; 3]>, Vec<u32>) {
+fn closed_prism_parts(mesh: &RuntimeMesh, depth_meters: f32) -> (Vec<[f32; 3]>, Vec<u32>) {
     let half_depth = depth_meters.max(0.0) * 0.5;
     let mut vertices = Vec::with_capacity(mesh.vertices.len() * 2);
     for vertex in &mesh.vertices {
@@ -992,259 +823,6 @@ fn character_color(character: &CharacterId) -> Color {
     }
 }
 
-fn resolve_asset_references(
-    manifest: &mut PolyToolsManifest,
-    directory: &Path,
-) -> Result<(), PolyToolsAssetError> {
-    for component in &mut manifest.components {
-        if component.mesh.is_some() || component.contour_stroke_mesh.is_some() {
-            continue;
-        }
-        let Some(source_key) = component.source_asset_key.as_deref() else {
-            continue;
-        };
-        let source = fs::read_to_string(directory.join(source_key).join("manifest.json")).map_err(
-            |error| {
-                PolyToolsAssetError::new(format!(
-                    "cannot read referenced asset {source_key}: {error}"
-                ))
-            },
-        )?;
-        let symbol: PolyToolsSymbolManifest = serde_json::from_str(&source).map_err(|error| {
-            PolyToolsAssetError::new(format!(
-                "cannot parse referenced asset {source_key}: {error}"
-            ))
-        })?;
-        if symbol.key != source_key || symbol.asset_kind != "symbols" {
-            return Err(PolyToolsAssetError::new(format!(
-                "referenced asset {source_key} is not a symbols manifest"
-            )));
-        }
-        component.referenced_components = symbol.components;
-    }
-    Ok(())
-}
-
-fn validate_manifest(
-    manifest: &PolyToolsManifest,
-    expected_key: &str,
-) -> Result<(), PolyToolsAssetError> {
-    if !(5..=12).contains(&manifest.schema_version) {
-        return Err(PolyToolsAssetError::new(format!(
-            "{} uses unsupported schema {}",
-            manifest.asset_key, manifest.schema_version
-        )));
-    }
-    if manifest.asset_key != expected_key || manifest.asset_type != "character" {
-        return Err(PolyToolsAssetError::new(
-            "manifest asset key does not match its package",
-        ));
-    }
-    validate_asset_contents(manifest)?;
-    if manifest.schema_version >= 9 && expected_key == "hammerer" {
-        attachment_frame(manifest, WEAPON_SOCKET_ROLE)?;
-    }
-    for component in &manifest.components {
-        if manifest.schema_version >= 8
-            && expected_key != "barde"
-            && (component.name == "eye_left" || component.name == "eye_right")
-            && component.closed_region_mesh.is_none()
-        {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} is missing its schema-8+ closed eye region",
-                component.component_id
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn validate_hammer_manifest(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
-    if !matches!(manifest.schema_version, 11 | 12)
-        || manifest.asset_key != HAMMER_ASSET_KEY
-        || manifest.asset_type != "weapons"
-    {
-        return Err(PolyToolsAssetError::new(
-            "Hammer must be a schema-11 or schema-12 weapons manifest",
-        ));
-    }
-    validate_asset_contents(manifest)?;
-    attachment_frame(manifest, WEAPON_GRIP_ROLE)?;
-    attachment_frame(manifest, WEAPON_SECONDARY_GRIP_ROLE)?;
-    attachment_frame(manifest, WEAPON_ATTACK_POINT_ROLE)?;
-    attachment_frame(manifest, WEAPON_REACH_LIMIT_ROLE)?;
-    let attack_regions = manifest
-        .regions
-        .iter()
-        .filter(|region| region.role == "attack")
-        .count();
-    if attack_regions != 1 {
-        return Err(PolyToolsAssetError::new(
-            "Hammer must contain exactly one AttackRegion",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_asset_contents(manifest: &PolyToolsManifest) -> Result<(), PolyToolsAssetError> {
-    if !finite_pair(manifest.asset_pivot) || manifest.components.is_empty() {
-        return Err(PolyToolsAssetError::new(format!(
-            "{} has invalid asset metadata",
-            manifest.asset_key
-        )));
-    }
-
-    let component_ids = manifest
-        .components
-        .iter()
-        .map(|component| component.component_id.as_str())
-        .collect::<BTreeSet<_>>();
-    let component_names = manifest
-        .components
-        .iter()
-        .map(|component| component.name.as_str())
-        .collect::<BTreeSet<_>>();
-    if component_ids.len() != manifest.components.len()
-        || component_names.len() != manifest.components.len()
-    {
-        return Err(PolyToolsAssetError::new(format!(
-            "{} has duplicate component identities",
-            manifest.asset_key
-        )));
-    }
-
-    for component in &manifest.components {
-        let pivot = component
-            .component_pivot
-            .or(component.local_pivot)
-            .unwrap_or([0.0, 0.0]);
-        if !finite_pair(pivot)
-            || !finite_pair(component.local_transform.position)
-            || !component.local_transform.rotation_radians.is_finite()
-            || !finite_pair(component.local_transform.scale)
-            || component
-                .local_transform
-                .scale
-                .iter()
-                .any(|scale| *scale == 0.0)
-        {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} has invalid transform data",
-                component.component_id
-            )));
-        }
-        if let Some(parent) = component.parent_component_id.as_deref()
-            && !component_ids.contains(parent)
-        {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} has an unknown parent",
-                component.component_id
-            )));
-        }
-        if let Some(mesh) = component.mesh.as_ref() {
-            validate_mesh(mesh, &component.component_id)?;
-        }
-        if let Some(region) = component.closed_region_mesh.as_ref() {
-            if region.role != "closed_contour_region" {
-                return Err(PolyToolsAssetError::new(format!(
-                    "{} has an invalid closed region role",
-                    component.component_id
-                )));
-            }
-            validate_mesh_parts(&region.vertices, &region.indices, &component.component_id)?;
-        }
-        if let Some(contour_stroke_mesh) = component.contour_stroke_mesh.as_ref() {
-            let stroke = PolyToolsMesh {
-                vertices: contour_stroke_mesh.vertices.clone(),
-                indices: contour_stroke_mesh.indices.clone(),
-            };
-            if contour_stroke_mesh.has_outline {
-                validate_mesh(&stroke, &component.component_id)?;
-            } else if !stroke.vertices.is_empty() || !stroke.indices.is_empty() {
-                return Err(PolyToolsAssetError::new(format!(
-                    "{} has a disabled outline with geometry",
-                    component.component_id
-                )));
-            }
-        }
-    }
-
-    let frame_ids = manifest
-        .attachment_frames
-        .iter()
-        .map(|frame| frame.frame_id.as_str())
-        .collect::<BTreeSet<_>>();
-    let frame_roles = manifest
-        .attachment_frames
-        .iter()
-        .map(|frame| frame.role.as_str())
-        .collect::<BTreeSet<_>>();
-    if frame_ids.len() != manifest.attachment_frames.len()
-        || frame_roles.len() != manifest.attachment_frames.len()
-        || manifest.attachment_frames.iter().any(|frame| {
-            frame.frame_id.is_empty()
-                || frame.role.is_empty()
-                || !finite_pair(frame.asset_transform.position)
-                || !frame.asset_transform.rotation_radians.is_finite()
-        })
-    {
-        return Err(PolyToolsAssetError::new(format!(
-            "{} has invalid attachment frames",
-            manifest.asset_key
-        )));
-    }
-
-    let region_ids = manifest
-        .regions
-        .iter()
-        .map(|region| region.region_id.as_str())
-        .collect::<BTreeSet<_>>();
-    if region_ids.len() != manifest.regions.len() {
-        return Err(PolyToolsAssetError::new(format!(
-            "{} has duplicate semantic Region identities",
-            manifest.asset_key
-        )));
-    }
-    for region in &manifest.regions {
-        if region.region_id.is_empty() || region.name.is_empty() || region.role.is_empty() {
-            return Err(PolyToolsAssetError::new(format!(
-                "{} has invalid semantic Region metadata",
-                manifest.asset_key
-            )));
-        }
-        validate_mesh_parts(&region.vertices, &region.indices, &region.region_id)?;
-    }
-    Ok(())
-}
-
-fn validate_mesh(mesh: &PolyToolsMesh, component_id: &str) -> Result<(), PolyToolsAssetError> {
-    validate_mesh_parts(&mesh.vertices, &mesh.indices, component_id)
-}
-
-fn validate_mesh_parts(
-    vertices: &[[f32; 2]],
-    indices: &[u32],
-    component_id: &str,
-) -> Result<(), PolyToolsAssetError> {
-    if vertices.is_empty()
-        || indices.is_empty()
-        || indices.len() % 3 != 0
-        || vertices.iter().any(|vertex| !finite_pair(*vertex))
-        || indices
-            .iter()
-            .any(|index| *index as usize >= vertices.len())
-    {
-        return Err(PolyToolsAssetError::new(format!(
-            "{component_id} has invalid mesh geometry"
-        )));
-    }
-    Ok(())
-}
-
-fn finite_pair(values: [f32; 2]) -> bool {
-    values.into_iter().all(f32::is_finite)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1264,7 +842,7 @@ mod tests {
     fn embedded_hammer_has_current_combat_authoring_contract() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        let hammer = &library.hammer;
+        let hammer = library.content.hammer();
         let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE).expect("Hammer grip is valid");
         let secondary_grip = attachment_frame(hammer, WEAPON_SECONDARY_GRIP_ROLE)
             .expect("Hammer secondary grip is valid");
@@ -1280,10 +858,10 @@ mod tests {
 
         assert!(matches!(hammer.schema_version, 11 | 12));
         assert_eq!(hammer.asset_type, "weapons");
-        assert!(finite_pair(grip.asset_transform.position));
-        assert!(finite_pair(secondary_grip.asset_transform.position));
-        assert!(finite_pair(attack_point.asset_transform.position));
-        assert!(finite_pair(reach_limit.asset_transform.position));
+        assert!(Vec2::from_array(grip.asset_transform.position).is_finite());
+        assert!(Vec2::from_array(secondary_grip.asset_transform.position).is_finite());
+        assert!(Vec2::from_array(attack_point.asset_transform.position).is_finite());
+        assert!(Vec2::from_array(reach_limit.asset_transform.position).is_finite());
         assert_ne!(
             grip.asset_transform.position,
             attack_point.asset_transform.position
@@ -1315,7 +893,7 @@ mod tests {
 
     #[test]
     fn projection_depth_builds_closed_side_walls_from_fill_boundary() {
-        let mesh = PolyToolsMesh {
+        let mesh = RuntimeMesh {
             vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             indices: vec![0, 1, 2, 0, 2, 3],
         };
@@ -1346,7 +924,7 @@ mod tests {
         let hammerer = library
             .character(&CharacterId("hammerer".to_owned()))
             .expect("Hammerer manifest is present");
-        let hammer = &library.hammer;
+        let hammer = library.content.hammer();
         let layer = resting_attached_weapon_layer(hammerer, hammer);
         let hammerer_minimum = asset_local_z_index_bounds(hammerer)
             .map(|(minimum, _)| minimum)
@@ -1367,7 +945,7 @@ mod tests {
         let hammerer = library
             .character(&CharacterId("hammerer".to_owned()))
             .expect("Hammerer manifest is present");
-        let hammer = &library.hammer;
+        let hammer = library.content.hammer();
         let layer = attacking_attached_weapon_layer(hammerer, hammer);
         let hammerer_maximum = asset_local_z_index_bounds(hammerer)
             .map(|(_, maximum)| maximum)
@@ -1390,20 +968,20 @@ mod tests {
             .expect("Hammerer manifest is present");
         let authored_socket = attachment_frame(hammerer, WEAPON_SOCKET_ROLE)
             .expect("Hammerer weapon socket is valid");
-        let authored_grip =
-            attachment_frame(&library.hammer, WEAPON_GRIP_ROLE).expect("Hammer grip is valid");
-        let socket = PolyToolsAttachmentFrame {
+        let authored_grip = attachment_frame(library.content.hammer(), WEAPON_GRIP_ROLE)
+            .expect("Hammer grip is valid");
+        let socket = RuntimeAttachmentFrame {
             frame_id: authored_socket.frame_id.clone(),
             role: authored_socket.role.clone(),
-            asset_transform: PolyToolsFrameTransform {
+            asset_transform: RuntimeFrameTransform {
                 position: authored_socket.asset_transform.position,
                 rotation_radians: 0.6,
             },
         };
-        let grip = PolyToolsAttachmentFrame {
+        let grip = RuntimeAttachmentFrame {
             frame_id: authored_grip.frame_id.clone(),
             role: authored_grip.role.clone(),
-            asset_transform: PolyToolsFrameTransform {
+            asset_transform: RuntimeFrameTransform {
                 position: authored_grip.asset_transform.position,
                 rotation_radians: -0.25,
             },
@@ -1476,59 +1054,10 @@ mod tests {
     }
 
     #[test]
-    fn missing_presentation_metadata_defaults_to_neutral() {
-        let manifest: PolyToolsManifest = serde_json::from_str(
-            r#"{
-                "schema_version": 8,
-                "asset_key": "legacy",
-                "asset_type": "character",
-                "asset_pivot": [0.0, 0.0],
-                "components": []
-            }"#,
-        )
-        .expect("legacy manifest remains readable");
-
-        assert_eq!(
-            manifest.presentation.authored_facing,
-            AuthoredFacing::Neutral
-        );
-    }
-
-    #[test]
-    fn authored_facing_accepts_every_exported_value() {
-        for (serialized, expected) in [
-            (r#""left""#, AuthoredFacing::Left),
-            (r#""right""#, AuthoredFacing::Right),
-            (r#""neutral""#, AuthoredFacing::Neutral),
-            (r#""top""#, AuthoredFacing::Top),
-            (r#""down""#, AuthoredFacing::Down),
-        ] {
-            assert_eq!(
-                serde_json::from_str::<AuthoredFacing>(serialized)
-                    .expect("exported authored facing is valid"),
-                expected,
-            );
-        }
-    }
-
-    #[test]
-    fn imported_manifests_use_only_finite_indexed_geometry() {
-        let library =
-            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        for manifest in library.characters.values() {
-            for component in &manifest.components {
-                if let Some(mesh) = component.mesh.as_ref() {
-                    validate_mesh(mesh, &component.component_id).expect("fill mesh is valid");
-                }
-            }
-        }
-    }
-
-    #[test]
     fn imported_eye_regions_build_colliders() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        for (character, manifest) in &library.characters {
+        for (character, manifest) in library.content.characters() {
             if character.0 == "barde" {
                 continue;
             }

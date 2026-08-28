@@ -6,8 +6,7 @@ use bevy::{
 };
 use game01_configs::load_file;
 use game01_network::{
-    Client, ClientPositionCorrection, NetworkSimulationProfile, RemotePositionExtrapolation,
-    configure_client, connect_client,
+    Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
 use game01_world_data::{
     CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter,
@@ -20,6 +19,7 @@ use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
 use crate::input::{collect_attack_input, collect_gaze_input, collect_movement_input};
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
+use crate::session::{ClientScreen, ClientSession};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
 const VIEWPORT_HEIGHT_METERS: f32 = 9.375;
@@ -33,11 +33,6 @@ const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
 
 pub struct ClientPresentationPlugin {
-    pub client_id: u64,
-    pub tick_duration: std::time::Duration,
-    pub snapshot_interval: std::time::Duration,
-    pub remote_interpolation_ratio: f32,
-    pub network_simulation: NetworkSimulationProfile,
     pub character_assets: CharacterAssetLibrary,
 }
 
@@ -65,17 +60,7 @@ impl CameraView {
 
 impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
-        configure_client(app, self.tick_duration, self.snapshot_interval);
-        app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
-            .init_state::<ClientScreen>()
-            .insert_resource(ClientSession {
-                client_id: self.client_id,
-                remote_interpolation_ratio: self.remote_interpolation_ratio,
-                network_simulation: self.network_simulation,
-                selected: None,
-                joining: false,
-            })
-            .insert_resource(self.character_assets.clone())
+        app.insert_resource(self.character_assets.clone())
             .init_resource::<PoseSettings>()
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
@@ -121,22 +106,6 @@ impl Plugin for ClientPresentationPlugin {
                     .run_if(in_state(ClientScreen::InGame)),
             );
     }
-}
-
-#[derive(States, Debug, Clone, Copy, Default, Eq, PartialEq, Hash)]
-enum ClientScreen {
-    #[default]
-    CharacterSelection,
-    InGame,
-}
-
-#[derive(Resource)]
-struct ClientSession {
-    client_id: u64,
-    remote_interpolation_ratio: f32,
-    network_simulation: NetworkSimulationProfile,
-    selected: Option<CharacterId>,
-    joining: bool,
 }
 
 #[derive(Component)]
