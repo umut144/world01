@@ -589,6 +589,7 @@
 			},
 			"name": "body_side_left",
 			"parent_component_id": "component_94",
+			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
 		{
@@ -1528,6 +1529,7 @@
 			},
 			"name": "body_side_right",
 			"parent_component_id": "component_94",
+			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
 		{
@@ -1831,6 +1833,7 @@
 			},
 			"name": "thorn_side_right",
 			"parent_component_id": "component_99",
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -4557,6 +4560,7 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -4860,6 +4864,7 @@
 			},
 			"name": "thorn_side_left",
 			"parent_component_id": "component_97",
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -5190,6 +5195,7 @@
 			},
 			"name": "thorn_left",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -5530,6 +5536,7 @@
 			},
 			"name": "thorn_right",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -6713,6 +6720,7 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
 		{
@@ -7164,6 +7172,7 @@
 			},
 			"name": "forehead",
 			"parent_component_id": "component_101",
+			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
 		{
@@ -7355,6 +7364,7 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_101",
+			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
 		{
@@ -7546,6 +7556,7 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_101",
+			"projection_depth_meters": 0.1,
 			"z_index": 4
 		}
 	],
@@ -7564,7 +7575,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 11,
+	"schema_version": 12,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

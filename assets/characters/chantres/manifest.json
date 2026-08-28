@@ -2653,6 +2653,7 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
 		{
@@ -4567,6 +4568,7 @@
 			},
 			"name": "belly",
 			"parent_component_id": "component_74",
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -5867,6 +5869,7 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -7005,6 +7008,7 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_76",
+			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
 		{
@@ -8143,6 +8147,7 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_76",
+			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
 		{
@@ -17254,6 +17259,7 @@
 			},
 			"name": "hat",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
 		{
@@ -17601,6 +17607,7 @@
 			},
 			"name": "hat_line",
 			"parent_component_id": "component_77",
+			"projection_depth_meters": 0.1,
 			"z_index": 5
 		}
 	],
@@ -17619,7 +17626,7 @@
 		"authored_facing": "left"
 	},
 	"regions": [],
-	"schema_version": 11,
+	"schema_version": 12,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

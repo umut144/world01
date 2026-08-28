@@ -3129,6 +3129,7 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
 		{
@@ -3781,6 +3782,7 @@
 			},
 			"name": "feet",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
 		{
@@ -5701,6 +5703,7 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -6073,6 +6076,7 @@
 			},
 			"name": "forehead",
 			"parent_component_id": "component_86",
+			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
 		{
@@ -7985,6 +7989,7 @@
 			},
 			"name": "head_tip01",
 			"parent_component_id": "component_87",
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -8250,6 +8255,7 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_86",
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -8515,6 +8521,7 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_86",
+			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
 		{
@@ -9786,6 +9793,7 @@
 			},
 			"name": "head_tip02",
 			"parent_component_id": "component_87",
+			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
 		{
@@ -10980,6 +10988,7 @@
 			},
 			"name": "head_tip03",
 			"parent_component_id": "component_87",
+			"projection_depth_meters": 0.1,
 			"z_index": 3
 		}
 	],
@@ -10998,7 +11007,7 @@
 		"authored_facing": "left"
 	},
 	"regions": [],
-	"schema_version": 11,
+	"schema_version": 12,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
