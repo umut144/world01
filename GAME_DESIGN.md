@@ -308,11 +308,11 @@ Confirmed first-iteration direction:
   head is blocked; tangential and inward movement remain available. The desired
   reach endpoint is slightly above the current `shaft_bevel_bottom` position.
   PolyTools provides the semantic Weapon Guide `reach_limit_primary`; its
-  further-scaled authored Hammer position is approximately `(0.0, 0.23 m)`.
+  further-scaled authored Hammer position is approximately `(0.0, 0.20 m)`.
   Relative to `attack_point_primary`, the further-enlarged schema-11 Hammer now
-  defines a maximum planted-head reach of roughly `1.9221 m`. Its carried
-  grip-to-head distance is roughly `1.4021 m`, while the authored secondary
-  attack grip produces a full impact radius of roughly `1.6021 m`.
+  defines a maximum planted-head reach of roughly `2.1674 m`. Its carried
+  grip-to-head distance is roughly `1.3674 m`, while the authored secondary
+  attack grip produces a full impact radius of roughly `1.7674 m`.
 - Space invokes the primary attack during keyboard development. The Xbox right
   trigger invokes the same action when a controller is available. Primary
   pointer/trackpad click is deliberately not bound.

@@ -5,7 +5,7 @@ use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
-use game01_world_data::{CharacterCatalog, StartingRoomGrid};
+use game01_world_data::{CharacterCatalog, HammerCombatGeometry, StartingRoomGrid};
 
 use crate::controller::ControllerInput;
 use crate::polytools::CharacterAssetLibrary;
@@ -43,6 +43,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let movement_step = MovementStep::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
+    let hammer_geometry = HammerCombatGeometry::from_runtime_manifests(
+        include_str!("../../../assets/characters/hammerer/manifest.json"),
+        include_str!("../../../assets/characters/hammer/manifest.json"),
+    )?;
     let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -81,6 +85,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(movement_step);
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
+    app.insert_resource(hammer_geometry);
     app.insert_resource(CharacterCatalog::from_json(include_str!(
         "../../../assets/characters/catalog.json"
     ))?);

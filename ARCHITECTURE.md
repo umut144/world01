@@ -78,7 +78,8 @@ Owns explicitly requested, human-editable game-design parameters:
 - exposes the current global `0.8 m/s` movement speed and 60 Hz simulation
   cadence, the default `60°/s` weapon-aim speed with optional
   per-character overrides, plus the explicitly requested Hammer
-  charge/swing/recovery timings and charging movement multiplier;
+  charge/grip/swing/embedded/recovery timings, movement multiplier, and
+  presentation-only charge scale/pull parameters;
 
 Later values such as mass, MaxHP, or attack values are added only when the developer explicitly requests them and the corresponding behavior enters scope. Do not expose every internal constant merely because simulation uses it.
 
@@ -116,9 +117,10 @@ configuration. It supplies explicit speed and step duration to the simulation
 system, clamps intent to unit length, rejects non-finite intent, and directly
 updates `Position` without owning fixed-tick scheduling. The current global
 speed is `0.8 m/s` for every character. A `HammerAttackRules` resource applies
-the configured Charging multiplier to both authoritative displacement and
-replicated `MovementDirection`; the initial multiplier is `0.0`, so Charging
-locks movement without rewriting input state.
+the configured Charging multiplier to authoritative displacement; its current
+value is `1.0`, so Charging retains normal movement. During Embedded, shared
+simulation projects only proposed socket positions outside the authored
+head-centered maximum-reach circle back to its boundary.
 
 ### `network`
 
@@ -270,12 +272,12 @@ inventory system:
 - PolyTools Runtime Manifest schema 9 introduced top-level Asset-local
   `attachment_frames` and triangulated semantic `regions` arrays without
   assigning new meaning to schema 8 fields. Runtime Manifest schema 10 extends
-  those frames with `reach_limit_primary`. Hammerer and Hammer schema-10 data
+  those frames with `reach_limit_primary`. Hammerer and Hammer schema-11 data
   are authored, exported, validated, synced, and imported into typed client-side
-  presentation data. The Hammer contract requires exactly one grip, one attack
-  point, one reach limit, and one triangulated AttackRegion; Hammerer requires
-  exactly one weapon socket. The Region is retained as semantic data and is not
-  rendered.
+  presentation data. The Hammer contract requires exactly one primary grip,
+  one secondary grip, one attack point, one reach limit, and one triangulated
+  AttackRegion; Hammerer requires exactly one weapon socket. The Region is
+  retained as semantic data and is not rendered.
 - PolyTools World schema 54 and Runtime Manifest schema 10 add the
   transform-based Weapon Guide role `reach_limit_primary`. The editor route,
   Component/Group scope, Inspector, Canvas gizmo, persistence, Scale Rebase,
@@ -291,8 +293,8 @@ inventory system:
   its authored secondary grip are exported and synced. game01 now requires
   exactly one secondary grip for Hammer while preserving schema 5 through 10
   loading compatibility for older non-Hammer character packages. Current
-  authored distances are approximately `1.4021 m` from primary grip to head,
-  `1.6021 m` from secondary grip to head, and `1.9221 m` from reach limit to
+  authored distances are approximately `1.3674 m` from primary grip to head,
+  `1.7674 m` from secondary grip to head, and `2.1674 m` from reach limit to
   head.
 
 The Hammer visible entity is attached by aligning `grip_primary` with
@@ -416,11 +418,11 @@ AttackRegion, attack point, and carried-behind-character layering.
   visible scale `1.25` at the overhead apex and `1.0` at ground impact, while
   authoritative Impact uses the authored AttackRegion at scale `1.0`. Client
   presentation samples fixed-tick overstep for frame-smooth transforms.
-- The planned Embedded Impact requires a presentation anchor containing the
-  world-space Hammer-head point at impact. The head remains at that point for
-  `2.0 s`, with
-  optional bounded `±1.5 cm` shake, while the shaft rotates so its grip stays
-  connected to the moving Hammerer. After the complete two-second Embedded
+- Embedded Impact stores a replicated/predicted world-space Hammer-head point
+  in `HammerAttackState` at the end of Swing. Client presentation anchors the
+  authored attack point there for `2.0 s`, with optional bounded `±1.5 cm`
+  shake, while the shaft rotates so its grip stays connected to the moving
+  Hammerer. After the complete two-second Embedded
   interval, Recovery interpolates for exactly one second directly from this
   constrained pose to the current carried pose while regripping from the attack
   contact locked at release back to `grip_primary` on
@@ -429,11 +431,11 @@ AttackRegion, attack point, and carried-behind-character layering.
   simulation state rather than this presentation anchor.
 - Embedded movement is constrained by a circle around the planted head. Inward
   and tangential displacement remain unchanged; only an outward displacement
-  crossing the authored maximum reach is projected to the boundary. The current
-  Hammer manifest exposes the intended endpoint only as the visual Component
-  pivot named `shaft_bevel_bottom` at asset position `(0, 0.03119038)`. A
-  semantic Weapon Guide at that position is preferred before shared simulation
-  imports it as authoritative reach data.
+  crossing the authored maximum reach is projected to the boundary. Shared
+  `HammerCombatGeometry` imports the semantic `reach_limit_primary` Guide from
+  the schema-11 manifest and derives the radius from its distance to
+  `attack_point_primary`; neither visible Component geometry nor a duplicated
+  balance constant defines this limit.
 - `attack_point_primary` is the authored Hammer-head and AttackRegion alignment
   reference. Slice 15B derives the full-length impact radius from the synced
   `grip_secondary`-to-`attack_point_primary` vector rather than duplicating it

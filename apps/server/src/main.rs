@@ -9,7 +9,7 @@ use game01_simulation::{
     HammerAttackRules, MovementStep, WeaponAimRules, advance_hammer_attacks, move_players,
     update_character_orientation, update_gaze_direction, update_weapon_aim,
 };
-use game01_world_data::{CharacterCatalog, StartingRoomGrid};
+use game01_world_data::{CharacterCatalog, HammerCombatGeometry, StartingRoomGrid};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let design = load_embedded()?;
@@ -23,6 +23,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let movement_step = MovementStep::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
+    let hammer_geometry = HammerCombatGeometry::from_runtime_manifests(
+        include_str!("../../../assets/characters/hammerer/manifest.json"),
+        include_str!("../../../assets/characters/hammer/manifest.json"),
+    )?;
     let snapshot_interval = design
         .network
         .snapshot_interval_for(design.simulation)
@@ -46,6 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(movement_step)
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
+    .insert_resource(hammer_geometry)
     .insert_resource(
         StartingRoomGrid::from_tiles(design.room.width_tiles, design.room.height_tiles)
             .ok_or_else(|| {

@@ -6,8 +6,8 @@ use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_world_data::{
     AttackIntent, BodyFacing, GazeDirection, GazeIntent, HammerAttackPhase, HammerAttackState,
-    MovementDirection, MovementIntent, Position, SelectedCharacter, WeaponAimState,
-    WeaponTurnDirection,
+    HammerCombatGeometry, MovementDirection, MovementIntent, Position, SelectedCharacter,
+    WeaponAimState, WeaponTurnDirection,
 };
 
 const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
@@ -98,9 +98,14 @@ impl MovementStep {
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct HammerAttackRules {
     maximum_charge_ticks: u32,
+    grip_reach_ticks: u32,
     swing_ticks: u32,
+    embedded_ticks: u32,
     recovery_ticks: u32,
     charging_movement_multiplier: f32,
+    scale_at_full_reach: f32,
+    scale_at_full_charge: f32,
+    maximum_inward_pull_ratio: f32,
 }
 
 impl HammerAttackRules {
@@ -116,9 +121,14 @@ impl HammerAttackRules {
         let ticks = |seconds: f32| (seconds * ticks_per_second as f32).round().max(1.0) as u32;
         Ok(Self {
             maximum_charge_ticks: ticks(config.hammer_attack.maximum_charge_seconds),
+            grip_reach_ticks: ticks(config.hammer_attack.grip_reach_seconds),
             swing_ticks: ticks(config.hammer_attack.swing_seconds),
+            embedded_ticks: ticks(config.hammer_attack.embedded_seconds),
             recovery_ticks: ticks(config.hammer_attack.recovery_seconds),
             charging_movement_multiplier: config.hammer_attack.charging_movement_multiplier,
+            scale_at_full_reach: config.hammer_attack.scale_at_full_reach,
+            scale_at_full_charge: config.hammer_attack.scale_at_full_charge,
+            maximum_inward_pull_ratio: config.hammer_attack.maximum_inward_pull_ratio,
         })
     }
 
@@ -130,12 +140,53 @@ impl HammerAttackRules {
         self.swing_ticks
     }
 
+    pub fn embedded_ticks(self) -> u32 {
+        self.embedded_ticks
+    }
+
     pub fn recovery_ticks(self) -> u32 {
         self.recovery_ticks
     }
 
     pub fn charge_ratio(self, charge_ticks: u32) -> f32 {
         charge_ticks.min(self.maximum_charge_ticks) as f32 / self.maximum_charge_ticks as f32
+    }
+
+    pub fn grip_progress(self, charge_ticks: f32) -> f32 {
+        charge_ticks.clamp(0.0, self.grip_reach_ticks as f32) / self.grip_reach_ticks as f32
+    }
+
+    pub fn charge_scale(self, charge_ticks: f32) -> f32 {
+        let charge_ticks = charge_ticks.clamp(0.0, self.maximum_charge_ticks as f32);
+        if charge_ticks <= self.grip_reach_ticks as f32 {
+            let progress = charge_ticks / self.grip_reach_ticks as f32;
+            1.0 + (self.scale_at_full_reach - 1.0) * progress
+        } else {
+            let second_stage_ticks = self
+                .maximum_charge_ticks
+                .saturating_sub(self.grip_reach_ticks)
+                .max(1);
+            let progress = (charge_ticks - self.grip_reach_ticks as f32)
+                .clamp(0.0, second_stage_ticks as f32)
+                / second_stage_ticks as f32;
+            self.scale_at_full_reach
+                + (self.scale_at_full_charge - self.scale_at_full_reach) * progress
+        }
+    }
+
+    pub fn inward_pull_ratio(self, charge_ticks: f32) -> f32 {
+        let charge_ticks = charge_ticks.clamp(0.0, self.maximum_charge_ticks as f32);
+        if charge_ticks <= self.grip_reach_ticks as f32 {
+            return 0.0;
+        }
+        let second_stage_ticks = self
+            .maximum_charge_ticks
+            .saturating_sub(self.grip_reach_ticks)
+            .max(1);
+        let progress = (charge_ticks - self.grip_reach_ticks as f32)
+            .clamp(0.0, second_stage_ticks as f32)
+            / second_stage_ticks as f32;
+        self.maximum_inward_pull_ratio * progress
     }
 
     fn movement_multiplier(self, attack: Option<&HammerAttackState>) -> f32 {
@@ -182,25 +233,59 @@ impl Error for MovementConfigError {}
 pub fn move_players(
     step: Res<MovementStep>,
     attack_rules: Res<HammerAttackRules>,
+    hammer_geometry: Res<HammerCombatGeometry>,
     mut players: Query<(&MovementIntent, Option<&HammerAttackState>, &mut Position)>,
 ) {
     for (intent, attack, mut position) in &mut players {
         let displacement =
             step.displacement_scaled(*intent, attack_rules.movement_multiplier(attack));
-        *position = Position::new(position.x + displacement.x, position.y + displacement.y);
+        let current = Vec2::new(position.x, position.y);
+        let proposed = current + displacement;
+        let constrained = match attack {
+            Some(state) if state.phase == HammerAttackPhase::Embedded => {
+                constrain_embedded_position(
+                    proposed,
+                    Vec2::new(state.impact_point.x, state.impact_point.y),
+                    hammer_geometry.socket_offset(),
+                    hammer_geometry.maximum_reach(),
+                )
+            }
+            _ => proposed,
+        };
+        *position = Position::new(constrained.x, constrained.y);
     }
+}
+
+fn constrain_embedded_position(
+    proposed_player_position: Vec2,
+    planted_head: Vec2,
+    socket_offset: Vec2,
+    maximum_reach: f32,
+) -> Vec2 {
+    let proposed_socket = proposed_player_position + socket_offset;
+    let head_to_socket = proposed_socket - planted_head;
+    if !head_to_socket.is_finite()
+        || !maximum_reach.is_finite()
+        || maximum_reach <= 0.0
+        || head_to_socket.length_squared() <= maximum_reach * maximum_reach
+    {
+        return proposed_player_position;
+    }
+    planted_head + head_to_socket.normalize() * maximum_reach - socket_offset
 }
 
 pub fn advance_hammer_attacks(
     rules: Res<HammerAttackRules>,
+    hammer_geometry: Res<HammerCombatGeometry>,
     mut players: Query<(
         &SelectedCharacter,
         &AttackIntent,
         &WeaponAimState,
+        &Position,
         &mut HammerAttackState,
     )>,
 ) {
-    for (character, attack, weapon_aim, mut state) in &mut players {
+    for (character, attack, weapon_aim, position, mut state) in &mut players {
         if character.0.0 != "hammerer" {
             *state = HammerAttackState::IDLE;
             continue;
@@ -239,6 +324,27 @@ pub fn advance_hammer_attacks(
             HammerAttackPhase::Swing => {
                 let next_tick = state.phase_ticks.saturating_add(1);
                 if next_tick >= rules.swing_ticks {
+                    let Some(direction) = valid_direction(state.direction) else {
+                        *state = HammerAttackState::IDLE;
+                        continue;
+                    };
+                    let direction = Vec2::new(direction.x, direction.y);
+                    let socket =
+                        Vec2::new(position.x, position.y) + hammer_geometry.socket_offset();
+                    let impact = socket
+                        + direction
+                            * hammer_geometry
+                                .attack_radius(rules.grip_progress(state.charge_ticks as f32));
+                    state.phase = HammerAttackPhase::Embedded;
+                    state.phase_ticks = 0;
+                    state.impact_point = Position::new(impact.x, impact.y);
+                } else {
+                    state.phase_ticks = next_tick;
+                }
+            }
+            HammerAttackPhase::Embedded => {
+                let next_tick = state.phase_ticks.saturating_add(1);
+                if next_tick >= rules.embedded_ticks {
                     state.phase = HammerAttackPhase::Recovery;
                     state.phase_ticks = 0;
                 } else {
@@ -382,6 +488,14 @@ mod tests {
         WeaponAimRules::from_design(&config).expect("embedded weapon aim configuration is valid")
     }
 
+    fn hammer_geometry() -> HammerCombatGeometry {
+        HammerCombatGeometry::from_runtime_manifests(
+            include_str!("../../../assets/characters/hammerer/manifest.json"),
+            include_str!("../../../assets/characters/hammer/manifest.json"),
+        )
+        .expect("synced Hammer manifests define valid combat geometry")
+    }
+
     fn character(name: &str) -> SelectedCharacter {
         SelectedCharacter(CharacterId(name.to_owned()))
     }
@@ -444,6 +558,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(movement_step())
             .insert_resource(attack_rules())
+            .insert_resource(hammer_geometry())
             .add_systems(Update, move_players);
         let player = app
             .world_mut()
@@ -710,9 +825,14 @@ mod tests {
             },
             hammer_attack: HammerAttackConfig {
                 maximum_charge_seconds: 5.0,
-                swing_seconds: 0.45,
-                recovery_seconds: 0.30,
-                charging_movement_multiplier: 0.0,
+                grip_reach_seconds: 2.0,
+                swing_seconds: 1.15,
+                embedded_seconds: 2.0,
+                recovery_seconds: 1.0,
+                charging_movement_multiplier: 1.0,
+                scale_at_full_reach: 0.8,
+                scale_at_full_charge: 0.5,
+                maximum_inward_pull_ratio: 0.05,
             },
             room: RoomConfig {
                 width_tiles: 15,
@@ -745,9 +865,14 @@ mod tests {
             },
             hammer_attack: HammerAttackConfig {
                 maximum_charge_seconds: 5.0,
-                swing_seconds: 0.45,
-                recovery_seconds: 0.30,
-                charging_movement_multiplier: 0.0,
+                grip_reach_seconds: 2.0,
+                swing_seconds: 1.15,
+                embedded_seconds: 2.0,
+                recovery_seconds: 1.0,
+                charging_movement_multiplier: 1.0,
+                scale_at_full_reach: 0.8,
+                scale_at_full_charge: 0.5,
+                maximum_inward_pull_ratio: 0.05,
             },
             room: RoomConfig {
                 width_tiles: 15,
@@ -782,12 +907,14 @@ mod tests {
     fn charging_caps_at_five_seconds_and_release_freezes_direction() {
         let rules = attack_rules();
         assert_eq!(rules.maximum_charge_ticks(), 300);
-        assert_eq!(rules.swing_ticks(), 27);
-        assert_eq!(rules.recovery_ticks(), 18);
+        assert_eq!(rules.swing_ticks(), 69);
+        assert_eq!(rules.embedded_ticks(), 120);
+        assert_eq!(rules.recovery_ticks(), 60);
 
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(weapon_aim_rules())
+            .insert_resource(hammer_geometry())
             .add_systems(
                 Update,
                 (
@@ -806,6 +933,7 @@ mod tests {
                 GazeDirection::RIGHT,
                 WeaponAimState::RIGHT,
                 HammerAttackState::IDLE,
+                Position::ZERO,
             ))
             .id();
 
@@ -858,6 +986,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(attack_rules())
             .insert_resource(weapon_aim_rules())
+            .insert_resource(hammer_geometry())
             .add_systems(
                 Update,
                 (
@@ -876,6 +1005,7 @@ mod tests {
                 GazeDirection::RIGHT,
                 WeaponAimState::RIGHT,
                 HammerAttackState::IDLE,
+                Position::ZERO,
             ))
             .id();
 
@@ -905,10 +1035,11 @@ mod tests {
     }
 
     #[test]
-    fn charging_lock_blocks_authoritative_movement_until_release() {
+    fn charging_retains_normal_authoritative_movement() {
         let mut app = App::new();
         app.insert_resource(movement_step())
             .insert_resource(attack_rules())
+            .insert_resource(hammer_geometry())
             .add_systems(Update, move_players);
         let player = app
             .world_mut()
@@ -923,7 +1054,11 @@ mod tests {
             .id();
 
         app.update();
-        assert_eq!(app.world().get::<Position>(player), Some(&Position::ZERO));
+        let charging_position = app
+            .world()
+            .get::<Position>(player)
+            .expect("charging Hammerer retains Position");
+        assert!((charging_position.x - 0.8 / 60.0).abs() < EPSILON);
 
         app.world_mut()
             .get_mut::<HammerAttackState>(player)
@@ -934,6 +1069,130 @@ mod tests {
             .world()
             .get::<Position>(player)
             .expect("Hammerer has Position");
-        assert!((position.x - 0.8 / 60.0).abs() < EPSILON);
+        assert!((position.x - 2.0 * 0.8 / 60.0).abs() < EPSILON);
+    }
+
+    #[test]
+    fn release_time_selects_the_authored_attack_radius() {
+        let rules = attack_rules();
+        let geometry = hammer_geometry();
+
+        for charge_ticks in [0, 60, 120, 300] {
+            let mut app = App::new();
+            app.insert_resource(rules)
+                .insert_resource(geometry)
+                .add_systems(Update, advance_hammer_attacks);
+            let player_position = Position::new(2.0, -3.0);
+            let player = app
+                .world_mut()
+                .spawn((
+                    character("hammerer"),
+                    AttackIntent::RELEASED,
+                    WeaponAimState::RIGHT,
+                    player_position,
+                    HammerAttackState {
+                        phase: HammerAttackPhase::Swing,
+                        direction: GazeDirection::RIGHT,
+                        phase_ticks: rules.swing_ticks() - 1,
+                        charge_ticks,
+                        impact_point: Position::ZERO,
+                    },
+                ))
+                .id();
+
+            app.update();
+
+            let state = *app.world().get::<HammerAttackState>(player).unwrap();
+            let socket = Vec2::new(player_position.x, player_position.y) + geometry.socket_offset();
+            let impact = Vec2::new(state.impact_point.x, state.impact_point.y);
+            let expected_radius = geometry.attack_radius(rules.grip_progress(charge_ticks as f32));
+            assert_eq!(state.phase, HammerAttackPhase::Embedded);
+            assert!((impact.distance(socket) - expected_radius).abs() < EPSILON);
+        }
+
+        let primary = geometry.attack_radius(0.0);
+        let halfway = geometry.attack_radius(0.5);
+        let secondary = geometry.attack_radius(1.0);
+        assert!((halfway - (primary + secondary) * 0.5).abs() < EPSILON);
+        assert_eq!(rules.grip_progress(120.0), 1.0);
+        assert_eq!(rules.grip_progress(300.0), 1.0);
+    }
+
+    #[test]
+    fn embedded_and_recovery_phases_use_the_configured_durations() {
+        let rules = attack_rules();
+        let mut app = App::new();
+        app.insert_resource(rules)
+            .insert_resource(hammer_geometry())
+            .add_systems(Update, advance_hammer_attacks);
+        let player = app
+            .world_mut()
+            .spawn((
+                character("hammerer"),
+                AttackIntent::RELEASED,
+                WeaponAimState::RIGHT,
+                Position::ZERO,
+                HammerAttackState {
+                    phase: HammerAttackPhase::Embedded,
+                    direction: GazeDirection::RIGHT,
+                    phase_ticks: 0,
+                    charge_ticks: 120,
+                    impact_point: Position::new(1.0, 0.0),
+                },
+            ))
+            .id();
+
+        for _ in 0..rules.embedded_ticks() - 1 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().get::<HammerAttackState>(player).unwrap().phase,
+            HammerAttackPhase::Embedded
+        );
+        app.update();
+        assert_eq!(
+            app.world().get::<HammerAttackState>(player).unwrap().phase,
+            HammerAttackPhase::Recovery
+        );
+
+        for _ in 0..rules.recovery_ticks() - 1 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().get::<HammerAttackState>(player).unwrap().phase,
+            HammerAttackPhase::Recovery
+        );
+        app.update();
+        assert_eq!(
+            *app.world().get::<HammerAttackState>(player).unwrap(),
+            HammerAttackState::IDLE
+        );
+    }
+
+    #[test]
+    fn embedded_reach_projects_only_positions_outside_the_authored_limit() {
+        let geometry = hammer_geometry();
+        let planted_head = Vec2::new(4.0, -2.0);
+        let socket_offset = geometry.socket_offset();
+        let reach = geometry.maximum_reach();
+        let player_for_socket = |socket: Vec2| socket - socket_offset;
+
+        let inside = player_for_socket(planted_head + Vec2::X * reach * 0.5);
+        assert_eq!(
+            constrain_embedded_position(inside, planted_head, socket_offset, reach),
+            inside
+        );
+
+        let outside = player_for_socket(planted_head + Vec2::new(3.0, 4.0) * reach);
+        let constrained = constrain_embedded_position(outside, planted_head, socket_offset, reach);
+        let constrained_socket = constrained + socket_offset;
+        assert!((constrained_socket.distance(planted_head) - reach).abs() < EPSILON);
+        assert_direction(
+            GazeDirection::new(
+                (constrained_socket - planted_head).normalize().x,
+                (constrained_socket - planted_head).normalize().y,
+            ),
+            Vec2::new(3.0, 4.0).normalize(),
+        );
     }
 }

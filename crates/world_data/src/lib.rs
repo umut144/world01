@@ -5,8 +5,7 @@ use bevy::{
     prelude::{Component, Reflect, Resource, Vec2},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::f32::consts::TAU;
+use std::{collections::HashSet, error::Error, f32::consts::TAU, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CharacterId(pub String);
@@ -184,7 +183,7 @@ pub struct SpawnPoint {
     pub y_meters: f32,
 }
 
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -260,6 +259,7 @@ pub enum HammerAttackPhase {
     Idle,
     Charging,
     Swing,
+    Embedded,
     Recovery,
 }
 
@@ -269,6 +269,7 @@ pub struct HammerAttackState {
     pub direction: GazeDirection,
     pub phase_ticks: u32,
     pub charge_ticks: u32,
+    pub impact_point: Position,
 }
 
 impl HammerAttackState {
@@ -277,7 +278,146 @@ impl HammerAttackState {
         direction: GazeDirection::ZERO,
         phase_ticks: 0,
         charge_ticks: 0,
+        impact_point: Position::ZERO,
     };
+}
+
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+pub struct HammerCombatGeometry {
+    socket_offset: Vec2,
+    primary_grip: Vec2,
+    secondary_grip: Vec2,
+    attack_point: Vec2,
+    reach_limit: Vec2,
+}
+
+impl HammerCombatGeometry {
+    pub fn from_runtime_manifests(
+        hammerer_source: &str,
+        hammer_source: &str,
+    ) -> Result<Self, HammerCombatGeometryError> {
+        let hammerer: CombatManifest = serde_json::from_str(hammerer_source).map_err(|error| {
+            HammerCombatGeometryError::new(format!("invalid Hammerer manifest: {error}"))
+        })?;
+        let hammer: CombatManifest = serde_json::from_str(hammer_source).map_err(|error| {
+            HammerCombatGeometryError::new(format!("invalid Hammer manifest: {error}"))
+        })?;
+        if hammerer.schema_version != 11 || hammerer.asset_key != "hammerer" {
+            return Err(HammerCombatGeometryError::new(
+                "Hammerer combat geometry requires its schema-11 manifest",
+            ));
+        }
+        if hammer.schema_version != 11 || hammer.asset_key != "hammer" {
+            return Err(HammerCombatGeometryError::new(
+                "Hammer combat geometry requires its schema-11 manifest",
+            ));
+        }
+        let hammerer_pivot = finite_vec2(hammerer.asset_pivot, "Hammerer asset pivot")?;
+        let socket = unique_frame(&hammerer, "weapon_socket_primary")?;
+        let primary_grip = unique_frame(&hammer, "grip_primary")?;
+        let secondary_grip = unique_frame(&hammer, "grip_secondary")?;
+        let attack_point = unique_frame(&hammer, "attack_point_primary")?;
+        let reach_limit = unique_frame(&hammer, "reach_limit_primary")?;
+        let geometry = Self {
+            socket_offset: socket - hammerer_pivot,
+            primary_grip,
+            secondary_grip,
+            attack_point,
+            reach_limit,
+        };
+        let primary_radius = geometry.attack_radius(0.0);
+        let secondary_radius = geometry.attack_radius(1.0);
+        if primary_radius <= f32::EPSILON
+            || secondary_radius <= primary_radius
+            || geometry.maximum_reach() <= secondary_radius
+        {
+            return Err(HammerCombatGeometryError::new(
+                "Hammer grips, attack point, and reach limit do not define increasing valid reaches",
+            ));
+        }
+        Ok(geometry)
+    }
+
+    pub fn socket_offset(self) -> Vec2 {
+        self.socket_offset
+    }
+
+    pub fn attack_radius(self, grip_progress: f32) -> f32 {
+        let grip = self
+            .primary_grip
+            .lerp(self.secondary_grip, grip_progress.clamp(0.0, 1.0));
+        self.attack_point.distance(grip)
+    }
+
+    pub fn maximum_reach(self) -> f32 {
+        self.attack_point.distance(self.reach_limit)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HammerCombatGeometryError(String);
+
+impl HammerCombatGeometryError {
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl fmt::Display for HammerCombatGeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Error for HammerCombatGeometryError {}
+
+#[derive(Deserialize)]
+struct CombatManifest {
+    schema_version: u32,
+    asset_key: String,
+    asset_pivot: [f32; 2],
+    attachment_frames: Vec<CombatAttachmentFrame>,
+}
+
+#[derive(Deserialize)]
+struct CombatAttachmentFrame {
+    role: String,
+    asset_transform: CombatFrameTransform,
+}
+
+#[derive(Deserialize)]
+struct CombatFrameTransform {
+    position: [f32; 2],
+}
+
+fn unique_frame(manifest: &CombatManifest, role: &str) -> Result<Vec2, HammerCombatGeometryError> {
+    let mut frames = manifest
+        .attachment_frames
+        .iter()
+        .filter(|frame| frame.role == role);
+    let frame = frames.next().ok_or_else(|| {
+        HammerCombatGeometryError::new(format!(
+            "{} is missing attachment frame {role}",
+            manifest.asset_key
+        ))
+    })?;
+    if frames.next().is_some() {
+        return Err(HammerCombatGeometryError::new(format!(
+            "{} contains duplicate attachment frame {role}",
+            manifest.asset_key
+        )));
+    }
+    finite_vec2(
+        frame.asset_transform.position,
+        &format!("{} attachment frame {role}", manifest.asset_key),
+    )
+}
+
+fn finite_vec2(values: [f32; 2], label: &str) -> Result<Vec2, HammerCombatGeometryError> {
+    let value = Vec2::from_array(values);
+    value.is_finite().then_some(value).ok_or_else(|| {
+        HammerCombatGeometryError::new(format!("{label} must contain finite coordinates"))
+    })
 }
 
 impl GazeIntent {
@@ -406,5 +546,20 @@ mod tests {
 
         assert_eq!(position, Position::new(22.5, -13.5));
         assert_eq!(grid.room_id_at(position), RoomId(2));
+    }
+
+    #[test]
+    fn embedded_hammer_combat_geometry_comes_from_schema_eleven_frames() {
+        let geometry = HammerCombatGeometry::from_runtime_manifests(
+            include_str!("../../../assets/characters/hammerer/manifest.json"),
+            include_str!("../../../assets/characters/hammer/manifest.json"),
+        )
+        .expect("synced Hammer manifests define valid combat geometry");
+
+        assert!(geometry.socket_offset().is_finite());
+        assert!(geometry.attack_radius(0.0) > 0.0);
+        assert!(geometry.attack_radius(0.5) > geometry.attack_radius(0.0));
+        assert!(geometry.attack_radius(1.0) > geometry.attack_radius(0.5));
+        assert!(geometry.maximum_reach() > geometry.attack_radius(1.0));
     }
 }

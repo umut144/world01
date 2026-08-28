@@ -22,6 +22,8 @@ pub struct HammerVisual {
     pub owner: Entity,
     pub rest_transform: Transform,
     pub attack_point_from_grip: Vec2,
+    pub secondary_grip_from_primary: Vec2,
+    pub owner_asset_pivot: Vec2,
     pub behind_layer: f32,
     pub front_layer: f32,
 }
@@ -605,6 +607,7 @@ fn spawn_hammer_visual(
 ) -> Result<(), PolyToolsAssetError> {
     let socket = attachment_frame(character, WEAPON_SOCKET_ROLE)?;
     let grip = attachment_frame(hammer, WEAPON_GRIP_ROLE)?;
+    let secondary_grip = attachment_frame(hammer, WEAPON_SECONDARY_GRIP_ROLE)?;
     let attack_point = attachment_frame(hammer, WEAPON_ATTACK_POINT_ROLE)?;
     let behind_layer = resting_attached_weapon_layer(character, hammer);
     let front_layer = attacking_attached_weapon_layer(character, hammer);
@@ -618,12 +621,22 @@ fn spawn_hammer_visual(
             0.0,
         ))
         .truncate();
+    let secondary_grip_from_primary = asset_transform
+        .to_matrix()
+        .transform_point3(Vec3::new(
+            secondary_grip.asset_transform.position[0],
+            secondary_grip.asset_transform.position[1],
+            0.0,
+        ))
+        .truncate();
     let pose_root = commands
         .spawn((
             HammerVisual {
                 owner,
                 rest_transform: pose_transform,
                 attack_point_from_grip,
+                secondary_grip_from_primary,
+                owner_asset_pivot: Vec2::from_array(character.asset_pivot),
                 behind_layer,
                 front_layer,
             },

@@ -38,21 +38,39 @@ impl WeaponAimConfig {
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct HammerAttackConfig {
     pub maximum_charge_seconds: f32,
+    pub grip_reach_seconds: f32,
     pub swing_seconds: f32,
+    pub embedded_seconds: f32,
     pub recovery_seconds: f32,
     pub charging_movement_multiplier: f32,
+    pub scale_at_full_reach: f32,
+    pub scale_at_full_charge: f32,
+    pub maximum_inward_pull_ratio: f32,
 }
 
 impl HammerAttackConfig {
     pub fn is_valid(self) -> bool {
         self.maximum_charge_seconds.is_finite()
             && self.maximum_charge_seconds > 0.0
+            && self.grip_reach_seconds.is_finite()
+            && self.grip_reach_seconds > 0.0
+            && self.grip_reach_seconds < self.maximum_charge_seconds
             && self.swing_seconds.is_finite()
             && self.swing_seconds > 0.0
+            && self.embedded_seconds.is_finite()
+            && self.embedded_seconds > 0.0
             && self.recovery_seconds.is_finite()
             && self.recovery_seconds > 0.0
             && self.charging_movement_multiplier.is_finite()
             && (0.0..=1.0).contains(&self.charging_movement_multiplier)
+            && self.scale_at_full_reach.is_finite()
+            && self.scale_at_full_reach > 0.0
+            && self.scale_at_full_reach <= 1.0
+            && self.scale_at_full_charge.is_finite()
+            && self.scale_at_full_charge > 0.0
+            && self.scale_at_full_charge <= self.scale_at_full_reach
+            && self.maximum_inward_pull_ratio.is_finite()
+            && (0.0..=1.0).contains(&self.maximum_inward_pull_ratio)
     }
 }
 
@@ -196,9 +214,14 @@ mod tests {
         assert!(design.weapon_aim.character_degrees_per_second.is_empty());
         assert!(design.weapon_aim.is_valid());
         assert_eq!(design.hammer_attack.maximum_charge_seconds, 5.0);
+        assert_eq!(design.hammer_attack.grip_reach_seconds, 2.0);
         assert_eq!(design.hammer_attack.swing_seconds, 1.15);
+        assert_eq!(design.hammer_attack.embedded_seconds, 2.0);
         assert_eq!(design.hammer_attack.recovery_seconds, 1.0);
-        assert_eq!(design.hammer_attack.charging_movement_multiplier, 0.0);
+        assert_eq!(design.hammer_attack.charging_movement_multiplier, 1.0);
+        assert_eq!(design.hammer_attack.scale_at_full_reach, 0.8);
+        assert_eq!(design.hammer_attack.scale_at_full_charge, 0.5);
+        assert_eq!(design.hammer_attack.maximum_inward_pull_ratio, 0.05);
         assert!(design.hammer_attack.is_valid());
         assert_eq!(
             design.network.snapshot_interval_for(design.simulation),
