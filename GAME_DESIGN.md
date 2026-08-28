@@ -226,11 +226,11 @@ Confirmed first-iteration direction:
   the Hammer rotates around its grip instead of around its visual center.
 - The Hammer has an authored polygonal `AttackRegion`, drawn with PolyTools'
   existing Bezier/closed-loop interaction rather than approximated by a circle.
-- The currently exported Hammer is visibly too small relative to the Hammerer
-  and is not accepted as the intended presentation size. Its complete authored
-  Asset, including attachment references and AttackRegion, will be scaled up
-  consistently in PolyTools before Slice 14 visual acceptance. The exact final
-  size remains a visual authoring choice rather than a hard-coded game value.
+- The Hammer's complete authored Asset has been uniformly enlarged and rebased
+  in PolyTools. Its current size relative to the Hammerer, grip/socket
+  alignment, grip-centered pivot, AttackRegion, and `attack_point_primary` are
+  visually accepted. The size remains authored Asset data rather than a
+  hard-coded game multiplier.
 - `GazeDirection` is the Hammerer's attack direction. While charging, the
   Hammer is held exactly opposite that direction and appears smaller. On
   release it swings across the Hammerer, grows while passing over the head,

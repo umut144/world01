@@ -309,8 +309,9 @@ Automated PolyTools acceptance covers nested and rotated hierarchy, primitives
 and Bézier geometry, semantic Regions, Component- and Group-scoped
 Guides/Weapon frames, References, Asset Pivot behavior, save/load round trips,
 undo/redo, post-Rebase Component Scale Rebase, and Runtime Export rejection
-before Rebase. Final Hammer sizing, re-export, game sync, and visual acceptance
-remain authoring steps.
+before Rebase. The enlarged/rebased Hammer export has been synced and visually
+accepted in game with correct size, grip/socket alignment, grip pivot,
+AttackRegion, attack point, and carried-behind-character layering.
 
 ### Planned Hammer attack and combat-state boundary
 
