@@ -26,6 +26,8 @@ pub struct HammerVisual {
     pub secondary_grip_from_primary: Vec2,
     pub owner_asset_pivot: Vec2,
     pub material_handles: Vec<Handle<HammerPresentationMaterial>>,
+    pub flat_visuals: Vec<Entity>,
+    pub swing_depth_visuals: Vec<Entity>,
     pub behind_layer: f32,
     pub front_layer: f32,
 }
@@ -715,6 +717,8 @@ fn spawn_hammer_visual(
 
     let mut component_entities = HashMap::new();
     let mut material_handles = Vec::new();
+    let mut flat_visuals = Vec::new();
+    let mut swing_depth_visuals = Vec::new();
     for component in &hammer.components {
         let entity = commands
             .spawn((component_transform(component), Visibility::default()))
@@ -743,15 +747,28 @@ fn spawn_hammer_visual(
             material_handles.push(material.clone());
             let fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh_with_depth(
+                    Mesh2d(meshes.add(bevy_mesh(mesh))),
+                    MeshMaterial2d(material.clone()),
+                    Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
+                    Visibility::Visible,
+                ))
+                .id();
+            commands.entity(component_entity).add_child(fill);
+            flat_visuals.push(fill);
+
+            let depth_fill = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_closed_prism_mesh(
                         mesh,
                         component.projection_depth_meters,
                     ))),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
+                    Visibility::Hidden,
                 ))
                 .id();
-            commands.entity(component_entity).add_child(fill);
+            commands.entity(component_entity).add_child(depth_fill);
+            swing_depth_visuals.push(depth_fill);
         }
         if let Some(stroke) = component.contour_stroke_mesh.as_ref()
             && stroke.has_outline
@@ -765,18 +782,17 @@ fn spawn_hammer_visual(
             material_handles.push(material.clone());
             let outline = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh_with_depth(
-                        &PolyToolsMesh {
-                            vertices: stroke.vertices.clone(),
-                            indices: stroke.indices.clone(),
-                        },
-                        component.projection_depth_meters,
-                    ))),
+                    Mesh2d(meshes.add(bevy_mesh(&PolyToolsMesh {
+                        vertices: stroke.vertices.clone(),
+                        indices: stroke.indices.clone(),
+                    }))),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
+                    Visibility::Visible,
                 ))
                 .id();
             commands.entity(component_entity).add_child(outline);
+            flat_visuals.push(outline);
         }
     }
 
@@ -787,6 +803,8 @@ fn spawn_hammer_visual(
         secondary_grip_from_primary,
         owner_asset_pivot: Vec2::from_array(character.asset_pivot),
         material_handles,
+        flat_visuals,
+        swing_depth_visuals,
         behind_layer,
         front_layer,
     });
@@ -859,7 +877,12 @@ fn bevy_mesh(mesh: &PolyToolsMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
 
-fn bevy_mesh_with_depth(mesh: &PolyToolsMesh, depth_meters: f32) -> Mesh {
+fn bevy_closed_prism_mesh(mesh: &PolyToolsMesh, depth_meters: f32) -> Mesh {
+    let (vertices, indices) = closed_prism_parts(mesh, depth_meters);
+    bevy_mesh_from_parts_3d(&vertices, &indices)
+}
+
+fn closed_prism_parts(mesh: &PolyToolsMesh, depth_meters: f32) -> (Vec<[f32; 3]>, Vec<u32>) {
     let half_depth = depth_meters.max(0.0) * 0.5;
     let mut vertices = Vec::with_capacity(mesh.vertices.len() * 2);
     for vertex in &mesh.vertices {
@@ -868,10 +891,50 @@ fn bevy_mesh_with_depth(mesh: &PolyToolsMesh, depth_meters: f32) -> Mesh {
     for vertex in &mesh.vertices {
         vertices.push([vertex[0], vertex[1], half_depth]);
     }
+
     let offset = mesh.vertices.len() as u32;
-    let mut indices = mesh.indices.clone();
-    indices.extend(mesh.indices.iter().map(|index| index + offset));
-    bevy_mesh_from_parts_3d(&vertices, &indices)
+    let mut indices = Vec::with_capacity(mesh.indices.len() * 2);
+    for triangle in mesh.indices.chunks_exact(3) {
+        indices.extend_from_slice(triangle);
+        indices.extend_from_slice(&[
+            triangle[0] + offset,
+            triangle[2] + offset,
+            triangle[1] + offset,
+        ]);
+    }
+
+    let mut boundary_edges = HashMap::<(u32, u32), (u32, u32, u32)>::new();
+    for triangle in mesh.indices.chunks_exact(3) {
+        for (start, end) in [
+            (triangle[0], triangle[1]),
+            (triangle[1], triangle[2]),
+            (triangle[2], triangle[0]),
+        ] {
+            let key = if start < end {
+                (start, end)
+            } else {
+                (end, start)
+            };
+            boundary_edges
+                .entry(key)
+                .and_modify(|edge| edge.2 += 1)
+                .or_insert((start, end, 1));
+        }
+    }
+    for (_, (start, end, count)) in boundary_edges {
+        if count == 1 {
+            indices.extend_from_slice(&[
+                start,
+                end,
+                end + offset,
+                start,
+                end + offset,
+                start + offset,
+            ]);
+        }
+    }
+
+    (vertices, indices)
 }
 
 pub(crate) fn bevy_pupil_mesh(geometry: &PupilGeometry) -> Mesh {
@@ -1002,7 +1065,7 @@ fn validate_hammer_manifest(manifest: &PolyToolsManifest) -> Result<(), PolyTool
         || manifest.asset_type != "weapons"
     {
         return Err(PolyToolsAssetError::new(
-            "Hammer must be a schema-11 weapons manifest",
+            "Hammer must be a schema-11 or schema-12 weapons manifest",
         ));
     }
     validate_asset_contents(manifest)?;
@@ -1215,7 +1278,7 @@ mod tests {
             .find(|region| region.role == "attack")
             .expect("Hammer AttackRegion is valid");
 
-        assert_eq!(hammer.schema_version, 11);
+        assert!(matches!(hammer.schema_version, 11 | 12));
         assert_eq!(hammer.asset_type, "weapons");
         assert!(finite_pair(grip.asset_transform.position));
         assert!(finite_pair(secondary_grip.asset_transform.position));
@@ -1248,6 +1311,20 @@ mod tests {
         assert_eq!(attack_region.vertices.len(), 8);
         assert_eq!(attack_region.indices.len(), 18);
         assert_eq!(attack_region.indices.len() % 3, 0);
+    }
+
+    #[test]
+    fn projection_depth_builds_closed_side_walls_from_fill_boundary() {
+        let mesh = PolyToolsMesh {
+            vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        };
+        let (vertices, indices) = closed_prism_parts(&mesh, 0.4);
+
+        assert_eq!(vertices.len(), 8);
+        assert!(vertices[..4].iter().all(|vertex| vertex[2] == -0.2));
+        assert!(vertices[4..].iter().all(|vertex| vertex[2] == 0.2));
+        assert_eq!(indices.len(), 36);
     }
 
     #[test]

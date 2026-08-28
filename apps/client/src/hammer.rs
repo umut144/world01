@@ -91,6 +91,7 @@ pub fn apply_hammer_pose(
     rules: Res<HammerAttackRules>,
     players: Query<(&WeaponAimState, &HammerAttackState, &Transform), Without<HammerVisual>>,
     mut hammers: Query<(&HammerVisual, &mut Transform), With<HammerVisual>>,
+    mut visual_visibility: Query<&mut Visibility, Without<HammerVisual>>,
     mut materials: ResMut<Assets<HammerPresentationMaterial>>,
 ) {
     let overstep = fixed_time.overstep_fraction();
@@ -110,6 +111,13 @@ pub fn apply_hammer_pose(
             HammerAttackPhase::Embedded => embedded_shake(*attack, overstep),
             _ => Vec2::ZERO,
         };
+        let swinging = attack.phase == HammerAttackPhase::Swing;
+        set_visual_visibility(&hammer.flat_visuals, !swinging, &mut visual_visibility);
+        set_visual_visibility(
+            &hammer.swing_depth_visuals,
+            swinging,
+            &mut visual_visibility,
+        );
         let grip_progress = rules.grip_progress(attack.charge_ticks as f32);
         let shake_pivot = owner_transform.translation.truncate() - hammer.owner_asset_pivot
             + hammer.rest_transform.translation.truncate();
@@ -179,11 +187,30 @@ fn hammer_pose(
                 rules.recovery_ticks(),
                 overstep,
             ));
-            let source = embedded_transform(hammer, owner_position, attack, rules);
+            let source = planar_recovery_source(hammer, owner_position, attack, rules);
             let target = direction(weapon_aim).map_or(hammer.rest_transform, |aim| {
                 posed_transform(hammer, -aim, 1.0, 0.0, 0.0, hammer.behind_layer)
             });
             interpolate_transform(source, target, progress, hammer.front_layer)
+        }
+    }
+}
+
+fn set_visual_visibility(
+    entities: &[Entity],
+    visible: bool,
+    visibility: &mut Query<&mut Visibility, Without<HammerVisual>>,
+) {
+    let next = if visible {
+        Visibility::Visible
+    } else {
+        Visibility::Hidden
+    };
+    for entity in entities {
+        if let Ok(mut current) = visibility.get_mut(*entity)
+            && *current != next
+        {
+            *current = next;
         }
     }
 }
@@ -290,6 +317,38 @@ fn embedded_transform(
     .with_rotation(rotation)
 }
 
+fn planar_recovery_source(
+    hammer: &HammerVisual,
+    owner_position: Vec2,
+    attack: HammerAttackState,
+    rules: &HammerAttackRules,
+) -> Transform {
+    let head = Vec2::new(attack.impact_point.x, attack.impact_point.y) - owner_position
+        + hammer.owner_asset_pivot;
+    let socket = hammer.rest_transform.translation.truncate();
+    let head_to_socket = socket - head;
+    let grip_progress = rules.grip_progress(attack.charge_ticks as f32);
+    let effective_grip = hammer.secondary_grip_from_primary * grip_progress;
+    let source_grip_to_head = hammer.attack_point_from_grip - effective_grip;
+    if head_to_socket.length_squared() <= f32::EPSILON
+        || source_grip_to_head.length_squared() <= f32::EPSILON
+    {
+        return hammer.rest_transform;
+    }
+    let desired_head_direction = -head_to_socket.normalize();
+    let rotation =
+        Quat::from_rotation_z(desired_head_direction.to_angle() - source_grip_to_head.to_angle());
+    let rotated_attack_point = rotation
+        .mul_vec3(hammer.attack_point_from_grip.extend(0.0))
+        .truncate();
+    Transform::from_xyz(
+        head.x - rotated_attack_point.x,
+        head.y - rotated_attack_point.y,
+        hammer.front_layer,
+    )
+    .with_rotation(rotation)
+}
+
 fn embedded_shake(attack: HammerAttackState, overstep: f32) -> Vec2 {
     let Some(aim) = direction(attack.direction) else {
         return Vec2::ZERO;
@@ -353,6 +412,8 @@ mod tests {
             secondary_grip_from_primary: Vec2::new(-0.25, 0.0),
             owner_asset_pivot: Vec2::ZERO,
             material_handles: Vec::new(),
+            flat_visuals: Vec::new(),
+            swing_depth_visuals: Vec::new(),
             behind_layer: -0.2,
             front_layer: 0.3,
         }
@@ -469,6 +530,26 @@ mod tests {
         let world_head = owner - hammer.owner_asset_pivot + local_head;
 
         assert!(world_head.distance(impact) < 0.000_01);
+    }
+
+    #[test]
+    fn recovery_stays_in_the_screen_plane() {
+        let hammer = hammer_visual();
+        let rules = attack_rules();
+        let attack = HammerAttackState {
+            phase: HammerAttackPhase::Recovery,
+            direction: GazeDirection::RIGHT,
+            phase_ticks: 0,
+            charge_ticks: 120,
+            impact_point: game01_world_data::Position::new(3.0, 0.0),
+        };
+        let source = planar_recovery_source(&hammer, Vec2::ZERO, attack, &rules);
+        let midpoint = interpolate_transform(source, hammer.rest_transform, 0.5, 0.3);
+
+        for transform in [source, midpoint] {
+            assert!(transform.rotation.mul_vec3(Vec3::X).z.abs() < 0.000_01);
+            assert!(transform.rotation.mul_vec3(Vec3::Y).z.abs() < 0.000_01);
+        }
     }
 
     #[test]

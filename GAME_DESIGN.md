@@ -315,10 +315,12 @@ Confirmed first-iteration direction:
   `180°` pose toward a rightward `0°` impact, it is projected like an exact
   `180°` rotation around the screen-space Y axis. For arbitrary attack angles,
   that depth-rotation axis follows the screen-space tangent perpendicular to
-  the locked attack direction. At the `90°` midpoint the current flat authored
-  Hammer is intentionally visible only edge-on. Authorable projection depth or
-  side thickness is deferred to a later PolyTools slice. The authored depth is
-  independent of component and asset scale; its visible contribution follows
+  the locked attack direction. PolyTools authors a Component-local projection
+  depth in centimeters. During Swing, the visible Hammer uses that depth as a
+  closed side silhouette, so the `90°` midpoint shows the authored thickness
+  rather than disappearing. Idle, Charging, Embedded, and Recovery retain the
+  normal flat polygon presentation. The authored depth is independent of
+  component and asset scale; its visible contribution follows
   `|sin(θ)|`, growing naturally to its maximum at `90°` and returning to zero
   at `180°`, while the original 2D geometry follows `|cos(θ)|`.
 - Release-to-impact duration remains `1.15 s`. The authoritative impact occurs

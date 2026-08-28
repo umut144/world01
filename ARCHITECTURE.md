@@ -218,11 +218,11 @@ assignment are outside this slice.
   referenced Symbol packages, then replaces the generated destination
   atomically so stale components cannot survive a re-export. The source World
   directory can be overridden with `POLYTOOLS_WORLD_DIR`. The sync requires
-  PolyTools Runtime Manifest schema 11 and validates the Hammer's required
+  PolyTools Runtime Manifest schema 12 and validates the Hammer's required
   primary and secondary grips, attack point, reach limit, and polygonal
-  AttackRegion contract before importing it. The client accepts schema 11
+  AttackRegion contract before importing it. The client accepts schema 12
   character packages while temporarily retaining loading compatibility with
-  imported schema 5 through 10 packages.
+  imported schema 5 through 11 packages.
 - Client-only loading validates each imported manifest and turns its already
   triangulated fill, closed-region, and contour-stroke geometry into Bevy 2D
   mesh presentation entities. Component transforms, hierarchy, and `z_index`
@@ -428,6 +428,16 @@ AttackRegion, attack point, and carried-behind-character layering.
   Hammerer while preserving PolyTools' internal Asset-local ordering. The
   simulation lifecycle, impact direction, radius, and 69-tick duration do not
   depend on this transform.
+- Slice 15D consumes each Hammer Component's schema-12 projection depth only
+  during Swing. The client keeps the ordinary flat fill and contour entities
+  for Idle, Charging, Embedded, and Recovery, and switches to a separate closed
+  prism fill for Swing. That prism duplicates the front/back fill and builds
+  filled side-wall triangles only from triangulation boundary edges; contour
+  stroke meshes are never extruded. Recovery uses a screen-plane return pose,
+  preventing authored depth and duplicate contours from appearing as a
+  wireframe. Both representations coincide at the face-on Swing endpoints, so
+  switching presentation does not alter authoritative impact timing or combat
+  geometry.
 - Slice 15C also introduces the project's first custom `Material2d` vertex
   shader, scoped to Hammer fill and outline meshes. Its only dynamic effect is
   the deterministic Embedded shake derived from replicated/predicted phase
