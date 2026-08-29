@@ -361,9 +361,10 @@ Confirmed first-iteration direction:
     then linearly from `0.8` to `0.5` during `2.0–5.0 s`.
   - The visible inward pull begins only at `2.0 s` and grows linearly to at most
     5% of the authored secondary-grip-to-attack-point distance at `5.0 s`.
-  - The attack starts at `100%` damage. Every completed `0.5 s` of charging adds
-    `2%` damage, reaching `120%` at the `5.0 s` charge cap. A quickly released
-    attack is therefore the uncharged basic strike at `100%` damage.
+  - The uncharged attack deals `20 HP` base damage (`100%`). Every completed
+    `0.5 s` of charging adds `2%` damage, reaching `120%` (`24 HP`) at the
+    `5.0 s` charge cap. A quickly released attack is therefore the uncharged
+    basic strike at `20 HP` damage.
 - Charge scale and inward pull are presentation-only anticipation. They do not
   change the locked attack grip, authoritative impact length, polygonal
   AttackRegion size, or damage area. Swing restores the Hammer to its confirmed
@@ -548,9 +549,8 @@ separate implementation chronicle.
 - Exact DASH collision/slide behavior at walls, doors, and room boundaries.
 - Full status-effect interaction beyond the currently implemented
   KNOCKDOWNED behavior.
-- Exact base damage value. Hammer impact distance is authored by
-  `grip_secondary` and `attack_point_primary`; current action timings remain
-  balanceable.
+- Hammer impact distance is authored by `grip_secondary` and
+  `attack_point_primary`; current action timings remain balanceable.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
 - Persistence design beyond the non-persistent first slice.
