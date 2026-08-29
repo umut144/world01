@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "name_key": "HammerStrike",
+  "base_damage": 20.0,
+  "charge_step_seconds": 0.5,
+  "charge_damage_percent_per_step": 10.0,
+  "component_effects": [
+    {
+      "component_name": "head_mid",
+      "effects": []
+    },
+    {
+      "component_name": "head_left",
+      "effects": [
+        {
+          "name_key": "STUNNED",
+          "duration_seconds": 4.0
+        }
+      ]
+    },
+    {
+      "component_name": "head_right",
+      "effects": [
+        {
+          "name_key": "STUNNED",
+          "duration_seconds": 4.0
+        }
+      ]
+    }
+  ]
+}
