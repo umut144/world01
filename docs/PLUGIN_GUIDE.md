@@ -1,11 +1,12 @@
-# game01 Multiplayer Sandbox — Plugin Guide
+# World 01 Multiplayer Sandbox — Plugin Guide
 
 Last updated: 2026-08-29
 
 ## Purpose and audience
 
 This guide is for developers adding a new game implementation to the sandbox.
-Read [`SANDBOX_VISION.md`](SANDBOX_VISION.md) and
+Read [`SANDBOX_VISION.md`](SANDBOX_VISION.md),
+[`WORLD_DESIGN.md`](WORLD_DESIGN.md), and
 [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md) first. A game plugin owns its
 genre rules; it reuses sandbox services without changing their authority
 boundaries.

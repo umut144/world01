@@ -1,14 +1,27 @@
-# game01 — Current Tasks
+# World 01 — Current Tasks
 
 This file tracks only current, next, blocked, or deliberately deferred
 outcomes. Completed implementation history remains available in Git. Tasks may
 use vertical slices when that helps produce a small, testable result; completed
 slices are not retained here as a permanent project chronicle.
 
+## Documentation routing
+
+Until this slice, no separate World Design document existed and `AGENTS.md`
+identified the Labyrinth document as the only game-design source. As a result,
+Codex naturally used Labyrinth context for shared characters, weapons,
+abilities, and mechanics, even when a request was not Labyrinth-specific.
+
+Shared World 01 design now belongs in `docs/WORLD_DESIGN.md`. The Labyrinth
+document contains only Labyrinth-specific context, tuning, scope, and explicit
+overrides. Future agents must read World Design for cross-game work and the
+active game document for that game's deviations.
+
 | ID | Area | Outcome | Status |
 |---|---|---|---|
 | `SBX-NEXT` | Sandbox | Agree on the first concrete implementation slice that moves the existing project toward the contracts in `docs/SANDBOX_VISION.md` and `docs/SANDBOX_TECHNICAL.md`. | **Next decision** |
-| `LAB-17` | The Labyrinth | Add authoritative polygonal Hammer impact using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
+| `WORLD-RENAME` | World 01 | Plan and execute the separate technical rename from the `game01` repository/package namespace to `world01` when the code and tooling scope is explicitly approved. | **Deferred** |
+| `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 
 ## Tracker rules
 

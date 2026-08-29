@@ -1,7 +1,8 @@
 # Agent entry point
 
 Before planning, discussing, or changing this project, read
-`docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`, and `TASKS.md` in full.
+`docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`,
+`docs/WORLD_DESIGN.md`, and `TASKS.md` in full.
 Read `docs/PLUGIN_GUIDE.md` in full when a task concerns game plugins or public
 sandbox extension contracts. Read
 `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` in full only when the task
@@ -12,11 +13,17 @@ scope boundaries, confirmed decisions, and extension principles.
 `docs/SANDBOX_TECHNICAL.md` is the persistent source of truth for the
 genre-neutral technical sandbox contracts. `docs/PLUGIN_GUIDE.md` explains how
 game implementations extend those contracts.
+`docs/WORLD_DESIGN.md` is the persistent source of truth for World 01's shared
+setting, visual language, recurring characters, weapons, abilities, health and
+status foundations, and other cross-game design decisions. World Design owns
+canonical behavior and baseline values; individual games may tune or override
+them only when the override is explicit in the game's design document.
 `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` is the persistent source of
 truth for The Labyrinth's game-design intent, scope boundaries, confirmed
-decisions, open questions, and reference-art locations. Preserve the
-distinction between confirmed design and ideas still under discussion. Update
-the appropriate document when the user makes a durable decision.
+decisions, open questions, and game-specific reference-art locations. It is not
+the source for shared World 01 mechanics. Preserve the distinction between
+confirmed design and ideas still under discussion. Update the appropriate
+document when the user makes a durable decision.
 
 `TASKS.md` is the short, current project tracker. Keep only active, next,
 blocked, or deliberately deferred outcomes in it. Completed implementation
@@ -25,13 +32,15 @@ still be planned and implemented as a vertical slice without preserving every
 finished slice as permanent documentation.
 
 `AGENTS.md`, `docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`,
-`docs/PLUGIN_GUIDE.md`, `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`,
-and `TASKS.md` are the complete canonical project-document set. Do not add
+`docs/WORLD_DESIGN.md`, `docs/PLUGIN_GUIDE.md`,
+`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`, and `TASKS.md` are the
+complete canonical project-document set. Do not add
 further context, planning, design, workflow, test, or architecture documents
 unless the user explicitly requests one; extend the appropriate existing
 document instead. Keep automated behavior in tests, durable sandbox-wide
-technical decisions in `docs/SANDBOX_TECHNICAL.md`, and game-owned decisions in
-the corresponding game document.
+technical decisions in `docs/SANDBOX_TECHNICAL.md`, shared World 01 design in
+`docs/WORLD_DESIGN.md`, and game-owned decisions in the corresponding game
+document.
 
 The user is a solo developer. Prefer iterative, high-leverage work and avoid prematurely solving future-season problems. Do not implement gameplay merely because it is described in the design document; implementation requires an explicit user request.
 

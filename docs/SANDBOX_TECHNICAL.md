@@ -1,11 +1,13 @@
-# game01 Multiplayer Sandbox — Technical Specification
+# World 01 Multiplayer Sandbox — Technical Specification
 
 Last updated: 2026-08-29
 
 ## Purpose and interpretation
 
-This document records the technical foundation for the multiplayer sandbox
-described in [`SANDBOX_VISION.md`](SANDBOX_VISION.md). It distinguishes two
+This document records the technical foundation for the World 01 multiplayer
+sandbox described in [`SANDBOX_VISION.md`](SANDBOX_VISION.md). Shared
+cross-game design intent is recorded in [`WORLD_DESIGN.md`](WORLD_DESIGN.md);
+this document distinguishes two
 kinds of statement:
 
 - **Current verified baseline** describes behavior and boundaries that exist in
@@ -15,6 +17,8 @@ kinds of statement:
   that a corresponding public API already exists.
 
 The current codebase grew from The Labyrinth and remains partly game-specific.
+The design umbrella is now World 01, while the current repository and Rust
+package namespace still use `game01`.
 Physical separation into crates is not by itself proof that their complete
 contents are already genre-neutral or reusable. This document is neither an
 implementation roadmap nor a promise to build speculative framework APIs.
@@ -25,8 +29,8 @@ The workspace currently has these physical boundaries:
 
 ```text
 apps/
-  client/                 graphical Labyrinth application and composition
-  server/                 headless authoritative Labyrinth application
+  client/                 graphical current-game application and composition
+  server/                 headless authoritative current-game application
 crates/
   configs/                typed configuration
   design/                 game design data and typed design loading
@@ -56,7 +60,7 @@ There is no direct dependency from `network` to `simulation` or `content`.
 Both applications currently depend directly on all five shared crates and own
 their final schedule and plugin composition.
 
-### Current game-specific coupling
+### Current implementation coupling
 
 The physical boundaries are useful, but their current contents still include
 Labyrinth behavior:
@@ -77,7 +81,10 @@ Labyrinth behavior:
   health bars, eyes, and Hammer presentation.
 
 These are facts about the starting implementation, not requirements that every
-future multiplayer game must inherit.
+future multiplayer game must inherit. Several current components embody
+World-01 character and weapon concepts that were first implemented while
+building The Labyrinth; their current code location does not make those design
+concepts Labyrinth-owned.
 
 ## Confirmed dependency and authority boundaries
 

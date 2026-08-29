@@ -1,12 +1,13 @@
-# game01 Multiplayer Sandbox — Vision
+# World 01 Multiplayer Sandbox — Vision
 
 Last updated: 2026-08-29
 
 ## Purpose and audience
 
-This document defines the product and scope boundary of the `game01` sandbox
+This document defines the product and scope boundary of the World 01 sandbox
 for developers. The sandbox is the shared, runnable technical foundation for
-several **multiplayer games** set in **“Secrets, Room's & Travels'”**. It
+several **multiplayer games** set in **World 01** and its theme **“Secrets,
+Room's & Travels'”**. It
 provides common runtime capabilities and asset conventions; it does not define
 a particular game, genre, ruleset, or player progression.
 
@@ -14,8 +15,10 @@ a particular game, genre, ruleset, or player progression.
 games can grow. It does not mean a disposable prototype, a standalone game, or
 an attempt to build a universal engine.
 
-Game-specific rules belong in game plugins and their design documents. The
-Labyrinth reference design is deliberately isolated at
+Shared setting, recurring character, weapon, ability, and cross-game gameplay
+design belongs in [`WORLD_DESIGN.md`](WORLD_DESIGN.md). Game-specific rules
+belong in game plugins and their design documents. The Labyrinth reference
+design is deliberately isolated at
 [`games/labyrinth/GAME_LABYRINTH_DESIGN.md`](games/labyrinth/GAME_LABYRINTH_DESIGN.md).
 
 `SANDBOX_TECHNICAL.md` specifies the technical contracts. `PLUGIN_GUIDE.md`
@@ -23,9 +26,10 @@ defines how a game extends those contracts.
 
 ## Scope
 
-The sandbox supports multiple 2D multiplayer games that can share world theme,
-authored assets, networking conventions, and presentation infrastructure. A
-game may use rooms, larger spaces, characters, or other entities without those
+The sandbox supports multiple 2D multiplayer games that can share World 01's
+theme, authored assets, recurring characters and abilities, networking
+conventions, and presentation infrastructure. A game may use rooms, larger
+spaces, characters, or other entities without those
 concepts implying a particular genre or gameplay loop.
 
 The sandbox owns stable boundaries rather than genre behavior:
