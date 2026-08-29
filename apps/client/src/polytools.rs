@@ -122,15 +122,20 @@ impl CharacterAssetLibrary {
     }
 
     pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
-        self.character(character)
-            .and_then(|manifest| {
-                manifest
-                    .components
-                    .iter()
-                    .find(|component| component.name == "body")
-            })
+        let Some(manifest) = self.character(character) else {
+            return Vec2::ZERO;
+        };
+        manifest
+            .components
+            .iter()
+            .find(|component| component.name == "body")
             .and_then(|component| component.component_pivot.or(component.local_pivot))
-            .map(|pivot| Vec2::new(pivot[0], pivot[1]))
+            .map(|pivot| {
+                Vec2::new(
+                    pivot[0] - manifest.asset_pivot[0],
+                    pivot[1] - manifest.asset_pivot[1],
+                )
+            })
             .unwrap_or(Vec2::ZERO)
     }
 
@@ -292,10 +297,17 @@ pub fn spawn_character_visual(
     let manifest = library
         .character(character)
         .ok_or_else(|| PolyToolsAssetError::new("missing validated character manifest"))?;
+    let body_pivot = library.body_pivot(character);
     let orientation_root = commands
         .spawn((
             CharacterVisualOrientation,
-            Transform::default(),
+            Transform::from_translation(-body_pivot.extend(0.0)),
+            Visibility::default(),
+        ))
+        .id();
+    let status_pivot = commands
+        .spawn((
+            Transform::from_translation(body_pivot.extend(0.0)),
             Visibility::default(),
         ))
         .id();
@@ -305,7 +317,8 @@ pub fn spawn_character_visual(
             Visibility::default(),
         ))
         .id();
-    commands.entity(root).add_child(orientation_root);
+    commands.entity(root).add_child(status_pivot);
+    commands.entity(status_pivot).add_child(orientation_root);
     commands.entity(orientation_root).add_child(anchor);
 
     let mut component_entities = HashMap::new();
