@@ -43,7 +43,7 @@ const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
 const ANKH_PRESENTATION_LAYER: f32 = -1.0;
-const ANKH_TILT_DEGREES: f32 = 20.0;
+const ANKH_TILT_DEGREES: f32 = -8.0;
 
 pub struct ClientPresentationPlugin {
     pub character_assets: CharacterAssetLibrary,
@@ -1050,7 +1050,7 @@ mod tests {
     }
 
     #[test]
-    fn ankh_projection_uses_positive_x_and_y_tilts() {
+    fn ankh_projection_uses_negative_eight_degree_x_and_y_tilts() {
         let rotation = ankh_projection_rotation();
         let projected_up = rotation * Vec3::Y;
         let projected_right = rotation * Vec3::X;
