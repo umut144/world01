@@ -3,6 +3,7 @@ use std::{env, error::Error, io};
 use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, state::app::StatesPlugin};
 use game01_configs::load_embedded;
 use game01_content::{CharacterHealthCatalog, HammerCombatGeometry, RuntimeContent};
+use game01_design::load_embedded as load_game_design;
 use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
@@ -16,24 +17,27 @@ use crate::session::ServerSessionPlugin;
 mod session;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let design = load_embedded()?;
+    let config = load_embedded()?;
+    let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
     let network_simulation = network_simulation_from_env()?;
-    let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
+    let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             "simulation tick rate must be greater than zero",
         )
     })?;
-    let movement_step = MovementStep::from_design(&design)?;
-    let locomotion_rules = LocomotionRules::from_design(&design)?;
-    let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
-    let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
-    let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
+    let movement_step = MovementStep::from_design(&config)?;
+    let locomotion_rules = LocomotionRules::from_design(&config)?;
+    let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
+    let hammer_attack_rules =
+        HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
+    let hammer_geometry =
+        HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let character_health = CharacterHealthCatalog::from_content(&content)?;
-    let snapshot_interval = design
+    let snapshot_interval = config
         .network
-        .snapshot_interval_for(design.simulation)
+        .snapshot_interval_for(config.simulation)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,

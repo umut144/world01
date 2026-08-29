@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "asset_key": "hammer",
+  "attack_components": ["head_mid", "head_left", "head_right"],
+  "maximum_charge_seconds": 5.0,
+  "grip_reach_seconds": 2.0,
+  "swing_seconds": 1.15,
+  "embedded_seconds": 2.0,
+  "recovery_seconds": 1.0,
+  "scale_at_full_reach": 0.8,
+  "scale_at_full_charge": 0.5,
+  "maximum_inward_pull_ratio": 0.05
+}

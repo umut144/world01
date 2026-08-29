@@ -3071,6 +3071,7 @@ dependencies = [
  "bevy",
  "game01-configs",
  "game01-content",
+ "game01-design",
  "game01-network",
  "game01-simulation",
  "game01-world-data",
@@ -3096,6 +3097,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "game01-design"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "game01-network"
 version = "0.1.0"
 dependencies = [
@@ -3112,6 +3121,7 @@ dependencies = [
  "bevy",
  "game01-configs",
  "game01-content",
+ "game01-design",
  "game01-network",
  "game01-simulation",
  "game01-world-data",
@@ -3124,6 +3134,7 @@ dependencies = [
  "bevy",
  "game01-configs",
  "game01-content",
+ "game01-design",
  "game01-world-data",
 ]
 

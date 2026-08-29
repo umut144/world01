@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_content::{HammerCombatGeometry, RuntimeContent};
+use game01_design::load_embedded as load_game_design;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules};
 
@@ -30,48 +31,55 @@ const INITIAL_WINDOW_HEIGHT: u32 = 1800;
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
-    let design = load_embedded()?;
+    let config = load_embedded()?;
+    let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
+    let hammer_geometry =
+        HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let character_assets = CharacterAssetLibrary::from_content(
         content,
-        design.eyes.pupil_area_ratio,
-        design.eyes.hammerer_collision_radius_ratio,
+        config.eyes.pupil_area_ratio,
+        config.eyes.hammerer_collision_radius_ratio,
     )?;
     let controller_input = ControllerInput::new()?;
-    let tick_duration = design.simulation.tick_duration().ok_or_else(|| {
+    let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             "simulation tick rate must be greater than zero",
         )
     })?;
-    let movement_step = MovementStep::from_design(&design)?;
-    let locomotion_rules = LocomotionRules::from_design(&design)?;
-    let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
-    let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
-    let hammer_presentation_rules =
-        HammerPresentationRules::from_design(&design, hammer_attack_rules).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Hammer presentation values must be finite and within their valid ranges",
-            )
-        })?;
-    let camera_view = design.camera.effective_view_tiles().ok_or_else(|| {
+    let movement_step = MovementStep::from_design(&config)?;
+    let locomotion_rules = LocomotionRules::from_design(&config)?;
+    let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
+    let hammer_attack_rules =
+        HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
+    let hammer_presentation_rules = HammerPresentationRules::from_design(
+        &game_design.hammer,
+        config.simulation.ticks_per_second,
+        hammer_attack_rules,
+    )
+    .ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Hammer presentation values must be finite and within their valid ranges",
+        )
+    })?;
+    let camera_view = config.camera.effective_view_tiles().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             "camera view preset or dimensions are invalid",
         )
     })?;
-    let snapshot_interval = design
+    let snapshot_interval = config
         .network
-        .snapshot_interval_for(design.simulation)
+        .snapshot_interval_for(config.simulation)
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 "snapshot send rate must be positive and an integer divisor of the simulation tick rate",
             )
         })?;
-    let remote_interpolation_ratio = design
+    let remote_interpolation_ratio = config
         .network
         .validated_remote_interpolation_ratio()
         .ok_or_else(|| {
@@ -100,7 +108,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hammer_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
-        RoomDimensions::new(design.room.width_tiles, design.room.height_tiles).ok_or_else(
+        RoomDimensions::new(config.room.width_tiles, config.room.height_tiles).ok_or_else(
             || {
                 io::Error::new(
                     io::ErrorKind::InvalidData,

@@ -1,8 +1,8 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use game01_configs::DesignConfig;
 use game01_content::HammerCombatGeometry;
+use game01_design::HammerDesign;
 use game01_world_data::{
     AttackIntent, GazeDirection, HammerAttackPhase, HammerAttackState, Position, SelectedCharacter,
     WeaponAimState,
@@ -18,21 +18,23 @@ pub struct HammerAttackRules {
 }
 
 impl HammerAttackRules {
-    pub fn from_design(config: &DesignConfig) -> Result<Self, HammerAttackConfigError> {
-        if !config.hammer_attack.simulation_is_valid() {
+    pub fn from_design(
+        ticks_per_second: u32,
+        design: &HammerDesign,
+    ) -> Result<Self, HammerAttackConfigError> {
+        if !design.is_valid() {
             return Err(HammerAttackConfigError);
         }
-        let ticks_per_second = config.simulation.ticks_per_second;
         if ticks_per_second == 0 {
             return Err(HammerAttackConfigError);
         }
         let ticks = |seconds: f32| (seconds * ticks_per_second as f32).round().max(1.0) as u32;
         Ok(Self {
-            maximum_charge_ticks: ticks(config.hammer_attack.maximum_charge_seconds),
-            grip_reach_ticks: ticks(config.hammer_attack.grip_reach_seconds),
-            swing_ticks: ticks(config.hammer_attack.swing_seconds),
-            embedded_ticks: ticks(config.hammer_attack.embedded_seconds),
-            recovery_ticks: ticks(config.hammer_attack.recovery_seconds),
+            maximum_charge_ticks: ticks(design.maximum_charge_seconds),
+            grip_reach_ticks: ticks(design.grip_reach_seconds),
+            swing_ticks: ticks(design.swing_seconds),
+            embedded_ticks: ticks(design.embedded_seconds),
+            recovery_ticks: ticks(design.recovery_seconds),
         })
     }
 

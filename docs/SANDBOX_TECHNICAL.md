@@ -29,6 +29,7 @@ apps/
   server/                 headless authoritative Labyrinth application
 crates/
   configs/                typed configuration
+  design/                 game design data and typed design loading
   content/                PolyTools import, validation, runtime derivation
   world_data/             protocol-neutral serializable/domain components
   simulation/             deterministic movement, aim, and Hammer systems
@@ -43,6 +44,7 @@ In the following graph, `A -> B` means **B directly depends on A**:
 
 ```text
 configs --------------------------------> simulation
+design ---------------------------------> simulation
 world_data ----+------------------------> simulation
                +----> content ----------> simulation
                +----> network
@@ -153,6 +155,14 @@ catalog, requires Hammer content, validates Hammer attachment contracts, and
 exposes Labyrinth-derived health and combat geometry. Asset keys provide
 stable identity inside this contract, while the set of supported package roles
 is not yet plugin-extensible.
+
+Game-specific design data is loaded through `design`, not `configs`. The design
+crate owns typed character and weapon data, including the mapping from gameplay
+roles to stable Component names. It does not parse PolyTools manifests;
+`content` resolves those names against validated Component geometry before the
+simulation receives the resulting typed data. `configs` remains the boundary
+for technical runtime settings such as ports, addresses, window dimensions,
+and simulation cadence.
 
 ### Confirmed shared direction
 

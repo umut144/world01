@@ -3,6 +3,7 @@ members = [
     "apps/client",
     "apps/server",
     "crates/configs",
+    "crates/design",
     "crates/content",
     "crates/network",
     "crates/simulation",

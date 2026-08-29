@@ -65,17 +65,21 @@ impl fmt::Display for CharacterHealthError {
 
 impl Error for CharacterHealthError {}
 
-#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq)]
 pub struct HammerCombatGeometry {
     socket_offset: Vec2,
     primary_grip: Vec2,
     secondary_grip: Vec2,
     attack_point: Vec2,
     reach_limit: Vec2,
+    attack_components: Vec<RuntimeComponentGeometry>,
 }
 
 impl HammerCombatGeometry {
-    pub fn from_content(content: &RuntimeContent) -> Result<Self, HammerCombatGeometryError> {
+    pub fn from_content(
+        content: &RuntimeContent,
+        attack_component_names: &[String],
+    ) -> Result<Self, HammerCombatGeometryError> {
         let hammerer = content
             .character(&CharacterId("hammerer".into()))
             .ok_or_else(|| HammerCombatGeometryError::new("content is missing Hammerer"))?;
@@ -86,12 +90,17 @@ impl HammerCombatGeometry {
         let secondary_grip = unique_frame(hammer, WEAPON_SECONDARY_GRIP_ROLE)?;
         let attack_point = unique_frame(hammer, WEAPON_ATTACK_POINT_ROLE)?;
         let reach_limit = unique_frame(hammer, WEAPON_REACH_LIMIT_ROLE)?;
+        let attack_components = attack_component_names
+            .iter()
+            .map(|name| component_geometry(hammer, name))
+            .collect::<Result<Vec<_>, _>>()?;
         let geometry = Self {
             socket_offset: socket - hammerer_pivot,
             primary_grip,
             secondary_grip,
             attack_point,
             reach_limit,
+            attack_components,
         };
         let primary_radius = geometry.attack_radius(0.0);
         let secondary_radius = geometry.attack_radius(1.0);
@@ -106,20 +115,32 @@ impl HammerCombatGeometry {
         Ok(geometry)
     }
 
-    pub fn socket_offset(self) -> Vec2 {
+    pub fn socket_offset(&self) -> Vec2 {
         self.socket_offset
     }
 
-    pub fn attack_radius(self, grip_progress: f32) -> f32 {
+    pub fn attack_radius(&self, grip_progress: f32) -> f32 {
         let grip = self
             .primary_grip
             .lerp(self.secondary_grip, grip_progress.clamp(0.0, 1.0));
         self.attack_point.distance(grip)
     }
 
-    pub fn maximum_reach(self) -> f32 {
+    pub fn maximum_reach(&self) -> f32 {
         self.attack_point.distance(self.reach_limit)
     }
+
+    pub fn attack_components(&self) -> &[RuntimeComponentGeometry] {
+        &self.attack_components
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeComponentGeometry {
+    pub component_id: String,
+    pub name: String,
+    pub vertices: Vec<Vec2>,
+    pub indices: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,6 +179,34 @@ fn finite_vec2(values: [f32; 2], label: &str) -> Result<Vec2, HammerCombatGeomet
     let value = Vec2::from_array(values);
     value.is_finite().then_some(value).ok_or_else(|| {
         HammerCombatGeometryError::new(format!("{label} must contain finite coordinates"))
+    })
+}
+
+fn component_geometry(
+    manifest: &RuntimeManifest,
+    name: &str,
+) -> Result<RuntimeComponentGeometry, HammerCombatGeometryError> {
+    let component = manifest
+        .components
+        .iter()
+        .find(|component| component.name == name)
+        .ok_or_else(|| {
+            HammerCombatGeometryError::new(format!("Hammer is missing attack Component {name}"))
+        })?;
+    let mesh = component.mesh.as_ref().ok_or_else(|| {
+        HammerCombatGeometryError::new(format!("Hammer attack Component {name} has no Fill Mesh"))
+    })?;
+    let transform = component_world_transform(component, &manifest.components, &mut HashSet::new())
+        .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
+    Ok(RuntimeComponentGeometry {
+        component_id: component.component_id.clone(),
+        name: component.name.clone(),
+        vertices: mesh
+            .vertices
+            .iter()
+            .map(|vertex| transform_point(transform, *vertex))
+            .collect(),
+        indices: mesh.indices.clone(),
     })
 }
 
@@ -236,8 +285,11 @@ mod tests {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let health = CharacterHealthCatalog::from_content(&content)
             .expect("embedded character geometry defines health");
-        let hammer = HammerCombatGeometry::from_content(&content)
-            .expect("embedded Hammer frames define combat geometry");
+        let hammer = HammerCombatGeometry::from_content(
+            &content,
+            &["head_mid", "head_left", "head_right"].map(str::to_owned),
+        )
+        .expect("embedded Hammer frames define combat geometry");
 
         assert_eq!(health.max_hp(&CharacterId("hammerer".into())), Some(140.0));
         assert!(
@@ -247,6 +299,20 @@ mod tests {
                 .all(|character| health.max_hp(character).is_some())
         );
         assert!(hammer.socket_offset().is_finite());
+        assert_eq!(
+            hammer
+                .attack_components()
+                .iter()
+                .map(|component| component.name.as_str())
+                .collect::<Vec<_>>(),
+            ["head_mid", "head_left", "head_right"]
+        );
+        assert!(
+            hammer
+                .attack_components()
+                .iter()
+                .all(|component| !component.vertices.is_empty() && !component.indices.is_empty())
+        );
         assert!(hammer.attack_radius(1.0) > hammer.attack_radius(0.0));
         assert!(hammer.maximum_reach() > hammer.attack_radius(1.0));
     }

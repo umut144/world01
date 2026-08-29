@@ -22,8 +22,8 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
     use game01_configs::{
-        DesignConfig, EyesConfig, HammerAttackConfig, LocomotionConfig, MovementConfig,
-        NetworkConfig, RoomConfig, SimulationConfig, WeaponAimConfig, load_embedded,
+        DesignConfig, EyesConfig, LocomotionConfig, MovementConfig, NetworkConfig, RoomConfig,
+        SimulationConfig, WeaponAimConfig, load_embedded,
     };
     use game01_content::HammerCombatGeometry;
     use game01_world_data::{
@@ -43,7 +43,8 @@ mod tests {
 
     fn attack_rules() -> HammerAttackRules {
         let config = load_embedded().expect("embedded design configuration parses");
-        HammerAttackRules::from_design(&config)
+        let design = game01_design::load_embedded().expect("embedded game design parses");
+        HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
             .expect("embedded Hammer attack configuration is valid")
     }
 
@@ -55,7 +56,8 @@ mod tests {
     fn hammer_geometry() -> HammerCombatGeometry {
         let content = game01_content::RuntimeContent::load_embedded()
             .expect("embedded runtime content is valid");
-        HammerCombatGeometry::from_content(&content)
+        let design = game01_design::load_embedded().expect("embedded game design parses");
+        HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
             .expect("synced Hammer manifests define valid combat geometry")
     }
 
@@ -398,16 +400,6 @@ mod tests {
                 default_degrees_per_second: 60.0,
                 character_degrees_per_second: HashMap::new(),
             },
-            hammer_attack: HammerAttackConfig {
-                maximum_charge_seconds: 5.0,
-                grip_reach_seconds: 2.0,
-                swing_seconds: 1.15,
-                embedded_seconds: 2.0,
-                recovery_seconds: 1.0,
-                scale_at_full_reach: 0.8,
-                scale_at_full_charge: 0.5,
-                maximum_inward_pull_ratio: 0.05,
-            },
             room: RoomConfig {
                 width_tiles: 15,
                 height_tiles: 9,
@@ -448,16 +440,6 @@ mod tests {
             weapon_aim: WeaponAimConfig {
                 default_degrees_per_second: 60.0,
                 character_degrees_per_second: HashMap::new(),
-            },
-            hammer_attack: HammerAttackConfig {
-                maximum_charge_seconds: 5.0,
-                grip_reach_seconds: 2.0,
-                swing_seconds: 1.15,
-                embedded_seconds: 2.0,
-                recovery_seconds: 1.0,
-                scale_at_full_reach: 0.8,
-                scale_at_full_charge: 0.5,
-                maximum_inward_pull_ratio: 0.05,
             },
             room: RoomConfig {
                 width_tiles: 15,
@@ -664,7 +646,7 @@ mod tests {
         for charge_ticks in [0, 60, 120, 300] {
             let mut app = App::new();
             app.insert_resource(rules)
-                .insert_resource(geometry)
+                .insert_resource(geometry.clone())
                 .add_systems(Update, advance_hammer_attacks);
             let player_position = Position::new(2.0, -3.0);
             let player = app
@@ -709,7 +691,7 @@ mod tests {
         let resolve_impact = || {
             let mut app = App::new();
             app.insert_resource(rules)
-                .insert_resource(geometry)
+                .insert_resource(geometry.clone())
                 .add_systems(Update, advance_hammer_attacks);
             let player = app
                 .world_mut()

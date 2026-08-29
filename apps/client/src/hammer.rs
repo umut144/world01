@@ -8,7 +8,7 @@ use bevy::{
     shader::{Shader, ShaderRef},
     sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
 };
-use game01_configs::DesignConfig;
+use game01_design::HammerDesign;
 use game01_simulation::HammerAttackRules;
 use game01_world_data::{
     GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState, WeaponTurnDirection,
@@ -50,20 +50,20 @@ pub struct HammerPresentationRules {
 }
 
 impl HammerPresentationRules {
-    pub fn from_design(config: &DesignConfig, attack: HammerAttackRules) -> Option<Self> {
-        config
-            .hammer_attack
-            .presentation_is_valid()
-            .then_some(Self {
-                attack,
-                embedded_unroll_ticks: ((config.simulation.ticks_per_second as f32
-                    * EMBEDDED_UNROLL_SECONDS)
-                    .round() as u32)
-                    .max(1),
-                scale_at_full_reach: config.hammer_attack.scale_at_full_reach,
-                scale_at_full_charge: config.hammer_attack.scale_at_full_charge,
-                maximum_inward_pull_ratio: config.hammer_attack.maximum_inward_pull_ratio,
-            })
+    pub fn from_design(
+        design: &HammerDesign,
+        ticks_per_second: u32,
+        attack: HammerAttackRules,
+    ) -> Option<Self> {
+        design.is_valid().then_some(Self {
+            attack,
+            embedded_unroll_ticks: ((ticks_per_second as f32 * EMBEDDED_UNROLL_SECONDS).round()
+                as u32)
+                .max(1),
+            scale_at_full_reach: design.scale_at_full_reach,
+            scale_at_full_charge: design.scale_at_full_charge,
+            maximum_inward_pull_ratio: design.maximum_inward_pull_ratio,
+        })
     }
 
     fn grip_progress(self, charge_ticks: f32) -> f32 {
@@ -752,10 +752,17 @@ mod tests {
     }
 
     fn attack_rules() -> HammerPresentationRules {
-        let config = game01_configs::load_embedded().expect("embedded design config parses");
-        let attack = HammerAttackRules::from_design(&config).expect("Hammer attack config parses");
-        HammerPresentationRules::from_design(&config, attack)
-            .expect("Hammer presentation config parses")
+        let config = game01_configs::load_embedded().expect("embedded config parses");
+        let design = game01_design::load_embedded().expect("embedded game design parses");
+        let attack =
+            HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
+                .expect("Hammer attack config parses");
+        HammerPresentationRules::from_design(
+            &design.hammer,
+            config.simulation.ticks_per_second,
+            attack,
+        )
+        .expect("Hammer presentation config parses")
     }
 
     fn weapon_aim(angle: f32, turn: WeaponTurnDirection) -> WeaponAimState {
