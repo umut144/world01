@@ -7,6 +7,29 @@ source_catalog="$source_world_dir/catalog.json"
 assets_dir="$project_root/assets"
 required_schema=13
 
+success_color=''
+success_reset=''
+error_color=''
+warning_color=''
+error_reset=''
+if [[ -z "${NO_COLOR:-}" && -t 1 ]]; then
+  success_color=$'\033[1;32m'
+  success_reset=$'\033[0m'
+fi
+if [[ -z "${NO_COLOR:-}" && -t 2 ]]; then
+  error_color=$'\033[1;31m'
+  warning_color=$'\033[1;33m'
+  error_reset=$'\033[0m'
+fi
+
+error_message() {
+  printf '%bERROR: %s%b\n' "$error_color" "$1" "$error_reset" >&2
+}
+
+warning_message() {
+  printf '%bWARNING: %s%b\n' "$warning_color" "$1" "$error_reset" >&2
+}
+
 finish() {
   local status=$?
   trap - EXIT
@@ -17,21 +40,21 @@ finish() {
     rm -rf -- "$backup_dir"
   fi
   if ((status == 0)); then
-    printf '%s\n' 'POLYTOOLS SYNC SUCCESS'
+    printf '%b%s%b\n' "$success_color" 'POLYTOOLS SYNC SUCCESS' "$success_reset"
   else
-    printf '%s\n' 'POLYTOOLS SYNC FAILED' >&2
+    printf '%b%s%b\n' "$error_color" 'POLYTOOLS SYNC FAILED' "$error_reset" >&2
   fi
   exit "$status"
 }
 trap finish EXIT
 
 if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' 'error: jq is required to validate PolyTools exports.' >&2
+  error_message 'jq is required to validate PolyTools exports.'
   exit 1
 fi
 
 if [[ ! -f "$source_catalog" ]]; then
-  printf 'error: PolyTools catalog not found: %s\n' "$source_catalog" >&2
+  error_message "PolyTools catalog not found: $source_catalog"
   exit 1
 fi
 
@@ -52,7 +75,7 @@ if ! jq -e '
   )
   and (([.assets[].asset_key] | unique | length) == ([.assets[].asset_key] | length))
 ' "$source_catalog" >/dev/null; then
-  printf 'error: invalid PolyTools world catalog: %s\n' "$source_catalog" >&2
+  error_message "invalid PolyTools world catalog: $source_catalog"
   exit 1
 fi
 
@@ -65,7 +88,7 @@ destination_for_type() {
     icons) printf '%s\n' 'icons' ;;
     symbols) printf '%s\n' 'symbols' ;;
     *)
-      printf 'error: unsupported PolyTools asset type: %s\n' "$1" >&2
+      error_message "unsupported PolyTools asset type: $1"
       exit 1
       ;;
   esac
@@ -76,7 +99,7 @@ asset_type_for_directory() {
     characters) printf '%s\n' 'character' ;;
     props|weapons|terrain|icons|symbols) printf '%s\n' "$1" ;;
     *)
-      printf 'error: unsupported destination directory: %s\n' "$1" >&2
+      error_message "unsupported destination directory: $1"
       exit 1
       ;;
   esac
@@ -96,7 +119,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
   destination_subdir="$(destination_for_type "$asset_type")"
 
   if [[ ! -f "$manifest_path" ]]; then
-    printf 'error: missing PolyTools manifest: %s\n' "$manifest_path" >&2
+    error_message "missing PolyTools manifest: $manifest_path"
     exit 1
   fi
 
@@ -136,7 +159,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
         )] | length == 3)
       else true end)
     ' "$manifest_path" >/dev/null; then
-    printf 'error: invalid PolyTools %s manifest: %s\n' "$asset_type" "$manifest_path" >&2
+    error_message "invalid PolyTools $asset_type manifest: $manifest_path"
     exit 1
   fi
 
