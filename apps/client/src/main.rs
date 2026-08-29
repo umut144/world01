@@ -5,7 +5,7 @@ use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
 use game01_content::{HammerCombatGeometry, RuntimeContent};
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
-use game01_simulation::{HammerAttackRules, MovementStep, WeaponAimRules};
+use game01_simulation::{HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules};
 
 use crate::controller::ControllerInput;
 use crate::hammer::{HammerPresentationPlugin, HammerPresentationRules};
@@ -46,6 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let locomotion_rules = LocomotionRules::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
     let hammer_presentation_rules =
@@ -92,6 +93,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }));
     app.add_plugins(HammerPresentationPlugin);
     app.insert_resource(movement_step);
+    app.insert_resource(locomotion_rules);
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
     app.insert_resource(hammer_presentation_rules);

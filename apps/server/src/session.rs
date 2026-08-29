@@ -5,9 +5,11 @@ use game01_content::{CharacterHealthCatalog, RuntimeContent};
 use game01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
+use game01_simulation::LocomotionRules;
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, GazeDirection, GazeIntent, HammerAttackState,
-    MovementDirection, MovementIntent, PlayerId, PlayerOwner, Position, SelectedCharacter,
+    AttackIntent, BodyFacing, CharacterHealth, DashIntent, DashState, GazeDirection, GazeIntent,
+    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner,
+    Position, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
     WeaponAimState,
 };
 
@@ -37,6 +39,7 @@ fn accept_join_requests(
     mut next_player_id: ResMut<NextPlayerId>,
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
+    locomotion: Res<LocomotionRules>,
     mut commands: Commands,
 ) {
     if requests.is_empty() {
@@ -66,17 +69,32 @@ fn accept_join_requests(
         next_player_id.0 = following_id;
         let spawn = spawn_position(player_id);
         let mut player = commands.spawn((
-            PlayerId(player_id),
-            PlayerOwner(request.owner()),
-            SelectedCharacter(selected.clone()),
-            MovementIntent::ZERO,
-            GazeIntent::ZERO,
-            AttackIntent::RELEASED,
-            MovementDirection::ZERO,
-            BodyFacing::Authored,
-            GazeDirection::RIGHT,
-            Position::new(spawn.x, spawn.y),
-            CharacterHealth::full(maximum_health),
+            (
+                PlayerId(player_id),
+                PlayerOwner(request.owner()),
+                SelectedCharacter(selected.clone()),
+            ),
+            (
+                MovementIntent::ZERO,
+                GazeIntent::ZERO,
+                AttackIntent::RELEASED,
+                RunIntent::RELEASED,
+                DashIntent::RELEASED,
+            ),
+            (
+                MovementDirection::ZERO,
+                MovementVelocity::ZERO,
+                StaminaState::full(locomotion.default_max_stamina()),
+                RunState::default(),
+                DashState::default(),
+                StatusEffectState::default(),
+            ),
+            (
+                BodyFacing::Authored,
+                GazeDirection::RIGHT,
+                Position::new(spawn.x, spawn.y),
+                CharacterHealth::full(maximum_health),
+            ),
         ));
         if selected.0 == "hammerer" {
             player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));

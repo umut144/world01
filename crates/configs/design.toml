@@ -8,6 +8,18 @@ remote_interpolation_ratio = 2.0
 [movement]
 speed_meters_per_second = 0.8
 
+[locomotion]
+default_max_stamina = 100.0
+stamina_regeneration_percent_per_second = 2.5
+run_speed_multiplier = 1.5
+run_drain_per_second = 8.0
+dash_cost_percent = 17.0
+dash_speed_multiplier = 2.0
+dash_duration_seconds = 1.0
+dash_invulnerability_seconds = 0.337
+knockdown_duration_seconds = 2.0
+knockdown_damage_percent_max_hp = 5.0
+
 [weapon_aim]
 default_degrees_per_second = 60.0
 

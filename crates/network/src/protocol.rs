@@ -5,9 +5,10 @@ use std::{
 
 use bevy::prelude::*;
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterId, GazeDirection, GazeIntent,
-    HammerAttackState, MovementDirection, MovementIntent, PlayerId, PlayerInput, PlayerOwner,
-    Position, SelectedCharacter, WeaponAimState,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterId, DashIntent, DashState, GazeDirection,
+    GazeIntent, HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId,
+    PlayerInput, PlayerOwner, Position, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState, WeaponAimState,
 };
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, AppMessageExt, ChannelMode, ChannelSettings,
@@ -88,11 +89,16 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
     app.component::<MovementDirection>().replicate().predict();
+    app.component::<MovementVelocity>().replicate().predict();
+    app.component::<StaminaState>().replicate().predict();
+    app.component::<RunState>().replicate().predict();
+    app.component::<DashState>().replicate().predict();
+    app.component::<StatusEffectState>().replicate().predict();
     app.component::<BodyFacing>().replicate().predict();
     app.component::<GazeDirection>().replicate().predict();
     app.component::<WeaponAimState>().replicate().predict();
     app.component::<HammerAttackState>().replicate().predict();
-    app.component::<CharacterHealth>().replicate();
+    app.component::<CharacterHealth>().replicate().predict();
     app.component::<Position>()
         .replicate()
         .predict()
@@ -114,12 +120,16 @@ pub fn apply_tick_player_input(
         &mut MovementIntent,
         &mut GazeIntent,
         &mut AttackIntent,
+        &mut RunIntent,
+        &mut DashIntent,
     )>,
 ) {
-    for (action_state, mut movement, mut gaze, mut attack) in &mut players {
+    for (action_state, mut movement, mut gaze, mut attack, mut run, mut dash) in &mut players {
         *movement = action_state.0.movement;
         *gaze = action_state.0.gaze;
         *attack = action_state.0.attack;
+        *run = action_state.0.run;
+        *dash = action_state.0.dash;
     }
 }
 
@@ -195,10 +205,14 @@ mod tests {
                     movement: MovementIntent::new(1.0, 0.0),
                     gaze: GazeIntent::new(-1.0, 0.0),
                     attack: AttackIntent::PRESSED,
+                    run: RunIntent::PRESSED,
+                    dash: DashIntent::PRESSED,
                 }),
                 MovementIntent::ZERO,
                 GazeIntent::ZERO,
                 AttackIntent::RELEASED,
+                RunIntent::RELEASED,
+                DashIntent::RELEASED,
             ))
             .id();
         app.world_mut().run_schedule(FixedUpdate);
@@ -230,6 +244,14 @@ mod tests {
         assert_eq!(
             app.world().get::<AttackIntent>(player),
             Some(&AttackIntent::RELEASED)
+        );
+        assert_eq!(
+            app.world().get::<RunIntent>(player),
+            Some(&RunIntent::RELEASED)
+        );
+        assert_eq!(
+            app.world().get::<DashIntent>(player),
+            Some(&DashIntent::RELEASED)
         );
     }
 }

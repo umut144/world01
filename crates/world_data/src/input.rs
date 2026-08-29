@@ -52,11 +52,45 @@ impl AttackIntent {
     }
 }
 
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub struct RunIntent {
+    pub pressed: bool,
+}
+
+impl RunIntent {
+    pub const RELEASED: Self = Self { pressed: false };
+    pub const PRESSED: Self = Self { pressed: true };
+
+    pub const fn new(pressed: bool) -> Self {
+        Self { pressed }
+    }
+}
+
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub struct DashIntent {
+    pub pressed: bool,
+}
+
+impl DashIntent {
+    pub const RELEASED: Self = Self { pressed: false };
+    pub const PRESSED: Self = Self { pressed: true };
+
+    pub const fn new(pressed: bool) -> Self {
+        Self { pressed }
+    }
+}
+
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct PlayerInput {
     pub movement: MovementIntent,
     pub gaze: GazeIntent,
     pub attack: AttackIntent,
+    pub run: RunIntent,
+    pub dash: DashIntent,
 }
 
 impl PlayerInput {
@@ -64,6 +98,8 @@ impl PlayerInput {
         movement: MovementIntent::ZERO,
         gaze: GazeIntent::ZERO,
         attack: AttackIntent::RELEASED,
+        run: RunIntent::RELEASED,
+        dash: DashIntent::RELEASED,
     };
 }
 

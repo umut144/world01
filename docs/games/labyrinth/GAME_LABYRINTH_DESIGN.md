@@ -272,7 +272,8 @@ Reference drawings:
 - DASH requires a non-zero current physical velocity vector. Its direction is
   locked at activation from that vector, and its speed is twice the current
   speed magnitude. It lasts exactly `1` second, so its distance is determined
-  by the speed at activation. RUN remains active after DASH.
+  by the speed at activation. RUN remains active after DASH, and its continuous
+  `8`-point-per-second drain continues while the DASH is carrying the character.
 - DASH costs `17%` of maximum stamina immediately. The cost may exceed the
   current stamina; stamina is reduced to zero and depletion consequences are
   then applied rather than preventing the DASH.
@@ -282,8 +283,8 @@ Reference drawings:
   without an affordability pre-check but does not continue once KNOCKDOWNED is
   applied.
 - DASH provides an invulnerability window of `0.337` seconds centered on the
-  middle of its one-second duration. The exact boundary convention remains to
-  be verified in implementation.
+  middle of the one-second duration. The implementation uses the centered
+  half-open interval `[0.3315s, 0.6685s)`.
 - A server-authoritative physical velocity vector is required for movement and
   DASH. It is distinct from movement intent and provides the current speed and
   locked DASH direction.
@@ -537,9 +538,8 @@ separate implementation chronicle.
 - Collapse wave timing, warning semantics, and escape constraints.
 - Exact combat and character-specific abilities beyond shared RUN and DASH.
 - Exact DASH collision/slide behavior at walls, doors, and room boundaries.
-- Exact DASH invulnerability interval boundary and status-effect interaction.
-- Whether a DASH can begin from a physically moving vector when movement input
-  is released in the same simulation tick.
+- Full status-effect interaction beyond the currently implemented
+  KNOCKDOWNED behavior.
 - Exact AttackRegion placement/overlap rule, base damage, and charged-damage
   curve. Hammer impact distance is authored by `grip_secondary` and
   `attack_point_primary`; current action timings remain balanceable.

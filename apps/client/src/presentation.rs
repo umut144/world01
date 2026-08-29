@@ -10,7 +10,8 @@ use game01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
 use game01_world_data::{
-    CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, SelectedCharacter,
+    CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, RunState,
+    SelectedCharacter,
 };
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
@@ -19,7 +20,7 @@ use crate::eyes::EyePupil;
 use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
 use crate::input::{
     ClientInputFocus, clear_input_when_unfocused, collect_attack_input, collect_gaze_input,
-    collect_movement_input, update_client_input_focus,
+    collect_locomotion_input, collect_movement_input, update_client_input_focus,
 };
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
@@ -111,6 +112,7 @@ impl Plugin for ClientPresentationPlugin {
                         collect_movement_input,
                         collect_gaze_input,
                         collect_attack_input,
+                        collect_locomotion_input,
                     )
                         .chain(),
                     (apply_body_facing, apply_neutral_head_motion),
@@ -128,6 +130,7 @@ impl Plugin for ClientPresentationPlugin {
                 PostUpdate,
                 (
                     sync_rendered_positions,
+                    apply_run_motion,
                     update_health_bars,
                     follow_local_character,
                     apply_eye_gaze,
@@ -818,6 +821,25 @@ fn sync_rendered_positions(
 
         transform.translation.x = rendered.x;
         transform.translation.y = rendered.y;
+    }
+}
+
+const RUN_ROCK_AMPLITUDE_RADIANS: f32 = 0.08;
+const RUN_ROCK_FREQUENCY_HZ: f32 = 8.0;
+
+fn apply_run_motion(
+    virtual_time: Res<Time<Virtual>>,
+    mut players: Query<(&RunState, &mut Transform), With<RenderedCharacter>>,
+) {
+    let phase = virtual_time.elapsed_secs() * std::f32::consts::TAU * RUN_ROCK_FREQUENCY_HZ;
+    let rock = phase.sin() * RUN_ROCK_AMPLITUDE_RADIANS;
+
+    for (run, mut transform) in &mut players {
+        transform.rotation = if run.active {
+            Quat::from_rotation_z(rock)
+        } else {
+            Quat::IDENTITY
+        };
     }
 }
 

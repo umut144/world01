@@ -7,7 +7,8 @@ use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{
-    HammerAttackRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
+    HammerAttackRules, LocomotionRules, MovementStep, SimulationSet, WeaponAimRules,
+    add_simulation_step,
 };
 
 use crate::session::ServerSessionPlugin;
@@ -25,6 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_design(&design)?;
+    let locomotion_rules = LocomotionRules::from_design(&design)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&design)?;
     let hammer_attack_rules = HammerAttackRules::from_design(&design)?;
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
@@ -48,6 +50,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(content)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
+    .insert_resource(locomotion_rules)
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(hammer_geometry)

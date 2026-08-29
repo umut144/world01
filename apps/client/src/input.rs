@@ -3,7 +3,9 @@ use bevy::{
     window::{PrimaryWindow, WindowFocused},
 };
 use game01_network::ClientPlayerInput;
-use game01_world_data::{AttackIntent, GazeIntent, MovementIntent, PlayerInput};
+use game01_world_data::{
+    AttackIntent, DashIntent, GazeIntent, MovementIntent, PlayerInput, RunIntent,
+};
 
 use crate::controller::ControllerInput;
 
@@ -99,6 +101,22 @@ pub fn collect_attack_input(
         controller_input.right_trigger_pressed(),
     );
     input.0.attack = AttackIntent::new(pressed);
+}
+
+pub fn collect_locomotion_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
+    mut controller_input: NonSendMut<ControllerInput>,
+    mut input: ResMut<ClientPlayerInput>,
+) {
+    if !focus.focused {
+        return;
+    }
+
+    input.0.run =
+        RunIntent::new(keyboard.pressed(KeyCode::ShiftLeft) || controller_input.run_pressed());
+    input.0.dash =
+        DashIntent::new(keyboard.pressed(KeyCode::ControlLeft) || controller_input.dash_pressed());
 }
 
 fn attack_pressed(space: bool, right_trigger: bool) -> bool {

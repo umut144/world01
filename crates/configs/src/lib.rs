@@ -8,6 +8,7 @@ pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub movement: MovementConfig,
+    pub locomotion: LocomotionConfig,
     pub weapon_aim: WeaponAimConfig,
     pub hammer_attack: HammerAttackConfig,
     pub room: RoomConfig,
@@ -121,6 +122,45 @@ pub struct MovementConfig {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct LocomotionConfig {
+    pub default_max_stamina: f32,
+    pub stamina_regeneration_percent_per_second: f32,
+    pub run_speed_multiplier: f32,
+    pub run_drain_per_second: f32,
+    pub dash_cost_percent: f32,
+    pub dash_speed_multiplier: f32,
+    pub dash_duration_seconds: f32,
+    pub dash_invulnerability_seconds: f32,
+    pub knockdown_duration_seconds: f32,
+    pub knockdown_damage_percent_max_hp: f32,
+}
+
+impl LocomotionConfig {
+    pub fn is_valid(self) -> bool {
+        self.default_max_stamina.is_finite()
+            && self.default_max_stamina > 0.0
+            && self.stamina_regeneration_percent_per_second.is_finite()
+            && self.stamina_regeneration_percent_per_second >= 0.0
+            && self.run_speed_multiplier.is_finite()
+            && self.run_speed_multiplier >= 1.0
+            && self.run_drain_per_second.is_finite()
+            && self.run_drain_per_second >= 0.0
+            && self.dash_cost_percent.is_finite()
+            && (0.0..=100.0).contains(&self.dash_cost_percent)
+            && self.dash_speed_multiplier.is_finite()
+            && self.dash_speed_multiplier > 0.0
+            && self.dash_duration_seconds.is_finite()
+            && self.dash_duration_seconds > 0.0
+            && self.dash_invulnerability_seconds.is_finite()
+            && (0.0..=self.dash_duration_seconds).contains(&self.dash_invulnerability_seconds)
+            && self.knockdown_duration_seconds.is_finite()
+            && self.knockdown_duration_seconds > 0.0
+            && self.knockdown_damage_percent_max_hp.is_finite()
+            && (0.0..=100.0).contains(&self.knockdown_damage_percent_max_hp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct EyesConfig {
     pub pupil_area_ratio: f32,
     pub hammerer_collision_radius_ratio: f32,
@@ -214,6 +254,20 @@ mod tests {
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
         assert_eq!(design.movement.speed_meters_per_second, 0.8);
+        assert_eq!(design.locomotion.default_max_stamina, 100.0);
+        assert_eq!(
+            design.locomotion.stamina_regeneration_percent_per_second,
+            2.5
+        );
+        assert_eq!(design.locomotion.run_speed_multiplier, 1.5);
+        assert_eq!(design.locomotion.run_drain_per_second, 8.0);
+        assert_eq!(design.locomotion.dash_cost_percent, 17.0);
+        assert_eq!(design.locomotion.dash_speed_multiplier, 2.0);
+        assert_eq!(design.locomotion.dash_duration_seconds, 1.0);
+        assert_eq!(design.locomotion.dash_invulnerability_seconds, 0.337);
+        assert_eq!(design.locomotion.knockdown_duration_seconds, 2.0);
+        assert_eq!(design.locomotion.knockdown_damage_percent_max_hp, 5.0);
+        assert!(design.locomotion.is_valid());
         assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
         assert!(design.weapon_aim.character_degrees_per_second.is_empty());
         assert!(design.weapon_aim.is_valid());

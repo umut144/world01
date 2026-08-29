@@ -2,6 +2,7 @@
 
 pub mod aim;
 pub mod combat;
+pub mod locomotion;
 pub mod movement;
 mod schedule;
 
@@ -10,6 +11,7 @@ pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, advance_hammer_attacks,
     constrain_embedded_hammer_reach,
 };
+pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
 pub use schedule::{SimulationSet, add_simulation_step};
 
@@ -20,8 +22,8 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
     use game01_configs::{
-        DesignConfig, EyesConfig, HammerAttackConfig, MovementConfig, NetworkConfig, RoomConfig,
-        SimulationConfig, WeaponAimConfig, load_embedded,
+        DesignConfig, EyesConfig, HammerAttackConfig, LocomotionConfig, MovementConfig,
+        NetworkConfig, RoomConfig, SimulationConfig, WeaponAimConfig, load_embedded,
     };
     use game01_content::HammerCombatGeometry;
     use game01_world_data::{
@@ -380,6 +382,18 @@ mod tests {
             movement: MovementConfig {
                 speed_meters_per_second: 4.0,
             },
+            locomotion: LocomotionConfig {
+                default_max_stamina: 100.0,
+                stamina_regeneration_percent_per_second: 2.5,
+                run_speed_multiplier: 1.5,
+                run_drain_per_second: 8.0,
+                dash_cost_percent: 17.0,
+                dash_speed_multiplier: 2.0,
+                dash_duration_seconds: 1.0,
+                dash_invulnerability_seconds: 0.337,
+                knockdown_duration_seconds: 2.0,
+                knockdown_damage_percent_max_hp: 5.0,
+            },
             weapon_aim: WeaponAimConfig {
                 default_degrees_per_second: 60.0,
                 character_degrees_per_second: HashMap::new(),
@@ -418,6 +432,18 @@ mod tests {
             },
             movement: MovementConfig {
                 speed_meters_per_second: -1.0,
+            },
+            locomotion: LocomotionConfig {
+                default_max_stamina: 100.0,
+                stamina_regeneration_percent_per_second: 2.5,
+                run_speed_multiplier: 1.5,
+                run_drain_per_second: 8.0,
+                dash_cost_percent: 17.0,
+                dash_speed_multiplier: 2.0,
+                dash_duration_seconds: 1.0,
+                dash_invulnerability_seconds: 0.337,
+                knockdown_duration_seconds: 2.0,
+                knockdown_damage_percent_max_hp: 5.0,
             },
             weapon_aim: WeaponAimConfig {
                 default_degrees_per_second: 60.0,

@@ -2,7 +2,9 @@ use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
-use game01_world_data::{BodyFacing, MovementDirection, MovementIntent, Position};
+use game01_world_data::{
+    BodyFacing, MovementDirection, MovementIntent, MovementVelocity, Position,
+};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct MovementStep {
@@ -27,7 +29,13 @@ impl MovementStep {
     }
 
     pub fn displacement(self, intent: MovementIntent) -> Vec2 {
-        normalized_intent(intent) * self.speed_meters_per_second * self.seconds_per_tick
+        let velocity = self.velocity(intent, 1.0);
+        Vec2::new(velocity.x, velocity.y) * self.seconds_per_tick
+    }
+
+    pub fn velocity(self, intent: MovementIntent, speed_multiplier: f32) -> MovementVelocity {
+        let velocity = normalized_intent(intent) * self.speed_meters_per_second * speed_multiplier;
+        MovementVelocity::new(velocity.x, velocity.y)
     }
 }
 
@@ -53,9 +61,15 @@ impl fmt::Display for MovementConfigError {
 
 impl Error for MovementConfigError {}
 
-pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent, &mut Position)>) {
-    for (intent, mut position) in &mut players {
-        let displacement = step.displacement(*intent);
+pub fn move_players(
+    step: Res<MovementStep>,
+    mut players: Query<(&MovementIntent, Option<&MovementVelocity>, &mut Position)>,
+) {
+    for (intent, velocity, mut position) in &mut players {
+        let displacement = velocity.map_or_else(
+            || step.displacement(*intent),
+            |velocity| Vec2::new(velocity.x, velocity.y) * step.seconds_per_tick,
+        );
         let current = Vec2::new(position.x, position.y);
         let proposed = current + displacement;
         *position = Position::new(proposed.x, proposed.y);
@@ -63,10 +77,18 @@ pub fn move_players(step: Res<MovementStep>, mut players: Query<(&MovementIntent
 }
 
 pub fn update_character_orientation(
-    mut players: Query<(&MovementIntent, &mut MovementDirection, &mut BodyFacing)>,
+    mut players: Query<(
+        &MovementIntent,
+        Option<&MovementVelocity>,
+        &mut MovementDirection,
+        &mut BodyFacing,
+    )>,
 ) {
-    for (movement, mut movement_direction, mut facing) in &mut players {
-        let direction = normalized_intent(*movement);
+    for (movement, velocity, mut movement_direction, mut facing) in &mut players {
+        let direction = velocity.map_or_else(
+            || normalized_intent(*movement),
+            |velocity| Vec2::new(velocity.x, velocity.y).normalize_or_zero(),
+        );
         *movement_direction = MovementDirection::new(direction.x, direction.y);
         if direction.x.is_finite() {
             if direction.x < 0.0 {
@@ -78,7 +100,7 @@ pub fn update_character_orientation(
     }
 }
 
-fn normalized_intent(intent: MovementIntent) -> Vec2 {
+pub(crate) fn normalized_intent(intent: MovementIntent) -> Vec2 {
     if !intent.x.is_finite() || !intent.y.is_finite() {
         return Vec2::ZERO;
     }
