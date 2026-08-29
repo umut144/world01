@@ -125,7 +125,13 @@ pub fn apply_character_status_presentation(
             } else {
                 1.0
             };
-            transform.scale = Vec3::new(facing_sign * scale, scale, 1.0);
+            let scale_vector = Vec2::new(facing_sign * scale, scale);
+            let transformed_pivot =
+                Vec2::from_angle(rotation).rotate(visual.body_pivot * scale_vector);
+            let pivot_offset = visual.body_pivot - transformed_pivot;
+            transform.translation.x = pivot_offset.x;
+            transform.translation.y = pivot_offset.y;
+            transform.scale = Vec3::new(scale_vector.x, scale_vector.y, 1.0);
             transform.rotation = Quat::from_rotation_z(rotation);
         }
 
@@ -300,6 +306,7 @@ mod tests {
             .spawn((
                 BodyFacing::Right,
                 CharacterVisual {
+                    body_pivot: Vec2::ZERO,
                     orientation_root,
                     authored_facing: AuthoredFacing::Left,
                     outline_visuals: Vec::new(),
@@ -322,5 +329,40 @@ mod tests {
                 .map(|transform| transform.scale),
             Some(Vec3::splat(2.0))
         );
+    }
+
+    #[test]
+    fn death_confirmation_rotation_keeps_the_body_pivot_fixed() {
+        let design = game01_configs::load_embedded().expect("embedded design is valid");
+        let rules = CharacterLifeRules::from_design(&design).expect("life rules are valid");
+        let mut app = App::new();
+        app.insert_resource(rules)
+            .add_systems(Update, apply_character_status_presentation);
+
+        let orientation_root = app
+            .world_mut()
+            .spawn((CharacterVisualOrientation, Transform::default()))
+            .id();
+        let body_pivot = Vec2::new(0.2, 0.8);
+        app.world_mut().spawn((
+            CharacterVisual {
+                body_pivot,
+                orientation_root,
+                authored_facing: AuthoredFacing::Neutral,
+                outline_visuals: Vec::new(),
+            },
+            CharacterLifeState::DeathConfirming,
+            DeathConfirmationState { held_ticks: 60 },
+            StatusEffectState::default(),
+        ));
+
+        app.update();
+
+        let transform = app
+            .world()
+            .get::<Transform>(orientation_root)
+            .expect("orientation root has a transform");
+        let transformed_pivot = transform.transform_point(body_pivot.extend(0.0));
+        assert!(transformed_pivot.truncate().distance(body_pivot) < 0.000_001);
     }
 }

@@ -37,6 +37,7 @@ pub struct HammerVisual {
 
 #[derive(Component, Debug, Clone)]
 pub struct CharacterVisual {
+    pub body_pivot: Vec2,
     pub orientation_root: Entity,
     pub authored_facing: AuthoredFacing,
     pub outline_visuals: Vec<Entity>,
@@ -301,13 +302,7 @@ pub fn spawn_character_visual(
     let orientation_root = commands
         .spawn((
             CharacterVisualOrientation,
-            Transform::from_translation(-body_pivot.extend(0.0)),
-            Visibility::default(),
-        ))
-        .id();
-    let status_pivot = commands
-        .spawn((
-            Transform::from_translation(body_pivot.extend(0.0)),
+            Transform::default(),
             Visibility::default(),
         ))
         .id();
@@ -317,8 +312,7 @@ pub fn spawn_character_visual(
             Visibility::default(),
         ))
         .id();
-    commands.entity(root).add_child(status_pivot);
-    commands.entity(status_pivot).add_child(orientation_root);
+    commands.entity(root).add_child(orientation_root);
     commands.entity(orientation_root).add_child(anchor);
 
     let mut component_entities = HashMap::new();
@@ -501,6 +495,7 @@ pub fn spawn_character_visual(
     }
 
     commands.entity(root).insert(CharacterVisual {
+        body_pivot,
         orientation_root,
         authored_facing: manifest.presentation.authored_facing,
         outline_visuals,
