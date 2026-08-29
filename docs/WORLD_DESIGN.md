@@ -83,7 +83,7 @@ this document instead of copying a shared mechanic as if it were game-owned.
   scale; consuming games do not add a hard-coded weapon-size multiplier.
 - The Ankh uses each authored Component's projection depth and retains its
   authored contours in the projected depth form. Its presentation is tilted
-  by `+30°` around the X axis followed by `+30°` around the Y axis.
+  by `+30°` around the Y axis followed by `+30°` around the X axis.
 
 ## Shared character presentation
 

@@ -694,8 +694,8 @@ fn setup_ankh_visuals(
 }
 
 fn ankh_projection_rotation() -> Quat {
-    Quat::from_rotation_y(ANKH_TILT_DEGREES.to_radians())
-        * Quat::from_rotation_x(ANKH_TILT_DEGREES.to_radians())
+    Quat::from_rotation_x(ANKH_TILT_DEGREES.to_radians())
+        * Quat::from_rotation_y(ANKH_TILT_DEGREES.to_radians())
 }
 
 fn cleanup_room_floor(
@@ -1050,17 +1050,17 @@ mod tests {
     }
 
     #[test]
-    fn ankh_projection_uses_positive_thirty_degree_x_and_y_tilts() {
+    fn ankh_projection_applies_positive_y_then_x_tilts() {
         let rotation = ankh_projection_rotation();
         let projected_up = rotation * Vec3::Y;
         let projected_right = rotation * Vec3::X;
         let radians = ANKH_TILT_DEGREES.to_radians();
-        let expected_up = Vec3::new(
-            radians.sin() * radians.sin(),
+        let expected_up = Vec3::new(0.0, radians.cos(), radians.sin());
+        let expected_right = Vec3::new(
             radians.cos(),
-            radians.sin() * radians.cos(),
+            radians.sin() * radians.sin(),
+            -radians.sin() * radians.cos(),
         );
-        let expected_right = Vec3::new(radians.cos(), 0.0, -radians.sin());
 
         assert!(projected_up.distance(expected_up) < 0.000_001);
         assert!(projected_right.distance(expected_right) < 0.000_001);
