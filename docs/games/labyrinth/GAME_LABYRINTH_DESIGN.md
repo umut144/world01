@@ -245,6 +245,49 @@ Reference drawings:
 - Body facing and gaze are retained and replicated independently. A late-joining
   client receives their current authoritative values.
 
+### Shared movement abilities: RUN and DASH
+
+- Every playable character has RUN and DASH.
+- Stamina is a numeric resource rather than a percentage-only value. `100` is
+  the standard baseline, but characters may have more than `100` maximum
+  stamina. Costs may be expressed either as absolute values or as percentages
+  of maximum stamina.
+- Stamina regenerates continuously at `2.5%` of maximum stamina per second,
+  including while normal movement, RUN, KNOCKDOWNED, or STUNNED. Regeneration
+  is not disabled by these states.
+- RUN is toggled by the Xbox `X` button. RUN is a potential intent while the
+  character is stationary and consumes no stamina until a non-zero movement
+  intent produces actual movement.
+- While actually moving with RUN active, stamina drains at `8` absolute points
+  per second. RUN uses the effective normal movement speed multiplied by
+  `1.5`; it is disabled automatically when stamina is depleted.
+- Stamina depletion triggers KNOCKDOWNED, applies damage equal to `5%` of
+  maximum HP, and disables RUN. KNOCKDOWNED lasts `2` seconds, blocks all input,
+  and is mechanically STUNNED plus the stamina-depletion damage penalty.
+- DASH is requested with the Xbox `B` button. The request activates on button
+  press and is released only when the button is released; holding B does not
+  repeatedly dash.
+- DASH requires a non-zero current physical velocity vector. Its direction is
+  locked at activation from that vector, and its speed is twice the current
+  speed magnitude. It lasts exactly `1` second, so its distance is determined
+  by the speed at activation. RUN remains active after DASH.
+- DASH costs `17%` of maximum stamina immediately. The cost may exceed the
+  current stamina; stamina is reduced to zero and depletion consequences are
+  then applied rather than preventing the DASH.
+- DASH provides an invulnerability window of `0.337` seconds centered on the
+  middle of its one-second duration. The exact boundary convention remains to
+  be verified in implementation.
+- A server-authoritative physical velocity vector is required for movement and
+  DASH. It is distinct from movement intent and provides the current speed and
+  locked DASH direction.
+- KNOCKDOWNED, STUNNED, SILENCED, DISARMED, and ROOTED remain distinct status
+  effects. STUNNED blocks all input; SILENCED blocks shoulder-button
+  abilities; DISARMED blocks Xbox action buttons `X/Y/A/B`; ROOTED blocks
+  movement from the left analog stick.
+- The first presentation iteration uses primitive ROCK and/or BOB motion for
+  RUN. DASH is initially functional without dedicated VFX. The basic RUN
+  motion is visible to other clients. A stamina HUD is deferred.
+
 ## Hammerer: first weapon and attack direction
 
 The Hammerer is the first character used to establish weapons and combat. This
@@ -485,7 +528,15 @@ separate implementation chronicle.
 - Exact core-room/core-area selection and final-area size.
 - Which collapse variant(s) enter iteration 1.
 - Collapse wave timing, warning semantics, and escape constraints.
-- Exact combat and abilities of all five characters.
+- Exact combat and character-specific abilities beyond shared RUN and DASH.
+- Whether stamina depletion is named KNOCKDOWNED or KNOCKBACKED in the final
+  status-effect vocabulary.
+- Exact DASH collision/slide behavior at walls, doors, and room boundaries.
+- Exact DASH invulnerability interval boundary and status-effect interaction.
+- Whether DASH may activate at exactly zero stamina, and whether its depletion
+  consequence is applied in the same tick as activation.
+- Whether a DASH can begin from a physically moving vector when movement input
+  is released in the same simulation tick.
 - Exact AttackRegion placement/overlap rule, base damage, and charged-damage
   curve. Hammer impact distance is authored by `grip_secondary` and
   `attack_point_primary`; current action timings remain balanceable.
