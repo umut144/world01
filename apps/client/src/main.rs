@@ -31,8 +31,8 @@ mod presentation;
 mod projection;
 mod session;
 
-const INITIAL_WINDOW_WIDTH: u32 = 2880;
-const INITIAL_WINDOW_HEIGHT: u32 = 1800;
+const INITIAL_WINDOW_PHYSICAL_WIDTH: u32 = 1280;
+const INITIAL_WINDOW_PHYSICAL_HEIGHT: u32 = 800;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
@@ -101,7 +101,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins(DefaultPlugins.set(game_log_plugin()).set(WindowPlugin {
         primary_window: Some(Window {
             title: "The Labyrinth — Secrets, Room's & Travels'".into(),
-            resolution: WindowResolution::new(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT),
+            resolution: WindowResolution::new(
+                INITIAL_WINDOW_PHYSICAL_WIDTH,
+                INITIAL_WINDOW_PHYSICAL_HEIGHT,
+            ),
             resizable: true,
             ..default()
         }),
