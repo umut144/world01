@@ -129,11 +129,11 @@ impl CharacterAssetLibrary {
             .components
             .iter()
             .find(|component| component.name == "body")
-            .and_then(|component| component.component_pivot.or(component.local_pivot))
-            .map(|pivot| {
+            .and_then(|component| component_world_transform(component, &manifest.components))
+            .map(|body_transform| {
                 Vec2::new(
-                    pivot[0] - manifest.asset_pivot[0],
-                    pivot[1] - manifest.asset_pivot[1],
+                    body_transform.translation.x - manifest.asset_pivot[0],
+                    body_transform.translation.y - manifest.asset_pivot[1],
                 )
             })
             .unwrap_or(Vec2::ZERO)
@@ -854,6 +854,17 @@ mod tests {
         assert_eq!(ids.len(), 11);
         assert!(ids.iter().any(|character| character.0 == "monk"));
         assert!(ids.iter().any(|character| character.0 == "warrior"));
+    }
+
+    #[test]
+    fn body_pivot_is_derived_from_the_rendered_body_anchor() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+
+        let hammerer_pivot = library.body_pivot(&CharacterId("hammerer".to_owned()));
+        let rogue_pivot = library.body_pivot(&CharacterId("rogue".to_owned()));
+        assert!((hammerer_pivot - Vec2::new(0.0, 0.695)).length() < 0.000_001);
+        assert!((rogue_pivot - Vec2::new(0.0, 0.15)).length() < 0.000_001);
     }
 
     #[test]
