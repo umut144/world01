@@ -31,7 +31,7 @@
       "label": "world01: server",
       "type": "process",
       "command": "cargo",
-      "args": ["run", "--quiet", "--package", "world01-server"],
+      "args": ["run", "--package", "world01-server"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -54,7 +54,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "world01-client",
         "--features",
@@ -84,7 +83,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "world01-client",
         "--features",
@@ -114,7 +112,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "world01-client",
         "--features",
@@ -144,7 +141,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "world01-client",
         "--features",
@@ -174,7 +170,6 @@
       "command": "cargo",
       "args": [
         "run",
-        "--quiet",
         "--package",
         "world01-client",
         "--features",
