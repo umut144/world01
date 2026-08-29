@@ -255,9 +255,9 @@ Reference drawings:
 - Stamina regenerates continuously at `2.5%` of maximum stamina per second,
   including while normal movement, RUN, KNOCKDOWNED, or STUNNED. Regeneration
   is not disabled by these states.
-- RUN is toggled by the Xbox `X` button. RUN is a potential intent while the
-  character is stationary and consumes no stamina until a non-zero movement
-  intent produces actual movement.
+- RUN is toggled by the Xbox `X` button or keyboard `LeftShift`. RUN is a
+  potential intent while the character is stationary and consumes no stamina
+  until a non-zero movement intent produces actual movement.
 - While actually moving with RUN active, stamina drains at `8` absolute points
   per second. RUN uses the effective normal movement speed multiplied by
   `1.5`; it is disabled automatically when stamina is depleted.
@@ -266,9 +266,9 @@ Reference drawings:
   blocks all input, and is mechanically STUNNED plus the stamina-depletion
   damage penalty. KNOCKBACKED is a separate future status effect and is not the
   stamina-depletion status.
-- DASH is requested with the Xbox `B` button. The request activates on button
-  press and is released only when the button is released; holding B does not
-  repeatedly dash.
+- DASH is requested with the Xbox `B` button or keyboard `LeftControl`. The
+  request activates on button press and is released only when the button is
+  released; holding B or `LeftControl` does not repeatedly dash.
 - DASH requires a non-zero current physical velocity vector. Its direction is
   locked at activation from that vector, and its speed is twice the current
   speed magnitude. It lasts exactly `1` second, so its distance is determined
@@ -278,7 +278,9 @@ Reference drawings:
   then applied rather than preventing the DASH.
 - If the DASH cost depletes stamina, the depletion check occurs in the same
   simulation tick after the cost is applied. KNOCKDOWNED then takes precedence,
-  disables RUN, and interrupts the active DASH.
+  disables RUN, and interrupts the active DASH. The DASH is therefore accepted
+  without an affordability pre-check but does not continue once KNOCKDOWNED is
+  applied.
 - DASH provides an invulnerability window of `0.337` seconds centered on the
   middle of its one-second duration. The exact boundary convention remains to
   be verified in implementation.
