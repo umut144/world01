@@ -8,8 +8,8 @@ use bevy::prelude::{Resource, Vec2};
 use game01_world_data::CharacterId;
 
 use crate::manifest::{
-    ContentError, RuntimeComponent, RuntimeContent, RuntimeManifest, RuntimeTransform,
-    WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
+    AuthoredFacing, ContentError, RuntimeComponent, RuntimeContent, RuntimeManifest,
+    RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
     WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE, attachment_frame,
 };
 
@@ -17,6 +17,52 @@ use crate::manifest::{
 pub struct CharacterHealthCatalog {
     max_hp: HashMap<CharacterId, f32>,
 }
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct CharacterHurtGeometryCatalog {
+    geometries: HashMap<CharacterId, CharacterHurtGeometry>,
+}
+
+impl CharacterHurtGeometryCatalog {
+    pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHurtGeometryError> {
+        let mut geometries = HashMap::new();
+        for (character_id, manifest) in content.characters() {
+            let components = ["body", "head"]
+                .into_iter()
+                .map(|name| character_component_geometry(manifest, name))
+                .collect::<Result<Vec<_>, _>>()?;
+            geometries.insert(
+                character_id.clone(),
+                CharacterHurtGeometry {
+                    authored_facing: manifest.presentation.authored_facing,
+                    components,
+                },
+            );
+        }
+        Ok(Self { geometries })
+    }
+
+    pub fn character(&self, character: &CharacterId) -> Option<&CharacterHurtGeometry> {
+        self.geometries.get(character)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CharacterHurtGeometry {
+    pub authored_facing: AuthoredFacing,
+    pub components: Vec<RuntimeComponentGeometry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CharacterHurtGeometryError(String);
+
+impl fmt::Display for CharacterHurtGeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Error for CharacterHurtGeometryError {}
 
 impl CharacterHealthCatalog {
     pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHealthError> {
@@ -126,6 +172,14 @@ impl HammerCombatGeometry {
         self.attack_point.distance(grip)
     }
 
+    pub fn secondary_grip(&self) -> Vec2 {
+        self.secondary_grip
+    }
+
+    pub fn attack_point(&self) -> Vec2 {
+        self.attack_point
+    }
+
     pub fn maximum_reach(&self) -> f32 {
         self.attack_point.distance(self.reach_limit)
     }
@@ -205,6 +259,42 @@ fn component_geometry(
             .vertices
             .iter()
             .map(|vertex| transform_point(transform, *vertex))
+            .collect(),
+        indices: mesh.indices.clone(),
+    })
+}
+
+fn character_component_geometry(
+    manifest: &RuntimeManifest,
+    name: &str,
+) -> Result<RuntimeComponentGeometry, CharacterHurtGeometryError> {
+    let component = manifest
+        .components
+        .iter()
+        .find(|component| component.name == name)
+        .ok_or_else(|| {
+            CharacterHurtGeometryError(format!(
+                "{} is missing hurt Component {name}",
+                manifest.asset_key
+            ))
+        })?;
+    let mesh = component.mesh.as_ref().ok_or_else(|| {
+        CharacterHurtGeometryError(format!(
+            "{} hurt Component {name} has no Fill Mesh",
+            manifest.asset_key
+        ))
+    })?;
+    let transform = component_world_transform(component, &manifest.components, &mut HashSet::new())
+        .map_err(|error| CharacterHurtGeometryError(error.to_string()))?;
+    let pivot = finite_vec2(manifest.asset_pivot, "character asset pivot")
+        .map_err(|error| CharacterHurtGeometryError(error.to_string()))?;
+    Ok(RuntimeComponentGeometry {
+        component_id: component.component_id.clone(),
+        name: component.name.clone(),
+        vertices: mesh
+            .vertices
+            .iter()
+            .map(|vertex| transform_point(transform, *vertex) - pivot)
             .collect(),
         indices: mesh.indices.clone(),
     })
@@ -315,5 +405,12 @@ mod tests {
         );
         assert!(hammer.attack_radius(1.0) > hammer.attack_radius(0.0));
         assert!(hammer.maximum_reach() > hammer.attack_radius(1.0));
+
+        let hurt = CharacterHurtGeometryCatalog::from_content(&content)
+            .expect("all playable characters define body and head hurt Components");
+        assert!(content.ids().iter().all(|character| {
+            hurt.character(character)
+                .is_some_and(|geometry| geometry.components.len() == 2)
+        }));
     }
 }

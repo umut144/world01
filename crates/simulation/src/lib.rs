@@ -8,8 +8,8 @@ mod schedule;
 
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
 pub use combat::hammer::{
-    HammerAttackConfigError, HammerAttackRules, advance_hammer_attacks,
-    constrain_embedded_hammer_reach,
+    HammerAttackConfigError, HammerAttackRules, HammerStrikeConfigError, HammerStrikeRules,
+    advance_hammer_attacks, apply_hammer_strike_damage, constrain_embedded_hammer_reach,
 };
 pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};

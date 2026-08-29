@@ -4,8 +4,9 @@ mod derived;
 mod manifest;
 
 pub use derived::{
-    CharacterHealthCatalog, CharacterHealthError, HammerCombatGeometry, HammerCombatGeometryError,
-    RuntimeComponentGeometry,
+    CharacterHealthCatalog, CharacterHealthError, CharacterHurtGeometry,
+    CharacterHurtGeometryCatalog, CharacterHurtGeometryError, HammerCombatGeometry,
+    HammerCombatGeometryError, RuntimeComponentGeometry,
 };
 pub use manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,
