@@ -48,6 +48,7 @@ struct ConnectionRegistry {
 }
 
 impl ConnectionRegistry {
+    #[cfg(test)]
     fn len(&self) -> usize {
         self.clients.len()
     }
@@ -111,12 +112,13 @@ pub fn configure_server(
             apply_tick_player_input.in_set(ServerNetworkSet::PrepareSimulation),
         )
         .add_observer(prepare_server_client)
+        .add_observer(report_server_started)
         .add_observer(track_connected_client)
         .add_observer(track_disconnected_client)
         .add_input_validator(authorize_controlled_targets::<NativeStateSequence<PlayerInput>>);
 }
 
-fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands: Commands) {
+fn start_server(mut commands: Commands) {
     let server = commands
         .spawn((
             NetcodeServer::new(server::NetcodeConfig {
@@ -129,12 +131,12 @@ fn start_server(network_simulation: Res<NetworkSimulationProfile>, mut commands:
         ))
         .id();
     commands.trigger(Start { entity: server });
-    info!(
-        %SERVER_ADDR,
-        maximum_clients = MAX_CLIENTS,
-        network_simulation = network_simulation.name(),
-        "local server starting"
-    );
+}
+
+fn report_server_started(trigger: On<Add, Started>, servers: Query<(), With<NetcodeServer>>) {
+    if servers.contains(trigger.entity) {
+        info!(target: "game_console", "Server erfolgreich gestartet");
+    }
 }
 
 fn prepare_server_client(
@@ -159,9 +161,7 @@ fn track_connected_client(
         return;
     };
     match registry.register(remote.0, trigger.entity) {
-        Admission::Accepted => {
-            info!(peer = ?remote.0, clients = registry.len(), "client connected");
-        }
+        Admission::Accepted => {}
         Admission::Duplicate => {
             warn!(peer = ?remote.0, "rejecting duplicate client identity");
             commands.entity(trigger.entity).insert(Disconnecting);
@@ -182,7 +182,6 @@ fn track_disconnected_client(
         return;
     };
     registry.unregister(remote.0, trigger.entity);
-    info!(peer = ?remote.0, clients = registry.len(), "client disconnected");
 }
 
 fn receive_join_requests(

@@ -44,6 +44,13 @@ The baseline is stable Rust, Bevy 0.19, and Lightyear 0.28. Bevy default
 features are disabled. The server has no direct rendering, windowing, audio, or
 input-device features.
 
+Local VS Code server/client tasks run Cargo quietly and clear their dedicated
+terminal before each start. Runtime console output omits timestamps, levels,
+and module targets. It shows only global errors plus messages explicitly sent
+to the `game_console` target; that target accepts `DEBUG` and higher levels.
+The current startup messages report successful server start, client start, and
+client login.
+
 In the following graph, `A -> B` means **B directly depends on A**:
 
 ```text

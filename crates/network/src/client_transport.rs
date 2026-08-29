@@ -69,8 +69,7 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
     .add_observer(enable_controlled_input)
     .add_observer(enable_remote_position_extrapolation)
     .add_observer(send_join_when_connected)
-    .add_observer(report_client_connected)
-    .add_observer(report_client_disconnected);
+    .add_observer(report_client_connected);
 }
 
 pub fn connect_client(
@@ -101,7 +100,7 @@ pub fn connect_client(
         ))
         .id();
     commands.trigger(Connect { entity: client });
-    info!(client_id, %SERVER_ADDR, network_simulation = network_simulation.name(), "client connecting");
+    info!(target: "game_console", "Client erfolgreich gestartet");
     Ok(client)
 }
 
@@ -238,18 +237,9 @@ pub fn client_input_timeline_synced(
     !clients.is_empty()
 }
 
-fn report_client_connected(trigger: On<Add, Connected>, clients: Query<&LocalId, With<Client>>) {
-    if let Ok(local_id) = clients.get(trigger.entity) {
-        info!(client = ?local_id.0, "connected to local server");
-    }
-}
-
-fn report_client_disconnected(
-    trigger: On<Add, Disconnected>,
-    clients: Query<&Disconnected, With<Client>>,
-) {
-    if let Ok(disconnected) = clients.get(trigger.entity) {
-        info!(reason = ?disconnected.reason, "disconnected from local server");
+fn report_client_connected(trigger: On<Add, Connected>, clients: Query<(), With<Client>>) {
+    if clients.contains(trigger.entity) {
+        info!(target: "game_console", "Client erfolgreich eingeloggt");
     }
 }
 

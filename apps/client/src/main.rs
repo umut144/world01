@@ -1,5 +1,6 @@
 use std::{env, error::Error, io};
 
+use bevy::log::{Level, LogPlugin};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
@@ -97,7 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         })?;
 
     let mut app = App::new();
-    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+    app.add_plugins(DefaultPlugins.set(game_log_plugin()).set(WindowPlugin {
         primary_window: Some(Window {
             title: "The Labyrinth — Secrets, Room's & Travels'".into(),
             resolution: WindowResolution::new(INITIAL_WINDOW_WIDTH, INITIAL_WINDOW_HEIGHT),
@@ -142,6 +143,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins(ClientPresentationPlugin { character_assets });
     app.run();
     Ok(())
+}
+
+fn game_log_plugin() -> LogPlugin {
+    LogPlugin {
+        filter: "game_console=debug".to_owned(),
+        level: Level::ERROR,
+        fmt_layer: |_| {
+            Some(Box::new(
+                bevy::log::tracing_subscriber::fmt::Layer::default()
+                    .without_time()
+                    .with_target(false)
+                    .with_level(false)
+                    .with_writer(std::io::stderr),
+            ))
+        },
+        ..default()
+    }
 }
 
 fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Error>> {

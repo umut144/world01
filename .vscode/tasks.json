@@ -31,7 +31,7 @@
       "label": "game01: server",
       "type": "process",
       "command": "cargo",
-      "args": ["run", "--package", "game01-server"],
+      "args": ["run", "--quiet", "--package", "game01-server"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -39,7 +39,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1
@@ -51,6 +54,7 @@
       "command": "cargo",
       "args": [
         "run",
+        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -65,7 +69,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1
@@ -77,6 +84,7 @@
       "command": "cargo",
       "args": [
         "run",
+        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -91,7 +99,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1
@@ -103,6 +114,7 @@
       "command": "cargo",
       "args": [
         "run",
+        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -117,7 +129,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1
@@ -129,6 +144,7 @@
       "command": "cargo",
       "args": [
         "run",
+        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -143,7 +159,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1
@@ -155,6 +174,7 @@
       "command": "cargo",
       "args": [
         "run",
+        "--quiet",
         "--package",
         "game01-client",
         "--features",
@@ -169,7 +189,10 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "game01",
+        "echo": false,
+        "showReuseMessage": false,
+        "clear": true
       },
       "runOptions": {
         "instanceLimit": 1

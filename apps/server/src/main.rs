@@ -1,6 +1,11 @@
 use std::{env, error::Error, io};
 
-use bevy::{app::ScheduleRunnerPlugin, log::LogPlugin, prelude::*, state::app::StatesPlugin};
+use bevy::{
+    app::ScheduleRunnerPlugin,
+    log::{Level, LogPlugin},
+    prelude::*,
+    state::app::StatesPlugin,
+};
 use game01_configs::load_embedded;
 use game01_content::{
     CharacterHealthCatalog, CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent,
@@ -59,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(tick_duration)),
-        LogPlugin::default(),
+        game_log_plugin(),
         StatesPlugin,
     ))
     .insert_resource(content)
@@ -97,6 +102,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     app.run();
     Ok(())
+}
+
+fn game_log_plugin() -> LogPlugin {
+    LogPlugin {
+        filter: "game_console=debug".to_owned(),
+        level: Level::ERROR,
+        fmt_layer: |_| {
+            Some(Box::new(
+                bevy::log::tracing_subscriber::fmt::Layer::default()
+                    .without_time()
+                    .with_target(false)
+                    .with_level(false)
+                    .with_writer(std::io::stderr),
+            ))
+        },
+        ..default()
+    }
 }
 
 fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Error>> {
