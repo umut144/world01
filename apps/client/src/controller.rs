@@ -26,6 +26,20 @@ impl ControllerInput {
             .max_by(|left, right| left.length_squared().total_cmp(&right.length_squared()))
     }
 
+    pub fn right_stick(&mut self) -> Option<Vec2> {
+        while self.gilrs.next_event().is_some() {}
+
+        self.gilrs
+            .gamepads()
+            .map(|(_, gamepad)| {
+                Vec2::new(
+                    gamepad.value(Axis::RightStickX),
+                    gamepad.value(Axis::RightStickY),
+                )
+            })
+            .max_by(|left, right| left.length_squared().total_cmp(&right.length_squared()))
+    }
+
     pub fn right_trigger_pressed(&mut self) -> bool {
         while self.gilrs.next_event().is_some() {}
 

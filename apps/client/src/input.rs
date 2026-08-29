@@ -22,15 +22,20 @@ pub fn collect_movement_input(
 pub fn collect_gaze_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     local_players: Query<(), With<MovementIntent>>,
+    mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientPlayerInput>,
 ) {
     if local_players.is_empty() {
         return;
     }
-    let direction = Vec2::new(
+    let keyboard_direction = Vec2::new(
         axis(&keyboard, KeyCode::KeyL, KeyCode::KeyJ),
         axis(&keyboard, KeyCode::KeyI, KeyCode::KeyK),
     );
+    let direction = controller_input
+        .right_stick()
+        .and_then(controller_stick_direction)
+        .unwrap_or_else(|| keyboard_direction.normalize_or_zero());
     input.0.gaze = gaze_intent(direction);
 }
 
