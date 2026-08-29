@@ -221,28 +221,34 @@ must be documented as an explicit game variant.
 - Games may tune resulting HP or use a different health model, but the
   override must be explicit.
 
-### DOWNED, DEAD, revival, and respawn
+### Life, death, revival, and respawn
 
 - Health is clamped at zero and never becomes negative.
-- Reaching zero HP transitions an otherwise living character to `DOWNED`.
-- A `DOWNED` character cannot receive further normal attack damage and may
-  wait indefinitely for a revival.
-- `DOWNED` blocks every gameplay action except the death-confirmation action.
-- Holding the controller `A` action for `4` seconds confirms `DEAD`. The hold
-  timer accumulates while held and decays at `1` second per second when
-  released; it does not reset immediately.
-- During confirmation, the character rotates counterclockwise with an angular
-  velocity that ramps deterministically and linearly from `144°/s` to
-  `1440°/s` over the four-second interval. Releasing the action reverses the
-  same time-based presentation back toward the static DOWNED pose.
-- The static `DOWNED` presentation hides the contour, scales the character to
-  `90%`, and tilts it `14°` clockwise. `DEAD` has no dedicated presentation
-  requirement yet.
-- Revival returns the character with `80%` of maximum HP. Its concrete trigger
-  may be supplied by the consuming game or a later shared ability.
-- Respawn returns the character with `40%` of maximum HP at an Ankh. The
-  respawn point is selected deterministically and randomly within a `4 m`
-  radius of that Ankh.
+- Reaching zero HP transitions an otherwise living character to `DEAD`. A dead
+  character cannot receive further normal attack damage and is incapable of
+  every gameplay action except the life-state use of the controller `A` action.
+- `DEATH_CONFIRMING` begins when the dead character holds `A`. It accumulates
+  over `4` seconds while held and decays at `1` second per second while
+  released; release returns the state to `DEAD`. During the accumulated
+  confirmation time, the body rotates counterclockwise with a deterministic,
+  linear angular-velocity ramp from `144°/s` to `1440°/s`. The reverse decay
+  uses the same time function.
+- A static dead body hides its contour, is scaled to `90%`, and tilts `14°`
+  clockwise. `DEATH_CONFIRMING` uses that base pose plus the confirmation
+  rotation. `REVIVING` reuses the static dead pose.
+- An `ALIVE` character can begin `REVIVING` by holding `A` while its authored
+  body/head geometry overlaps a dead body. The server accepts exactly one
+  reviver; simultaneous candidates resolve deterministically by lowest
+  `PlayerId`. The hold takes `8` seconds and is cancelled by releasing `A`,
+  losing overlap, or an action-button-blocking status effect such as
+  `STUNNED`. Incoming damage does not cancel revival.
+- The dead character can reject a revival at any time: its own `A` input has
+  higher priority, cancels `REVIVING` immediately, and enters
+  `DEATH_CONFIRMING`.
+- Completing `REVIVING` returns the target to `ALIVE` with `80%` maximum HP.
+  Completing `DEATH_CONFIRMING` respawns the character at an Ankh with `40%`
+  maximum HP. The spawn is selected deterministically within a `4 m` radius
+  around the current world-center Ankh anchor.
 
 ## The Hammerer and the transforming Hammer
 

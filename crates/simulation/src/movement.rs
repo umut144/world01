@@ -3,7 +3,7 @@ use std::{error::Error, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_world_data::{
-    BodyFacing, MovementDirection, MovementIntent, MovementVelocity, Position,
+    BodyFacing, CharacterLifeState, MovementDirection, MovementIntent, MovementVelocity, Position,
 };
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -63,9 +63,17 @@ impl Error for MovementConfigError {}
 
 pub fn move_players(
     step: Res<MovementStep>,
-    mut players: Query<(&MovementIntent, Option<&MovementVelocity>, &mut Position)>,
+    mut players: Query<(
+        &MovementIntent,
+        Option<&MovementVelocity>,
+        Option<&CharacterLifeState>,
+        &mut Position,
+    )>,
 ) {
-    for (intent, velocity, mut position) in &mut players {
+    for (intent, velocity, life, mut position) in &mut players {
+        if life.is_some_and(|life| !life.is_alive()) {
+            continue;
+        }
         let displacement = velocity.map_or_else(
             || step.displacement(*intent),
             |velocity| Vec2::new(velocity.x, velocity.y) * step.seconds_per_tick,

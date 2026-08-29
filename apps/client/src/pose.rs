@@ -88,7 +88,6 @@ pub fn apply_neutral_head_motion(
 }
 
 pub fn apply_character_status_presentation(
-    fixed_time: Res<Time<Fixed>>,
     rules: Res<CharacterLifeRules>,
     players: Query<(
         &CharacterVisual,
@@ -99,24 +98,26 @@ pub fn apply_character_status_presentation(
     mut orientation_roots: Query<&mut Transform, With<CharacterVisualOrientation>>,
     mut outlines: Query<&mut Visibility>,
 ) {
-    let overstep = fixed_time.overstep_fraction();
     for (visual, status, life, confirmation) in &players {
         let life = life.copied().unwrap_or(CharacterLifeState::Alive);
         let status_active = status.is_some_and(|status| status.blocks_all_input());
         let confirmation_ticks = confirmation
-            .map(|confirmation| confirmation.held_ticks as f32 + overstep)
+            .map(|confirmation| confirmation.held_ticks as f32)
             .unwrap_or_default();
         let scale = match life {
             CharacterLifeState::Alive if status_active => 0.9,
-            CharacterLifeState::Downed => 0.9,
+            CharacterLifeState::Dead
+            | CharacterLifeState::DeathConfirming
+            | CharacterLifeState::Reviving => 0.9,
             _ => 1.0,
         };
         let rotation = match life {
-            CharacterLifeState::Downed => {
+            CharacterLifeState::Dead | CharacterLifeState::DeathConfirming => {
                 -14.0_f32.to_radians() + rules.confirmation_angle_radians(confirmation_ticks)
             }
+            CharacterLifeState::Reviving => -14.0_f32.to_radians(),
             CharacterLifeState::Alive if status_active => 14.0_f32.to_radians(),
-            CharacterLifeState::Alive | CharacterLifeState::Dead => 0.0,
+            CharacterLifeState::Alive => 0.0,
         };
         if let Ok(mut transform) = orientation_roots.get_mut(visual.orientation_root) {
             let facing_sign = if transform.scale.x.is_sign_negative() {
@@ -128,8 +129,8 @@ pub fn apply_character_status_presentation(
             transform.rotation = Quat::from_rotation_z(rotation);
         }
 
-        let hide_outline = matches!(life, CharacterLifeState::Downed)
-            || (matches!(life, CharacterLifeState::Alive) && status_active);
+        let hide_outline =
+            !life.is_alive() || (matches!(life, CharacterLifeState::Alive) && status_active);
         for outline in &visual.outline_visuals {
             if let Ok(mut visibility) = outlines.get_mut(*outline) {
                 *visibility = if hide_outline {

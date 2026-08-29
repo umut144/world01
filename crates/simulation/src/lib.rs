@@ -399,9 +399,13 @@ mod tests {
                 knockdown_damage_percent_max_hp: 5.0,
             },
             health: HealthConfig {
-                downed_confirmation_seconds: 4.0,
-                downed_confirmation_initial_degrees_per_second: 144.0,
-                downed_confirmation_max_degrees_per_second: 1440.0,
+                death_confirmation_seconds: 4.0,
+                death_confirmation_initial_degrees_per_second: 144.0,
+                death_confirmation_max_degrees_per_second: 1440.0,
+                revival_seconds: 8.0,
+                revival_health_percent: 80.0,
+                respawn_health_percent: 40.0,
+                ankh_respawn_radius_meters: 4.0,
             },
             weapon_aim: WeaponAimConfig {
                 default_degrees_per_second: 60.0,
@@ -445,9 +449,13 @@ mod tests {
                 knockdown_damage_percent_max_hp: 5.0,
             },
             health: HealthConfig {
-                downed_confirmation_seconds: 4.0,
-                downed_confirmation_initial_degrees_per_second: 144.0,
-                downed_confirmation_max_degrees_per_second: 1440.0,
+                death_confirmation_seconds: 4.0,
+                death_confirmation_initial_degrees_per_second: 144.0,
+                death_confirmation_max_degrees_per_second: 1440.0,
+                revival_seconds: 8.0,
+                revival_health_percent: 80.0,
+                respawn_health_percent: 40.0,
+                ankh_respawn_radius_meters: 4.0,
             },
             weapon_aim: WeaponAimConfig {
                 default_degrees_per_second: 60.0,

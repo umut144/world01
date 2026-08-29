@@ -3,7 +3,7 @@ use std::{env, error::Error, io};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use game01_configs::load_embedded;
-use game01_content::{HammerCombatGeometry, RuntimeContent};
+use game01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent};
 use game01_design::load_embedded as load_game_design;
 use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{
@@ -38,6 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let content = RuntimeContent::load_embedded()?;
     let hammer_geometry =
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
+    let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let character_assets = CharacterAssetLibrary::from_content(
         content,
         config.eyes.pupil_area_ratio,
@@ -110,6 +111,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hammer_attack_rules);
     app.insert_resource(hammer_presentation_rules);
     app.insert_resource(hammer_geometry);
+    app.insert_resource(hurt_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(
         RoomDimensions::new(config.room.width_tiles, config.room.height_tiles).ok_or_else(

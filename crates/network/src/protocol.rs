@@ -8,8 +8,8 @@ use game01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashIntent,
     DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
     HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
-    PlayerOwner, Position, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
-    WeaponAimState,
+    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
+    StaminaState, StatusEffectState, WeaponAimState,
 };
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, AppMessageExt, ChannelMode, ChannelSettings,
@@ -104,6 +104,8 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<DeathConfirmationState>()
         .replicate()
         .predict();
+    app.component::<RevivalState>().replicate().predict();
+    app.component::<RespawnState>().replicate().predict();
     app.component::<Position>()
         .replicate()
         .predict()

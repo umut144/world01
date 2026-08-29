@@ -10,8 +10,8 @@ use game01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
 use game01_world_data::{
-    CharacterHealth, CharacterId, GazeDirection, MovementIntent, Position, RunState,
-    SelectedCharacter,
+    CharacterHealth, CharacterId, CharacterLifeState, GazeDirection, MovementIntent, Position,
+    RunState, SelectedCharacter,
 };
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
@@ -795,6 +795,7 @@ fn sync_rendered_positions(
             Option<&LocalRenderHistory>,
             Option<&RemotePositionExtrapolation>,
             Option<&mut ClientPositionCorrection>,
+            Option<&CharacterLifeState>,
             &mut Transform,
         ),
         With<RenderedCharacter>,
@@ -804,9 +805,11 @@ fn sync_rendered_positions(
     let alpha = fixed_time.overstep_fraction();
     let correction_decay = correction_decay(virtual_time.delta_secs());
 
-    for (entity, position, history, extrapolation, correction, mut transform) in &mut players {
+    for (entity, position, history, extrapolation, correction, life, mut transform) in &mut players
+    {
         let mut rendered = sampled_render_position(*position, history, alpha);
         if history.is_none()
+            && life.is_none_or(|life| life.is_alive())
             && let Some(extrapolation) = extrapolation
         {
             rendered += extrapolation.offset;

@@ -10,7 +10,8 @@ use game01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent, DashState,
     DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState,
     MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner, Position,
-    RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState, WeaponAimState,
+    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState, WeaponAimState,
 };
 
 #[derive(Resource, Debug)]
@@ -91,6 +92,8 @@ fn accept_join_requests(
                 StatusEffectState::default(),
                 CharacterLifeState::Alive,
                 DeathConfirmationState::default(),
+                RevivalState::IDLE,
+                RespawnState::default(),
             ),
             (
                 BodyFacing::Authored,

@@ -120,7 +120,7 @@ pub fn update_locomotion(
             dash.velocity = MovementVelocity::ZERO;
         }
 
-        let normal_velocity = if status.blocks_movement() {
+        let normal_velocity = if status.blocks_movement() || life_blocks_input {
             MovementVelocity::ZERO
         } else {
             let multiplier = if run.toggled {
@@ -135,6 +135,7 @@ pub fn update_locomotion(
         if dash_pressed_edge
             && !dash.active
             && !status.blocks_action_buttons()
+            && !life_blocks_input
             && normal_velocity.length() > f32::EPSILON
         {
             stamina_delta -= stamina.maximum * rules.dash_cost_ratio;
@@ -146,6 +147,7 @@ pub fn update_locomotion(
 
         run.active = run.toggled
             && !status.blocks_all_input()
+            && !life_blocks_input
             && (normal_velocity.length() > f32::EPSILON || dash.active);
 
         if run.active {
@@ -257,6 +259,24 @@ mod tests {
         assert!(run.toggled);
         assert!(!run.active);
         assert!((stamina.current - 100.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn dead_player_cannot_move_from_a_nonzero_intent() {
+        let mut app = test_app();
+        let player = spawn_player(&mut app, 100.0);
+        app.world_mut()
+            .entity_mut(player)
+            .insert(CharacterLifeState::Dead);
+        app.world_mut().get_mut::<MovementIntent>(player).unwrap().x = 1.0;
+
+        app.update();
+
+        assert_eq!(app.world().get::<Position>(player), Some(&Position::ZERO));
+        assert_eq!(
+            app.world().get::<MovementVelocity>(player),
+            Some(&MovementVelocity::ZERO)
+        );
     }
 
     #[test]

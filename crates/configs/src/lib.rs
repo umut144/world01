@@ -94,22 +94,34 @@ pub struct LocomotionConfig {
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct HealthConfig {
-    pub downed_confirmation_seconds: f32,
-    pub downed_confirmation_initial_degrees_per_second: f32,
-    pub downed_confirmation_max_degrees_per_second: f32,
+    pub death_confirmation_seconds: f32,
+    pub death_confirmation_initial_degrees_per_second: f32,
+    pub death_confirmation_max_degrees_per_second: f32,
+    pub revival_seconds: f32,
+    pub revival_health_percent: f32,
+    pub respawn_health_percent: f32,
+    pub ankh_respawn_radius_meters: f32,
 }
 
 impl HealthConfig {
     pub fn is_valid(self) -> bool {
-        self.downed_confirmation_seconds.is_finite()
-            && self.downed_confirmation_seconds > 0.0
+        self.death_confirmation_seconds.is_finite()
+            && self.death_confirmation_seconds > 0.0
             && self
-                .downed_confirmation_initial_degrees_per_second
+                .death_confirmation_initial_degrees_per_second
                 .is_finite()
-            && self.downed_confirmation_initial_degrees_per_second >= 0.0
-            && self.downed_confirmation_max_degrees_per_second.is_finite()
-            && self.downed_confirmation_max_degrees_per_second
-                >= self.downed_confirmation_initial_degrees_per_second
+            && self.death_confirmation_initial_degrees_per_second >= 0.0
+            && self.death_confirmation_max_degrees_per_second.is_finite()
+            && self.death_confirmation_max_degrees_per_second
+                >= self.death_confirmation_initial_degrees_per_second
+            && self.revival_seconds.is_finite()
+            && self.revival_seconds > 0.0
+            && self.revival_health_percent.is_finite()
+            && (0.0..=100.0).contains(&self.revival_health_percent)
+            && self.respawn_health_percent.is_finite()
+            && (0.0..=100.0).contains(&self.respawn_health_percent)
+            && self.ankh_respawn_radius_meters.is_finite()
+            && self.ankh_respawn_radius_meters >= 0.0
     }
 }
 
@@ -246,15 +258,19 @@ mod tests {
         assert_eq!(design.locomotion.knockdown_duration_seconds, 2.0);
         assert_eq!(design.locomotion.knockdown_damage_percent_max_hp, 5.0);
         assert!(design.locomotion.is_valid());
-        assert_eq!(design.health.downed_confirmation_seconds, 4.0);
+        assert_eq!(design.health.death_confirmation_seconds, 4.0);
         assert_eq!(
-            design.health.downed_confirmation_initial_degrees_per_second,
+            design.health.death_confirmation_initial_degrees_per_second,
             144.0
         );
         assert_eq!(
-            design.health.downed_confirmation_max_degrees_per_second,
+            design.health.death_confirmation_max_degrees_per_second,
             1440.0
         );
+        assert_eq!(design.health.revival_seconds, 8.0);
+        assert_eq!(design.health.revival_health_percent, 80.0);
+        assert_eq!(design.health.respawn_health_percent, 40.0);
+        assert_eq!(design.health.ankh_respawn_radius_meters, 4.0);
         assert!(design.health.is_valid());
         assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
         assert!(design.weapon_aim.character_degrees_per_second.is_empty());
