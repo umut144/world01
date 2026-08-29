@@ -17,7 +17,10 @@ use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
 use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
-use crate::input::{collect_attack_input, collect_gaze_input, collect_movement_input};
+use crate::input::{
+    ClientInputFocus, clear_input_when_unfocused, collect_attack_input, collect_gaze_input,
+    collect_movement_input, update_client_input_focus,
+};
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
 use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
 use crate::session::{ClientScreen, ClientSession};
@@ -88,6 +91,7 @@ impl CameraView {
 impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.character_assets.clone())
+            .init_resource::<ClientInputFocus>()
             .init_resource::<PoseSettings>()
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
@@ -101,9 +105,14 @@ impl Plugin for ClientPresentationPlugin {
                     (handle_selection_input, update_selection_feedback)
                         .chain()
                         .run_if(in_state(ClientScreen::CharacterSelection)),
-                    collect_movement_input,
-                    collect_gaze_input,
-                    collect_attack_input,
+                    (
+                        update_client_input_focus,
+                        clear_input_when_unfocused,
+                        collect_movement_input,
+                        collect_gaze_input,
+                        collect_attack_input,
+                    )
+                        .chain(),
                     (apply_body_facing, apply_neutral_head_motion),
                     (render_new_players, initialize_local_render_history)
                         .chain()

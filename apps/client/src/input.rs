@@ -1,16 +1,60 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    window::{PrimaryWindow, WindowFocused},
+};
 use game01_network::ClientPlayerInput;
-use game01_world_data::{AttackIntent, GazeIntent, MovementIntent};
+use game01_world_data::{AttackIntent, GazeIntent, MovementIntent, PlayerInput};
 
 use crate::controller::ControllerInput;
 
 const CONTROLLER_STICK_DEADZONE: f32 = 0.15;
 
+#[derive(Resource, Debug, Default)]
+pub struct ClientInputFocus {
+    focused: bool,
+    initialized: bool,
+}
+
+pub fn update_client_input_focus(
+    mut focus: ResMut<ClientInputFocus>,
+    mut focus_events: MessageReader<WindowFocused>,
+    windows: Query<(Entity, &Window), With<PrimaryWindow>>,
+) {
+    let Ok((primary_window, window)) = windows.single() else {
+        return;
+    };
+
+    if !focus.initialized {
+        focus.focused = window.focused;
+        focus.initialized = true;
+    }
+
+    for event in focus_events.read() {
+        if event.window == primary_window {
+            focus.focused = event.focused;
+        }
+    }
+}
+
+pub fn clear_input_when_unfocused(
+    focus: Res<ClientInputFocus>,
+    mut input: ResMut<ClientPlayerInput>,
+) {
+    if !focus.focused {
+        input.0 = PlayerInput::ZERO;
+    }
+}
+
 pub fn collect_movement_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
     mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientPlayerInput>,
 ) {
+    if !focus.focused {
+        return;
+    }
+
     let keyboard_direction = Vec2::new(
         axis(&keyboard, KeyCode::KeyD, KeyCode::KeyA),
         axis(&keyboard, KeyCode::KeyW, KeyCode::KeyS),
@@ -21,11 +65,12 @@ pub fn collect_movement_input(
 
 pub fn collect_gaze_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
     local_players: Query<(), With<MovementIntent>>,
     mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientPlayerInput>,
 ) {
-    if local_players.is_empty() {
+    if !focus.focused || local_players.is_empty() {
         return;
     }
     let keyboard_direction = Vec2::new(
@@ -41,9 +86,14 @@ pub fn collect_gaze_input(
 
 pub fn collect_attack_input(
     keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
     mut controller_input: NonSendMut<ControllerInput>,
     mut input: ResMut<ClientPlayerInput>,
 ) {
+    if !focus.focused {
+        return;
+    }
+
     let pressed = attack_pressed(
         keyboard.pressed(KeyCode::Space),
         controller_input.right_trigger_pressed(),
