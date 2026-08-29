@@ -10,8 +10,9 @@ use game01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use game01_simulation::{
-    HammerAttackRules, HammerStrikeRules, LocomotionRules, MovementStep, SimulationSet,
-    WeaponAimRules, add_simulation_step, apply_hammer_strike_damage,
+    CharacterLifeRules, HammerAttackRules, HammerStrikeRules, LocomotionRules, MovementStep,
+    SimulationSet, WeaponAimRules, add_simulation_step, apply_hammer_strike_damage,
+    update_character_life,
 };
 
 use crate::session::ServerSessionPlugin;
@@ -31,6 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     })?;
     let movement_step = MovementStep::from_design(&config)?;
     let locomotion_rules = LocomotionRules::from_design(&config)?;
+    let character_life_rules = CharacterLifeRules::from_design(&config)?;
     let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
     let hammer_attack_rules =
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
@@ -63,6 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
     .insert_resource(locomotion_rules)
+    .insert_resource(character_life_rules)
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(hammer_strike_rules)
@@ -76,7 +79,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     app.add_systems(
         FixedUpdate,
-        apply_hammer_strike_damage.after(SimulationSet::GameplayStep),
+        (apply_hammer_strike_damage, update_character_life)
+            .chain()
+            .after(SimulationSet::GameplayStep),
     );
     app.add_plugins(ServerSessionPlugin);
     configure_server(

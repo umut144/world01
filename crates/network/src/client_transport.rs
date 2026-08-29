@@ -2,8 +2,8 @@ use std::{net::Ipv4Addr, time::Duration};
 
 use bevy::{log::info, prelude::*};
 use game01_world_data::{
-    AttackIntent, CharacterId, DashIntent, GazeIntent, MovementIntent, PlayerInput, Position,
-    RunIntent,
+    AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent,
+    PlayerInput, Position, RunIntent,
 };
 use lightyear::interpolation::timeline::InterpolationConfig;
 use lightyear::prediction::correction::PreviousVisual;
@@ -202,6 +202,7 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
         AttackIntent::RELEASED,
         RunIntent::RELEASED,
         DashIntent::RELEASED,
+        DeathConfirmIntent::RELEASED,
     ));
 }
 

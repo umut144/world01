@@ -35,10 +35,11 @@ pub struct HammerVisual {
     pub front_layer: f32,
 }
 
-#[derive(Component, Debug, Clone, Copy)]
+#[derive(Component, Debug, Clone)]
 pub struct CharacterVisual {
     pub orientation_root: Entity,
     pub authored_facing: AuthoredFacing,
+    pub outline_visuals: Vec<Entity>,
 }
 
 #[derive(Component)]
@@ -304,14 +305,11 @@ pub fn spawn_character_visual(
             Visibility::default(),
         ))
         .id();
-    commands.entity(root).insert(CharacterVisual {
-        orientation_root,
-        authored_facing: manifest.presentation.authored_facing,
-    });
     commands.entity(root).add_child(orientation_root);
     commands.entity(orientation_root).add_child(anchor);
 
     let mut component_entities = HashMap::new();
+    let mut outline_visuals = Vec::new();
     for component in &manifest.components {
         let transform = component_transform(component);
         let mut entity_commands = commands.spawn((transform, Visibility::default()));
@@ -438,6 +436,7 @@ pub fn spawn_character_visual(
                 ))
                 .id();
             commands.entity(component_entity).add_child(outline);
+            outline_visuals.push(outline);
         }
 
         for referenced in &component.referenced_components {
@@ -483,9 +482,16 @@ pub fn spawn_character_visual(
                     ))
                     .id();
                 commands.entity(referenced_entity).add_child(outline);
+                outline_visuals.push(outline);
             }
         }
     }
+
+    commands.entity(root).insert(CharacterVisual {
+        orientation_root,
+        authored_facing: manifest.presentation.authored_facing,
+        outline_visuals,
+    });
 
     if weapon_key_for_character(character) == Some(HAMMER_ASSET_KEY) {
         spawn_hammer_visual(

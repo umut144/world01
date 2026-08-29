@@ -75,6 +75,22 @@ pub struct DashIntent {
     pub pressed: bool,
 }
 
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub struct DeathConfirmIntent {
+    pub pressed: bool,
+}
+
+impl DeathConfirmIntent {
+    pub const RELEASED: Self = Self { pressed: false };
+    pub const PRESSED: Self = Self { pressed: true };
+
+    pub const fn new(pressed: bool) -> Self {
+        Self { pressed }
+    }
+}
+
 impl DashIntent {
     pub const RELEASED: Self = Self { pressed: false };
     pub const PRESSED: Self = Self { pressed: true };
@@ -91,6 +107,7 @@ pub struct PlayerInput {
     pub attack: AttackIntent,
     pub run: RunIntent,
     pub dash: DashIntent,
+    pub death_confirm: DeathConfirmIntent,
 }
 
 impl PlayerInput {
@@ -100,6 +117,7 @@ impl PlayerInput {
         attack: AttackIntent::RELEASED,
         run: RunIntent::RELEASED,
         dash: DashIntent::RELEASED,
+        death_confirm: DeathConfirmIntent::RELEASED,
     };
 }
 

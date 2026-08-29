@@ -9,6 +9,7 @@ pub struct DesignConfig {
     pub network: NetworkConfig,
     pub movement: MovementConfig,
     pub locomotion: LocomotionConfig,
+    pub health: HealthConfig,
     pub weapon_aim: WeaponAimConfig,
     pub room: RoomConfig,
     pub camera: CameraConfig,
@@ -89,6 +90,27 @@ pub struct LocomotionConfig {
     pub dash_invulnerability_seconds: f32,
     pub knockdown_duration_seconds: f32,
     pub knockdown_damage_percent_max_hp: f32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct HealthConfig {
+    pub downed_confirmation_seconds: f32,
+    pub downed_confirmation_initial_degrees_per_second: f32,
+    pub downed_confirmation_max_degrees_per_second: f32,
+}
+
+impl HealthConfig {
+    pub fn is_valid(self) -> bool {
+        self.downed_confirmation_seconds.is_finite()
+            && self.downed_confirmation_seconds > 0.0
+            && self
+                .downed_confirmation_initial_degrees_per_second
+                .is_finite()
+            && self.downed_confirmation_initial_degrees_per_second >= 0.0
+            && self.downed_confirmation_max_degrees_per_second.is_finite()
+            && self.downed_confirmation_max_degrees_per_second
+                >= self.downed_confirmation_initial_degrees_per_second
+    }
 }
 
 impl LocomotionConfig {
@@ -224,6 +246,16 @@ mod tests {
         assert_eq!(design.locomotion.knockdown_duration_seconds, 2.0);
         assert_eq!(design.locomotion.knockdown_damage_percent_max_hp, 5.0);
         assert!(design.locomotion.is_valid());
+        assert_eq!(design.health.downed_confirmation_seconds, 4.0);
+        assert_eq!(
+            design.health.downed_confirmation_initial_degrees_per_second,
+            144.0
+        );
+        assert_eq!(
+            design.health.downed_confirmation_max_degrees_per_second,
+            1440.0
+        );
+        assert!(design.health.is_valid());
         assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
         assert!(design.weapon_aim.character_degrees_per_second.is_empty());
         assert!(design.weapon_aim.is_valid());

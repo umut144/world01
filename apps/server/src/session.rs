@@ -7,10 +7,10 @@ use game01_network::{
 };
 use game01_simulation::LocomotionRules;
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, DashIntent, DashState, GazeDirection, GazeIntent,
-    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner,
-    Position, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
-    WeaponAimState,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent, DashState,
+    DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner, Position,
+    RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState, WeaponAimState,
 };
 
 #[derive(Resource, Debug)]
@@ -80,6 +80,7 @@ fn accept_join_requests(
                 AttackIntent::RELEASED,
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
+                DeathConfirmIntent::RELEASED,
             ),
             (
                 MovementDirection::ZERO,
@@ -88,6 +89,8 @@ fn accept_join_requests(
                 RunState::default(),
                 DashState::default(),
                 StatusEffectState::default(),
+                CharacterLifeState::Alive,
+                DeathConfirmationState::default(),
             ),
             (
                 BodyFacing::Authored,

@@ -5,10 +5,11 @@ use std::{
 
 use bevy::prelude::*;
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterId, DashIntent, DashState, GazeDirection,
-    GazeIntent, HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId,
-    PlayerInput, PlayerOwner, Position, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WeaponAimState,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashIntent,
+    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
+    PlayerOwner, Position, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
+    WeaponAimState,
 };
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, AppMessageExt, ChannelMode, ChannelSettings,
@@ -99,6 +100,10 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<WeaponAimState>().replicate().predict();
     app.component::<HammerAttackState>().replicate().predict();
     app.component::<CharacterHealth>().replicate().predict();
+    app.component::<CharacterLifeState>().replicate().predict();
+    app.component::<DeathConfirmationState>()
+        .replicate()
+        .predict();
     app.component::<Position>()
         .replicate()
         .predict()
@@ -122,14 +127,18 @@ pub fn apply_tick_player_input(
         &mut AttackIntent,
         &mut RunIntent,
         &mut DashIntent,
+        &mut DeathConfirmIntent,
     )>,
 ) {
-    for (action_state, mut movement, mut gaze, mut attack, mut run, mut dash) in &mut players {
+    for (action_state, mut movement, mut gaze, mut attack, mut run, mut dash, mut death_confirm) in
+        &mut players
+    {
         *movement = action_state.0.movement;
         *gaze = action_state.0.gaze;
         *attack = action_state.0.attack;
         *run = action_state.0.run;
         *dash = action_state.0.dash;
+        *death_confirm = action_state.0.death_confirm;
     }
 }
 
@@ -207,12 +216,14 @@ mod tests {
                     attack: AttackIntent::PRESSED,
                     run: RunIntent::PRESSED,
                     dash: DashIntent::PRESSED,
+                    death_confirm: DeathConfirmIntent::PRESSED,
                 }),
                 MovementIntent::ZERO,
                 GazeIntent::ZERO,
                 AttackIntent::RELEASED,
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
+                DeathConfirmIntent::RELEASED,
             ))
             .id();
         app.world_mut().run_schedule(FixedUpdate);
@@ -252,6 +263,10 @@ mod tests {
         assert_eq!(
             app.world().get::<DashIntent>(player),
             Some(&DashIntent::RELEASED)
+        );
+        assert_eq!(
+            app.world().get::<DeathConfirmIntent>(player),
+            Some(&DeathConfirmIntent::RELEASED)
         );
     }
 }

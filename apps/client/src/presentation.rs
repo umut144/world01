@@ -19,11 +19,14 @@ use std::{path::Path, time::SystemTime};
 use crate::eyes::EyePupil;
 use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
 use crate::input::{
-    ClientInputFocus, clear_input_when_unfocused, collect_attack_input, collect_gaze_input,
-    collect_locomotion_input, collect_movement_input, update_client_input_focus,
+    ClientInputFocus, clear_input_when_unfocused, collect_attack_input,
+    collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
+    collect_movement_input, update_client_input_focus,
 };
 use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
-use crate::pose::{PoseSettings, apply_body_facing, apply_neutral_head_motion};
+use crate::pose::{
+    PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
+};
 use crate::session::{ClientScreen, ClientSession};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
@@ -113,6 +116,7 @@ impl Plugin for ClientPresentationPlugin {
                         collect_gaze_input,
                         collect_attack_input,
                         collect_locomotion_input,
+                        collect_death_confirmation_input,
                     )
                         .chain(),
                     (apply_body_facing, apply_neutral_head_motion),
@@ -134,6 +138,7 @@ impl Plugin for ClientPresentationPlugin {
                     update_health_bars,
                     follow_local_character,
                     apply_eye_gaze,
+                    apply_character_status_presentation,
                     apply_hammer_pose,
                 )
                     .chain()

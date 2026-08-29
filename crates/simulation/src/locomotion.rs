@@ -3,8 +3,8 @@ use std::{error::Error, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_world_data::{
-    CharacterHealth, DashIntent, DashState, MovementIntent, MovementVelocity, Position, RunIntent,
-    RunState, StaminaState, StatusEffectState,
+    CharacterHealth, CharacterLifeState, DashIntent, DashState, MovementIntent, MovementVelocity,
+    Position, RunIntent, RunState, StaminaState, StatusEffectState,
 };
 
 use crate::movement::MovementStep;
@@ -82,6 +82,7 @@ pub fn update_locomotion(
         &mut DashState,
         &mut StatusEffectState,
         &mut CharacterHealth,
+        Option<&CharacterLifeState>,
     )>,
 ) {
     for (
@@ -95,6 +96,7 @@ pub fn update_locomotion(
         mut dash,
         mut status,
         mut health,
+        life,
     ) in &mut players
     {
         status.tick();
@@ -109,8 +111,10 @@ pub fn update_locomotion(
             run.toggled = !run.toggled;
         }
 
-        if status.blocks_all_input() {
+        let life_blocks_input = life.is_some_and(|life| !life.is_alive());
+        if status.blocks_all_input() || life_blocks_input {
             run.active = false;
+            run.toggled = false;
             dash.active = false;
             dash.invulnerable = false;
             dash.velocity = MovementVelocity::ZERO;

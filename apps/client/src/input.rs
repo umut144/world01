@@ -4,7 +4,8 @@ use bevy::{
 };
 use game01_network::ClientPlayerInput;
 use game01_world_data::{
-    AttackIntent, DashIntent, GazeIntent, MovementIntent, PlayerInput, RunIntent,
+    AttackIntent, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput,
+    RunIntent,
 };
 
 use crate::controller::ControllerInput;
@@ -117,6 +118,21 @@ pub fn collect_locomotion_input(
         RunIntent::new(keyboard.pressed(KeyCode::ShiftLeft) || controller_input.run_pressed());
     input.0.dash =
         DashIntent::new(keyboard.pressed(KeyCode::ControlLeft) || controller_input.dash_pressed());
+}
+
+pub fn collect_death_confirmation_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
+    mut controller_input: NonSendMut<ControllerInput>,
+    mut input: ResMut<ClientPlayerInput>,
+) {
+    if !focus.focused {
+        return;
+    }
+
+    input.0.death_confirm = DeathConfirmIntent::new(
+        keyboard.pressed(KeyCode::KeyE) || controller_input.death_confirm_pressed(),
+    );
 }
 
 fn attack_pressed(space: bool, right_trigger: bool) -> bool {

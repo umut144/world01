@@ -56,6 +56,10 @@ impl ControllerInput {
         self.button_pressed(Button::East)
     }
 
+    pub fn death_confirm_pressed(&mut self) -> bool {
+        self.button_pressed(Button::South)
+    }
+
     fn button_pressed(&mut self, button: Button) -> bool {
         while self.gilrs.next_event().is_some() {}
 

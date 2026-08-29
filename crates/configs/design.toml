@@ -20,6 +20,11 @@ dash_invulnerability_seconds = 0.337
 knockdown_duration_seconds = 2.0
 knockdown_damage_percent_max_hp = 5.0
 
+[health]
+downed_confirmation_seconds = 4.0
+downed_confirmation_initial_degrees_per_second = 144.0
+downed_confirmation_max_degrees_per_second = 1440.0
+
 [weapon_aim]
 default_degrees_per_second = 60.0
 

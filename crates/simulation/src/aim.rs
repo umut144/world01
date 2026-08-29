@@ -3,7 +3,8 @@ use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use game01_configs::DesignConfig;
 use game01_world_data::{
-    GazeDirection, GazeIntent, SelectedCharacter, WeaponAimState, WeaponTurnDirection,
+    CharacterLifeState, GazeDirection, GazeIntent, SelectedCharacter, WeaponAimState,
+    WeaponTurnDirection,
 };
 
 const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
@@ -57,8 +58,13 @@ impl fmt::Display for WeaponAimConfigError {
 
 impl Error for WeaponAimConfigError {}
 
-pub fn update_gaze_direction(mut players: Query<(&GazeIntent, &mut GazeDirection)>) {
-    for (intent, mut gaze) in &mut players {
+pub fn update_gaze_direction(
+    mut players: Query<(&GazeIntent, &mut GazeDirection, Option<&CharacterLifeState>)>,
+) {
+    for (intent, mut gaze, life) in &mut players {
+        if life.is_some_and(|life| !life.is_alive()) {
+            continue;
+        }
         let direction = Vec2::new(intent.x, intent.y);
         if direction.is_finite() && direction != Vec2::ZERO {
             let direction = direction.normalize();
@@ -74,9 +80,13 @@ pub fn update_weapon_aim(
         &GazeIntent,
         &GazeDirection,
         &mut WeaponAimState,
+        Option<&CharacterLifeState>,
     )>,
 ) {
-    for (character, gaze_intent, gaze, mut state) in &mut players {
+    for (character, gaze_intent, gaze, mut state, life) in &mut players {
+        if life.is_some_and(|life| !life.is_alive()) {
+            continue;
+        }
         let active_target = Vec2::new(gaze_intent.x, gaze_intent.y);
         let target = Vec2::new(gaze.x, gaze.y);
         if !active_target.is_finite() || active_target == Vec2::ZERO {

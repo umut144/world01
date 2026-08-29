@@ -1,5 +1,8 @@
 use bevy::prelude::*;
-use game01_world_data::{BodyFacing, MovementDirection};
+use game01_simulation::CharacterLifeRules;
+use game01_world_data::{
+    BodyFacing, CharacterLifeState, DeathConfirmationState, MovementDirection, StatusEffectState,
+};
 
 use game01_content::AuthoredFacing;
 
@@ -81,6 +84,61 @@ pub fn apply_neutral_head_motion(
         };
         transform.translation.x = next.x;
         transform.translation.y = next.y;
+    }
+}
+
+pub fn apply_character_status_presentation(
+    fixed_time: Res<Time<Fixed>>,
+    rules: Res<CharacterLifeRules>,
+    players: Query<(
+        &CharacterVisual,
+        Option<&StatusEffectState>,
+        Option<&CharacterLifeState>,
+        Option<&DeathConfirmationState>,
+    )>,
+    mut orientation_roots: Query<&mut Transform, With<CharacterVisualOrientation>>,
+    mut outlines: Query<&mut Visibility>,
+) {
+    let overstep = fixed_time.overstep_fraction();
+    for (visual, status, life, confirmation) in &players {
+        let life = life.copied().unwrap_or(CharacterLifeState::Alive);
+        let status_active = status.is_some_and(|status| status.blocks_all_input());
+        let confirmation_ticks = confirmation
+            .map(|confirmation| confirmation.held_ticks as f32 + overstep)
+            .unwrap_or_default();
+        let scale = match life {
+            CharacterLifeState::Alive if status_active => 0.9,
+            CharacterLifeState::Downed => 0.9,
+            _ => 1.0,
+        };
+        let rotation = match life {
+            CharacterLifeState::Downed => {
+                -14.0_f32.to_radians() + rules.confirmation_angle_radians(confirmation_ticks)
+            }
+            CharacterLifeState::Alive if status_active => 14.0_f32.to_radians(),
+            CharacterLifeState::Alive | CharacterLifeState::Dead => 0.0,
+        };
+        if let Ok(mut transform) = orientation_roots.get_mut(visual.orientation_root) {
+            let facing_sign = if transform.scale.x.is_sign_negative() {
+                -1.0
+            } else {
+                1.0
+            };
+            transform.scale = Vec3::new(facing_sign * scale, scale, 1.0);
+            transform.rotation = Quat::from_rotation_z(rotation);
+        }
+
+        let hide_outline = matches!(life, CharacterLifeState::Downed)
+            || (matches!(life, CharacterLifeState::Alive) && status_active);
+        for outline in &visual.outline_visuals {
+            if let Ok(mut visibility) = outlines.get_mut(*outline) {
+                *visibility = if hide_outline {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                };
+            }
+        }
     }
 }
 
@@ -243,6 +301,7 @@ mod tests {
                 CharacterVisual {
                     orientation_root,
                     authored_facing: AuthoredFacing::Left,
+                    outline_visuals: Vec::new(),
                 },
                 Transform::from_scale(Vec3::splat(2.0)),
             ))

@@ -7,8 +7,9 @@ use game01_content::{
 };
 use game01_design::{HammerDesign, HammerStrikeDesign};
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, DashState, GazeDirection, HammerAttackPhase,
-    HammerAttackState, Position, SelectedCharacter, StatusEffectState, WeaponAimState,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashState, GazeDirection,
+    HammerAttackPhase, HammerAttackState, Position, SelectedCharacter, StatusEffectState,
+    WeaponAimState,
 };
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -193,6 +194,7 @@ pub fn apply_hammer_strike_damage(
             &Position,
             &BodyFacing,
             &DashState,
+            Option<&CharacterLifeState>,
             Option<&mut HammerAttackState>,
             &mut CharacterHealth,
             &mut StatusEffectState,
@@ -228,10 +230,10 @@ pub fn apply_hammer_strike_damage(
         ) else {
             continue;
         };
-        for (_, character, position, facing, dash, attack_state, mut health, mut status) in
+        for (_, character, position, facing, dash, life, attack_state, mut health, mut status) in
             &mut targets
         {
-            if dash.invulnerable {
+            if dash.invulnerable || life.is_some_and(|life| !life.is_alive()) {
                 continue;
             }
             let Some(hurt) = hurt_geometry.character(&character.0) else {
@@ -402,15 +404,18 @@ pub fn advance_hammer_attacks(
         &WeaponAimState,
         &Position,
         Option<&StatusEffectState>,
+        Option<&CharacterLifeState>,
         &mut HammerAttackState,
     )>,
 ) {
-    for (character, attack, weapon_aim, position, status, mut state) in &mut players {
+    for (character, attack, weapon_aim, position, status, life, mut state) in &mut players {
         if character.0.0 != "hammerer" {
             *state = HammerAttackState::IDLE;
             continue;
         }
-        if status.is_some_and(|status| status.blocks_all_input()) {
+        if status.is_some_and(|status| status.blocks_all_input())
+            || life.is_some_and(|life| !life.is_alive())
+        {
             *state = HammerAttackState::IDLE;
             continue;
         }
