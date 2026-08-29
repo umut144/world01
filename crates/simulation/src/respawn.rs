@@ -1,6 +1,6 @@
 use bevy::prelude::Vec2;
-use game01_content::CharacterHurtGeometryCatalog;
-use game01_world_data::{Ankh, BodyFacing, CharacterId, CharacterLifeState, Position};
+use world01_content::CharacterHurtGeometryCatalog;
+use world01_world_data::{Ankh, BodyFacing, CharacterId, CharacterLifeState, Position};
 
 use crate::combat::overlap::{components_overlap, hurt_transform};
 
@@ -78,7 +78,7 @@ fn candidate_is_blocked(
     candidate: Position,
     target_player_id: u64,
     facing: BodyFacing,
-    target_geometry: &game01_content::CharacterHurtGeometry,
+    target_geometry: &world01_content::CharacterHurtGeometry,
     players: &[RespawnPlayer],
     hurt_geometry: &CharacterHurtGeometryCatalog,
 ) -> bool {
@@ -149,7 +149,7 @@ fn unit_interval(value: u64) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use game01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
+    use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
 
     fn hurt_geometry() -> CharacterHurtGeometryCatalog {
         CharacterHurtGeometryCatalog::from_content(

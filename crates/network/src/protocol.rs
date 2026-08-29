@@ -4,23 +4,23 @@ use std::{
 };
 
 use bevy::prelude::*;
-use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashIntent,
-    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
-    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
-    StaminaState, StatusEffectState, WeaponAimState,
-};
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, AppMessageExt, ChannelMode, ChannelSettings,
     InterpolationRegistrationExt, LinkConditionerConfig, NetworkDirection, PredictionBuilderExt,
     RecvLinkConditioner, ReliableSettings, input::native::ActionState,
 };
 use serde::{Deserialize, Serialize};
+use world01_world_data::{
+    AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashIntent,
+    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
+    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
+    StaminaState, StatusEffectState, WeaponAimState,
+};
 
 pub const MAX_CLIENTS: usize = 5;
 pub(crate) const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
-pub const NETWORK_SIMULATION_ENV: &str = "GAME01_NETWORK_SIMULATION";
+pub const NETWORK_SIMULATION_ENV: &str = "WORLD01_NETWORK_SIMULATION";
 pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
 
 pub(crate) struct JoinChannel;

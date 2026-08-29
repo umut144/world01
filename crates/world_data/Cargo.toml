@@ -1,5 +1,5 @@
 [package]
-name = "game01-world-data"
+name = "world01-world-data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

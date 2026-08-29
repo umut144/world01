@@ -1,9 +1,9 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Entity, Mut, ParamSet, Query, Res, Resource};
-use game01_configs::DesignConfig;
-use game01_content::CharacterHurtGeometryCatalog;
-use game01_world_data::{
+use world01_configs::DesignConfig;
+use world01_content::CharacterHurtGeometryCatalog;
+use world01_world_data::{
     Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
     DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
     MovementVelocity, PlayerId, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
@@ -504,9 +504,9 @@ fn bodies_overlap(
 mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
-    use game01_configs::load_embedded;
-    use game01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
-    use game01_world_data::{BodyFacing, CharacterId, MovementIntent, SelectedCharacter};
+    use world01_configs::load_embedded;
+    use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
+    use world01_world_data::{BodyFacing, CharacterId, MovementIntent, SelectedCharacter};
 
     fn test_app() -> App {
         let config = load_embedded().expect("embedded config parses");

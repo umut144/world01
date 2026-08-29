@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use game01_network::{NetworkSimulationProfile, configure_client};
-use game01_world_data::CharacterId;
+use world01_network::{NetworkSimulationProfile, configure_client};
+use world01_world_data::CharacterId;
 
 pub struct ClientSessionPlugin {
     pub client_id: u64,

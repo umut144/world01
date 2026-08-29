@@ -1,9 +1,9 @@
 use std::{collections::HashSet, error::Error, fmt};
 
 use bevy::prelude::{Entity, Query, Res, Resource, Vec2};
-use game01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry};
-use game01_design::{HammerDesign, HammerStrikeDesign};
-use game01_world_data::{
+use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry};
+use world01_design::{HammerDesign, HammerStrikeDesign};
+use world01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashState, GazeDirection,
     HammerAttackPhase, HammerAttackState, Position, SelectedCharacter, StatusEffectState,
     WeaponAimState,
@@ -415,9 +415,9 @@ fn valid_direction(direction: GazeDirection) -> Option<GazeDirection> {
 mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
-    use game01_configs::load_embedded;
-    use game01_content::RuntimeContent;
-    use game01_design::load_embedded as load_game_design;
+    use world01_configs::load_embedded;
+    use world01_content::RuntimeContent;
+    use world01_design::load_embedded as load_game_design;
 
     #[test]
     fn hammer_strike_damage_reaches_forty_at_full_charge() {
@@ -473,7 +473,7 @@ mod tests {
         let player = app
             .world_mut()
             .spawn((
-                SelectedCharacter(game01_world_data::CharacterId("hammerer".into())),
+                SelectedCharacter(world01_world_data::CharacterId("hammerer".into())),
                 AttackIntent::PRESSED,
                 WeaponAimState::RIGHT,
                 Position::ZERO,

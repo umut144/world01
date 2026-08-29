@@ -25,12 +25,12 @@ mod tests {
 
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
-    use game01_configs::{
+    use world01_configs::{
         DesignConfig, EyesConfig, HealthConfig, LocomotionConfig, MovementConfig, NetworkConfig,
         RoomConfig, SimulationConfig, WeaponAimConfig, load_embedded,
     };
-    use game01_content::HammerCombatGeometry;
-    use game01_world_data::{
+    use world01_content::HammerCombatGeometry;
+    use world01_world_data::{
         AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackPhase,
         HammerAttackState, MovementDirection, MovementIntent, Position, SelectedCharacter,
         WeaponAimState, WeaponTurnDirection,
@@ -47,7 +47,7 @@ mod tests {
 
     fn attack_rules() -> HammerAttackRules {
         let config = load_embedded().expect("embedded design configuration parses");
-        let design = game01_design::load_embedded().expect("embedded game design parses");
+        let design = world01_design::load_embedded().expect("embedded game design parses");
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
             .expect("embedded Hammer attack configuration is valid")
     }
@@ -58,9 +58,9 @@ mod tests {
     }
 
     fn hammer_geometry() -> HammerCombatGeometry {
-        let content = game01_content::RuntimeContent::load_embedded()
+        let content = world01_content::RuntimeContent::load_embedded()
             .expect("embedded runtime content is valid");
-        let design = game01_design::load_embedded().expect("embedded game design parses");
+        let design = world01_design::load_embedded().expect("embedded game design parses");
         HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
             .expect("synced Hammer manifests define valid combat geometry")
     }
@@ -417,7 +417,7 @@ mod tests {
                 width_tiles: 15,
                 height_tiles: 9,
             },
-            camera: game01_configs::CameraConfig {
+            camera: world01_configs::CameraConfig {
                 view_preset: 0,
                 view_width_tiles: 22,
                 view_height_tiles: 20,
@@ -467,7 +467,7 @@ mod tests {
                 width_tiles: 15,
                 height_tiles: 9,
             },
-            camera: game01_configs::CameraConfig {
+            camera: world01_configs::CameraConfig {
                 view_preset: 0,
                 view_width_tiles: 22,
                 view_height_tiles: 20,

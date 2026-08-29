@@ -1,5 +1,5 @@
 [package]
-name = "game01-server"
+name = "world01-server"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,9 +11,9 @@ bevy = { workspace = true, features = [
     "bevy_log",
     "bevy_state",
 ] }
-game01-configs = { path = "../../crates/configs" }
-game01-content = { path = "../../crates/content" }
-game01-design = { path = "../../crates/design" }
-game01-network = { path = "../../crates/network", default-features = false, features = ["server"] }
-game01-simulation = { path = "../../crates/simulation" }
-game01-world-data = { path = "../../crates/world_data" }
+world01-configs = { path = "../../crates/configs" }
+world01-content = { path = "../../crates/content" }
+world01-design = { path = "../../crates/design" }
+world01-network = { path = "../../crates/network", default-features = false, features = ["server"] }
+world01-simulation = { path = "../../crates/simulation" }
+world01-world-data = { path = "../../crates/world_data" }

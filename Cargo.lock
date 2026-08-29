@@ -3065,88 +3065,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "game01-client"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "game01-configs",
- "game01-content",
- "game01-design",
- "game01-network",
- "game01-simulation",
- "game01-world-data",
- "gilrs",
-]
-
-[[package]]
-name = "game01-configs"
-version = "0.1.0"
-dependencies = [
- "serde",
- "toml",
-]
-
-[[package]]
-name = "game01-content"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "game01-world-data",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "game01-design"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "game01-network"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "game01-world-data",
- "lightyear",
- "serde",
-]
-
-[[package]]
-name = "game01-server"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "game01-configs",
- "game01-content",
- "game01-design",
- "game01-network",
- "game01-simulation",
- "game01-world-data",
-]
-
-[[package]]
-name = "game01-simulation"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "game01-configs",
- "game01-content",
- "game01-design",
- "game01-world-data",
-]
-
-[[package]]
-name = "game01-world-data"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "serde",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8126,6 +8044,88 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-wlr",
+]
+
+[[package]]
+name = "world01-client"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "gilrs",
+ "world01-configs",
+ "world01-content",
+ "world01-design",
+ "world01-network",
+ "world01-simulation",
+ "world01-world-data",
+]
+
+[[package]]
+name = "world01-configs"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "world01-content"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+ "serde_json",
+ "world01-world-data",
+]
+
+[[package]]
+name = "world01-design"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "world01-network"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "lightyear",
+ "serde",
+ "world01-world-data",
+]
+
+[[package]]
+name = "world01-server"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "world01-configs",
+ "world01-content",
+ "world01-design",
+ "world01-network",
+ "world01-simulation",
+ "world01-world-data",
+]
+
+[[package]]
+name = "world01-simulation"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "world01-configs",
+ "world01-content",
+ "world01-design",
+ "world01-world-data",
+]
+
+[[package]]
+name = "world01-world-data"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
 ]
 
 [[package]]

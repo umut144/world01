@@ -1,8 +1,8 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use game01_configs::DesignConfig;
-use game01_world_data::{
+use world01_configs::DesignConfig;
+use world01_world_data::{
     BodyFacing, CharacterLifeState, MovementDirection, MovementIntent, MovementVelocity, Position,
 };
 

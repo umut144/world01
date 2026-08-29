@@ -5,8 +5,8 @@ use std::{
 };
 
 use bevy::prelude::Resource;
-use game01_world_data::CharacterId;
 use serde::Deserialize;
+use world01_world_data::CharacterId;
 
 pub const HAMMER_ASSET_KEY: &str = "hammer";
 pub const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";

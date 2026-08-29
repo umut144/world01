@@ -1,10 +1,10 @@
 use bevy::prelude::*;
-use game01_simulation::CharacterLifeRules;
-use game01_world_data::{
+use world01_simulation::CharacterLifeRules;
+use world01_world_data::{
     BodyFacing, CharacterLifeState, DeathConfirmationState, MovementDirection, StatusEffectState,
 };
 
-use game01_content::AuthoredFacing;
+use world01_content::AuthoredFacing;
 
 use crate::polytools::{CharacterVisual, CharacterVisualOrientation};
 
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn death_confirmation_rotation_keeps_the_body_pivot_fixed() {
-        let design = game01_configs::load_embedded().expect("embedded design is valid");
+        let design = world01_configs::load_embedded().expect("embedded design is valid");
         let rules = CharacterLifeRules::from_design(&design).expect("life rules are valid");
         let mut app = App::new();
         app.insert_resource(rules)

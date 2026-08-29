@@ -2,8 +2,8 @@ use bevy::{
     prelude::*,
     window::{PrimaryWindow, WindowFocused},
 };
-use game01_network::ClientPlayerInput;
-use game01_world_data::{
+use world01_network::ClientPlayerInput;
+use world01_world_data::{
     AttackIntent, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput,
     RunIntent,
 };

@@ -6,20 +6,20 @@ use bevy::{
     prelude::*,
     state::app::StatesPlugin,
 };
-use game01_configs::load_embedded;
-use game01_content::{
+use world01_configs::load_embedded;
+use world01_content::{
     CharacterHealthCatalog, CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent,
 };
-use game01_design::load_embedded as load_game_design;
-use game01_network::{
+use world01_design::load_embedded as load_game_design;
+use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
-use game01_simulation::{
+use world01_simulation::{
     CharacterLifeRules, HammerAttackRules, HammerStrikeRules, LocomotionRules, MovementStep,
     SimulationSet, WeaponAimRules, add_simulation_step, apply_hammer_strike_damage,
     update_character_life,
 };
-use game01_world_data::AnkhLayout;
+use world01_world_data::AnkhLayout;
 
 use crate::session::ServerSessionPlugin;
 

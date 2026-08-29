@@ -1,6 +1,6 @@
 # World 01 Multiplayer Sandbox — Technical Specification
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
 ## Purpose and interpretation
 
@@ -17,8 +17,7 @@ kinds of statement:
   that a corresponding public API already exists.
 
 The current codebase grew from The Labyrinth and remains partly game-specific.
-The design umbrella is now World 01, while the current repository and Rust
-package namespace still use `game01`.
+The design umbrella, repository, and Rust package namespace now use `world01`.
 Physical separation into crates is not by itself proof that their complete
 contents are already genre-neutral or reusable. This document is neither an
 implementation roadmap nor a promise to build speculative framework APIs.

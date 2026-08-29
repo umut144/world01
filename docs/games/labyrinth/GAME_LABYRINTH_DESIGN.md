@@ -7,7 +7,7 @@
 > in [`../../SANDBOX_VISION.md`](../../SANDBOX_VISION.md) and
 > [`../../SANDBOX_TECHNICAL.md`](../../SANDBOX_TECHNICAL.md).
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
 ## Purpose and authority
 
@@ -34,8 +34,7 @@ Interpretation rules:
 
 - Game name: **The Labyrinth**.
 - World: **World 01**.
-- The current repository and Rust package namespace still use `game01`; this
-  technical rename is tracked separately from the design-document migration.
+- The repository and Rust package namespace use `world01`.
 - The shared theme title is defined in [`WORLD_DESIGN.md`](../../WORLD_DESIGN.md)
   and must not be redefined here.
 

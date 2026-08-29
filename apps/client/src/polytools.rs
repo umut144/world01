@@ -4,15 +4,15 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 #[cfg(test)]
-use game01_content::RuntimeFrameTransform;
+use world01_content::RuntimeFrameTransform;
 #[cfg(test)]
-use game01_content::WEAPON_REACH_LIMIT_ROLE;
-use game01_content::{
+use world01_content::WEAPON_REACH_LIMIT_ROLE;
+use world01_content::{
     AuthoredFacing, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent,
     RuntimeManifest, RuntimeMesh, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
     WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
 };
-use game01_world_data::CharacterId;
+use world01_world_data::CharacterId;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
 use crate::hammer::HammerPresentationState;
@@ -57,7 +57,7 @@ pub struct CharacterAssetLibrary {
 impl CharacterAssetLibrary {
     #[cfg(test)]
     fn load_embedded() -> Result<Self, PolyToolsAssetError> {
-        let design = game01_configs::load_embedded().map_err(|error| {
+        let design = world01_configs::load_embedded().map_err(|error| {
             PolyToolsAssetError::new(format!("cannot load embedded eye design: {error}"))
         })?;
         Self::from_content(

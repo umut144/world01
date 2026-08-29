@@ -1,12 +1,12 @@
 [package]
-name = "game01-simulation"
+name = "world01-simulation"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
 bevy = { workspace = true, features = ["std"] }
-game01-configs = { path = "../configs" }
-game01-design = { path = "../design" }
-game01-content = { path = "../content" }
-game01-world-data = { path = "../world_data" }
+world01-configs = { path = "../configs" }
+world01-design = { path = "../design" }
+world01-content = { path = "../content" }
+world01-world-data = { path = "../world_data" }

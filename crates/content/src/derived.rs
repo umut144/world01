@@ -5,7 +5,7 @@ use std::{
 };
 
 use bevy::prelude::{Resource, Vec2};
-use game01_world_data::CharacterId;
+use world01_world_data::CharacterId;
 
 use crate::manifest::{
     AuthoredFacing, ContentError, RuntimeComponent, RuntimeContent, RuntimeManifest,

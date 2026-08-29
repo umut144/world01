@@ -1,8 +1,8 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use game01_configs::DesignConfig;
-use game01_world_data::{
+use world01_configs::DesignConfig;
+use world01_world_data::{
     CharacterHealth, CharacterLifeState, DashIntent, DashState, MovementIntent, MovementVelocity,
     Position, RunIntent, RunState, StaminaState, StatusEffectState,
 };
@@ -210,7 +210,7 @@ fn dash_invulnerability_end(rules: LocomotionRules) -> f32 {
 mod tests {
     use super::*;
     use bevy::prelude::{App, Entity, Update};
-    use game01_configs::load_embedded;
+    use world01_configs::load_embedded;
 
     fn test_app() -> App {
         let design = load_embedded().expect("embedded design configuration parses");

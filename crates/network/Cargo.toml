@@ -1,5 +1,5 @@
 [package]
-name = "game01-network"
+name = "world01-network"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -27,6 +27,6 @@ server = [
 
 [dependencies]
 bevy = { workspace = true, features = ["std", "bevy_log"] }
-game01-world-data = { path = "../world_data" }
+world01-world-data = { path = "../world_data" }
 serde.workspace = true
 lightyear = { workspace = true, features = ["std"] }

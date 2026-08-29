@@ -3,14 +3,14 @@ use std::{env, error::Error, io};
 use bevy::log::{Level, LogPlugin};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
-use game01_configs::load_embedded;
-use game01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent};
-use game01_design::load_embedded as load_game_design;
-use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
-use game01_simulation::{
+use world01_configs::load_embedded;
+use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent};
+use world01_design::load_embedded as load_game_design;
+use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
+use world01_simulation::{
     CharacterLifeRules, HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules,
 };
-use game01_world_data::AnkhLayout;
+use world01_world_data::AnkhLayout;
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationRules;

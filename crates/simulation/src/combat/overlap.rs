@@ -1,6 +1,6 @@
 use bevy::prelude::Vec2;
-use game01_content::{CharacterHurtGeometry, RuntimeComponentGeometry};
-use game01_world_data::{BodyFacing, Position};
+use world01_content::{CharacterHurtGeometry, RuntimeComponentGeometry};
+use world01_world_data::{BodyFacing, Position};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GeometryTransform {
@@ -16,8 +16,8 @@ pub(crate) fn hurt_transform(
 ) -> GeometryTransform {
     let mirrored = matches!(
         (geometry.authored_facing, facing),
-        (game01_content::AuthoredFacing::Left, BodyFacing::Right)
-            | (game01_content::AuthoredFacing::Right, BodyFacing::Left)
+        (world01_content::AuthoredFacing::Left, BodyFacing::Right)
+            | (world01_content::AuthoredFacing::Right, BodyFacing::Left)
     );
     GeometryTransform {
         origin: Vec2::new(position.x, position.y),

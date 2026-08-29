@@ -1,9 +1,9 @@
 use std::f32::consts::{PI, TAU};
 
 use bevy::prelude::*;
-use game01_design::HammerDesign;
-use game01_simulation::HammerAttackRules;
-use game01_world_data::{
+use world01_design::HammerDesign;
+use world01_simulation::HammerAttackRules;
+use world01_world_data::{
     GazeDirection, HammerAttackPhase, HammerAttackState, WeaponAimState, WeaponTurnDirection,
 };
 
@@ -675,8 +675,8 @@ mod tests {
     }
 
     fn attack_rules() -> HammerPresentationRules {
-        let config = game01_configs::load_embedded().expect("embedded config parses");
-        let design = game01_design::load_embedded().expect("embedded game design parses");
+        let config = world01_configs::load_embedded().expect("embedded config parses");
+        let design = world01_design::load_embedded().expect("embedded game design parses");
         let attack =
             HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
                 .expect("Hammer attack config parses");
@@ -759,7 +759,7 @@ mod tests {
                 direction: GazeDirection::new(0.0, 1.0),
                 phase_ticks: 34,
                 charge_ticks: 300,
-                impact_point: game01_world_data::Position::ZERO,
+                impact_point: world01_world_data::Position::ZERO,
             },
             &rules,
             0.5,
@@ -796,7 +796,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: 0,
             charge_ticks: 120,
-            impact_point: game01_world_data::Position::new(impact.x, impact.y),
+            impact_point: world01_world_data::Position::new(impact.x, impact.y),
         };
         let pose = embedded_transform(
             &hammer,
@@ -826,7 +826,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: rules.embedded_ticks().saturating_sub(1),
             charge_ticks: 120,
-            impact_point: game01_world_data::Position::new(3.0, 3.0),
+            impact_point: world01_world_data::Position::new(3.0, 3.0),
         };
         let source = hammer_pose(
             &hammer,
@@ -885,7 +885,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: 0,
             charge_ticks: 120,
-            impact_point: game01_world_data::Position::new(impact.x, impact.y),
+            impact_point: world01_world_data::Position::new(impact.x, impact.y),
         };
         let embedded = embedded_transform(
             &hammer,
@@ -916,7 +916,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: rules.embedded_ticks().saturating_sub(1),
             charge_ticks: 120,
-            impact_point: game01_world_data::Position::new(3.0, 3.0),
+            impact_point: world01_world_data::Position::new(3.0, 3.0),
         };
         let embedded = embedded_transform(
             &hammer,
@@ -957,7 +957,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: rules.embedded_ticks().saturating_sub(1),
             charge_ticks: 0,
-            impact_point: game01_world_data::Position::new(3.0, 3.0),
+            impact_point: world01_world_data::Position::new(3.0, 3.0),
         };
         let embedded = hammer_pose(
             &hammer,
@@ -1017,7 +1017,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: rules.embedded_ticks().saturating_sub(1),
             charge_ticks: 0,
-            impact_point: game01_world_data::Position::new(3.0, 3.0),
+            impact_point: world01_world_data::Position::new(3.0, 3.0),
         };
         let embedded = hammer_pose(
             &hammer,
@@ -1084,7 +1084,7 @@ mod tests {
             direction: GazeDirection::RIGHT,
             phase_ticks: rules.embedded_ticks().saturating_sub(1),
             charge_ticks: 0,
-            impact_point: game01_world_data::Position::ZERO,
+            impact_point: world01_world_data::Position::ZERO,
         };
 
         assert_eq!(embedded_shake(attack, 0.0, &rules), Vec2::ZERO);

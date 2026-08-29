@@ -5,16 +5,16 @@ use bevy::{
     window::PrimaryWindow,
 };
 #[cfg(feature = "dev")]
-use game01_configs::load_file;
-use game01_network::{
+use std::{path::Path, time::SystemTime};
+#[cfg(feature = "dev")]
+use world01_configs::load_file;
+use world01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
-use game01_world_data::{
+use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
     MovementIntent, Position, RunState, SelectedCharacter,
 };
-#[cfg(feature = "dev")]
-use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
 use crate::hammer::apply_hammer_pose;

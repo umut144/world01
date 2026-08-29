@@ -7,7 +7,7 @@
 > [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md). Game-specific decisions live
 > in the corresponding document below [`games/`](games/).
 
-Last updated: 2026-08-29
+Last updated: 2026-08-30
 
 ## Purpose and authority
 
@@ -32,8 +32,7 @@ Interpretation rules:
 ## World 01 identity
 
 - Shared world identity: **World 01**.
-- The current repository and Rust package namespace still use the technical
-  name `game01`; changing that namespace is a separate migration task.
+- The repository and Rust package namespace use the technical name `world01`.
 - Theme title: **“Secrets, Room's & Travels'”**. The apostrophes are
   deliberately incorrect/unusual for marketing and must not be “corrected”
   automatically.

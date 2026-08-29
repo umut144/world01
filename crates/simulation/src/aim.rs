@@ -1,8 +1,8 @@
 use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use game01_configs::DesignConfig;
-use game01_world_data::{
+use world01_configs::DesignConfig;
+use world01_world_data::{
     CharacterLifeState, GazeDirection, GazeIntent, SelectedCharacter, WeaponAimState,
     WeaponTurnDirection,
 };

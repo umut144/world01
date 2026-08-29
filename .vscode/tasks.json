@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "game01: sync PolyTools character assets",
+      "label": "world01: sync PolyTools character assets",
       "type": "process",
       "command": "${workspaceFolder}/scripts/sync_polytools_characters.sh",
       "options": {
@@ -12,26 +12,26 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01"
+        "group": "world01"
       },
       "runOptions": {
         "instanceLimit": 1
       }
     },
     {
-      "label": "game01: local room test (server + client 1001)",
+      "label": "world01: local room test (server + client 1001)",
       "dependsOrder": "parallel",
       "dependsOn": [
-        "game01: server",
-        "game01: client 1001"
+        "world01: server",
+        "world01: client 1001"
       ],
       "problemMatcher": []
     },
     {
-      "label": "game01: server",
+      "label": "world01: server",
       "type": "process",
       "command": "cargo",
-      "args": ["run", "--quiet", "--package", "game01-server"],
+      "args": ["run", "--quiet", "--package", "world01-server"],
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -39,7 +39,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -49,14 +49,14 @@
       }
     },
     {
-      "label": "game01: client 1001",
+      "label": "world01: client 1001",
       "type": "process",
       "command": "cargo",
       "args": [
         "run",
         "--quiet",
         "--package",
-        "game01-client",
+        "world01-client",
         "--features",
         "dev",
         "--",
@@ -69,7 +69,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -79,14 +79,14 @@
       }
     },
     {
-      "label": "game01: client 1002",
+      "label": "world01: client 1002",
       "type": "process",
       "command": "cargo",
       "args": [
         "run",
         "--quiet",
         "--package",
-        "game01-client",
+        "world01-client",
         "--features",
         "dev",
         "--",
@@ -99,7 +99,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -109,14 +109,14 @@
       }
     },
     {
-      "label": "game01: client 1003",
+      "label": "world01: client 1003",
       "type": "process",
       "command": "cargo",
       "args": [
         "run",
         "--quiet",
         "--package",
-        "game01-client",
+        "world01-client",
         "--features",
         "dev",
         "--",
@@ -129,7 +129,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -139,14 +139,14 @@
       }
     },
     {
-      "label": "game01: client 1004",
+      "label": "world01: client 1004",
       "type": "process",
       "command": "cargo",
       "args": [
         "run",
         "--quiet",
         "--package",
-        "game01-client",
+        "world01-client",
         "--features",
         "dev",
         "--",
@@ -159,7 +159,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -169,14 +169,14 @@
       }
     },
     {
-      "label": "game01: client 1005",
+      "label": "world01: client 1005",
       "type": "process",
       "command": "cargo",
       "args": [
         "run",
         "--quiet",
         "--package",
-        "game01-client",
+        "world01-client",
         "--features",
         "dev",
         "--",
@@ -189,7 +189,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "game01",
+        "group": "world01",
         "echo": false,
         "showReuseMessage": false,
         "clear": true
@@ -199,15 +199,15 @@
       }
     },
     {
-      "label": "game01: local slice (server + 5 clients)",
+      "label": "world01: local slice (server + 5 clients)",
       "dependsOrder": "parallel",
       "dependsOn": [
-        "game01: server",
-        "game01: client 1001",
-        "game01: client 1002",
-        "game01: client 1003",
-        "game01: client 1004",
-        "game01: client 1005"
+        "world01: server",
+        "world01: client 1001",
+        "world01: client 1002",
+        "world01: client 1003",
+        "world01: client 1004",
+        "world01: client 1005"
       ],
       "problemMatcher": []
     }

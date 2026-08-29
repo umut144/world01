@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-use game01_network::{apply_tick_player_input, client_input_timeline_synced};
-use game01_simulation::{SimulationSet, add_simulation_step, update_character_life};
+use world01_network::{apply_tick_player_input, client_input_timeline_synced};
+use world01_simulation::{SimulationSet, add_simulation_step, update_character_life};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum PredictionSet {

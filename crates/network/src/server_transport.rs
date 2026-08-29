@@ -4,7 +4,6 @@ use bevy::{
     log::{info, warn},
     prelude::*,
 };
-use game01_world_data::{CharacterId, PlayerInput};
 use lightyear::connection::client::Disconnecting;
 use lightyear::prelude::server::ServerUdpIo;
 use lightyear::prelude::{
@@ -16,6 +15,7 @@ use lightyear::prelude::{
     server::*,
 };
 use lightyear::{netcode::Key, prelude::*};
+use world01_world_data::{CharacterId, PlayerInput};
 
 use crate::protocol::{
     JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,

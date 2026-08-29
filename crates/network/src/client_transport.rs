@@ -1,10 +1,6 @@
 use std::{net::Ipv4Addr, time::Duration};
 
 use bevy::{log::info, prelude::*};
-use game01_world_data::{
-    AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent,
-    PlayerInput, Position, RunIntent,
-};
 use lightyear::interpolation::timeline::InterpolationConfig;
 use lightyear::prediction::correction::PreviousVisual;
 pub use lightyear::prelude::Client;
@@ -15,6 +11,10 @@ use lightyear::prelude::{
     input::native::{ActionState, InputMarker, InputPlugin as NativeInputPlugin},
 };
 use lightyear::{netcode::Key, prelude::*};
+use world01_world_data::{
+    AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent,
+    PlayerInput, Position, RunIntent,
+};
 
 use crate::protocol::{
     JoinChannel, JoinRequest, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,

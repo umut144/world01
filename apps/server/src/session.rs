@@ -1,12 +1,12 @@
 use std::collections::HashSet;
 
 use bevy::{log::warn, prelude::*};
-use game01_content::{CharacterHealthCatalog, RuntimeContent};
-use game01_network::{
+use world01_content::{CharacterHealthCatalog, RuntimeContent};
+use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
-use game01_simulation::LocomotionRules;
-use game01_world_data::{
+use world01_simulation::LocomotionRules;
+use world01_world_data::{
     Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
     DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
     HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner,
