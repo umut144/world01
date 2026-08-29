@@ -5,7 +5,7 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyTools/worlds/world01}"
 source_catalog="$source_world_dir/catalog.json"
 destination_dir="$project_root/assets/characters"
-required_schema=12
+required_schema=13
 character_keys=()
 weapon_keys=("hammer")
 symbol_keys=()
@@ -70,7 +70,12 @@ for key in "${character_keys[@]}"; do
     and .asset_type == "character"
     and (.components | type == "array" and length > 0)
     and (.attachment_frames | type == "array")
-    and (.regions | type == "array")
+    and ([.components[] | select(
+      (.name == "body" or .name == "head")
+      and (.mesh | type == "object")
+      and (.mesh.vertices | type == "array" and length >= 3)
+      and (.mesh.indices | type == "array" and length >= 3 and length % 3 == 0)
+    )] | length == 2)
     and ($key != "hammerer" or ([.attachment_frames[] | select(.role == "weapon_socket_primary")] | length == 1))
   ' "$manifest_path" >/dev/null; then
     printf 'error: invalid PolyTools character manifest: %s\n' "$manifest_path" >&2
@@ -114,11 +119,12 @@ for key in "${weapon_keys[@]}"; do
     and ([.attachment_frames[] | select(.role == "grip_secondary")] | length == 1)
     and ([.attachment_frames[] | select(.role == "attack_point_primary")] | length == 1)
     and ([.attachment_frames[] | select(.role == "reach_limit_primary")] | length == 1)
-    and ([.regions[] | select(
-      .role == "attack"
-      and (.vertices | type == "array" and length >= 3)
-      and (.indices | type == "array" and length >= 3 and length % 3 == 0)
-    )] | length == 1)
+    and ([.components[] | select(
+      (.name == "head_mid" or .name == "head_left" or .name == "head_right")
+      and (.mesh | type == "object")
+      and (.mesh.vertices | type == "array" and length >= 3)
+      and (.mesh.indices | type == "array" and length >= 3 and length % 3 == 0)
+    )] | length == 3)
   ' "$manifest_path" >/dev/null; then
     printf 'error: invalid PolyTools Hammer combat manifest: %s\n' "$manifest_path" >&2
     exit 1
