@@ -1,8 +1,8 @@
 use serde::Deserialize;
 use std::{error::Error, fmt};
 
-const HAMMER_DESIGN: &str = include_str!("../design/weapons/hammer.json");
-const HAMMERER_DESIGN: &str = include_str!("../design/characters/hammerer.json");
+const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
+const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct GameDesign {
