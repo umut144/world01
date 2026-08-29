@@ -247,8 +247,8 @@ must be documented as an explicit game variant.
   `DEATH_CONFIRMING`.
 - Completing `REVIVING` returns the target to `ALIVE` with `80%` maximum HP.
   Completing `DEATH_CONFIRMING` respawns the character at an Ankh with `40%`
-  maximum HP. The spawn is selected deterministically within a `4 m` radius
-  around the current world-center Ankh anchor.
+  maximum HP. The spawn is placed exactly at the current world-center Ankh
+  anchor (`0 m` radius).
 
 ## The Hammerer and the transforming Hammer
 

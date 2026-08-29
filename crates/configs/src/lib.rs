@@ -270,7 +270,7 @@ mod tests {
         assert_eq!(design.health.revival_seconds, 8.0);
         assert_eq!(design.health.revival_health_percent, 80.0);
         assert_eq!(design.health.respawn_health_percent, 40.0);
-        assert_eq!(design.health.ankh_respawn_radius_meters, 4.0);
+        assert_eq!(design.health.ankh_respawn_radius_meters, 0.0);
         assert!(design.health.is_valid());
         assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
         assert!(design.weapon_aim.character_degrees_per_second.is_empty());
