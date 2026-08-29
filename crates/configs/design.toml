@@ -27,7 +27,7 @@ death_confirmation_max_degrees_per_second = 1440.0
 revival_seconds = 8.0
 revival_health_percent = 80.0
 respawn_health_percent = 40.0
-ankh_respawn_radius_meters = 1.0
+ankh_respawn_radius_meters = 3.0
 
 [weapon_aim]
 default_degrees_per_second = 60.0
