@@ -1,0 +1,109 @@
+{
+	"assets": [
+		{
+			"asset_key": "ankh",
+			"asset_type": "props",
+			"display_name": "Ankh",
+			"runtime_package": "PolyToolsRuntimeExports/ankh/manifest.json"
+		},
+		{
+			"asset_key": "archerf",
+			"asset_type": "character",
+			"display_name": "ArcherF",
+			"runtime_package": "PolyToolsRuntimeExports/archerf/manifest.json"
+		},
+		{
+			"asset_key": "barde",
+			"asset_type": "character",
+			"display_name": "Barde",
+			"runtime_package": "PolyToolsRuntimeExports/barde/manifest.json"
+		},
+		{
+			"asset_key": "chantres",
+			"asset_type": "character",
+			"display_name": "Chantres",
+			"runtime_package": "PolyToolsRuntimeExports/chantres/manifest.json"
+		},
+		{
+			"asset_key": "glavier",
+			"asset_type": "character",
+			"display_name": "Glavier",
+			"runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
+		},
+		{
+			"asset_key": "hammer",
+			"asset_type": "weapons",
+			"display_name": "Hammer",
+			"runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
+		},
+		{
+			"asset_key": "hammerer",
+			"asset_type": "character",
+			"display_name": "Hammerer",
+			"runtime_package": "PolyToolsRuntimeExports/hammerer/manifest.json"
+		},
+		{
+			"asset_key": "heart",
+			"asset_type": "symbols",
+			"display_name": "Heart",
+			"runtime_package": "PolyToolsRuntimeExports/heart/manifest.json"
+		},
+		{
+			"asset_key": "mage",
+			"asset_type": "character",
+			"display_name": "Mage",
+			"runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
+		},
+		{
+			"asset_key": "monk",
+			"asset_type": "character",
+			"display_name": "Monk",
+			"runtime_package": "PolyToolsRuntimeExports/monk/manifest.json"
+		},
+		{
+			"asset_key": "orb",
+			"asset_type": "symbols",
+			"display_name": "Orb",
+			"runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
+		},
+		{
+			"asset_key": "plus",
+			"asset_type": "symbols",
+			"display_name": "Plus",
+			"runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
+		},
+		{
+			"asset_key": "rogue",
+			"asset_type": "character",
+			"display_name": "Rogue",
+			"runtime_package": "PolyToolsRuntimeExports/rogue/manifest.json"
+		},
+		{
+			"asset_key": "sorcerer",
+			"asset_type": "character",
+			"display_name": "Sorcerer",
+			"runtime_package": "PolyToolsRuntimeExports/sorcerer/manifest.json"
+		},
+		{
+			"asset_key": "tree",
+			"asset_type": "props",
+			"display_name": "Tree",
+			"runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
+		},
+		{
+			"asset_key": "warrior",
+			"asset_type": "character",
+			"display_name": "Warrior",
+			"runtime_package": "PolyToolsRuntimeExports/warrior/manifest.json"
+		},
+		{
+			"asset_key": "wizard",
+			"asset_type": "character",
+			"display_name": "Wizard",
+			"runtime_package": "PolyToolsRuntimeExports/wizard/manifest.json"
+		}
+	],
+	"schema_version": 1,
+	"world_key": "world01",
+	"world_name": "Secrets, Room's & Travels'"
+}

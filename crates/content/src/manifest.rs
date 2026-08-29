@@ -24,25 +24,37 @@ pub struct RuntimeContent {
 impl RuntimeContent {
     pub fn load_embedded() -> Result<Self, ContentError> {
         Self::from_source_loader(
-            include_str!("../../../assets/characters/catalog.json"),
-            |asset_key| {
-                embedded_manifest(asset_key)
+            include_str!("../../../assets/catalog.json"),
+            |asset_type, asset_key| {
+                embedded_manifest(asset_type, asset_key)
                     .map(str::to_owned)
-                    .ok_or_else(|| ContentError::new(format!("missing embedded asset {asset_key}")))
+                    .ok_or_else(|| {
+                        ContentError::new(format!(
+                            "missing embedded {asset_type} asset {asset_key}"
+                        ))
+                    })
             },
         )
     }
 
     fn from_source_loader(
         catalog_source: &str,
-        mut load: impl FnMut(&str) -> Result<String, ContentError>,
+        mut load: impl FnMut(&str, &str) -> Result<String, ContentError>,
     ) -> Result<Self, ContentError> {
-        let catalog: RuntimeCatalog = serde_json::from_str(catalog_source).map_err(|error| {
-            ContentError::new(format!("cannot parse character catalog: {error}"))
-        })?;
+        let catalog: RuntimeCatalog = serde_json::from_str(catalog_source)
+            .map_err(|error| ContentError::new(format!("cannot parse world catalog: {error}")))?;
         let mut source_cache = HashMap::new();
         for asset in &catalog.assets {
-            source_cache.insert(asset.asset_key.clone(), load(&asset.asset_key)?);
+            if !matches!(
+                asset.asset_type.as_str(),
+                "character" | "weapons" | "symbols"
+            ) {
+                continue;
+            }
+            source_cache.insert(
+                asset.asset_key.clone(),
+                load(&asset.asset_type, &asset.asset_key)?,
+            );
         }
 
         let mut characters = HashMap::new();
@@ -474,48 +486,47 @@ fn finite_pair(values: [f32; 2]) -> bool {
     values.into_iter().all(f32::is_finite)
 }
 
-fn embedded_manifest(asset_key: &str) -> Option<&'static str> {
-    match asset_key {
-        "archerf" => Some(include_str!(
+fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> {
+    match (asset_type, asset_key) {
+        ("character", "archerf") => Some(include_str!(
             "../../../assets/characters/archerf/manifest.json"
         )),
-        "barde" => Some(include_str!(
+        ("character", "barde") => Some(include_str!(
             "../../../assets/characters/barde/manifest.json"
         )),
-        "chantres" => Some(include_str!(
+        ("character", "chantres") => Some(include_str!(
             "../../../assets/characters/chantres/manifest.json"
         )),
-        "glavier" => Some(include_str!(
+        ("character", "glavier") => Some(include_str!(
             "../../../assets/characters/glavier/manifest.json"
         )),
-        "hammer" => Some(include_str!(
-            "../../../assets/characters/hammer/manifest.json"
-        )),
-        "hammerer" => Some(include_str!(
+        ("character", "hammerer") => Some(include_str!(
             "../../../assets/characters/hammerer/manifest.json"
         )),
-        "mage" => Some(include_str!(
+        ("character", "mage") => Some(include_str!(
             "../../../assets/characters/mage/manifest.json"
         )),
-        "monk" => Some(include_str!(
+        ("character", "monk") => Some(include_str!(
             "../../../assets/characters/monk/manifest.json"
         )),
-        "orb" => Some(include_str!("../../../assets/characters/orb/manifest.json")),
-        "plus" => Some(include_str!(
-            "../../../assets/characters/plus/manifest.json"
-        )),
-        "rogue" => Some(include_str!(
+        ("character", "rogue") => Some(include_str!(
             "../../../assets/characters/rogue/manifest.json"
         )),
-        "sorcerer" => Some(include_str!(
+        ("character", "sorcerer") => Some(include_str!(
             "../../../assets/characters/sorcerer/manifest.json"
         )),
-        "warrior" => Some(include_str!(
+        ("character", "warrior") => Some(include_str!(
             "../../../assets/characters/warrior/manifest.json"
         )),
-        "wizard" => Some(include_str!(
+        ("character", "wizard") => Some(include_str!(
             "../../../assets/characters/wizard/manifest.json"
         )),
+        ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
+        ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
+        ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
+        ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
+        ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),
+        ("symbols", "plus") => Some(include_str!("../../../assets/symbols/plus/manifest.json")),
         _ => None,
     }
 }

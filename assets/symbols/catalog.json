@@ -1,0 +1,25 @@
+{
+  "assets": [
+    {
+      "asset_key": "heart",
+      "asset_type": "symbols",
+      "display_name": "Heart",
+      "runtime_package": "PolyToolsRuntimeExports/heart/manifest.json"
+    },
+    {
+      "asset_key": "orb",
+      "asset_type": "symbols",
+      "display_name": "Orb",
+      "runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
+    },
+    {
+      "asset_key": "plus",
+      "asset_type": "symbols",
+      "display_name": "Plus",
+      "runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
+    }
+  ],
+  "schema_version": 1,
+  "world_key": "world01",
+  "world_name": "Secrets, Room's & Travels'"
+}

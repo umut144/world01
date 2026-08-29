@@ -25,12 +25,6 @@
       "runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
     },
     {
-      "asset_key": "hammer",
-      "asset_type": "weapons",
-      "display_name": "Hammer",
-      "runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
-    },
-    {
       "asset_key": "hammerer",
       "asset_type": "character",
       "display_name": "Hammerer",
@@ -47,18 +41,6 @@
       "asset_type": "character",
       "display_name": "Monk",
       "runtime_package": "PolyToolsRuntimeExports/monk/manifest.json"
-    },
-    {
-      "asset_key": "orb",
-      "asset_type": "symbols",
-      "display_name": "Orb",
-      "runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
-    },
-    {
-      "asset_key": "plus",
-      "asset_type": "symbols",
-      "display_name": "Plus",
-      "runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
     },
     {
       "asset_key": "rogue",

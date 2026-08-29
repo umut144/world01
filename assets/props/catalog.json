@@ -1,0 +1,19 @@
+{
+  "assets": [
+    {
+      "asset_key": "ankh",
+      "asset_type": "props",
+      "display_name": "Ankh",
+      "runtime_package": "PolyToolsRuntimeExports/ankh/manifest.json"
+    },
+    {
+      "asset_key": "tree",
+      "asset_type": "props",
+      "display_name": "Tree",
+      "runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
+    }
+  ],
+  "schema_version": 1,
+  "world_key": "world01",
+  "world_name": "Secrets, Room's & Travels'"
+}

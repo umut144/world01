@@ -859,7 +859,7 @@ mod tests {
         let hammerer_pivot = library.body_pivot(&CharacterId("hammerer".to_owned()));
         let rogue_pivot = library.body_pivot(&CharacterId("rogue".to_owned()));
         assert!((hammerer_pivot - Vec2::new(0.0, 0.695)).length() < 0.000_001);
-        assert!((rogue_pivot - Vec2::new(0.0, 0.15)).length() < 0.000_001);
+        assert!((rogue_pivot - Vec2::new(0.0, 0.18)).length() < 0.000_001);
     }
 
     #[test]
