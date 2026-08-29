@@ -261,9 +261,11 @@ Reference drawings:
 - While actually moving with RUN active, stamina drains at `8` absolute points
   per second. RUN uses the effective normal movement speed multiplied by
   `1.5`; it is disabled automatically when stamina is depleted.
-- Stamina depletion triggers KNOCKDOWNED, applies damage equal to `5%` of
-  maximum HP, and disables RUN. KNOCKDOWNED lasts `2` seconds, blocks all input,
-  and is mechanically STUNNED plus the stamina-depletion damage penalty.
+- Stamina depletion at or below zero triggers KNOCKDOWNED, applies damage equal
+  to `5%` of maximum HP, and disables RUN. KNOCKDOWNED lasts `2` seconds,
+  blocks all input, and is mechanically STUNNED plus the stamina-depletion
+  damage penalty. KNOCKBACKED is a separate future status effect and is not the
+  stamina-depletion status.
 - DASH is requested with the Xbox `B` button. The request activates on button
   press and is released only when the button is released; holding B does not
   repeatedly dash.
@@ -274,6 +276,9 @@ Reference drawings:
 - DASH costs `17%` of maximum stamina immediately. The cost may exceed the
   current stamina; stamina is reduced to zero and depletion consequences are
   then applied rather than preventing the DASH.
+- If the DASH cost depletes stamina, the depletion check occurs in the same
+  simulation tick after the cost is applied. KNOCKDOWNED then takes precedence,
+  disables RUN, and interrupts the active DASH.
 - DASH provides an invulnerability window of `0.337` seconds centered on the
   middle of its one-second duration. The exact boundary convention remains to
   be verified in implementation.
@@ -529,12 +534,8 @@ separate implementation chronicle.
 - Which collapse variant(s) enter iteration 1.
 - Collapse wave timing, warning semantics, and escape constraints.
 - Exact combat and character-specific abilities beyond shared RUN and DASH.
-- Whether stamina depletion is named KNOCKDOWNED or KNOCKBACKED in the final
-  status-effect vocabulary.
 - Exact DASH collision/slide behavior at walls, doors, and room boundaries.
 - Exact DASH invulnerability interval boundary and status-effect interaction.
-- Whether DASH may activate at exactly zero stamina, and whether its depletion
-  consequence is applied in the same tick as activation.
 - Whether a DASH can begin from a physically moving vector when movement input
   is released in the same simulation tick.
 - Exact AttackRegion placement/overlap rule, base damage, and charged-damage
