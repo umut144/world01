@@ -51,7 +51,7 @@ to the `game_console` target; that target accepts `DEBUG` and higher levels.
 The current startup messages report successful server start, client start, and
 client login.
 
-The graphical client starts windowed at a physical `1280 × 800 px`. The window
+The graphical client starts windowed at a physical `1152 × 720 px`. The window
 remains resizable without a configured maximum, so maximizing may use the full
 available monitor area, including `2880 × 1800 px` where the display permits.
 

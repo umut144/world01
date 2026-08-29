@@ -31,8 +31,8 @@ mod presentation;
 mod projection;
 mod session;
 
-const INITIAL_WINDOW_PHYSICAL_WIDTH: u32 = 1280;
-const INITIAL_WINDOW_PHYSICAL_HEIGHT: u32 = 800;
+const INITIAL_WINDOW_PHYSICAL_WIDTH: u32 = 1152;
+const INITIAL_WINDOW_PHYSICAL_HEIGHT: u32 = 720;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
