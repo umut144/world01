@@ -380,6 +380,10 @@ Confirmed first-iteration direction:
   is not excluded from the query, so a self-hit is possible whenever the
   authored Components overlap. A target that is DASH-invulnerable receives
   `0` damage.
+- In this first combat iteration, each character's `body` and `head`
+  Components together form one shared `HurtRegion`. Overlap with multiple
+  Components of the same Character still produces only one hit; separate
+  Characters can each be hit by the same Hammer impact.
 - The first procedural swing crosses over the Hammerer's body through depth
   rather than circling around it in the screen plane. From a left-carried
   `180°` pose toward a rightward `0°` impact, it is projected like an exact
