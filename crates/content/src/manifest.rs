@@ -18,6 +18,7 @@ pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
 #[derive(Resource, Clone)]
 pub struct RuntimeContent {
     characters: HashMap<CharacterId, RuntimeManifest>,
+    props: HashMap<String, RuntimeManifest>,
     hammer: RuntimeManifest,
 }
 
@@ -47,7 +48,7 @@ impl RuntimeContent {
         for asset in &catalog.assets {
             if !matches!(
                 asset.asset_type.as_str(),
-                "character" | "weapons" | "symbols"
+                "character" | "props" | "weapons" | "symbols"
             ) {
                 continue;
             }
@@ -58,9 +59,10 @@ impl RuntimeContent {
         }
 
         let mut characters = HashMap::new();
+        let mut props = HashMap::new();
         let mut hammer = None;
         for asset in &catalog.assets {
-            if asset.asset_type != "character" && asset.asset_type != "weapons" {
+            if !matches!(asset.asset_type.as_str(), "character" | "props" | "weapons") {
                 continue;
             }
             let source = source_cache.get(&asset.asset_key).ok_or_else(|| {
@@ -79,6 +81,9 @@ impl RuntimeContent {
             } else if asset.asset_key == HAMMER_ASSET_KEY {
                 validate_hammer_manifest(&manifest)?;
                 hammer = Some(manifest);
+            } else if asset.asset_type == "props" {
+                validate_asset_contents(&manifest)?;
+                props.insert(asset.asset_key.clone(), manifest);
             }
         }
 
@@ -88,7 +93,11 @@ impl RuntimeContent {
             ));
         }
         let hammer = hammer.ok_or_else(|| ContentError::new("catalog is missing Hammer"))?;
-        Ok(Self { characters, hammer })
+        Ok(Self {
+            characters,
+            props,
+            hammer,
+        })
     }
 
     pub fn ids(&self) -> Vec<CharacterId> {
@@ -111,6 +120,10 @@ impl RuntimeContent {
 
     pub fn hammer(&self) -> &RuntimeManifest {
         &self.hammer
+    }
+
+    pub fn prop(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.props.get(asset_key)
     }
 }
 
@@ -542,5 +555,9 @@ mod tests {
         assert_eq!(content.ids().len(), 11);
         assert!(content.contains_character(&CharacterId("hammerer".into())));
         assert_eq!(content.hammer().asset_key, HAMMER_ASSET_KEY);
+        assert_eq!(
+            content.prop("ankh").map(|prop| prop.asset_key.as_str()),
+            Some("ankh")
+        );
     }
 }

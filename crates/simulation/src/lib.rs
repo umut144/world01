@@ -5,6 +5,7 @@ pub mod combat;
 pub mod life;
 pub mod locomotion;
 pub mod movement;
+pub mod respawn;
 mod schedule;
 
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
@@ -15,6 +16,7 @@ pub use combat::hammer::{
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
 pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
+pub use respawn::{RespawnPlayer, choose_respawn_position};
 pub use schedule::{SimulationSet, add_simulation_step};
 
 #[cfg(test)]

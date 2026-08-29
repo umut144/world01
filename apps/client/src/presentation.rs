@@ -10,8 +10,8 @@ use game01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
 use game01_world_data::{
-    CharacterHealth, CharacterId, CharacterLifeState, GazeDirection, MovementIntent, Position,
-    RunState, SelectedCharacter,
+    Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
+    MovementIntent, Position, RunState, SelectedCharacter,
 };
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
@@ -23,7 +23,9 @@ use crate::input::{
     collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
     collect_movement_input, update_client_input_focus,
 };
-use crate::polytools::{CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual};
+use crate::polytools::{
+    CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual, spawn_prop_visual,
+};
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
 };
@@ -98,7 +100,10 @@ impl Plugin for ClientPresentationPlugin {
             .init_resource::<ClientInputFocus>()
             .init_resource::<PoseSettings>()
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
-            .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
+            .add_systems(
+                OnEnter(ClientScreen::InGame),
+                (configure_ingame_camera, setup_ankh_visuals),
+            )
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
             .add_systems(
@@ -157,6 +162,9 @@ impl Plugin for ClientPresentationPlugin {
 
 #[derive(Component)]
 struct RoomFloorTile;
+
+#[derive(Component)]
+struct RenderedAnkh;
 
 #[derive(Component)]
 struct SelectionVisual;
@@ -645,8 +653,50 @@ fn cleanup_selection(
     }
 }
 
-fn cleanup_room_floor(floor_tiles: Query<Entity, With<RoomFloorTile>>, mut commands: Commands) {
+fn setup_ankh_visuals(
+    mut commands: Commands,
+    layout: Res<AnkhLayout>,
+    character_assets: Res<CharacterAssetLibrary>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let Some(ankh_manifest) = character_assets.prop("ankh") else {
+        error!("cannot spawn Ankhs: missing Ankh prop manifest");
+        return;
+    };
+
+    for (index, position) in layout.positions.iter().copied().enumerate() {
+        let root = commands
+            .spawn((
+                Ankh::new(index as u32),
+                RenderedAnkh,
+                position,
+                Transform::from_xyz(position.x, position.y, -1.0),
+                Visibility::default(),
+            ))
+            .id();
+        if let Err(error) = spawn_prop_visual(
+            &mut commands,
+            root,
+            &mut meshes,
+            &mut materials,
+            ankh_manifest,
+            Color::srgb(0.72, 0.56, 0.20),
+        ) {
+            error!("cannot spawn Ankh prop visual: {error}");
+        }
+    }
+}
+
+fn cleanup_room_floor(
+    floor_tiles: Query<Entity, With<RoomFloorTile>>,
+    ankhs: Query<Entity, With<RenderedAnkh>>,
+    mut commands: Commands,
+) {
     for entity in &floor_tiles {
+        commands.entity(entity).despawn();
+    }
+    for entity in &ankhs {
         commands.entity(entity).despawn();
     }
 }

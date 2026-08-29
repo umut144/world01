@@ -9,6 +9,7 @@ use game01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use game01_simulation::{
     CharacterLifeRules, HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules,
 };
+use game01_world_data::AnkhLayout;
 
 use crate::controller::ControllerInput;
 use crate::hammer::{HammerPresentationPlugin, HammerPresentationRules};
@@ -123,6 +124,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
         )?,
     );
+    app.insert_resource(AnkhLayout::for_room(
+        config.room.width_tiles,
+        config.room.height_tiles,
+    ));
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientSessionPlugin {

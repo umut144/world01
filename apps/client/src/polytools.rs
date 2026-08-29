@@ -122,6 +122,10 @@ impl CharacterAssetLibrary {
         self.content.character(character)
     }
 
+    pub fn prop(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.content.prop(asset_key)
+    }
+
     pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
         let Some(manifest) = self.character(character) else {
             return Vec2::ZERO;
@@ -511,6 +515,71 @@ pub fn spawn_character_visual(
             manifest,
             library.content.hammer(),
         )?;
+    }
+
+    Ok(())
+}
+
+pub fn spawn_prop_visual(
+    commands: &mut Commands,
+    root: Entity,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ColorMaterial>,
+    manifest: &RuntimeManifest,
+    fill_color: Color,
+) -> Result<(), PolyToolsAssetError> {
+    let anchor = commands
+        .spawn((
+            Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0),
+            Visibility::default(),
+        ))
+        .id();
+    commands.entity(root).add_child(anchor);
+
+    let mut component_entities = HashMap::new();
+    for component in &manifest.components {
+        let entity = commands
+            .spawn((component_transform(component), Visibility::default()))
+            .id();
+        component_entities.insert(component.component_id.as_str(), entity);
+    }
+
+    for component in &manifest.components {
+        let component_entity = component_entities[component.component_id.as_str()];
+        let parent = component
+            .parent_component_id
+            .as_deref()
+            .and_then(|parent_id| component_entities.get(parent_id).copied())
+            .unwrap_or(anchor);
+        commands.entity(parent).add_child(component_entity);
+
+        let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
+        let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
+        if let Some(mesh) = component.mesh.as_ref() {
+            let fill = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_mesh(mesh))),
+                    MeshMaterial2d(materials.add(fill_color)),
+                    Transform::from_xyz(-pivot[0], -pivot[1], z),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(fill);
+        }
+        if let Some(stroke_mesh) = component.contour_stroke_mesh.as_ref()
+            && stroke_mesh.has_outline
+        {
+            let outline = commands
+                .spawn((
+                    Mesh2d(meshes.add(bevy_mesh(&RuntimeMesh {
+                        vertices: stroke_mesh.vertices.clone(),
+                        indices: stroke_mesh.indices.clone(),
+                    }))),
+                    MeshMaterial2d(materials.add(Color::srgb(0.045, 0.04, 0.055))),
+                    Transform::from_xyz(-pivot[0], -pivot[1], z + OUTLINE_Z_OFFSET),
+                ))
+                .id();
+            commands.entity(component_entity).add_child(outline);
+        }
     }
 
     Ok(())

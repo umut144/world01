@@ -7,10 +7,10 @@ use game01_network::{
 };
 use game01_simulation::LocomotionRules;
 use game01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent, DashState,
-    DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState,
-    MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner, Position,
-    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
+    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner,
+    Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
     StatusEffectState, WeaponAimState,
 };
 
@@ -27,10 +27,18 @@ pub struct ServerSessionPlugin;
 
 impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<NextPlayerId>().add_systems(
-            Update,
-            accept_join_requests.after(ServerNetworkSet::ReceiveRequests),
-        );
+        app.init_resource::<NextPlayerId>()
+            .add_systems(Startup, spawn_room_ankhs)
+            .add_systems(
+                Update,
+                accept_join_requests.after(ServerNetworkSet::ReceiveRequests),
+            );
+    }
+}
+
+fn spawn_room_ankhs(layout: Res<AnkhLayout>, mut commands: Commands) {
+    for (index, position) in layout.positions.iter().copied().enumerate() {
+        commands.spawn((Ankh::new(index as u32), position));
     }
 }
 

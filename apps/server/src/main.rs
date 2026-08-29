@@ -14,6 +14,7 @@ use game01_simulation::{
     SimulationSet, WeaponAimRules, add_simulation_step, apply_hammer_strike_damage,
     update_character_life,
 };
+use game01_world_data::AnkhLayout;
 
 use crate::session::ServerSessionPlugin;
 
@@ -71,7 +72,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(hammer_strike_rules)
     .insert_resource(hammer_geometry)
     .insert_resource(hurt_geometry)
-    .insert_resource(character_health);
+    .insert_resource(character_health)
+    .insert_resource(AnkhLayout::for_room(
+        config.room.width_tiles,
+        config.room.height_tiles,
+    ));
     add_simulation_step(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,

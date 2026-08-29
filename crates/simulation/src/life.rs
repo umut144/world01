@@ -1,17 +1,17 @@
 use std::{error::Error, fmt};
 
-#[cfg(test)]
-use bevy::prelude::Vec2;
 use bevy::prelude::{Entity, Mut, ParamSet, Query, Res, Resource};
 use game01_configs::DesignConfig;
 use game01_content::CharacterHurtGeometryCatalog;
 use game01_world_data::{
-    BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState, DeathConfirmIntent,
-    DeathConfirmationState, HammerAttackState, MovementDirection, MovementVelocity, PlayerId,
-    Position, RespawnState, RevivalState, RunState, SelectedCharacter, StatusEffectState,
+    Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
+    DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
+    MovementVelocity, PlayerId, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
+    StatusEffectState,
 };
 
 use crate::combat::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
+use crate::respawn::{RespawnPlayer, choose_respawn_position};
 
 const DEAD_BODY_SCALE: f32 = 0.9;
 const DEAD_BODY_ROTATION_RADIANS: f32 = -14.0_f32.to_radians();
@@ -94,6 +94,7 @@ impl Error for CharacterLifeConfigError {}
 pub fn update_character_life(
     rules: Res<CharacterLifeRules>,
     hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
+    ankhs: Query<(&Ankh, &Position), bevy::prelude::Without<PlayerId>>,
     mut players: ParamSet<(
         Query<(
             Entity,
@@ -147,6 +148,20 @@ pub fn update_character_life(
             },
         )
         .collect::<Vec<_>>();
+    let respawn_players = snapshots
+        .iter()
+        .map(|snapshot| RespawnPlayer {
+            player_id: snapshot.player_id,
+            character: snapshot.character.clone(),
+            position: snapshot.position,
+            facing: snapshot.facing,
+            life: snapshot.life,
+        })
+        .collect::<Vec<_>>();
+    let ankhs = ankhs
+        .iter()
+        .map(|(ankh, position)| (*ankh, *position))
+        .collect::<Vec<_>>();
     for (
         entity,
         player_id,
@@ -190,6 +205,11 @@ pub fn update_character_life(
                         *player_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        character.map(|character| &character.0),
+                        facing.copied(),
+                        &ankhs,
+                        &respawn_players,
+                        hurt_geometry.as_deref(),
                     );
                 } else {
                     confirmation.held_ticks = confirmation.held_ticks.saturating_sub(1);
@@ -221,6 +241,11 @@ pub fn update_character_life(
                         *player_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        character.map(|character| &character.0),
+                        facing.copied(),
+                        &ankhs,
+                        &respawn_players,
+                        hurt_geometry.as_deref(),
                     );
                 } else {
                     *life = CharacterLifeState::Dead;
@@ -240,6 +265,11 @@ pub fn update_character_life(
                         *player_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        character.map(|character| &character.0),
+                        facing.copied(),
+                        &ankhs,
+                        &respawn_players,
+                        hurt_geometry.as_deref(),
                     );
                 } else if revival_continues(
                     revival.reviver_player_id,
@@ -285,6 +315,11 @@ fn advance_confirmation(
     player_id: PlayerId,
     respawn: &mut RespawnState,
     position: Option<&mut Position>,
+    character: Option<&CharacterId>,
+    facing: Option<BodyFacing>,
+    ankhs: &[(Ankh, Position)],
+    players: &[RespawnPlayer],
+    hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
 ) {
     confirmation.held_ticks = confirmation
         .held_ticks
@@ -297,8 +332,18 @@ fn advance_confirmation(
         confirmation.held_ticks = 0;
         respawn.count = respawn.count.saturating_add(1);
         if let Some(position) = position {
-            *position =
-                respawn_position(player_id, respawn.count, rules.ankh_respawn_radius_meters);
+            let fallback = *position;
+            *position = choose_respawn_position(
+                player_id.0,
+                respawn.count,
+                fallback,
+                character,
+                facing,
+                rules.ankh_respawn_radius_meters,
+                ankhs,
+                players,
+                hurt_geometry,
+            );
         }
     }
 }
@@ -455,24 +500,6 @@ fn bodies_overlap(
     })
 }
 
-fn respawn_position(player_id: PlayerId, respawn_count: u32, radius: f32) -> Position {
-    let seed = mix64(player_id.0 ^ (u64::from(respawn_count) << 32));
-    let angle = unit_interval(seed) * std::f32::consts::TAU;
-    let distance = unit_interval(mix64(seed)).sqrt() * radius;
-    Position::new(distance * angle.cos(), distance * angle.sin())
-}
-
-fn mix64(mut value: u64) -> u64 {
-    value = value.wrapping_add(0x9e37_79b9_7f4a_7c15);
-    value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    value ^ (value >> 31)
-}
-
-fn unit_interval(value: u64) -> f32 {
-    (value >> 40) as f32 / (1_u32 << 24) as f32
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -600,9 +627,18 @@ mod tests {
 
     #[test]
     fn deterministic_respawns_stay_inside_the_ankh_radius() {
-        let first = respawn_position(PlayerId(7), 1, 4.0);
-        assert_eq!(first, respawn_position(PlayerId(7), 1, 4.0));
-        assert!(Vec2::new(first.x, first.y).length() <= 4.0);
+        let first = choose_respawn_position(
+            7,
+            1,
+            Position::ZERO,
+            None,
+            None,
+            4.0,
+            &[(Ankh::new(0), Position::ZERO)],
+            &[],
+            None,
+        );
+        assert_eq!(first, Position::ZERO);
     }
 
     #[test]
