@@ -15,8 +15,9 @@ use game01_content::{
 use game01_world_data::CharacterId;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
-use crate::hammer::{HammerPresentationMaterial, HammerPresentationState};
+use crate::hammer::HammerPresentationState;
 use crate::pose::CharacterHead;
+use crate::projection::ProjectionDepthMaterial;
 
 #[derive(Component)]
 pub struct BodyAnchor;
@@ -28,7 +29,7 @@ pub struct HammerVisual {
     pub attack_point_from_grip: Vec2,
     pub secondary_grip_from_primary: Vec2,
     pub owner_asset_pivot: Vec2,
-    pub material_handles: Vec<Handle<HammerPresentationMaterial>>,
+    pub material_handles: Vec<Handle<ProjectionDepthMaterial>>,
     pub flat_visuals: Vec<Entity>,
     pub swing_depth_visuals: Vec<Entity>,
     pub behind_layer: f32,
@@ -295,7 +296,7 @@ pub fn spawn_character_visual(
     root: Entity,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<ColorMaterial>,
-    hammer_materials: &mut Assets<HammerPresentationMaterial>,
+    projection_materials: &mut Assets<ProjectionDepthMaterial>,
     library: &CharacterAssetLibrary,
     character: &CharacterId,
 ) -> Result<(), PolyToolsAssetError> {
@@ -511,7 +512,7 @@ pub fn spawn_character_visual(
             root,
             anchor,
             meshes,
-            hammer_materials,
+            projection_materials,
             manifest,
             library.content.hammer(),
         )?;
@@ -520,17 +521,20 @@ pub fn spawn_character_visual(
     Ok(())
 }
 
-pub fn spawn_prop_visual(
+pub fn spawn_projected_prop_visual(
     commands: &mut Commands,
     root: Entity,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<ColorMaterial>,
+    materials: &mut Assets<ProjectionDepthMaterial>,
     manifest: &RuntimeManifest,
     fill_color: Color,
+    projection_rotation: Quat,
+    presentation_layer: f32,
 ) -> Result<(), PolyToolsAssetError> {
     let anchor = commands
         .spawn((
-            Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0),
+            Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0)
+                .with_rotation(projection_rotation),
             Visibility::default(),
         ))
         .id();
@@ -556,11 +560,21 @@ pub fn spawn_prop_visual(
         let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
         let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
         if let Some(mesh) = component.mesh.as_ref() {
+            let material = materials.add(ProjectionDepthMaterial::from_color(
+                fill_color,
+                z,
+                presentation_layer,
+                component.projection_depth_meters,
+            ));
             let fill = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(mesh))),
-                    MeshMaterial2d(materials.add(fill_color)),
-                    Transform::from_xyz(-pivot[0], -pivot[1], z),
+                    Mesh2d(meshes.add(bevy_closed_prism_mesh(
+                        &mesh.vertices,
+                        &mesh.indices,
+                        component.projection_depth_meters,
+                    ))),
+                    MeshMaterial2d(material),
+                    Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
                 .id();
             commands.entity(component_entity).add_child(fill);
@@ -568,14 +582,21 @@ pub fn spawn_prop_visual(
         if let Some(stroke_mesh) = component.contour_stroke_mesh.as_ref()
             && stroke_mesh.has_outline
         {
+            let material = materials.add(ProjectionDepthMaterial::from_color(
+                Color::srgb(0.045, 0.04, 0.055),
+                z + OUTLINE_Z_OFFSET,
+                presentation_layer,
+                component.projection_depth_meters,
+            ));
             let outline = commands
                 .spawn((
-                    Mesh2d(meshes.add(bevy_mesh(&RuntimeMesh {
-                        vertices: stroke_mesh.vertices.clone(),
-                        indices: stroke_mesh.indices.clone(),
-                    }))),
-                    MeshMaterial2d(materials.add(Color::srgb(0.045, 0.04, 0.055))),
-                    Transform::from_xyz(-pivot[0], -pivot[1], z + OUTLINE_Z_OFFSET),
+                    Mesh2d(meshes.add(bevy_closed_prism_mesh(
+                        &stroke_mesh.vertices,
+                        &stroke_mesh.indices,
+                        component.projection_depth_meters,
+                    ))),
+                    MeshMaterial2d(material),
+                    Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
                 .id();
             commands.entity(component_entity).add_child(outline);
@@ -590,7 +611,7 @@ fn spawn_hammer_visual(
     owner: Entity,
     character_anchor: Entity,
     meshes: &mut Assets<Mesh>,
-    hammer_materials: &mut Assets<HammerPresentationMaterial>,
+    projection_materials: &mut Assets<ProjectionDepthMaterial>,
     character: &RuntimeManifest,
     hammer: &RuntimeManifest,
 ) -> Result<(), PolyToolsAssetError> {
@@ -648,7 +669,7 @@ fn spawn_hammer_visual(
         let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
         let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
         if let Some(mesh) = component.mesh.as_ref() {
-            let material = hammer_materials.add(HammerPresentationMaterial::from_color(
+            let material = projection_materials.add(ProjectionDepthMaterial::from_color(
                 hammer_component_color(&component.name),
                 z,
                 behind_layer,
@@ -669,7 +690,8 @@ fn spawn_hammer_visual(
             let depth_fill = commands
                 .spawn((
                     Mesh2d(meshes.add(bevy_closed_prism_mesh(
-                        mesh,
+                        &mesh.vertices,
+                        &mesh.indices,
                         component.projection_depth_meters,
                     ))),
                     MeshMaterial2d(material),
@@ -683,7 +705,7 @@ fn spawn_hammer_visual(
         if let Some(stroke) = component.contour_stroke_mesh.as_ref()
             && stroke.has_outline
         {
-            let material = hammer_materials.add(HammerPresentationMaterial::from_color(
+            let material = projection_materials.add(ProjectionDepthMaterial::from_color(
                 Color::srgb(0.045, 0.04, 0.055),
                 z + OUTLINE_Z_OFFSET,
                 behind_layer,
@@ -790,24 +812,32 @@ fn bevy_mesh(mesh: &RuntimeMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
 
-fn bevy_closed_prism_mesh(mesh: &RuntimeMesh, depth_meters: f32) -> Mesh {
-    let (vertices, indices) = closed_prism_parts(mesh, depth_meters);
+fn bevy_closed_prism_mesh(
+    source_vertices: &[[f32; 2]],
+    source_indices: &[u32],
+    depth_meters: f32,
+) -> Mesh {
+    let (vertices, indices) = closed_prism_parts(source_vertices, source_indices, depth_meters);
     bevy_mesh_from_parts_3d(&vertices, &indices)
 }
 
-fn closed_prism_parts(mesh: &RuntimeMesh, depth_meters: f32) -> (Vec<[f32; 3]>, Vec<u32>) {
+fn closed_prism_parts(
+    source_vertices: &[[f32; 2]],
+    source_indices: &[u32],
+    depth_meters: f32,
+) -> (Vec<[f32; 3]>, Vec<u32>) {
     let half_depth = depth_meters.max(0.0) * 0.5;
-    let mut vertices = Vec::with_capacity(mesh.vertices.len() * 2);
-    for vertex in &mesh.vertices {
+    let mut vertices = Vec::with_capacity(source_vertices.len() * 2);
+    for vertex in source_vertices {
         vertices.push([vertex[0], vertex[1], -half_depth]);
     }
-    for vertex in &mesh.vertices {
+    for vertex in source_vertices {
         vertices.push([vertex[0], vertex[1], half_depth]);
     }
 
-    let offset = mesh.vertices.len() as u32;
-    let mut indices = Vec::with_capacity(mesh.indices.len() * 2);
-    for triangle in mesh.indices.chunks_exact(3) {
+    let offset = source_vertices.len() as u32;
+    let mut indices = Vec::with_capacity(source_indices.len() * 2);
+    for triangle in source_indices.chunks_exact(3) {
         indices.extend_from_slice(triangle);
         indices.extend_from_slice(&[
             triangle[0] + offset,
@@ -817,7 +847,7 @@ fn closed_prism_parts(mesh: &RuntimeMesh, depth_meters: f32) -> (Vec<[f32; 3]>, 
     }
 
     let mut boundary_edges = HashMap::<(u32, u32), (u32, u32, u32)>::new();
-    for triangle in mesh.indices.chunks_exact(3) {
+    for triangle in source_indices.chunks_exact(3) {
         for (start, end) in [
             (triangle[0], triangle[1]),
             (triangle[1], triangle[2]),
@@ -981,12 +1011,37 @@ mod tests {
             vertices: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             indices: vec![0, 1, 2, 0, 2, 3],
         };
-        let (vertices, indices) = closed_prism_parts(&mesh, 0.4);
+        let (vertices, indices) = closed_prism_parts(&mesh.vertices, &mesh.indices, 0.4);
 
         assert_eq!(vertices.len(), 8);
         assert!(vertices[..4].iter().all(|vertex| vertex[2] == -0.2));
         assert!(vertices[4..].iter().all(|vertex| vertex[2] == 0.2));
         assert_eq!(indices.len(), 36);
+    }
+
+    #[test]
+    fn embedded_ankh_exposes_depth_and_authored_contours() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let ankh = library.prop("ankh").expect("embedded Ankh prop is present");
+        let visible_components = ankh
+            .components
+            .iter()
+            .filter(|component| component.mesh.is_some())
+            .collect::<Vec<_>>();
+
+        assert!(!visible_components.is_empty());
+        assert!(
+            visible_components.iter().all(|component| {
+                (component.projection_depth_meters - 0.1).abs() < f32::EPSILON
+            })
+        );
+        assert!(visible_components.iter().all(|component| {
+            component
+                .contour_stroke_mesh
+                .as_ref()
+                .is_some_and(|stroke| stroke.has_outline)
+        }));
     }
 
     #[test]

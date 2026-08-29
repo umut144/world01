@@ -14,18 +14,18 @@
 #import bevy_render::color_operations::linear_rgb_to_oklab
 #endif
 
-struct HammerPresentationMaterial {
+struct ProjectionDepthMaterial {
     color: vec4<f32>,
-    shake_offset: vec2<f32>,
-    shake_pivot: vec2<f32>,
-    shake_extent: f32,
+    deformation_offset: vec2<f32>,
+    deformation_pivot: vec2<f32>,
+    deformation_extent: f32,
     authored_layer: f32,
     presentation_layer: f32,
     projection_depth_meters: f32,
     padding: f32,
 };
 
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: HammerPresentationMaterial;
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> material: ProjectionDepthMaterial;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -59,13 +59,16 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         world_from_local,
         vec4<f32>(vertex.position, 1.0)
     );
-    let distance_from_grip = distance(out.world_position.xy, material.shake_pivot);
-    let shake_weight = clamp(distance_from_grip / max(material.shake_extent, 0.0001), 0.0, 1.0);
-    out.world_position.x += material.shake_offset.x * shake_weight;
-    out.world_position.y += material.shake_offset.y * shake_weight;
-    // Projection depth changes only the visible XY silhouette. Contextual
-    // behind/front ordering remains authoritative for presentation and must
-    // not inherit the temporary geometric Z produced by the depth rotation.
+    let distance_from_pivot = distance(out.world_position.xy, material.deformation_pivot);
+    let deformation_weight = clamp(
+        distance_from_pivot / max(material.deformation_extent, 0.0001),
+        0.0,
+        1.0
+    );
+    out.world_position.x += material.deformation_offset.x * deformation_weight;
+    out.world_position.y += material.deformation_offset.y * deformation_weight;
+    // Projection depth changes only the visible XY silhouette. Authored and
+    // contextual 2D layers remain the presentation ordering source of truth.
     out.world_position.z = material.presentation_layer + material.authored_layer;
     out.position = mesh_functions::mesh2d_position_world_to_clip(out.world_position);
 #endif

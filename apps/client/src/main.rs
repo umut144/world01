@@ -12,10 +12,11 @@ use game01_simulation::{
 use game01_world_data::AnkhLayout;
 
 use crate::controller::ControllerInput;
-use crate::hammer::{HammerPresentationPlugin, HammerPresentationRules};
+use crate::hammer::HammerPresentationRules;
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
 use crate::presentation::{CameraView, ClientPresentationPlugin, RoomDimensions};
+use crate::projection::ProjectionDepthPresentationPlugin;
 use crate::session::ClientSessionPlugin;
 
 mod controller;
@@ -26,6 +27,7 @@ mod polytools;
 mod pose;
 mod prediction;
 mod presentation;
+mod projection;
 mod session;
 
 const INITIAL_WINDOW_WIDTH: u32 = 2880;
@@ -104,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }),
         ..default()
     }));
-    app.add_plugins(HammerPresentationPlugin);
+    app.add_plugins(ProjectionDepthPresentationPlugin);
     app.insert_resource(movement_step);
     app.insert_resource(locomotion_rules);
     app.insert_resource(character_life_rules);

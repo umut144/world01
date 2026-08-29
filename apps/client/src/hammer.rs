@@ -1,13 +1,6 @@
 use std::f32::consts::{PI, TAU};
 
-use bevy::{
-    asset::{load_internal_asset, uuid_handle},
-    prelude::*,
-    reflect::TypePath,
-    render::render_resource::{AsBindGroup, ShaderType},
-    shader::{Shader, ShaderRef},
-    sprite_render::{AlphaMode2d, Material2d, Material2dPlugin},
-};
+use bevy::prelude::*;
 use game01_design::HammerDesign;
 use game01_simulation::HammerAttackRules;
 use game01_world_data::{
@@ -15,6 +8,7 @@ use game01_world_data::{
 };
 
 use crate::polytools::HammerVisual;
+use crate::projection::ProjectionDepthMaterial;
 
 const APEX_SCALE: f32 = 1.25;
 const IMPACT_SCALE: f32 = 1.0;
@@ -24,22 +18,6 @@ const HEAD_SINGULARITY_ENTER_METERS: f32 = 0.02;
 const HEAD_SINGULARITY_EXIT_METERS: f32 = 0.04;
 const HEAD_SINGULARITY_RELEASE_RADIANS_PER_SECOND: f32 = 4.0 * PI;
 const ANGLE_EPSILON: f32 = 0.000_01;
-const HAMMER_SHADER_HANDLE: Handle<Shader> = uuid_handle!("41caa612-7608-4bb0-80c0-aa418ba2c56a");
-
-pub struct HammerPresentationPlugin;
-
-impl Plugin for HammerPresentationPlugin {
-    fn build(&self, app: &mut App) {
-        load_internal_asset!(
-            app,
-            HAMMER_SHADER_HANDLE,
-            "../../../assets/shaders/hammer_presentation.wgsl",
-            Shader::from_wgsl
-        );
-        app.add_plugins(Material2dPlugin::<HammerPresentationMaterial>::default());
-    }
-}
-
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct HammerPresentationRules {
     attack: HammerAttackRules,
@@ -135,60 +113,6 @@ struct HammerRecoveryVisualState {
     target_angle: f32,
 }
 
-#[derive(Debug, Clone, Copy, ShaderType)]
-struct HammerPresentationUniform {
-    color: Vec4,
-    shake_offset: Vec2,
-    shake_pivot: Vec2,
-    shake_extent: f32,
-    authored_layer: f32,
-    presentation_layer: f32,
-    projection_depth_meters: f32,
-    padding: f32,
-}
-
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-pub struct HammerPresentationMaterial {
-    #[uniform(0)]
-    uniform: HammerPresentationUniform,
-}
-
-impl HammerPresentationMaterial {
-    pub fn from_color(
-        color: Color,
-        authored_layer: f32,
-        presentation_layer: f32,
-        projection_depth_meters: f32,
-    ) -> Self {
-        Self {
-            uniform: HammerPresentationUniform {
-                color: color.to_linear().to_vec4(),
-                shake_offset: Vec2::ZERO,
-                shake_pivot: Vec2::ZERO,
-                shake_extent: 1.0,
-                authored_layer,
-                presentation_layer,
-                projection_depth_meters,
-                padding: 0.0,
-            },
-        }
-    }
-}
-
-impl Material2d for HammerPresentationMaterial {
-    fn vertex_shader() -> ShaderRef {
-        ShaderRef::Handle(HAMMER_SHADER_HANDLE.clone())
-    }
-
-    fn fragment_shader() -> ShaderRef {
-        ShaderRef::Handle(HAMMER_SHADER_HANDLE.clone())
-    }
-
-    fn alpha_mode(&self) -> AlphaMode2d {
-        AlphaMode2d::Opaque
-    }
-}
-
 pub fn apply_hammer_pose(
     fixed_time: Res<Time<Fixed>>,
     virtual_time: Res<Time<Virtual>>,
@@ -199,7 +123,7 @@ pub fn apply_hammer_pose(
         With<HammerVisual>,
     >,
     mut visual_visibility: Query<&mut Visibility, Without<HammerVisual>>,
-    mut materials: ResMut<Assets<HammerPresentationMaterial>>,
+    mut materials: ResMut<Assets<ProjectionDepthMaterial>>,
 ) {
     let overstep = fixed_time.overstep_fraction();
     let delta_seconds = virtual_time.delta_secs();
@@ -237,11 +161,10 @@ pub fn apply_hammer_pose(
             .length();
         for handle in &hammer.material_handles {
             if let Some(mut material) = materials.get_mut(handle) {
-                material.uniform.shake_offset = shake;
-                material.uniform.shake_pivot = shake_pivot;
-                material.uniform.shake_extent = shake_extent.max(f32::EPSILON);
-                material.uniform.presentation_layer =
-                    owner_transform.translation.z + next_transform.translation.z;
+                material.set_deformation(shake, shake_pivot, shake_extent);
+                material.set_presentation_layer(
+                    owner_transform.translation.z + next_transform.translation.z,
+                );
             }
         }
         *transform = next_transform;

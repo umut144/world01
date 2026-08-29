@@ -81,6 +81,9 @@ this document instead of copying a shared mechanic as if it were game-owned.
   identity must remain stable unless a deliberate World-01 decision changes it.
 - The complete authored Hammer Asset and its Weapon frames share the exported
   scale; consuming games do not add a hard-coded weapon-size multiplier.
+- The Ankh uses each authored Component's projection depth and retains its
+  authored contours in the projected depth form. Its presentation is tilted
+  by `+20°` around the X axis followed by `+20°` around the Y axis.
 
 ## Shared character presentation
 

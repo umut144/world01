@@ -17,18 +17,19 @@ use game01_world_data::{
 use std::{path::Path, time::SystemTime};
 
 use crate::eyes::EyePupil;
-use crate::hammer::{HammerPresentationMaterial, apply_hammer_pose};
+use crate::hammer::apply_hammer_pose;
 use crate::input::{
     ClientInputFocus, clear_input_when_unfocused, collect_attack_input,
     collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
     collect_movement_input, update_client_input_focus,
 };
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual, spawn_prop_visual,
+    CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual, spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
 };
+use crate::projection::ProjectionDepthMaterial;
 use crate::session::{ClientScreen, ClientSession};
 
 const VIEWPORT_WIDTH_METERS: f32 = 15.0;
@@ -41,6 +42,8 @@ const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
 const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
 const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
+const ANKH_PRESENTATION_LAYER: f32 = -1.0;
+const ANKH_TILT_DEGREES: f32 = 20.0;
 
 pub struct ClientPresentationPlugin {
     pub character_assets: CharacterAssetLibrary,
@@ -203,7 +206,7 @@ fn setup_selection(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut hammer_materials: ResMut<Assets<HammerPresentationMaterial>>,
+    mut projection_materials: ResMut<Assets<ProjectionDepthMaterial>>,
     character_assets: Res<CharacterAssetLibrary>,
     cameras: Query<(), With<PresentationCamera>>,
 ) {
@@ -239,7 +242,7 @@ fn setup_selection(
             root,
             &mut meshes,
             &mut materials,
-            &mut hammer_materials,
+            &mut projection_materials,
             &character_assets,
             &character,
         ) {
@@ -658,7 +661,7 @@ fn setup_ankh_visuals(
     layout: Res<AnkhLayout>,
     character_assets: Res<CharacterAssetLibrary>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<ProjectionDepthMaterial>>,
 ) {
     let Some(ankh_manifest) = character_assets.prop("ankh") else {
         error!("cannot spawn Ankhs: missing Ankh prop manifest");
@@ -671,21 +674,28 @@ fn setup_ankh_visuals(
                 Ankh::new(index as u32),
                 RenderedAnkh,
                 position,
-                Transform::from_xyz(position.x, position.y, -1.0),
+                Transform::from_xyz(position.x, position.y, ANKH_PRESENTATION_LAYER),
                 Visibility::default(),
             ))
             .id();
-        if let Err(error) = spawn_prop_visual(
+        if let Err(error) = spawn_projected_prop_visual(
             &mut commands,
             root,
             &mut meshes,
             &mut materials,
             ankh_manifest,
             Color::srgb(0.72, 0.56, 0.20),
+            ankh_projection_rotation(),
+            ANKH_PRESENTATION_LAYER,
         ) {
             error!("cannot spawn Ankh prop visual: {error}");
         }
     }
+}
+
+fn ankh_projection_rotation() -> Quat {
+    Quat::from_rotation_y(ANKH_TILT_DEGREES.to_radians())
+        * Quat::from_rotation_x(ANKH_TILT_DEGREES.to_radians())
 }
 
 fn cleanup_room_floor(
@@ -751,7 +761,7 @@ fn render_new_players(
     players: Query<(Entity, &SelectedCharacter, &Position), Without<RenderedCharacter>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut hammer_materials: ResMut<Assets<HammerPresentationMaterial>>,
+    mut projection_materials: ResMut<Assets<ProjectionDepthMaterial>>,
     character_assets: Res<CharacterAssetLibrary>,
 ) {
     for (entity, character, position) in &players {
@@ -779,7 +789,7 @@ fn render_new_players(
             entity,
             &mut meshes,
             &mut materials,
-            &mut hammer_materials,
+            &mut projection_materials,
             &character_assets,
             &character.0,
         ) {
@@ -1037,6 +1047,24 @@ mod tests {
         let viewport = letterbox_viewport(UVec2::new(1200, 1200), 16.0 / 10.0);
         assert_eq!(viewport.physical_position, UVec2::new(0, 225));
         assert_eq!(viewport.physical_size, UVec2::new(1200, 750));
+    }
+
+    #[test]
+    fn ankh_projection_uses_positive_x_and_y_tilts() {
+        let rotation = ankh_projection_rotation();
+        let projected_up = rotation * Vec3::Y;
+        let projected_right = rotation * Vec3::X;
+        let radians = ANKH_TILT_DEGREES.to_radians();
+        let expected_up = Vec3::new(
+            radians.sin() * radians.sin(),
+            radians.cos(),
+            radians.sin() * radians.cos(),
+        );
+        let expected_right = Vec3::new(radians.cos(), 0.0, -radians.sin());
+
+        assert!(projected_up.distance(expected_up) < 0.000_001);
+        assert!(projected_right.distance(expected_right) < 0.000_001);
+        assert!((rotation.length() - 1.0).abs() < 0.000_001);
     }
 
     #[test]
