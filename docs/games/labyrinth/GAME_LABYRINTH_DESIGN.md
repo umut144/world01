@@ -352,7 +352,7 @@ Confirmed first-iteration direction:
 - Pressing and quickly releasing the attack input produces the basic strike;
   holding it charges the same strike and releasing executes it.
 - Charging follows the current weapon aim and caps at `5.0 s`. Three independent
-  progress curves run during it:
+  progress curves run during it, including the damage multiplier:
   - From `0.0–2.0 s`, the held contact moves linearly from `grip_primary` to
     `grip_secondary`, selecting attack reach. Releasing freezes the exact
     intermediate grip; a `1.0 s` release therefore uses half the authored reach
@@ -361,6 +361,9 @@ Confirmed first-iteration direction:
     then linearly from `0.8` to `0.5` during `2.0–5.0 s`.
   - The visible inward pull begins only at `2.0 s` and grows linearly to at most
     5% of the authored secondary-grip-to-attack-point distance at `5.0 s`.
+  - The attack starts at `100%` damage. Every completed `0.5 s` of charging adds
+    `2%` damage, reaching `120%` at the `5.0 s` charge cap. A quickly released
+    attack is therefore the uncharged basic strike at `100%` damage.
 - Charge scale and inward pull are presentation-only anticipation. They do not
   change the locked attack grip, authoritative impact length, polygonal
   AttackRegion size, or damage area. Swing restores the Hammer to its confirmed
@@ -370,6 +373,11 @@ Confirmed first-iteration direction:
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction,
   charge duration, and current interpolated attack grip.
+- At authoritative impact, the Hammer evaluates its complete polygonal
+  `AttackRegion` against every overlapping target `HurtRegion`. Multiple targets
+  may be hit by one impact. Friendly fire is enabled, and the Hammerer is not
+  excluded from the query, so a self-hit is possible whenever the authored
+  regions overlap. A target that is DASH-invulnerable receives `0` damage.
 - The first procedural swing crosses over the Hammerer's body through depth
   rather than circling around it in the screen plane. From a left-carried
   `180°` pose toward a rightward `0°` impact, it is projected like an exact
@@ -540,9 +548,9 @@ separate implementation chronicle.
 - Exact DASH collision/slide behavior at walls, doors, and room boundaries.
 - Full status-effect interaction beyond the currently implemented
   KNOCKDOWNED behavior.
-- Exact AttackRegion placement/overlap rule, base damage, and charged-damage
-  curve. Hammer impact distance is authored by `grip_secondary` and
-  `attack_point_primary`; current action timings remain balanceable.
+- Exact base damage value. Hammer impact distance is authored by
+  `grip_secondary` and `attack_point_primary`; current action timings remain
+  balanceable.
 - Detailed in-match upgrade system and snowball controls.
 - Exact meta-upgrades and Magic Coin economy/reward amounts.
 - Persistence design beyond the non-persistent first slice.
