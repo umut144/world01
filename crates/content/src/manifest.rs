@@ -141,8 +141,6 @@ pub struct RuntimeManifest {
     pub components: Vec<RuntimeComponent>,
     #[serde(default)]
     pub attachment_frames: Vec<RuntimeAttachmentFrame>,
-    #[serde(default)]
-    pub regions: Vec<RuntimeSemanticRegion>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -156,15 +154,6 @@ pub struct RuntimeAttachmentFrame {
 pub struct RuntimeFrameTransform {
     pub position: [f32; 2],
     pub rotation_radians: f32,
-}
-
-#[derive(Clone, Deserialize)]
-pub struct RuntimeSemanticRegion {
-    pub region_id: String,
-    pub name: String,
-    pub role: String,
-    pub vertices: Vec<[f32; 2]>,
-    pub indices: Vec<u32>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -289,7 +278,7 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if !(5..=12).contains(&manifest.schema_version) {
+    if manifest.schema_version != 13 {
         return Err(ContentError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -320,7 +309,7 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if !matches!(manifest.schema_version, 11 | 12)
+    if manifest.schema_version != 13
         || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
@@ -333,16 +322,6 @@ fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentErr
     attachment_frame(manifest, WEAPON_SECONDARY_GRIP_ROLE)?;
     attachment_frame(manifest, WEAPON_ATTACK_POINT_ROLE)?;
     attachment_frame(manifest, WEAPON_REACH_LIMIT_ROLE)?;
-    let attack_regions = manifest
-        .regions
-        .iter()
-        .filter(|region| region.role == "attack")
-        .count();
-    if attack_regions != 1 {
-        return Err(ContentError::new(
-            "Hammer must contain exactly one AttackRegion",
-        ));
-    }
     Ok(())
 }
 
@@ -468,26 +447,6 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
         )));
     }
 
-    let region_ids = manifest
-        .regions
-        .iter()
-        .map(|region| region.region_id.as_str())
-        .collect::<BTreeSet<_>>();
-    if region_ids.len() != manifest.regions.len() {
-        return Err(ContentError::new(format!(
-            "{} has duplicate semantic Region identities",
-            manifest.asset_key
-        )));
-    }
-    for region in &manifest.regions {
-        if region.region_id.is_empty() || region.name.is_empty() || region.role.is_empty() {
-            return Err(ContentError::new(format!(
-                "{} has invalid semantic Region metadata",
-                manifest.asset_key
-            )));
-        }
-        validate_mesh_parts(&region.vertices, &region.indices, &region.region_id)?;
-    }
     Ok(())
 }
 

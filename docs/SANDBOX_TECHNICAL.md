@@ -149,8 +149,8 @@ resources from it. Loading uses a temporary source map while resolving
 references; there is not yet a generic persistent asset-cache service.
 
 The existing loader is deliberately specific: it recognizes the character
-catalog, requires Hammer content, validates Hammer attachment/Region contracts,
-and exposes Labyrinth-derived health and combat geometry. Asset keys provide
+catalog, requires Hammer content, validates Hammer attachment contracts, and
+exposes Labyrinth-derived health and combat geometry. Asset keys provide
 stable identity inside this contract, while the set of supported package roles
 is not yet plugin-extensible.
 

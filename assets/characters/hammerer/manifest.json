@@ -17527,8 +17527,7 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
-	"schema_version": 12,
+	"schema_version": 13,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

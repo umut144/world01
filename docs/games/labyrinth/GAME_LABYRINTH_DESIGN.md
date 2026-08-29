@@ -307,11 +307,11 @@ Confirmed first-iteration direction:
 - The Hammerer's `weapon_socket_primary` and the Hammer's `grip_primary` are
   authored attachment frames. They carry orientation as well as position so
   the Hammer rotates around its grip instead of around its visual center.
-- The Hammer has an authored polygonal `AttackRegion`, drawn with PolyTools'
-  existing Bezier/closed-loop interaction rather than approximated by a circle.
+- The Hammer's `head_mid`, `head_left`, and `head_right` Components form the
+  authored polygonal attack geometry; no separate AttackRegion is authored.
 - The Hammer's complete authored Asset has been further enlarged and rebased in
-  PolyTools for Slice 15B. The synced geometry, AttackRegion, and every Weapon
-  frame share that authored scale; game01 applies no hard-coded size multiplier.
+  PolyTools for Slice 15B. The synced geometry and every Weapon frame share
+  that authored scale; game01 applies no hard-coded size multiplier.
 - `grip_primary` remains the Hammer's carried contact aligned to the Hammerer's
   `weapon_socket_primary`. The attack regrips the same hand to a separately
   authored weapon-local `grip_secondary`; neither existing role is renamed.
@@ -366,19 +366,20 @@ Confirmed first-iteration direction:
     `5.0 s` charge cap. A quickly released attack is therefore the uncharged
     basic strike at `20 HP` damage.
 - Charge scale and inward pull are presentation-only anticipation. They do not
-  change the locked attack grip, authoritative impact length, polygonal
-  AttackRegion size, or damage area. Swing restores the Hammer to its confirmed
-  apex/Impact scale curve, and authoritative Impact always evaluates the
-  authored AttackRegion at normal scale.
+  change the locked attack grip, authoritative impact length, Component attack
+  geometry, or damage area. Swing restores the Hammer to its confirmed
+  apex/Impact scale curve, and authoritative Impact evaluates the configured
+  attack Components at normal scale.
   Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction,
   charge duration, and current interpolated attack grip.
-- At authoritative impact, the Hammer evaluates its complete polygonal
-  `AttackRegion` against every overlapping target `HurtRegion`. Multiple targets
-  may be hit by one impact. Friendly fire is enabled, and the Hammerer is not
-  excluded from the query, so a self-hit is possible whenever the authored
-  regions overlap. A target that is DASH-invulnerable receives `0` damage.
+- At authoritative impact, the Hammer evaluates the union of its configured
+  attack Components against every overlapping target Hurt Component. Multiple
+  targets may be hit by one impact. Friendly fire is enabled, and the Hammerer
+  is not excluded from the query, so a self-hit is possible whenever the
+  authored Components overlap. A target that is DASH-invulnerable receives
+  `0` damage.
 - The first procedural swing crosses over the Hammerer's body through depth
   rather than circling around it in the screen plane. From a left-carried
   `180°` pose toward a rightward `0°` impact, it is projected like an exact
@@ -444,7 +445,8 @@ Confirmed first-iteration direction:
 Confirmed authoring aids:
 
 - `attack_point_primary` is placed at the Hammer head's authored center and
-  gives the swing and AttackRegion an explicit alignment reference.
+  gives the swing and configured attack Components an explicit alignment
+  reference.
 - `grip_secondary` is authored on the Hammer shaft as the attack contact. The
   impact radius is derived from this frame to `attack_point_primary`; no
   duplicate impact-distance balance value is introduced for this iteration.

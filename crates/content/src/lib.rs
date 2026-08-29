@@ -9,7 +9,7 @@ pub use derived::{
 pub use manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,
     RuntimeContent, RuntimeFrameTransform, RuntimeManifest, RuntimeMesh, RuntimePresentation,
-    RuntimeRegionMesh, RuntimeSemanticRegion, RuntimeStrokeMesh, RuntimeStrokeRun,
+    RuntimeRegionMesh, RuntimeStrokeMesh, RuntimeStrokeRun,
     RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
     WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
 };
