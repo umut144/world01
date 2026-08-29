@@ -7,6 +7,24 @@ source_catalog="$source_world_dir/catalog.json"
 assets_dir="$project_root/assets"
 required_schema=13
 
+finish() {
+  local status=$?
+  trap - EXIT
+  if [[ -n "${staging_dir:-}" ]]; then
+    rm -rf -- "$staging_dir"
+  fi
+  if [[ -n "${backup_dir:-}" ]]; then
+    rm -rf -- "$backup_dir"
+  fi
+  if ((status == 0)); then
+    printf '%s\n' 'POLYTOOLS SYNC SUCCESS'
+  else
+    printf '%s\n' 'POLYTOOLS SYNC FAILED' >&2
+  fi
+  exit "$status"
+}
+trap finish EXIT
+
 if ! command -v jq >/dev/null 2>&1; then
   printf '%s\n' 'error: jq is required to validate PolyTools exports.' >&2
   exit 1
@@ -67,10 +85,6 @@ asset_type_for_directory() {
 mkdir -p "$assets_dir"
 staging_dir="$(mktemp -d "$assets_dir/.polytools-staging.XXXXXX")"
 backup_dir="$(mktemp -d "$assets_dir/.polytools-backup.XXXXXX")"
-cleanup() {
-  rm -rf "$staging_dir" "$backup_dir"
-}
-trap cleanup EXIT
 
 for directory in characters props weapons terrain icons symbols; do
   mkdir -p "$staging_dir/$directory"
@@ -149,5 +163,3 @@ if [[ -e "$assets_dir/catalog.json" ]]; then
   mv "$assets_dir/catalog.json" "$backup_dir/catalog.json"
 fi
 mv "$staging_dir/catalog.json" "$assets_dir/catalog.json"
-
-printf 'Synced PolyTools world assets (characters, props, weapons, terrain, icons, symbols) to %s\n' "$assets_dir"
