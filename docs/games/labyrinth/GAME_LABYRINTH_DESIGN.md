@@ -309,6 +309,9 @@ Confirmed first-iteration direction:
   the Hammer rotates around its grip instead of around its visual center.
 - The Hammer's `head_mid`, `head_left`, and `head_right` Components form the
   authored polygonal attack geometry; no separate AttackRegion is authored.
+- The Hammer defines a named ability with `name_key: "HammerStrike"`. Its
+  attack Components remain separate during hit evaluation so each Component
+  can contribute its own gameplay effect.
 - The Hammer's complete authored Asset has been further enlarged and rebased in
   PolyTools for Slice 15B. The synced geometry and every Weapon frame share
   that authored scale; game01 applies no hard-coded size multiplier.
@@ -362,24 +365,30 @@ Confirmed first-iteration direction:
   - The visible inward pull begins only at `2.0 s` and grows linearly to at most
     5% of the authored secondary-grip-to-attack-point distance at `5.0 s`.
   - The uncharged attack deals `20 HP` base damage (`100%`). Every completed
-    `0.5 s` of charging adds `2%` damage, reaching `120%` (`24 HP`) at the
+    `0.5 s` of charging adds `10%` damage, reaching `200%` (`40 HP`) at the
     `5.0 s` charge cap. A quickly released attack is therefore the uncharged
     basic strike at `20 HP` damage.
 - Charge scale and inward pull are presentation-only anticipation. They do not
   change the locked attack grip, authoritative impact length, Component attack
-  geometry, or damage area. Swing restores the Hammer to its confirmed
-  apex/Impact scale curve, and authoritative Impact evaluates the configured
-  attack Components at normal scale.
+  geometry, or Component-specific damage/effects. Swing restores the Hammer to
+  its confirmed apex/Impact scale curve, and authoritative Impact evaluates
+  each configured attack Component at normal scale.
   Continued IJKL input may keep rotating the weapon aim while Charging.
 - The Hammerer retains normal global movement speed during Charging, Swing,
   embedded Impact, and Recovery. Releasing freezes the attack direction,
   charge duration, and current interpolated attack grip.
-- At authoritative impact, the Hammer evaluates the union of its configured
-  attack Components against every overlapping target Hurt Component. Multiple
-  targets may be hit by one impact. Friendly fire is enabled, and the Hammerer
-  is not excluded from the query, so a self-hit is possible whenever the
-  authored Components overlap. A target that is DASH-invulnerable receives
-  `0` damage.
+- At authoritative impact, `HammerStrike` evaluates each configured attack
+  Component separately against the target Hurt Components. Multiple targets
+  may be hit by one impact, while multiple overlapping attack Components still
+  deal damage only once to the same Character. Friendly fire is enabled, and
+  the Hammerer is not excluded from the query, so a self-hit is possible
+  whenever the authored Components overlap. A target that is DASH-invulnerable
+  receives `0` damage and no additional effect.
+- `head_mid`, `head_left`, and `head_right` each deal the same calculated
+  `HammerStrike` damage. A hit through `head_left` or `head_right` additionally
+  applies `STUNNED` for `4` seconds. If multiple side Components touch the same
+  Character, the damage remains one hit and the additional STUNNED effect is
+  applied once for that Character.
 - In this first combat iteration, each character's `body` and `head`
   Components together form one shared `HurtRegion`. Overlap with multiple
   Components of the same Character still produces only one hit; separate
