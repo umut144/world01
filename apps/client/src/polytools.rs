@@ -530,6 +530,7 @@ pub fn spawn_projected_prop_visual(
     fill_color: Color,
     projection_rotation: Quat,
     presentation_layer: f32,
+    outline_depth_meters: f32,
 ) -> Result<(), PolyToolsAssetError> {
     let anchor = commands
         .spawn((
@@ -593,7 +594,7 @@ pub fn spawn_projected_prop_visual(
                     Mesh2d(meshes.add(bevy_closed_prism_mesh(
                         &stroke_mesh.vertices,
                         &stroke_mesh.indices,
-                        component.projection_depth_meters,
+                        outline_depth_meters,
                     ))),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),

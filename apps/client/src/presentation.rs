@@ -44,6 +44,7 @@ const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
 const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
 const ANKH_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_TILT_DEGREES: f32 = 30.0;
+const ANKH_OUTLINE_DEPTH_METERS: f32 = 0.025;
 
 pub struct ClientPresentationPlugin {
     pub character_assets: CharacterAssetLibrary,
@@ -687,6 +688,7 @@ fn setup_ankh_visuals(
             Color::srgb(0.72, 0.56, 0.20),
             ankh_projection_rotation(),
             ANKH_PRESENTATION_LAYER,
+            ANKH_OUTLINE_DEPTH_METERS,
         ) {
             error!("cannot spawn Ankh prop visual: {error}");
         }
