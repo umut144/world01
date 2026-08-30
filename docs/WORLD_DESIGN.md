@@ -42,8 +42,8 @@ dieses Dokuments maßgeblich.
 | Kamera | Maximierter Referenz-Viewport | `2880 × 1800 px` |  | Andere Fensterformate werden über aspektgerechtes Framing und Letterboxing angepasst |
 | Flächendichte | Sechs Dichteklassen | `0.00 / 0.25 / 0.50 / 1.00 / 2.00 / 4.00` | `d(k) ∈ {0.00, 0.25, 0.50, 1.00, 2.00, 4.00}` | Relative 2D-Flächendichte der Klassen Weightless / Gas bis Very Heavy |
 | Masse | Materialtragende Components | Flächengewichtete Summe | `M(X) = Σ_i A_i × d(k_i)` | Transformierte Fill-Fläche mal Dichtefaktor; ausgeschlossene Components tragen keine Masse bei |
-| Bewegungsmasse | Character-Körper | Waffen zunächst ausgeschlossen | `M_move(C) = M_body(C)` | Waffenmasse wird separat abgeleitet; vorbereitetes Gesamtmodell: `M_total(C) = M_body(C) + Σ_w M_weapon(w)` |
-| Normalgeschwindigkeit | Hammerer | `0.6 m/s` | `v(C) = 0.6 m/s × (M_body(Hammerer) / M_body(C))^0.25` | Vierter-Wurzel-Massenkurve; RUN und DASH bauen auf der effektiven Normalgeschwindigkeit auf |
+| Bewegungsmasse | Character-Körper | Waffen zunächst ausgeschlossen | `M_move(C) = M_body(C) + optional Σ_w M_weapon(w)` | Waffenmasse wird separat abgeleitet und kann später zur Bewegungsmasse zugeschaltet werden |
+| Normalgeschwindigkeit | Unbewaffneter Hammerer | `0.6 m/s` | `v(C) = 0.6 m/s × (M_body(Hammerer) / M_move(C))^0.25` | Vierter-Wurzel-Massenkurve; RUN und DASH bauen auf der effektiven Normalgeschwindigkeit auf |
 | MaxHP | Hammerer | `140 HP` | `HP(C) = 140 × A_HP(C) / A_HP(Hammerer)` | Referenz für die flächenbasierte HP-Normierung |
 | MaxHP-Fläche | Alle Charaktere | `body + optional feet` | `A_HP(C) = A_body(C) + A_feet(C)` | Fläche aus exportierten triangulierten Fill-Meshes; automatisch datengetrieben |
 | HP-Balkenlänge | Mage | Faktor `1.0` | `L_factor(C) = MaxHP(C) / MaxHP(Mage)` | Temporäre UI-Verifikation; kein vorgesehenes finales HP-Display |
@@ -229,13 +229,17 @@ remains available for material that has no relevant gameplay mass.
   weapon mass. Weapon mass must therefore be derived without affecting initial
   movement speed, and the boundary must allow a later game to include equipped
   weapon mass without replacing the derivation model.
+- When a game enables equipped weapon mass, the unarmed Hammerer's body mass
+  remains the fixed normalization anchor. An equipped weapon therefore reduces
+  the carrier's speed, including the Hammerer's, rather than renormalizing the
+  whole Character catalog.
 
 ### Mass-derived normal movement speed
 
 - The Hammerer is the World-01 normalization reference. His effective normal
   movement speed is `0.6 m/s`.
-- Initial Character speed uses the fourth-root mass curve
-  `speed = 0.6 m/s * (Hammerer body mass / Character body mass)^0.25`.
+- Character speed uses the fourth-root mass curve
+  `speed = 0.6 m/s * (Hammerer body mass / Character movement mass)^0.25`.
 - RUN and DASH continue to derive from the resulting effective normal movement
   speed through their existing multipliers.
 - The formula has no arbitrary minimum or maximum speed clamp. The Rogue is

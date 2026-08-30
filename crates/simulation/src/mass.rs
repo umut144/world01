@@ -44,14 +44,14 @@ impl CharacterMassCatalog {
             }
             values.insert(character.clone(), (body, equipped_weapon, movement));
         }
-        let hammerer_movement = values
+        let hammerer_body = values
             .get(&CharacterId("hammerer".into()))
-            .map(|(_, _, movement)| *movement)
+            .map(|(body, _, _)| *body)
             .ok_or_else(|| MassModelError("missing Hammerer mass geometry".into()))?;
         let mut profiles = HashMap::new();
         for (character, (body, equipped_weapon, movement)) in values {
             let normal_speed_meters_per_second = config.mass.hammerer_speed_meters_per_second
-                * (hammerer_movement / movement).powf(config.mass.speed_mass_exponent);
+                * (hammerer_body / movement).powf(config.mass.speed_mass_exponent);
             if !normal_speed_meters_per_second.is_finite() || normal_speed_meters_per_second <= 0.0
             {
                 return Err(MassModelError(format!(
