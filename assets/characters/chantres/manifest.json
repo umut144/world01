@@ -2653,6 +2653,36 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_8008055797915588410",
+					"position": [
+						-0.220499992370605,
+						-0.0700000047683716
+					]
+				},
+				{
+					"point_id": "point_5546017009288862582",
+					"position": [
+						-0.134999990463257,
+						-0.340000009536743
+					]
+				},
+				{
+					"point_id": "mirror_point_8094786170490286315",
+					"position": [
+						0.220499992370605,
+						-0.0700000047683716
+					]
+				},
+				{
+					"point_id": "mirror_point_3531354170839659215",
+					"position": [
+						0.134999990463257,
+						-0.340000009536743
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
@@ -4568,6 +4598,36 @@
 			},
 			"name": "belly",
 			"parent_component_id": "component_74",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_5998453129035056365",
+					"position": [
+						-0.0700234174728394,
+						0.166724967956543
+					]
+				},
+				{
+					"point_id": "point_2895517937749526189",
+					"position": [
+						-0.148701429367065,
+						-0.0589950084686279
+					]
+				},
+				{
+					"point_id": "mirror_point_6867181221765704902",
+					"position": [
+						0.0700234174728394,
+						0.166724967956543
+					]
+				},
+				{
+					"point_id": "mirror_point_6569746183649581261",
+					"position": [
+						0.148701429367065,
+						-0.0589950084686279
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
@@ -5869,6 +5929,29 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_2061523260533648614",
+					"position": [
+						-0.106000018119812,
+						0.825
+					]
+				},
+				{
+					"point_id": "point_4793702232318845253",
+					"position": [
+						0.0,
+						0.656999969482422
+					]
+				},
+				{
+					"point_id": "mirror_point_2694969308626396839",
+					"position": [
+						0.106000018119812,
+						0.825
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
@@ -7008,6 +7091,22 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_76",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_2886844781268465279",
+					"position": [
+						0.0310000002384186,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_5975166909595052530",
+					"position": [
+						-0.0309999972581863,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
@@ -8147,6 +8246,22 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_76",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_5915079832542698480",
+					"position": [
+						-0.0309999942779541,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_320832249790582684",
+					"position": [
+						0.0310000002384186,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
@@ -17259,6 +17374,43 @@
 			},
 			"name": "hat",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_3301737361006410662",
+					"position": [
+						-0.377999997138977,
+						0.76399998664856
+					]
+				},
+				{
+					"point_id": "point_2341304140315888963",
+					"position": [
+						-0.10900000333786,
+						1.07299995422363
+					]
+				},
+				{
+					"point_id": "point_5689722522504875031",
+					"position": [
+						-0.0189999997615814,
+						1.1789999961853
+					]
+				},
+				{
+					"point_id": "point_8873930947583686245",
+					"position": [
+						0.125,
+						1.07700004577637
+					]
+				},
+				{
+					"point_id": "point_2790285923164098060",
+					"position": [
+						0.394000005722046,
+						0.767000007629395
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
@@ -17607,6 +17759,7 @@
 			},
 			"name": "hat_line",
 			"parent_component_id": "component_77",
+			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
 			"z_index": 5
 		}
@@ -17625,7 +17778,7 @@
 	"presentation": {
 		"authored_facing": "left"
 	},
-	"schema_version": 13,
+	"schema_version": 14,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

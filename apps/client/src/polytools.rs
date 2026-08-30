@@ -974,7 +974,7 @@ mod tests {
             .expect("Hammer attack point is valid");
         let reach_limit =
             attachment_frame(hammer, WEAPON_REACH_LIMIT_ROLE).expect("Hammer reach limit is valid");
-        assert_eq!(hammer.schema_version, 13);
+        assert_eq!(hammer.schema_version, 14);
         assert_eq!(hammer.asset_type, "weapons");
         assert!(Vec2::from_array(grip.asset_transform.position).is_finite());
         assert!(Vec2::from_array(secondary_grip.asset_transform.position).is_finite());
@@ -1034,7 +1034,7 @@ mod tests {
         assert!(!visible_components.is_empty());
         assert!(
             visible_components.iter().all(|component| {
-                (component.projection_depth_meters - 0.1).abs() < f32::EPSILON
+                (component.projection_depth_meters - 0.4).abs() < f32::EPSILON
             })
         );
         assert!(visible_components.iter().all(|component| {
@@ -1043,6 +1043,14 @@ mod tests {
                 .as_ref()
                 .is_some_and(|stroke| stroke.has_outline)
         }));
+        let body = visible_components
+            .iter()
+            .find(|component| component.name == "body")
+            .expect("Ankh body Component is visible");
+        assert_eq!(
+            body.projection_depth_corners.as_ref().map(Vec::len),
+            Some(12)
+        );
     }
 
     #[test]

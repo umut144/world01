@@ -14,6 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
+const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 14;
 
 #[derive(Resource, Clone)]
 pub struct RuntimeContent {
@@ -204,6 +205,8 @@ pub struct RuntimeComponent {
     pub local_transform: RuntimeTransform,
     #[serde(default = "default_projection_depth_meters")]
     pub projection_depth_meters: f32,
+    #[serde(default)]
+    pub projection_depth_corners: Option<Vec<RuntimeProjectionDepthCorner>>,
     pub mesh: Option<RuntimeMesh>,
     #[serde(default)]
     pub closed_region_mesh: Option<RuntimeRegionMesh>,
@@ -217,6 +220,12 @@ pub struct RuntimeComponent {
 
 fn default_projection_depth_meters() -> f32 {
     0.1
+}
+
+#[derive(Clone, Deserialize)]
+pub struct RuntimeProjectionDepthCorner {
+    pub point_id: String,
+    pub position: [f32; 2],
 }
 
 #[derive(Clone, Deserialize)]
@@ -303,7 +312,7 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if manifest.schema_version != 13 {
+    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
         return Err(ContentError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -334,12 +343,12 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if manifest.schema_version != 13
+    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION
         || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
         return Err(ContentError::new(
-            "Hammer must be a schema-11 or schema-12 weapons manifest",
+            "Hammer must be a schema-14 weapons manifest",
         ));
     }
     validate_asset_contents(manifest)?;
@@ -400,6 +409,28 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
     }
 
     for component in &manifest.components {
+        if component.source_asset_key.is_none() && component.projection_depth_corners.is_none() {
+            return Err(ContentError::new(format!(
+                "{} is missing projection-depth Corner Points",
+                component.component_id
+            )));
+        }
+        if let Some(corners) = component.projection_depth_corners.as_ref() {
+            let corner_ids = corners
+                .iter()
+                .map(|corner| corner.point_id.as_str())
+                .collect::<BTreeSet<_>>();
+            if corner_ids.len() != corners.len()
+                || corners
+                    .iter()
+                    .any(|corner| corner.point_id.is_empty() || !finite_pair(corner.position))
+            {
+                return Err(ContentError::new(format!(
+                    "{} has invalid projection-depth Corner Points",
+                    component.component_id
+                )));
+            }
+        }
         let pivot = component
             .component_pivot
             .or(component.local_pivot)
@@ -558,6 +589,28 @@ mod tests {
         assert_eq!(
             content.prop("ankh").map(|prop| prop.asset_key.as_str()),
             Some("ankh")
+        );
+    }
+
+    #[test]
+    fn embedded_ankh_body_exposes_its_authored_projection_depth_corners() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+        let ankh = content.prop("ankh").expect("embedded Ankh prop is present");
+        let body = ankh
+            .components
+            .iter()
+            .find(|component| component.name == "body")
+            .expect("Ankh has a body Component");
+        let corners = body
+            .projection_depth_corners
+            .as_ref()
+            .expect("ordinary Components export projection-depth Corner Points");
+
+        assert_eq!(corners.len(), 12);
+        assert!(
+            corners
+                .iter()
+                .all(|corner| { !corner.point_id.is_empty() && finite_pair(corner.position) })
         );
     }
 }

@@ -3772,6 +3772,22 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_8279731001714707516",
+					"position": [
+						-0.444999980926514,
+						-0.329999995231628
+					]
+				},
+				{
+					"point_id": "mirror_point_8787060870405258589",
+					"position": [
+						0.4,
+						-0.329999995231628
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
@@ -4341,6 +4357,7 @@
 			},
 			"name": "arm_line",
 			"parent_component_id": "component_6",
+			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
@@ -6891,6 +6908,7 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
 			"z_index": 2
 		},
@@ -8011,6 +8029,22 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_5",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_4929896108107969545",
+					"position": [
+						0.0330000013113022,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_7322010106834274423",
+					"position": [
+						-0.0329999983310699,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
@@ -9131,6 +9165,22 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_5",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_5413258734058806224",
+					"position": [
+						0.0330000013113022,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_6887310755834263382",
+					"position": [
+						-0.0329999983310699,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
@@ -13403,6 +13453,29 @@
 			},
 			"name": "hat",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_2163787112472732220",
+					"position": [
+						-0.4,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_3750744865911776731",
+					"position": [
+						-0.440000009536743,
+						0.130000019073486
+					]
+				},
+				{
+					"point_id": "point_8725473141765850664",
+					"position": [
+						0.4,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 4
 		}
@@ -13421,7 +13494,7 @@
 	"presentation": {
 		"authored_facing": "right"
 	},
-	"schema_version": 13,
+	"schema_version": 14,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

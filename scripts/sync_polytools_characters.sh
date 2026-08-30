@@ -5,7 +5,7 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyTools/worlds/world01}"
 source_catalog="$source_world_dir/catalog.json"
 assets_dir="$project_root/assets"
-required_schema=13
+required_schema=14
 
 success_color=''
 success_reset=''
@@ -136,6 +136,16 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
         (.component_id | type == "string" and length > 0)
         and (.name | type == "string" and length > 0)
         and (.local_transform | type == "object")
+        and (if .kind == "asset_reference" then
+          (has("projection_depth_corners") | not)
+        else
+          (.projection_depth_corners | type == "array")
+          and all(.projection_depth_corners[];
+            (.point_id | type == "string" and length > 0)
+            and (.position | type == "array" and length == 2 and all(.[]; type == "number" and isfinite))
+          )
+          and (([.projection_depth_corners[].point_id] | unique | length) == ([.projection_depth_corners[].point_id] | length))
+        end)
       ))
       and (if $type == "character" then
         (.attachment_frames | type == "array")

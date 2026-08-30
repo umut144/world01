@@ -1937,6 +1937,50 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_6664544772828519806",
+					"position": [
+						-0.15,
+						0.484999990463257
+					]
+				},
+				{
+					"point_id": "point_3307721165058378959",
+					"position": [
+						-0.4,
+						-0.105000019073486
+					]
+				},
+				{
+					"point_id": "point_7354295383944041822",
+					"position": [
+						-0.240000009536743,
+						-0.465000009536743
+					]
+				},
+				{
+					"point_id": "mirror_point_1317438747221897016",
+					"position": [
+						0.15,
+						0.484999990463257
+					]
+				},
+				{
+					"point_id": "mirror_point_2121132515374732125",
+					"position": [
+						0.4,
+						-0.105000019073486
+					]
+				},
+				{
+					"point_id": "mirror_point_5989467989506088843",
+					"position": [
+						0.240000009536743,
+						-0.465000009536743
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 0
 		},
@@ -3066,6 +3110,7 @@
 			},
 			"name": "belly",
 			"parent_component_id": "component_22",
+			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
 			"z_index": 1
 		},
@@ -4001,6 +4046,50 @@
 			},
 			"name": "head",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_7403895444111353539",
+					"position": [
+						0.129999995231628,
+						-0.175
+					]
+				},
+				{
+					"point_id": "point_1644022618651069588",
+					"position": [
+						0.25,
+						0.025
+					]
+				},
+				{
+					"point_id": "point_2928699667505512862",
+					"position": [
+						0.114999997615814,
+						0.2
+					]
+				},
+				{
+					"point_id": "mirror_point_5841116525700765769",
+					"position": [
+						-0.129999995231628,
+						-0.175
+					]
+				},
+				{
+					"point_id": "mirror_point_5960505830348759541",
+					"position": [
+						-0.25,
+						0.025
+					]
+				},
+				{
+					"point_id": "mirror_point_7390119926255383030",
+					"position": [
+						-0.114999997615814,
+						0.2
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 3
 		},
@@ -4194,6 +4283,29 @@
 			},
 			"name": "eye_right",
 			"parent_component_id": "component_18",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_8089255888887302388",
+					"position": [
+						0.0,
+						-0.0649999618530274
+					]
+				},
+				{
+					"point_id": "point_7307487732236315982",
+					"position": [
+						0.05,
+						0.0350000381469727
+					]
+				},
+				{
+					"point_id": "point_7095689170725922834",
+					"position": [
+						-0.05,
+						0.0340000152587891
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
@@ -4387,6 +4499,29 @@
 			},
 			"name": "eye_left",
 			"parent_component_id": "component_18",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_8577755126893111533",
+					"position": [
+						0.0,
+						0.0649999618530274
+					]
+				},
+				{
+					"point_id": "point_435434355813250047",
+					"position": [
+						0.05,
+						-0.0350000381469727
+					]
+				},
+				{
+					"point_id": "point_3314265712943291487",
+					"position": [
+						-0.05,
+						-0.0340000152587891
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 4
 		},
@@ -4776,6 +4911,29 @@
 			},
 			"name": "head_tip",
 			"parent_component_id": "component_18",
+			"projection_depth_corners": [
+				{
+					"point_id": "point_2034821196566936096",
+					"position": [
+						-0.114999997615814,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_8820691670213262324",
+					"position": [
+						0.0,
+						0.325
+					]
+				},
+				{
+					"point_id": "point_2737386321032421572",
+					"position": [
+						0.115000009536743,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 5
 		}
@@ -4794,7 +4952,7 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"schema_version": 13,
+	"schema_version": 14,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

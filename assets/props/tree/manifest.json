@@ -7595,6 +7595,36 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_730647510245149137",
+					"position": [
+						-1.0,
+						0.0
+					]
+				},
+				{
+					"point_id": "point_4437998441822270114",
+					"position": [
+						-1.0,
+						5.0
+					]
+				},
+				{
+					"point_id": "point_8612826145795688184",
+					"position": [
+						1.0,
+						5.0
+					]
+				},
+				{
+					"point_id": "point_5776037141774371142",
+					"position": [
+						1.0,
+						0.0
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 0
 		}
@@ -7613,7 +7643,7 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"schema_version": 13,
+	"schema_version": 14,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

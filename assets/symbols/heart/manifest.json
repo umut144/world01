@@ -2506,6 +2506,22 @@
 			},
 			"name": "body",
 			"parent_component_id": null,
+			"projection_depth_corners": [
+				{
+					"point_id": "point_2459239942217104146",
+					"position": [
+						0.0,
+						-0.0519999980926514
+					]
+				},
+				{
+					"point_id": "mirror_point_4785538755420035555",
+					"position": [
+						0.0,
+						0.0209999993443489
+					]
+				}
+			],
 			"projection_depth_meters": 0.1,
 			"z_index": 0
 		}
@@ -2524,7 +2540,7 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"schema_version": 13,
+	"schema_version": 14,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
