@@ -29,6 +29,27 @@ Interpretation rules:
 - Update this document when the developer makes a durable cross-game design
   decision.
 
+## Normierte Größenentscheidungen
+
+Diese Tabelle enthält die wichtigsten bestätigten Referenzgrößen. Charaktere,
+Assets und UI-Elemente werden relativ zu diesen Referenzen abgeleitet. Die
+ausführlichen Regeln und Ausnahmen bleiben in den jeweiligen Fachabschnitten
+dieses Dokuments maßgeblich.
+
+| Bereich | Referenz | Normwert | Modell | Ableitung / Anwendung |
+|---|---|---:|---|---|
+| Weltmaßstab | PolyTools- und Weltgeometrie | `1 m = 192 px` | `x_m = x_px / 192` | Einheitliche Umrechnung zwischen authored Assets und Spielwelt |
+| Kamera | Maximierter Referenz-Viewport | `2880 × 1800 px` |  | Andere Fensterformate werden über aspektgerechtes Framing und Letterboxing angepasst |
+| Flächendichte | Sechs Dichteklassen | `0.00 / 0.25 / 0.50 / 1.00 / 2.00 / 4.00` | `d(k) ∈ {0.00, 0.25, 0.50, 1.00, 2.00, 4.00}` | Relative 2D-Flächendichte der Klassen Weightless / Gas bis Very Heavy |
+| Masse | Materialtragende Components | Flächengewichtete Summe | `M(X) = Σ_i A_i × d(k_i)` | Transformierte Fill-Fläche mal Dichtefaktor; ausgeschlossene Components tragen keine Masse bei |
+| Bewegungsmasse | Character-Körper | Waffen zunächst ausgeschlossen | `M_move(C) = M_body(C)` | Waffenmasse wird separat abgeleitet; vorbereitetes Gesamtmodell: `M_total(C) = M_body(C) + Σ_w M_weapon(w)` |
+| Normalgeschwindigkeit | Hammerer | `0.6 m/s` | `v(C) = 0.6 m/s × (M_body(Hammerer) / M_body(C))^0.25` | Vierter-Wurzel-Massenkurve; RUN und DASH bauen auf der effektiven Normalgeschwindigkeit auf |
+| MaxHP | Hammerer | `140 HP` | `HP(C) = 140 × A_HP(C) / A_HP(Hammerer)` | Referenz für die flächenbasierte HP-Normierung |
+| MaxHP-Fläche | Alle Charaktere | `body + optional feet` | `A_HP(C) = A_body(C) + A_feet(C)` | Fläche aus exportierten triangulierten Fill-Meshes; automatisch datengetrieben |
+| HP-Balkenlänge | Mage | Faktor `1.0` | `L_factor(C) = MaxHP(C) / MaxHP(Mage)` | Temporäre UI-Verifikation; kein vorgesehenes finales HP-Display |
+| Pupillenfläche | Jeweilige Augenregion | `26.0%` | `A_pupil(C) = 0.26 × A_eye(C)` | Pupillenradius wird unabhängig aus der jeweiligen Augenfläche abgeleitet |
+| Pupillenkollision | Hammerer | `35.0%` seines Pupillenradius | `r_collision(C) = min(0.35 × r_pupil(Hammerer), r_pupil(C))` | Gemeinsame absolute Kollisionsreferenz, begrenzt auf den jeweiligen Pupillenradius |
+
 ## World 01 identity
 
 - Shared world identity: **World 01**.
