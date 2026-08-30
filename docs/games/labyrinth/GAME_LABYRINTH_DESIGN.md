@@ -83,17 +83,19 @@ Interpretation rules:
 
 - Other displays must be scaled/framed so they reveal neither more nor less
   relevant game world.
-- The current camera test uses one **50 × 50 tile** room; room dimensions are
-  independent from the camera's visible tile count.
+- The current single-room map is authored in SceneMaker as a **100 × 100 tile**
+  Grass field with one Tree and one Ankh; map dimensions and placements come
+  from the synchronized SceneMaker export rather than `design.toml`.
+- Authored map dimensions remain independent from the camera's visible tile
+  count.
 - The camera view is configured separately (`view_width_tiles` /
   `view_height_tiles`) and letterboxes unused native-window area.
 - Larger logical spaces can be composed from multiple room units, while each
   room's configured tile dimensions remain independent and are shown whole.
 - The camera follows and centers the complete active room; exceptions and
   special rooms are possible.
-- Room dimensions are configured before a match and may vary between rooms;
-  every configured room is shown completely and centered in its aspect-matched
-  camera frame.
+- Room dimensions are authored before a match and may vary between rooms; the
+  camera view remains a separate game-owned policy.
 - The current camera test intentionally has no neighbor-room or transition
   presentation; the character starts at the center of the single room.
 - The current playable implementation remains a single room. The former fixed

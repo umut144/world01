@@ -1,5 +1,12 @@
 {
-  "assets": [],
+  "assets": [
+    {
+      "asset_key": "grass",
+      "asset_type": "terrain",
+      "display_name": "Grass",
+      "runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
+    }
+  ],
   "schema_version": 1,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"

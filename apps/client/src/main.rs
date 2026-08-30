@@ -10,13 +10,13 @@ use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
     CharacterLifeRules, HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules,
 };
-use world01_world_data::AnkhLayout;
+use world01_world_data::{AnkhLayout, WorldMap};
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationRules;
 use crate::polytools::CharacterAssetLibrary;
 use crate::prediction::ClientPredictionPlugin;
-use crate::presentation::{CameraView, ClientPresentationPlugin, RoomDimensions};
+use crate::presentation::{CameraView, ClientPresentationPlugin};
 use crate::projection::ProjectionDepthPresentationPlugin;
 use crate::session::ClientSessionPlugin;
 
@@ -40,6 +40,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config = load_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
+    let world_map = WorldMap::load_embedded()?;
+    let ankh_layout = AnkhLayout::from_map(&world_map);
+    if ankh_layout.positions.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "SceneMaker world map requires at least one Ankh placement",
+        )
+        .into());
+    }
     let hammer_geometry =
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
@@ -120,20 +129,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hammer_geometry);
     app.insert_resource(hurt_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
-    app.insert_resource(
-        RoomDimensions::new(config.room.width_tiles, config.room.height_tiles).ok_or_else(
-            || {
-                io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "room dimensions must be greater than zero",
-                )
-            },
-        )?,
-    );
-    app.insert_resource(AnkhLayout::for_room(
-        config.room.width_tiles,
-        config.room.height_tiles,
-    ));
+    app.insert_resource(world_map);
+    app.insert_resource(ankh_layout);
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientSessionPlugin {

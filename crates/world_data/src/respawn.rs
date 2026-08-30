@@ -1,7 +1,7 @@
 use bevy::prelude::{Component, Reflect, Resource};
 use serde::{Deserialize, Serialize};
 
-use crate::Position;
+use crate::{Position, WorldMap};
 
 #[derive(
     Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
@@ -22,23 +22,15 @@ pub struct AnkhLayout {
 }
 
 impl AnkhLayout {
-    pub fn for_room(width_tiles: u32, height_tiles: u32) -> Self {
-        let width = width_tiles as f32;
-        let height = height_tiles as f32;
-        let offsets = [(-0.25, -0.20), (0.20, 0.15), (-0.05, 0.35)];
-
+    pub fn from_map(map: &WorldMap) -> Self {
         Self {
-            positions: offsets
-                .into_iter()
-                .map(|(x, y)| Position::new(width * x, height * y))
+            positions: map
+                .placements()
+                .iter()
+                .filter(|placement| placement.asset_key == "ankh")
+                .map(|placement| placement.position)
                 .collect(),
         }
-    }
-}
-
-impl Default for AnkhLayout {
-    fn default() -> Self {
-        Self::for_room(16, 10)
     }
 }
 
@@ -47,12 +39,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_room_layout_contains_three_distinct_ankhs_around_the_center() {
-        let layout = AnkhLayout::for_room(16, 10);
+    fn layout_uses_authored_ankh_placements() {
+        let map = WorldMap::load_embedded().expect("embedded SceneMaker map is valid");
+        let layout = AnkhLayout::from_map(&map);
 
-        assert_eq!(layout.positions.len(), 3);
-        assert_eq!(layout.positions[0], Position::new(-4.0, -2.0));
-        assert_eq!(layout.positions[1], Position::new(3.2, 1.5));
-        assert_eq!(layout.positions[2], Position::new(-0.8, 3.5));
+        assert_eq!(layout.positions, [Position::new(4.0, 0.0)]);
     }
 }

@@ -127,6 +127,10 @@ impl CharacterAssetLibrary {
         self.content.prop(asset_key)
     }
 
+    pub fn terrain(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.content.terrain(asset_key)
+    }
+
     pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
         let Some(manifest) = self.character(character) else {
             return Vec2::ZERO;
@@ -607,6 +611,82 @@ pub fn spawn_projected_prop_visual(
     Ok(())
 }
 
+pub fn repeated_flat_asset_mesh(
+    manifest: &RuntimeManifest,
+    offsets: impl IntoIterator<Item = Vec2>,
+) -> Result<Mesh, PolyToolsAssetError> {
+    let offsets = offsets.into_iter().collect::<Vec<_>>();
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for offset in offsets {
+        for component in &manifest.components {
+            let world = component_world_transform(component, &manifest.components)
+                .unwrap_or_else(|| component_transform(component));
+            if let Some(mesh) = component.mesh.as_ref() {
+                append_repeated_mesh(
+                    &mut vertices,
+                    &mut indices,
+                    mesh,
+                    world,
+                    component.local_pivot,
+                    manifest.asset_pivot,
+                    offset,
+                )?;
+            }
+            for referenced in &component.referenced_components {
+                if let Some(mesh) = referenced.mesh.as_ref() {
+                    append_repeated_mesh(
+                        &mut vertices,
+                        &mut indices,
+                        mesh,
+                        world.mul_transform(component_transform(referenced)),
+                        referenced.local_pivot,
+                        manifest.asset_pivot,
+                        offset,
+                    )?;
+                }
+            }
+        }
+    }
+    if vertices.is_empty() || indices.is_empty() {
+        return Err(PolyToolsAssetError::new(format!(
+            "terrain asset '{}' has no visible fill mesh",
+            manifest.asset_key
+        )));
+    }
+    Ok(bevy_mesh_from_parts(&vertices, &indices))
+}
+
+fn append_repeated_mesh(
+    vertices: &mut Vec<[f32; 2]>,
+    indices: &mut Vec<u32>,
+    mesh: &RuntimeMesh,
+    transform: Transform,
+    local_pivot: Option<[f32; 2]>,
+    asset_pivot: [f32; 2],
+    offset: Vec2,
+) -> Result<(), PolyToolsAssetError> {
+    let vertex_offset = u32::try_from(vertices.len())
+        .map_err(|_| PolyToolsAssetError::new("repeated terrain mesh exceeds u32 indexing"))?;
+    let local_pivot = Vec2::from_array(local_pivot.unwrap_or([0.0, 0.0]));
+    let asset_pivot = Vec2::from_array(asset_pivot);
+    for vertex in &mesh.vertices {
+        let transformed = transform
+            .transform_point((Vec2::from_array(*vertex) - local_pivot).extend(0.0))
+            .truncate()
+            - asset_pivot
+            + offset;
+        vertices.push(transformed.to_array());
+    }
+    for index in &mesh.indices {
+        let repeated_index = vertex_offset
+            .checked_add(*index)
+            .ok_or_else(|| PolyToolsAssetError::new("repeated terrain index overflow"))?;
+        indices.push(repeated_index);
+    }
+    Ok(())
+}
+
 fn spawn_hammer_visual(
     commands: &mut Commands,
     owner: Entity,
@@ -949,6 +1029,34 @@ mod tests {
         assert_eq!(ids.len(), 11);
         assert!(ids.iter().any(|character| character.0 == "monk"));
         assert!(ids.iter().any(|character| character.0 == "warrior"));
+    }
+
+    #[test]
+    fn repeated_terrain_mesh_reuses_polytools_fill_geometry_for_each_cell() {
+        let library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        let grass = library.terrain("grass").expect("Grass terrain is present");
+        let source_vertex_count = grass
+            .components
+            .iter()
+            .filter_map(|component| component.mesh.as_ref())
+            .map(|mesh| mesh.vertices.len())
+            .sum::<usize>();
+        let source_index_count = grass
+            .components
+            .iter()
+            .filter_map(|component| component.mesh.as_ref())
+            .map(|mesh| mesh.indices.len())
+            .sum::<usize>();
+
+        let mesh = repeated_flat_asset_mesh(grass, [Vec2::ZERO, Vec2::X])
+            .expect("Grass can be repeated as one flat mesh");
+
+        assert_eq!(mesh.count_vertices(), source_vertex_count * 2);
+        assert_eq!(
+            mesh.indices().map(Indices::len),
+            Some(source_index_count * 2)
+        );
     }
 
     #[test]

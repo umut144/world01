@@ -20,7 +20,7 @@ use world01_simulation::{
     LocomotionRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
     apply_hammer_strike_damage, update_character_life,
 };
-use world01_world_data::AnkhLayout;
+use world01_world_data::{AnkhLayout, WorldMap};
 
 use crate::session::ServerSessionPlugin;
 
@@ -30,6 +30,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let config = load_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
+    let world_map = WorldMap::load_embedded()?;
+    let ankh_layout = AnkhLayout::from_map(&world_map);
+    if ankh_layout.positions.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "SceneMaker world map requires at least one Ankh placement",
+        )
+        .into());
+    }
     let network_simulation = network_simulation_from_env()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -82,10 +91,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(hurt_geometry)
     .insert_resource(character_health)
     .insert_resource(character_mass)
-    .insert_resource(AnkhLayout::for_room(
-        config.room.width_tiles,
-        config.room.height_tiles,
-    ));
+    .insert_resource(world_map)
+    .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,

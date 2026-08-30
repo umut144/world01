@@ -12,7 +12,6 @@ pub struct DesignConfig {
     pub locomotion: LocomotionConfig,
     pub health: HealthConfig,
     pub weapon_aim: WeaponAimConfig,
-    pub room: RoomConfig,
     pub camera: CameraConfig,
     pub eyes: EyesConfig,
 }
@@ -208,18 +207,6 @@ impl EyesConfig {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-pub struct RoomConfig {
-    pub width_tiles: u32,
-    pub height_tiles: u32,
-}
-
-impl RoomConfig {
-    pub const fn is_valid(self) -> bool {
-        self.width_tiles > 0 && self.height_tiles > 0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 pub struct CameraConfig {
     pub view_preset: u32,
     pub view_width_tiles: u32,
@@ -275,9 +262,6 @@ mod tests {
             Some(Duration::from_secs_f64(1.0 / 30.0))
         );
         assert_eq!(design.network.remote_interpolation_ratio, 2.0);
-        assert_eq!(design.room.width_tiles, 50);
-        assert_eq!(design.room.height_tiles, 50);
-        assert!(design.room.is_valid());
         assert_eq!(design.camera.effective_view_tiles(), Some((16, 10)));
         assert!(design.camera.is_valid());
         assert_eq!(design.eyes.pupil_area_ratio, 0.26);

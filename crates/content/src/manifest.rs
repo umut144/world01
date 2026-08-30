@@ -20,6 +20,7 @@ const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 14;
 pub struct RuntimeContent {
     characters: HashMap<CharacterId, RuntimeManifest>,
     props: HashMap<String, RuntimeManifest>,
+    terrain: HashMap<String, RuntimeManifest>,
     hammer: RuntimeManifest,
 }
 
@@ -49,7 +50,7 @@ impl RuntimeContent {
         for asset in &catalog.assets {
             if !matches!(
                 asset.asset_type.as_str(),
-                "character" | "props" | "weapons" | "symbols"
+                "character" | "props" | "weapons" | "terrain" | "symbols"
             ) {
                 continue;
             }
@@ -61,9 +62,13 @@ impl RuntimeContent {
 
         let mut characters = HashMap::new();
         let mut props = HashMap::new();
+        let mut terrain = HashMap::new();
         let mut hammer = None;
         for asset in &catalog.assets {
-            if !matches!(asset.asset_type.as_str(), "character" | "props" | "weapons") {
+            if !matches!(
+                asset.asset_type.as_str(),
+                "character" | "props" | "weapons" | "terrain"
+            ) {
                 continue;
             }
             let source = source_cache.get(&asset.asset_key).ok_or_else(|| {
@@ -85,6 +90,9 @@ impl RuntimeContent {
             } else if asset.asset_type == "props" {
                 validate_asset_contents(&manifest)?;
                 props.insert(asset.asset_key.clone(), manifest);
+            } else if asset.asset_type == "terrain" {
+                validate_asset_contents(&manifest)?;
+                terrain.insert(asset.asset_key.clone(), manifest);
             }
         }
 
@@ -97,6 +105,7 @@ impl RuntimeContent {
         Ok(Self {
             characters,
             props,
+            terrain,
             hammer,
         })
     }
@@ -125,6 +134,10 @@ impl RuntimeContent {
 
     pub fn prop(&self, asset_key: &str) -> Option<&RuntimeManifest> {
         self.props.get(asset_key)
+    }
+
+    pub fn terrain(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.terrain.get(asset_key)
     }
 }
 
@@ -567,6 +580,7 @@ fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> 
         )),
         ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
         ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
+        ("terrain", "grass") => Some(include_str!("../../../assets/terrain/grass/manifest.json")),
         ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
         ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
         ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),
@@ -589,6 +603,12 @@ mod tests {
         assert_eq!(
             content.prop("ankh").map(|prop| prop.asset_key.as_str()),
             Some("ankh")
+        );
+        assert_eq!(
+            content
+                .terrain("grass")
+                .map(|terrain| terrain.asset_key.as_str()),
+            Some("grass")
         );
     }
 

@@ -4,6 +4,7 @@ use bevy::{
     transform::{TransformSystems, helper::TransformHelper},
     window::PrimaryWindow,
 };
+use std::collections::BTreeMap;
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
 #[cfg(feature = "dev")]
@@ -13,7 +14,7 @@ use world01_network::{
 };
 use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
-    MovementIntent, Position, RunState, SelectedCharacter,
+    MovementIntent, Position, RunState, SelectedCharacter, WorldMap,
 };
 
 use crate::eyes::EyePupil;
@@ -24,7 +25,8 @@ use crate::input::{
     collect_movement_input, update_client_input_focus,
 };
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_pupil_mesh, spawn_character_visual, spawn_projected_prop_visual,
+    CharacterAssetLibrary, bevy_pupil_mesh, repeated_flat_asset_mesh, spawn_character_visual,
+    spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
@@ -38,10 +40,8 @@ const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
-const PRIMARY_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.37, 0.35, 0.40);
-const PRIMARY_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.31, 0.29, 0.34);
-const ALTERNATE_CHECKERBOARD_EVEN_COLOR: Color = Color::srgb(0.36, 0.39, 0.43);
-const ALTERNATE_CHECKERBOARD_ODD_COLOR: Color = Color::srgb(0.30, 0.33, 0.37);
+const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
+const PROP_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_TILT_DEGREES: f32 = 30.0;
 const ANKH_OUTLINE_DEPTH_METERS: f32 = 0.025;
@@ -54,32 +54,6 @@ pub struct ClientPresentationPlugin {
 pub struct CameraView {
     pub width_tiles: u32,
     pub height_tiles: u32,
-}
-
-#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RoomDimensions {
-    width_tiles: u32,
-    height_tiles: u32,
-}
-
-impl RoomDimensions {
-    pub const fn new(width_tiles: u32, height_tiles: u32) -> Option<Self> {
-        if width_tiles == 0 || height_tiles == 0 {
-            return None;
-        }
-        Some(Self {
-            width_tiles,
-            height_tiles,
-        })
-    }
-
-    const fn width_meters(self) -> f32 {
-        self.width_tiles as f32
-    }
-
-    const fn height_meters(self) -> f32 {
-        self.height_tiles as f32
-    }
 }
 
 impl CameraView {
@@ -106,7 +80,11 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(
                 OnEnter(ClientScreen::InGame),
-                (configure_ingame_camera, setup_ankh_visuals),
+                (
+                    configure_ingame_camera,
+                    setup_map_visuals,
+                    setup_ankh_visuals,
+                ),
             )
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
@@ -165,7 +143,7 @@ impl Plugin for ClientPresentationPlugin {
 }
 
 #[derive(Component)]
-struct RoomFloorTile;
+struct RenderedMap;
 
 #[derive(Component)]
 struct RenderedAnkh;
@@ -322,9 +300,6 @@ fn apply_letterbox_viewport(
 fn hot_reload_design(
     mut last_modified: Local<Option<SystemTime>>,
     mut camera_view: ResMut<CameraView>,
-    mut room_dimensions: ResMut<RoomDimensions>,
-    floor_tiles: Query<Entity, With<RoomFloorTile>>,
-    mut commands: Commands,
 ) {
     let path = Path::new("crates/configs/design.toml");
     let Ok(modified) = std::fs::metadata(path).and_then(|metadata| metadata.modified()) else {
@@ -347,20 +322,8 @@ fn hot_reload_design(
         warn!("ignoring hot-reloaded configuration with invalid camera dimensions");
         return;
     };
-    let Some(new_dimensions) =
-        RoomDimensions::new(design.room.width_tiles, design.room.height_tiles)
-    else {
-        warn!("ignoring hot-reloaded configuration with invalid room dimensions");
-        return;
-    };
-
     *camera_view = CameraView::new(camera_width, camera_height);
-    *room_dimensions = new_dimensions;
-    for entity in &floor_tiles {
-        commands.entity(entity).despawn();
-    }
-    spawn_single_room(&mut commands, new_dimensions);
-    info!("reloaded room and camera configuration");
+    info!("reloaded camera configuration");
 }
 
 fn configure_ingame_camera(
@@ -471,7 +434,6 @@ fn handle_selection_input(
         With<Button>,
     >,
     mut commands: Commands,
-    room_dimensions: Res<RoomDimensions>,
     character_assets: Res<CharacterAssetLibrary>,
 ) -> Result {
     if session.joining {
@@ -483,12 +445,7 @@ fn handle_selection_input(
             if let Some(selection_button) = selection_button {
                 session.selected = Some(selection_button.0.clone());
             } else if confirm_button.is_some() {
-                return join_selected_character(
-                    &mut session,
-                    &mut commands,
-                    &mut next_screen,
-                    *room_dimensions,
-                );
+                return join_selected_character(&mut session, &mut commands, &mut next_screen);
             }
         }
     }
@@ -519,12 +476,7 @@ fn handle_selection_input(
     }
 
     if keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::NumpadEnter) {
-        return join_selected_character(
-            &mut session,
-            &mut commands,
-            &mut next_screen,
-            *room_dimensions,
-        );
+        return join_selected_character(&mut session, &mut commands, &mut next_screen);
     }
 
     Ok(())
@@ -627,7 +579,6 @@ fn join_selected_character(
     session: &mut ClientSession,
     commands: &mut Commands,
     next_screen: &mut NextState<ClientScreen>,
-    room_dimensions: RoomDimensions,
 ) -> Result {
     let Some(character) = session.selected.clone() else {
         return Ok(());
@@ -641,7 +592,6 @@ fn join_selected_character(
         session.network_simulation,
     )?;
     session.joining = true;
-    spawn_single_room(commands, room_dimensions);
     next_screen.set(ClientScreen::InGame);
     Ok(())
 }
@@ -695,17 +645,98 @@ fn setup_ankh_visuals(
     }
 }
 
+fn setup_map_visuals(
+    mut commands: Commands,
+    map: Res<WorldMap>,
+    character_assets: Res<CharacterAssetLibrary>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut flat_materials: ResMut<Assets<ColorMaterial>>,
+    mut projection_materials: ResMut<Assets<ProjectionDepthMaterial>>,
+) {
+    let mut terrain_offsets = BTreeMap::<&str, Vec<Vec2>>::new();
+    for cell in map.terrain_cells() {
+        terrain_offsets
+            .entry(&cell.asset_key)
+            .or_default()
+            .push(Vec2::new(cell.center.x, cell.center.y));
+    }
+    for (asset_key, offsets) in terrain_offsets {
+        let Some(manifest) = character_assets.terrain(asset_key) else {
+            error!(
+                asset_key,
+                "cannot render map terrain: missing PolyTools manifest"
+            );
+            continue;
+        };
+        match repeated_flat_asset_mesh(manifest, offsets) {
+            Ok(mesh) => {
+                commands.spawn((
+                    RenderedMap,
+                    Mesh2d(meshes.add(mesh)),
+                    MeshMaterial2d(flat_materials.add(map_asset_color(asset_key))),
+                    Transform::from_xyz(0.0, 0.0, TERRAIN_PRESENTATION_LAYER),
+                ));
+            }
+            Err(error) => error!(asset_key, %error, "cannot build repeated map terrain mesh"),
+        }
+    }
+
+    for placement in map
+        .placements()
+        .iter()
+        .chain(map.transitions().iter())
+        .filter(|placement| placement.asset_key != "ankh")
+    {
+        let Some(manifest) = character_assets.prop(&placement.asset_key) else {
+            error!(asset_key = %placement.asset_key, "cannot render map prop: missing PolyTools manifest");
+            continue;
+        };
+        let root = commands
+            .spawn((
+                RenderedMap,
+                Transform::from_xyz(
+                    placement.position.x,
+                    placement.position.y,
+                    PROP_PRESENTATION_LAYER,
+                ),
+                Visibility::default(),
+            ))
+            .id();
+        if let Err(error) = spawn_projected_prop_visual(
+            &mut commands,
+            root,
+            &mut meshes,
+            &mut projection_materials,
+            manifest,
+            map_asset_color(&placement.asset_key),
+            Quat::IDENTITY,
+            PROP_PRESENTATION_LAYER,
+            ANKH_OUTLINE_DEPTH_METERS,
+        ) {
+            error!(asset_key = %placement.asset_key, %error, "cannot spawn map prop visual");
+        }
+    }
+}
+
+fn map_asset_color(asset_key: &str) -> Color {
+    match asset_key {
+        "grass" => Color::srgb(0.34, 0.62, 0.22),
+        "tree" => Color::srgb(0.18, 0.46, 0.14),
+        _ => Color::srgb(0.45, 0.45, 0.48),
+    }
+}
+
 fn ankh_projection_rotation() -> Quat {
     Quat::from_rotation_x(ANKH_TILT_DEGREES.to_radians())
         * Quat::from_rotation_y(ANKH_TILT_DEGREES.to_radians())
 }
 
 fn cleanup_room_floor(
-    floor_tiles: Query<Entity, With<RoomFloorTile>>,
+    map_visuals: Query<Entity, With<RenderedMap>>,
     ankhs: Query<Entity, With<RenderedAnkh>>,
     mut commands: Commands,
 ) {
-    for entity in &floor_tiles {
+    for entity in &map_visuals {
         commands.entity(entity).despawn();
     }
     for entity in &ankhs {
@@ -729,33 +760,6 @@ fn repick_character(
     session.selected = None;
     session.joining = false;
     next_screen.set(ClientScreen::CharacterSelection);
-}
-
-fn spawn_single_room(commands: &mut Commands, room: RoomDimensions) {
-    for row in 0..room.height_tiles {
-        for column in 0..room.width_tiles {
-            let color = checkerboard_color(IVec2::ZERO, row, column);
-            let x = column as f32 + 0.5 - room.width_meters() * 0.5;
-            let y = row as f32 + 0.5 - room.height_meters() * 0.5;
-            commands.spawn((
-                Sprite::from_color(color, Vec2::ONE),
-                Transform::from_xyz(x, y, -10.0),
-                RoomFloorTile,
-            ));
-        }
-    }
-}
-
-fn checkerboard_color(room_coordinates: IVec2, row: u32, column: u32) -> Color {
-    let primary_room = (room_coordinates.x + room_coordinates.y).rem_euclid(2) == 0;
-    let even_tile = (row + column) % 2 == 0;
-
-    match (primary_room, even_tile) {
-        (true, true) => PRIMARY_CHECKERBOARD_EVEN_COLOR,
-        (true, false) => PRIMARY_CHECKERBOARD_ODD_COLOR,
-        (false, true) => ALTERNATE_CHECKERBOARD_EVEN_COLOR,
-        (false, false) => ALTERNATE_CHECKERBOARD_ODD_COLOR,
-    }
 }
 
 fn render_new_players(

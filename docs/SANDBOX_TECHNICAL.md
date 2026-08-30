@@ -217,9 +217,16 @@ state. The exact public API is not yet established.
 
 The graphical client implements a configurable orthographic camera,
 aspect-safe viewport calculation, letterboxing, camera follow, and a temporary
-tile-based room presentation. These facilities live inside the Labyrinth client
-application. There is no public reusable camera service, room service, or
-camera-target contract today.
+tile-based room presentation. World 01's current map is authored in SceneMaker,
+exported as an engine-neutral snapshot, validated by
+`scripts/sync_scenemaker_world.sh`, and embedded in the protocol-neutral
+`world_data` crate. The headless server and graphical client therefore consume
+the same dimensions and gameplay placements. SceneMaker stores only PolyTools
+asset keys and authoring geometry; the runtime resolves those keys through its
+synchronized PolyTools content and renders the real runtime geometry. These
+facilities live inside the Labyrinth client application. There is no public
+reusable camera service, room service, map service, or camera-target contract
+today.
 
 ### Confirmed shared direction
 

@@ -31,6 +31,12 @@
 			"runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
 		},
 		{
+			"asset_key": "grass",
+			"asset_type": "terrain",
+			"display_name": "Grass",
+			"runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
+		},
+		{
 			"asset_key": "hammer",
 			"asset_type": "weapons",
 			"display_name": "Hammer",
