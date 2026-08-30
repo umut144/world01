@@ -145,6 +145,58 @@ this document instead of copying a shared mechanic as if it were game-owned.
 - Body facing and gaze are retained and replicated independently when a game
   uses networked authoritative state.
 
+## Shared mass and movement-speed foundation
+
+### Density classes and mass derivation
+
+- World 01 uses six relative two-dimensional density classes. They represent
+  gameplay areal density rather than physical kilograms per cubic meter,
+  because authored character Components provide area without a canonical
+  material thickness.
+- Density class numbers are stable identifiers, not density values to use
+  directly in calculations.
+
+| Class | Name | Areal-density factor | Baseline materials |
+|---:|---|---:|---|
+| `0` | Weightless / Gas | `0.00` | Smoke, steam, fog, gas, magical particles |
+| `1` | Very Light | `0.25` | Hair, feathers, fur, leaves, thin fabric |
+| `2` | Light | `0.50` | Hats, clothing, leather, light plants |
+| `3` | Medium | `1.00` | Wood, body/tissue, rubber, bone |
+| `4` | Heavy | `2.00` | Glass, stone, ceramic |
+| `5` | Very Heavy | `4.00` | Steel, iron, massive metal parts |
+
+- A material-bearing Component contributes its transformed triangulated fill
+  area in square meters multiplied by its density factor. A Character's mass
+  is the sum of those Component contributions.
+- Contours and contour-only Components do not contribute mass. This includes
+  authored line Components such as `arm_line`, eye geometry, and decorative
+  contour marks such as `forehead_dot`. Technical guides, attachment frames,
+  and presentation-only geometry likewise do not contribute mass.
+- Material-bearing and excluded Components must be classified explicitly. A
+  Component is not included merely because it has geometry or a recognizable
+  name; overlapping presentation geometry must not accidentally count the same
+  physical material twice.
+- Weapons have their own derived mass. Both Character-body mass and total
+  equipped mass remain available as distinct values so games can choose which
+  model they use.
+- The initial normal-movement model uses Character-body mass only and excludes
+  weapon mass. Weapon mass must therefore be derived without affecting initial
+  movement speed, and the boundary must allow a later game to include equipped
+  weapon mass without replacing the derivation model.
+
+### Mass-derived normal movement speed
+
+- The Hammerer is the World-01 normalization reference. His effective normal
+  movement speed is `0.6 m/s`.
+- Initial Character speed uses the fourth-root mass curve
+  `speed = 0.6 m/s * (Hammerer body mass / Character body mass)^0.25`.
+- RUN and DASH continue to derive from the resulting effective normal movement
+  speed through their existing multipliers.
+- The density assignment for every current material-bearing Component remains
+  to be decided before mass and speed values are implemented. Appropriate
+  minimum or maximum speed safeguards should be evaluated from the resulting
+  catalog rather than chosen without that distribution.
+
 ## Shared movement abilities and status foundations
 
 These are the World-01 baseline abilities for playable characters. Games may

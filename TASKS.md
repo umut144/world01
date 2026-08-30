@@ -19,6 +19,7 @@ active game document for that game's deviations.
 
 | ID | Area | Outcome | Status |
 |---|---|---|---|
+| `W01-MASS` | World Design | Classify every current Character and weapon Component as excluded or as one of the six confirmed density classes, then review the resulting mass and speed distribution before implementation. | **Next decision** |
 | `SBX-NEXT` | Sandbox | Agree on the first concrete implementation slice that moves the existing project toward the contracts in `docs/SANDBOX_VISION.md` and `docs/SANDBOX_TECHNICAL.md`. | **Next decision** |
 | `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 
