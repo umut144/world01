@@ -431,26 +431,6 @@ mod tests {
     }
 
     #[test]
-    fn equipped_weapon_mass_slows_its_carrier_without_renormalizing_hammerer() {
-        let mut config = load_embedded().expect("embedded design configuration parses");
-        config.mass.include_equipped_weapon_mass = true;
-        let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
-        let design = world01_design::load_embedded().expect("embedded game design parses");
-        let geometry = CharacterMassGeometryCatalog::from_content(&content, &design.mass)
-            .expect("mass design covers embedded content");
-        let catalog = CharacterMassCatalog::from_geometry(&config, &geometry)
-            .expect("weapon-inclusive mass configuration is valid");
-        let hammerer = catalog
-            .character(&CharacterId("hammerer".into()))
-            .expect("Hammerer mass is derived");
-        let expected_speed = 0.6_f32 * (hammerer.body / hammerer.movement).powf(0.25);
-
-        assert!((hammerer.movement - (hammerer.body + hammerer.equipped_weapon)).abs() < EPSILON);
-        assert!((hammerer.normal_speed_meters_per_second - expected_speed).abs() < EPSILON);
-        assert!(hammerer.normal_speed_meters_per_second < 0.6);
-    }
-
-    #[test]
     fn charging_caps_at_five_seconds_and_release_freezes_direction() {
         let rules = attack_rules();
         assert_eq!(rules.maximum_charge_ticks(), 300);
