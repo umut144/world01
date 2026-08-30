@@ -104,11 +104,16 @@ this document instead of copying a shared mechanic as if it were game-owned.
 - The Ankh uses each authored Component's projection depth and retains its
   authored contours in the projected depth form. Its presentation is tilted
   by `+30°` around the Y axis followed by `+30°` around the X axis.
-- For a projected-depth prism, only authored PolyTools path points whose
-  handle mode is `Corner` produce a contour edge through the Component's
-  depth. Smooth points never produce a depth contour edge. PolyTools remains
-  the source of this visual intent; runtime rendering consumes the exported
-  local point positions rather than inferring corners from triangulation.
+- For the Ankh's projected-depth presentation, only authored PolyTools path
+  points whose handle mode is `Corner` produce a contour edge through the
+  Component's depth. Smooth points never produce a depth contour edge.
+  PolyTools remains the source of this visual intent; runtime rendering
+  consumes the exported local point positions rather than inferring corners
+  from triangulation.
+- World 01 may use multiple distinct 3D presentation models. The Ankh's
+  authored-Corner contour model is not an automatic default for the Hammer or
+  for other projected-depth Assets; each such presentation is decided
+  separately.
 
 ## Shared character presentation
 
