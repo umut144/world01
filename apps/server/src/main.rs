@@ -8,16 +8,17 @@ use bevy::{
 };
 use world01_configs::load_embedded;
 use world01_content::{
-    CharacterHealthCatalog, CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent,
+    CharacterHealthCatalog, CharacterHurtGeometryCatalog, CharacterMassGeometryCatalog,
+    HammerCombatGeometry, RuntimeContent,
 };
 use world01_design::load_embedded as load_game_design;
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use world01_simulation::{
-    CharacterLifeRules, HammerAttackRules, HammerStrikeRules, LocomotionRules, MovementStep,
-    SimulationSet, WeaponAimRules, add_simulation_step, apply_hammer_strike_damage,
-    update_character_life,
+    CharacterLifeRules, CharacterMassCatalog, HammerAttackRules, HammerStrikeRules,
+    LocomotionRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
+    apply_hammer_strike_damage, update_character_life,
 };
 use world01_world_data::AnkhLayout;
 
@@ -51,6 +52,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let character_health = CharacterHealthCatalog::from_content(&content)?;
+    let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
+    let character_mass = CharacterMassCatalog::from_geometry(&config, &mass_geometry)?;
     let snapshot_interval = config
         .network
         .snapshot_interval_for(config.simulation)
@@ -78,6 +81,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(hammer_geometry)
     .insert_resource(hurt_geometry)
     .insert_resource(character_health)
+    .insert_resource(character_mass)
     .insert_resource(AnkhLayout::for_room(
         config.room.width_tiles,
         config.room.height_tiles,

@@ -3,8 +3,8 @@ use std::{error::Error, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use world01_configs::DesignConfig;
 use world01_world_data::{
-    CharacterHealth, CharacterLifeState, DashIntent, DashState, MovementIntent, MovementVelocity,
-    Position, RunIntent, RunState, StaminaState, StatusEffectState,
+    CharacterHealth, CharacterLifeState, CharacterMass, DashIntent, DashState, MovementIntent,
+    MovementVelocity, Position, RunIntent, RunState, StaminaState, StatusEffectState,
 };
 
 use crate::movement::MovementStep;
@@ -73,6 +73,7 @@ pub fn update_locomotion(
     movement_step: Res<MovementStep>,
     mut players: Query<(
         &MovementIntent,
+        &CharacterMass,
         &RunIntent,
         &DashIntent,
         &mut Position,
@@ -87,6 +88,7 @@ pub fn update_locomotion(
 ) {
     for (
         movement_intent,
+        mass,
         run_intent,
         dash_intent,
         mut position,
@@ -128,7 +130,11 @@ pub fn update_locomotion(
             } else {
                 1.0
             };
-            movement_step.velocity(*movement_intent, multiplier)
+            movement_step.velocity(
+                *movement_intent,
+                mass.normal_speed_meters_per_second,
+                multiplier,
+            )
         };
 
         let mut started_dash = false;
@@ -230,6 +236,7 @@ mod tests {
         app.world_mut()
             .spawn((
                 MovementIntent::ZERO,
+                CharacterMass::new(1.0, 0.0, 1.0, 0.8),
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
                 Position::ZERO,

@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use std::{collections::HashMap, path::Path, time::Duration};
+use world01_world_data::DensityClass;
 
 const DESIGN_TOML: &str = include_str!("../design.toml");
 
@@ -7,7 +8,7 @@ const DESIGN_TOML: &str = include_str!("../design.toml");
 pub struct DesignConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
-    pub movement: MovementConfig,
+    pub mass: MassConfig,
     pub locomotion: LocomotionConfig,
     pub health: HealthConfig,
     pub weapon_aim: WeaponAimConfig,
@@ -74,8 +75,47 @@ impl SimulationConfig {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
-pub struct MovementConfig {
-    pub speed_meters_per_second: f32,
+pub struct MassConfig {
+    pub weightless_density_factor: f32,
+    pub very_light_density_factor: f32,
+    pub light_density_factor: f32,
+    pub medium_density_factor: f32,
+    pub heavy_density_factor: f32,
+    pub very_heavy_density_factor: f32,
+    pub hammerer_speed_meters_per_second: f32,
+    pub speed_mass_exponent: f32,
+    pub include_equipped_weapon_mass: bool,
+}
+
+impl MassConfig {
+    pub fn density_factor(self, class: DensityClass) -> f32 {
+        match class {
+            DensityClass::Weightless => self.weightless_density_factor,
+            DensityClass::VeryLight => self.very_light_density_factor,
+            DensityClass::Light => self.light_density_factor,
+            DensityClass::Medium => self.medium_density_factor,
+            DensityClass::Heavy => self.heavy_density_factor,
+            DensityClass::VeryHeavy => self.very_heavy_density_factor,
+        }
+    }
+
+    pub fn is_valid(self) -> bool {
+        [
+            self.weightless_density_factor,
+            self.very_light_density_factor,
+            self.light_density_factor,
+            self.medium_density_factor,
+            self.heavy_density_factor,
+            self.very_heavy_density_factor,
+        ]
+        .into_iter()
+        .all(|factor| factor.is_finite() && factor >= 0.0)
+            && self.medium_density_factor > 0.0
+            && self.hammerer_speed_meters_per_second.is_finite()
+            && self.hammerer_speed_meters_per_second > 0.0
+            && self.speed_mass_exponent.is_finite()
+            && self.speed_mass_exponent > 0.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
@@ -243,7 +283,16 @@ mod tests {
         assert_eq!(design.eyes.pupil_area_ratio, 0.26);
         assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
         assert!(design.eyes.is_valid());
-        assert_eq!(design.movement.speed_meters_per_second, 0.8);
+        assert_eq!(design.mass.weightless_density_factor, 0.0);
+        assert_eq!(design.mass.very_light_density_factor, 0.25);
+        assert_eq!(design.mass.light_density_factor, 0.5);
+        assert_eq!(design.mass.medium_density_factor, 1.0);
+        assert_eq!(design.mass.heavy_density_factor, 2.0);
+        assert_eq!(design.mass.very_heavy_density_factor, 4.0);
+        assert_eq!(design.mass.hammerer_speed_meters_per_second, 0.6);
+        assert_eq!(design.mass.speed_mass_exponent, 0.25);
+        assert!(!design.mass.include_equipped_weapon_mass);
+        assert!(design.mass.is_valid());
         assert_eq!(design.locomotion.default_max_stamina, 100.0);
         assert_eq!(
             design.locomotion.stamina_regeneration_percent_per_second,

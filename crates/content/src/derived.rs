@@ -5,18 +5,60 @@ use std::{
 };
 
 use bevy::prelude::{Resource, Vec2};
-use world01_world_data::CharacterId;
+use world01_world_data::{CharacterId, ComponentMassAssignment, DensityClass, MassModelDefinition};
 
 use crate::manifest::{
-    AuthoredFacing, ContentError, RuntimeComponent, RuntimeContent, RuntimeManifest,
-    RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
-    WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE, attachment_frame,
+    AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeComponent, RuntimeContent,
+    RuntimeManifest, RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
+    WEAPON_REACH_LIMIT_ROLE, WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE, attachment_frame,
 };
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct CharacterHealthCatalog {
     max_hp: HashMap<CharacterId, f32>,
 }
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct CharacterMassGeometryCatalog {
+    body: HashMap<CharacterId, DensityAreas>,
+    equipped_weapon: HashMap<CharacterId, DensityAreas>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DensityAreas {
+    areas: [f32; 6],
+}
+
+impl DensityAreas {
+    pub const ZERO: Self = Self { areas: [0.0; 6] };
+
+    pub fn area(self, class: DensityClass) -> f32 {
+        self.areas[class.index()]
+    }
+
+    fn add(&mut self, class: DensityClass, area: f32) {
+        self.areas[class.index()] += area;
+    }
+
+    fn combined(self, other: Self) -> Self {
+        let mut result = self;
+        for class in DensityClass::ALL {
+            result.areas[class.index()] += other.areas[class.index()];
+        }
+        result
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CharacterMassGeometryError(String);
+
+impl fmt::Display for CharacterMassGeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Error for CharacterMassGeometryError {}
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct CharacterHurtGeometryCatalog {
@@ -98,6 +140,119 @@ impl CharacterHealthCatalog {
     pub fn max_hp(&self, character: &CharacterId) -> Option<f32> {
         self.max_hp.get(character).copied()
     }
+}
+
+impl CharacterMassGeometryCatalog {
+    pub fn from_content(
+        content: &RuntimeContent,
+        definition: &MassModelDefinition,
+    ) -> Result<Self, CharacterMassGeometryError> {
+        if !definition.is_valid() {
+            return Err(CharacterMassGeometryError(
+                "mass definition is invalid".into(),
+            ));
+        }
+        let hammer_definition = definition
+            .weapons
+            .iter()
+            .find(|assignment| assignment.asset_key == HAMMER_ASSET_KEY)
+            .ok_or_else(|| {
+                CharacterMassGeometryError("mass definition is missing Hammer".into())
+            })?;
+        let hammer = density_areas_for_manifest(content.hammer(), &hammer_definition.components)?;
+        let mut body = HashMap::new();
+        let mut equipped_weapon = HashMap::new();
+        for (character_id, manifest) in content.characters() {
+            let assignment = definition
+                .characters
+                .iter()
+                .find(|assignment| assignment.asset_key == character_id.0)
+                .ok_or_else(|| {
+                    CharacterMassGeometryError(format!(
+                        "mass definition is missing Character {}",
+                        character_id.0
+                    ))
+                })?;
+            let body_areas = density_areas_for_manifest(manifest, &assignment.components)?;
+            let mut weapon_areas = DensityAreas::ZERO;
+            for weapon_key in &assignment.equipped_weapon_asset_keys {
+                if weapon_key != HAMMER_ASSET_KEY {
+                    return Err(CharacterMassGeometryError(format!(
+                        "{} references unsupported equipped weapon {weapon_key}",
+                        character_id.0
+                    )));
+                }
+                weapon_areas = weapon_areas.combined(hammer);
+            }
+            body.insert(character_id.clone(), body_areas);
+            equipped_weapon.insert(character_id.clone(), weapon_areas);
+        }
+        if definition.characters.len() != body.len() {
+            return Err(CharacterMassGeometryError(
+                "mass definition contains an unknown Character assignment".into(),
+            ));
+        }
+        Ok(Self {
+            body,
+            equipped_weapon,
+        })
+    }
+
+    pub fn body(&self, character: &CharacterId) -> Option<DensityAreas> {
+        self.body.get(character).copied()
+    }
+
+    pub fn equipped_weapon(&self, character: &CharacterId) -> Option<DensityAreas> {
+        self.equipped_weapon.get(character).copied()
+    }
+
+    pub fn character_ids(&self) -> impl Iterator<Item = &CharacterId> {
+        self.body.keys()
+    }
+}
+
+fn density_areas_for_manifest(
+    manifest: &RuntimeManifest,
+    assignments: &[ComponentMassAssignment],
+) -> Result<DensityAreas, CharacterMassGeometryError> {
+    let mut assignments_by_name = HashMap::new();
+    for assignment in assignments {
+        assignments_by_name.insert(assignment.component_name.as_str(), assignment);
+    }
+    if assignments_by_name.len() != manifest.components.len() {
+        return Err(CharacterMassGeometryError(format!(
+            "{} mass assignments do not cover its Components exactly once",
+            manifest.asset_key
+        )));
+    }
+    let mut areas = DensityAreas::ZERO;
+    for component in &manifest.components {
+        let assignment = assignments_by_name
+            .get(component.name.as_str())
+            .ok_or_else(|| {
+                CharacterMassGeometryError(format!(
+                    "{} mass assignments are missing Component {}",
+                    manifest.asset_key, component.name
+                ))
+            })?;
+        let Some(class) = assignment.classification.density_class() else {
+            continue;
+        };
+        let area = transformed_mesh_area(component, &manifest.components).map_err(|error| {
+            CharacterMassGeometryError(format!(
+                "cannot derive mass area for {} Component {}: {error}",
+                manifest.asset_key, component.name
+            ))
+        })?;
+        if !area.is_finite() || area < 0.0 {
+            return Err(CharacterMassGeometryError(format!(
+                "{} Component {} has invalid mass area {area}",
+                manifest.asset_key, component.name
+            )));
+        }
+        areas.add(class, area);
+    }
+    Ok(areas)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

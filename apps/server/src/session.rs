@@ -5,7 +5,7 @@ use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
-use world01_simulation::LocomotionRules;
+use world01_simulation::{CharacterMassCatalog, LocomotionRules};
 use world01_world_data::{
     Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
     DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
@@ -48,6 +48,7 @@ fn accept_join_requests(
     mut next_player_id: ResMut<NextPlayerId>,
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
+    masses: Res<CharacterMassCatalog>,
     locomotion: Res<LocomotionRules>,
     mut commands: Commands,
 ) {
@@ -68,6 +69,10 @@ fn accept_join_requests(
         let selected = request.character.clone();
         let Some(maximum_health) = health.max_hp(&selected) else {
             warn!(owner = request.owner(), character = ?selected, "ignoring join without derived character health");
+            continue;
+        };
+        let Some(mass) = masses.character(&selected) else {
+            warn!(owner = request.owner(), character = ?selected, "ignoring join without derived character mass");
             continue;
         };
         let player_id = next_player_id.0;
@@ -108,6 +113,7 @@ fn accept_join_requests(
                 GazeDirection::RIGHT,
                 Position::new(spawn.x, spawn.y),
                 CharacterHealth::full(maximum_health),
+                mass,
             ),
         ));
         if selected.0 == "hammerer" {

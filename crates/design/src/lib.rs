@@ -1,15 +1,18 @@
 use serde::Deserialize;
 use std::{collections::HashSet, error::Error, fmt};
+use world01_world_data::MassModelDefinition;
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
 const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
+const MASS_DESIGN: &str = include_str!("../mass.json");
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct GameDesign {
     pub hammer: HammerDesign,
     pub hammer_strike: HammerStrikeDesign,
     pub hammerer: CharacterDesign,
+    pub mass: MassModelDefinition,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -162,6 +165,8 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         .map_err(|error| DesignError(format!("cannot parse HammerStrike design: {error}")))?;
     let hammerer: CharacterDesign = serde_json::from_str(HAMMERER_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse hammerer design: {error}")))?;
+    let mass: MassModelDefinition = serde_json::from_str(MASS_DESIGN)
+        .map_err(|error| DesignError(format!("cannot parse mass design: {error}")))?;
     if !hammer.is_valid() {
         return Err(DesignError("Hammer design is invalid".into()));
     }
@@ -187,10 +192,14 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     if !hammerer.is_valid("hammerer") {
         return Err(DesignError("Hammerer design is invalid".into()));
     }
+    if !mass.is_valid() {
+        return Err(DesignError("mass design is invalid".into()));
+    }
     Ok(GameDesign {
         hammer,
         hammer_strike,
         hammerer,
+        mass,
     })
 }
 
@@ -223,5 +232,14 @@ mod tests {
             "STUNNED"
         );
         assert_eq!(design.hammerer.asset_key, "hammerer");
+        assert_eq!(design.mass.characters.len(), 11);
+        assert_eq!(design.mass.weapons.len(), 1);
+        assert!(
+            design
+                .mass
+                .characters
+                .iter()
+                .any(|assignment| assignment.asset_key == "hammerer")
+        );
     }
 }

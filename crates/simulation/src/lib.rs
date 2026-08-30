@@ -4,6 +4,7 @@ pub mod aim;
 pub mod combat;
 pub mod life;
 pub mod locomotion;
+pub mod mass;
 pub mod movement;
 pub mod respawn;
 mod schedule;
@@ -15,25 +16,23 @@ pub use combat::hammer::{
 };
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
 pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
+pub use mass::{CharacterMassCatalog, MassModelError};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
 pub use respawn::{RespawnPlayer, choose_respawn_position};
 pub use schedule::{SimulationSet, add_simulation_step};
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, f32::consts::PI};
+    use std::f32::consts::PI;
 
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
-    use world01_configs::{
-        DesignConfig, EyesConfig, HealthConfig, LocomotionConfig, MovementConfig, NetworkConfig,
-        RoomConfig, SimulationConfig, WeaponAimConfig, load_embedded,
-    };
-    use world01_content::HammerCombatGeometry;
+    use world01_configs::load_embedded;
+    use world01_content::{CharacterMassGeometryCatalog, HammerCombatGeometry, RuntimeContent};
     use world01_world_data::{
-        AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackPhase,
-        HammerAttackState, MovementDirection, MovementIntent, Position, SelectedCharacter,
-        WeaponAimState, WeaponTurnDirection,
+        AttackIntent, BodyFacing, CharacterId, CharacterMass, GazeDirection, GazeIntent,
+        HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent, Position,
+        SelectedCharacter, WeaponAimState, WeaponTurnDirection,
     };
 
     use crate::combat::hammer::constrain_embedded_position;
@@ -58,11 +57,20 @@ mod tests {
     }
 
     fn hammer_geometry() -> HammerCombatGeometry {
-        let content = world01_content::RuntimeContent::load_embedded()
-            .expect("embedded runtime content is valid");
+        let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
         let design = world01_design::load_embedded().expect("embedded game design parses");
         HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
             .expect("synced Hammer manifests define valid combat geometry")
+    }
+
+    fn mass_catalog() -> CharacterMassCatalog {
+        let config = load_embedded().expect("embedded design configuration parses");
+        let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
+        let design = world01_design::load_embedded().expect("embedded game design parses");
+        let geometry = CharacterMassGeometryCatalog::from_content(&content, &design.mass)
+            .expect("mass design covers embedded content");
+        CharacterMassCatalog::from_geometry(&config, &geometry)
+            .expect("embedded mass configuration is valid")
     }
 
     fn character(name: &str) -> SelectedCharacter {
@@ -78,18 +86,22 @@ mod tests {
     }
 
     #[test]
-    fn cardinal_movement_uses_configured_speed_and_tick_rate() {
-        let displacement = movement_step().displacement(MovementIntent::new(1.0, 0.0));
+    fn cardinal_movement_uses_character_speed_and_tick_rate() {
+        let displacement = movement_step().displacement(MovementIntent::new(1.0, 0.0), 0.6);
 
-        assert!((displacement.x - 0.8 / 60.0).abs() < EPSILON);
+        assert!((displacement.x - 0.6 / 60.0).abs() < EPSILON);
         assert_eq!(displacement.y, 0.0);
     }
 
     #[test]
     fn diagonal_movement_is_normalized() {
         let step = movement_step();
-        let cardinal_distance = step.displacement(MovementIntent::new(1.0, 0.0)).length();
-        let diagonal_distance = step.displacement(MovementIntent::new(1.0, 1.0)).length();
+        let cardinal_distance = step
+            .displacement(MovementIntent::new(1.0, 0.0), 0.6)
+            .length();
+        let diagonal_distance = step
+            .displacement(MovementIntent::new(1.0, 1.0), 0.6)
+            .length();
 
         assert!((cardinal_distance - diagonal_distance).abs() < EPSILON);
     }
@@ -97,29 +109,33 @@ mod tests {
     #[test]
     fn intent_above_unit_length_is_clamped() {
         let step = movement_step();
-        let unit_distance = step.displacement(MovementIntent::new(1.0, 0.0)).length();
-        let excessive_distance = step.displacement(MovementIntent::new(10.0, 0.0)).length();
+        let unit_distance = step
+            .displacement(MovementIntent::new(1.0, 0.0), 0.6)
+            .length();
+        let excessive_distance = step
+            .displacement(MovementIntent::new(10.0, 0.0), 0.6)
+            .length();
 
         assert!((unit_distance - excessive_distance).abs() < EPSILON);
     }
 
     #[test]
     fn invalid_intent_does_not_move() {
-        let displacement = movement_step().displacement(MovementIntent::new(f32::NAN, 1.0));
+        let displacement = movement_step().displacement(MovementIntent::new(f32::NAN, 1.0), 0.6);
 
         assert_eq!(displacement, Vec2::ZERO);
     }
 
     #[test]
-    fn sixty_ticks_cover_eight_tenths_of_a_meter() {
+    fn sixty_ticks_cover_a_hammerers_normal_distance() {
         let step = movement_step();
         let mut position = Vec2::ZERO;
 
         for _ in 0..60 {
-            position += step.displacement(MovementIntent::new(0.0, 1.0));
+            position += step.displacement(MovementIntent::new(0.0, 1.0), 0.6);
         }
 
-        assert!((position.y - 0.8).abs() < EPSILON);
+        assert!((position.y - 0.6).abs() < EPSILON);
     }
 
     #[test]
@@ -131,7 +147,11 @@ mod tests {
             .add_systems(Update, move_players);
         let player = app
             .world_mut()
-            .spawn((MovementIntent::new(-1.0, 0.0), Position::ZERO))
+            .spawn((
+                MovementIntent::new(-1.0, 0.0),
+                CharacterMass::new(2.0, 0.0, 2.0, 0.6),
+                Position::ZERO,
+            ))
             .id();
 
         app.update();
@@ -140,7 +160,7 @@ mod tests {
             .world()
             .get::<Position>(player)
             .expect("spawned test player has a Position");
-        assert!((position.x + 0.8 / 60.0).abs() < EPSILON);
+        assert!((position.x + 0.6 / 60.0).abs() < EPSILON);
         assert_eq!(position.y, 0.0);
     }
 
@@ -377,118 +397,36 @@ mod tests {
 
     #[test]
     fn invalid_design_values_are_rejected() {
-        let zero_tick_rate = DesignConfig {
-            simulation: SimulationConfig {
-                ticks_per_second: 0,
-            },
-            network: NetworkConfig {
-                snapshot_send_hz: 30,
-                remote_interpolation_ratio: 1.0,
-            },
-            movement: MovementConfig {
-                speed_meters_per_second: 4.0,
-            },
-            locomotion: LocomotionConfig {
-                default_max_stamina: 100.0,
-                stamina_regeneration_percent_per_second: 2.5,
-                run_speed_multiplier: 1.5,
-                run_drain_per_second: 8.0,
-                dash_cost_percent: 17.0,
-                dash_speed_multiplier: 2.0,
-                dash_duration_seconds: 1.0,
-                dash_invulnerability_seconds: 0.337,
-                knockdown_duration_seconds: 2.0,
-                knockdown_damage_percent_max_hp: 5.0,
-            },
-            health: HealthConfig {
-                death_confirmation_seconds: 4.0,
-                death_confirmation_initial_degrees_per_second: 144.0,
-                death_confirmation_max_degrees_per_second: 1440.0,
-                revival_seconds: 8.0,
-                revival_health_percent: 80.0,
-                respawn_health_percent: 40.0,
-                ankh_respawn_radius_meters: 4.0,
-            },
-            weapon_aim: WeaponAimConfig {
-                default_degrees_per_second: 60.0,
-                character_degrees_per_second: HashMap::new(),
-            },
-            room: RoomConfig {
-                width_tiles: 15,
-                height_tiles: 9,
-            },
-            camera: world01_configs::CameraConfig {
-                view_preset: 0,
-                view_width_tiles: 22,
-                view_height_tiles: 20,
-            },
-            eyes: EyesConfig {
-                pupil_area_ratio: 0.26,
-                hammerer_collision_radius_ratio: 0.35,
-            },
-        };
-        let negative_speed = DesignConfig {
-            simulation: SimulationConfig {
-                ticks_per_second: 60,
-            },
-            network: NetworkConfig {
-                snapshot_send_hz: 30,
-                remote_interpolation_ratio: 1.0,
-            },
-            movement: MovementConfig {
-                speed_meters_per_second: -1.0,
-            },
-            locomotion: LocomotionConfig {
-                default_max_stamina: 100.0,
-                stamina_regeneration_percent_per_second: 2.5,
-                run_speed_multiplier: 1.5,
-                run_drain_per_second: 8.0,
-                dash_cost_percent: 17.0,
-                dash_speed_multiplier: 2.0,
-                dash_duration_seconds: 1.0,
-                dash_invulnerability_seconds: 0.337,
-                knockdown_duration_seconds: 2.0,
-                knockdown_damage_percent_max_hp: 5.0,
-            },
-            health: HealthConfig {
-                death_confirmation_seconds: 4.0,
-                death_confirmation_initial_degrees_per_second: 144.0,
-                death_confirmation_max_degrees_per_second: 1440.0,
-                revival_seconds: 8.0,
-                revival_health_percent: 80.0,
-                respawn_health_percent: 40.0,
-                ankh_respawn_radius_meters: 4.0,
-            },
-            weapon_aim: WeaponAimConfig {
-                default_degrees_per_second: 60.0,
-                character_degrees_per_second: HashMap::new(),
-            },
-            room: RoomConfig {
-                width_tiles: 15,
-                height_tiles: 9,
-            },
-            camera: world01_configs::CameraConfig {
-                view_preset: 0,
-                view_width_tiles: 22,
-                view_height_tiles: 20,
-            },
-            eyes: EyesConfig {
-                pupil_area_ratio: 0.26,
-                hammerer_collision_radius_ratio: 0.35,
-            },
-        };
+        let mut zero_tick_rate = load_embedded().expect("embedded design configuration parses");
+        zero_tick_rate.simulation.ticks_per_second = 0;
 
         assert_eq!(
             MovementStep::from_design(&zero_tick_rate),
             Err(MovementConfigError::ZeroTickRate)
         );
         assert_eq!(
-            MovementStep::from_design(&negative_speed),
-            Err(MovementConfigError::InvalidSpeed(-1.0))
-        );
-        assert_eq!(
             WeaponAimRules::from_design(&zero_tick_rate),
             Err(WeaponAimConfigError)
+        );
+    }
+
+    #[test]
+    fn embedded_mass_model_derives_confirmed_hammerer_and_rogue_speeds() {
+        let catalog = mass_catalog();
+        let hammerer = catalog
+            .character(&CharacterId("hammerer".into()))
+            .expect("Hammerer mass is derived");
+        let rogue = catalog
+            .character(&CharacterId("rogue".into()))
+            .expect("Rogue mass is derived");
+
+        assert!((hammerer.body - 2.191_913).abs() < EPSILON);
+        assert!((hammerer.equipped_weapon - 4.643_827).abs() < EPSILON);
+        assert!((hammerer.movement - hammerer.body).abs() < EPSILON);
+        assert!((hammerer.normal_speed_meters_per_second - 0.6).abs() < EPSILON);
+        assert!((rogue.normal_speed_meters_per_second - 1.230_552).abs() < EPSILON);
+        assert!(
+            rogue.normal_speed_meters_per_second > 2.0 * hammerer.normal_speed_meters_per_second
         );
     }
 
@@ -633,6 +571,7 @@ mod tests {
             .world_mut()
             .spawn((
                 MovementIntent::new(1.0, 0.0),
+                CharacterMass::new(2.191_913, 4.643_827, 2.191_913, 0.6),
                 HammerAttackState {
                     phase: HammerAttackPhase::Charging,
                     ..HammerAttackState::IDLE
@@ -646,7 +585,7 @@ mod tests {
             .world()
             .get::<Position>(player)
             .expect("charging Hammerer retains Position");
-        assert!((charging_position.x - 0.8 / 60.0).abs() < EPSILON);
+        assert!((charging_position.x - 0.6 / 60.0).abs() < EPSILON);
 
         app.world_mut()
             .get_mut::<HammerAttackState>(player)
@@ -657,7 +596,7 @@ mod tests {
             .world()
             .get::<Position>(player)
             .expect("Hammerer has Position");
-        assert!((position.x - 2.0 * 0.8 / 60.0).abs() < EPSILON);
+        assert!((position.x - 2.0 * 0.6 / 60.0).abs() < EPSILON);
     }
 
     #[test]

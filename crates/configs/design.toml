@@ -5,8 +5,16 @@ ticks_per_second = 60
 snapshot_send_hz = 30
 remote_interpolation_ratio = 2.0
 
-[movement]
-speed_meters_per_second = 0.8
+[mass]
+weightless_density_factor = 0.0
+very_light_density_factor = 0.25
+light_density_factor = 0.5
+medium_density_factor = 1.0
+heavy_density_factor = 2.0
+very_heavy_density_factor = 4.0
+hammerer_speed_meters_per_second = 0.6
+speed_mass_exponent = 0.25
+include_equipped_weapon_mass = false
 
 [locomotion]
 default_max_stamina = 100.0

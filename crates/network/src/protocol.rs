@@ -11,8 +11,8 @@ use lightyear::prelude::{
 };
 use serde::{Deserialize, Serialize};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashIntent,
-    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, CharacterMass,
+    DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
     HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
     PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
     StaminaState, StatusEffectState, WeaponAimState,
@@ -89,6 +89,7 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<PlayerId>().replicate_once();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
+    app.component::<CharacterMass>().replicate_once().predict();
     app.component::<MovementDirection>().replicate().predict();
     app.component::<MovementVelocity>().replicate().predict();
     app.component::<StaminaState>().replicate().predict();

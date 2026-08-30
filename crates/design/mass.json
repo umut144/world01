@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "characters": [
+    {
+      "asset_key": "archerf",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "feet", "classification": "medium" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "forehead", "classification": "medium" },
+        { "component_name": "head_tip01", "classification": "very_light" },
+        { "component_name": "head_tip02", "classification": "very_light" },
+        { "component_name": "head_tip03", "classification": "very_light" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "barde",
+      "components": [
+        { "component_name": "feet", "classification": "medium" },
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "belly", "classification": "excluded" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "chantres",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "belly", "classification": "light" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "hat", "classification": "light" },
+        { "component_name": "hat_line", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "glavier",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "belly", "classification": "light" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "head_tip", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "hammerer",
+      "components": [
+        { "component_name": "cloak", "classification": "light" },
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "feet", "classification": "medium" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "hat", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": ["hammer"]
+    },
+    {
+      "asset_key": "mage",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "arm_line", "classification": "excluded" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "hat", "classification": "light" },
+        { "component_name": "hat_tip", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "monk",
+      "components": [
+        { "component_name": "feet", "classification": "medium" },
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eyebrow_right", "classification": "very_light" },
+        { "component_name": "eyebrow_left", "classification": "very_light" },
+        { "component_name": "forehead", "classification": "medium" },
+        { "component_name": "forehead_dot01", "classification": "excluded" },
+        { "component_name": "forehead_dot02", "classification": "excluded" },
+        { "component_name": "forehead_dot03", "classification": "excluded" },
+        { "component_name": "forehead_dot04", "classification": "excluded" },
+        { "component_name": "forehead_dot05", "classification": "excluded" },
+        { "component_name": "forehead_dot06", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "rogue",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "arm_line", "classification": "excluded" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "eyebrow_left", "classification": "excluded" },
+        { "component_name": "eyebrow_right", "classification": "excluded" },
+        { "component_name": "hat", "classification": "light" },
+        { "component_name": "hat_tip", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "sorcerer",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "arm_line", "classification": "excluded" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "hat_back", "classification": "light" },
+        { "component_name": "hat", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "warrior",
+      "components": [
+        { "component_name": "body_side_left", "classification": "medium" },
+        { "component_name": "body_side_right", "classification": "medium" },
+        { "component_name": "thorn_side_right", "classification": "medium" },
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "thorn_side_left", "classification": "medium" },
+        { "component_name": "thorn_left", "classification": "medium" },
+        { "component_name": "thorn_right", "classification": "medium" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "forehead", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "wizard",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "arm_line", "classification": "excluded" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" },
+        { "component_name": "hat", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    }
+  ],
+  "weapons": [
+    {
+      "asset_key": "hammer",
+      "components": [
+        { "component_name": "shaft_center", "classification": "medium" },
+        { "component_name": "head_mid", "classification": "very_heavy" },
+        { "component_name": "head_left", "classification": "very_heavy" },
+        { "component_name": "shaft_bevel_top", "classification": "very_heavy" },
+        { "component_name": "shaft_bevel_bottom", "classification": "very_heavy" },
+        { "component_name": "head_right", "classification": "very_heavy" }
+      ]
+    }
+  ]
+}

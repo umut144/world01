@@ -5,8 +5,9 @@ mod manifest;
 
 pub use derived::{
     CharacterHealthCatalog, CharacterHealthError, CharacterHurtGeometry,
-    CharacterHurtGeometryCatalog, CharacterHurtGeometryError, HammerCombatGeometry,
-    HammerCombatGeometryError, RuntimeComponentGeometry,
+    CharacterHurtGeometryCatalog, CharacterHurtGeometryError, CharacterMassGeometryCatalog,
+    CharacterMassGeometryError, DensityAreas, HammerCombatGeometry, HammerCombatGeometryError,
+    RuntimeComponentGeometry,
 };
 pub use manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,
