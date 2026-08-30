@@ -264,6 +264,7 @@ pub struct RuntimeRegionMesh {
 #[derive(Clone, Deserialize)]
 pub struct RuntimeStrokeMesh {
     pub has_outline: bool,
+    pub stroke_width_meters: f32,
     pub vertices: Vec<[f32; 2]>,
     pub indices: Vec<u32>,
     #[serde(default)]
@@ -480,6 +481,12 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
             validate_mesh_parts(&region.vertices, &region.indices, &component.component_id)?;
         }
         if let Some(stroke) = component.contour_stroke_mesh.as_ref() {
+            if !stroke.stroke_width_meters.is_finite() || stroke.stroke_width_meters <= 0.0 {
+                return Err(ContentError::new(format!(
+                    "{} has an invalid contour stroke width",
+                    component.component_id
+                )));
+            }
             if stroke.has_outline {
                 validate_mesh_parts(&stroke.vertices, &stroke.indices, &component.component_id)?;
             } else if !stroke.vertices.is_empty() || !stroke.indices.is_empty() {

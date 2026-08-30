@@ -536,6 +536,61 @@ pub fn spawn_projected_prop_visual(
     presentation_layer: f32,
     outline_depth_meters: f32,
 ) -> Result<(), PolyToolsAssetError> {
+    spawn_projected_prop_visual_with_contours(
+        commands,
+        root,
+        meshes,
+        materials,
+        manifest,
+        fill_color,
+        projection_rotation,
+        presentation_layer,
+        ProjectedPropContours::CenteredPrism {
+            depth_meters: outline_depth_meters,
+        },
+    )
+}
+
+pub fn spawn_ankh_projected_visual(
+    commands: &mut Commands,
+    root: Entity,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ProjectionDepthMaterial>,
+    manifest: &RuntimeManifest,
+    fill_color: Color,
+    projection_rotation: Quat,
+    presentation_layer: f32,
+) -> Result<(), PolyToolsAssetError> {
+    spawn_projected_prop_visual_with_contours(
+        commands,
+        root,
+        meshes,
+        materials,
+        manifest,
+        fill_color,
+        projection_rotation,
+        presentation_layer,
+        ProjectedPropContours::AnkhFrontAndAuthoredDepthEdges,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum ProjectedPropContours {
+    CenteredPrism { depth_meters: f32 },
+    AnkhFrontAndAuthoredDepthEdges,
+}
+
+fn spawn_projected_prop_visual_with_contours(
+    commands: &mut Commands,
+    root: Entity,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<ProjectionDepthMaterial>,
+    manifest: &RuntimeManifest,
+    fill_color: Color,
+    projection_rotation: Quat,
+    presentation_layer: f32,
+    contours: ProjectedPropContours,
+) -> Result<(), PolyToolsAssetError> {
     let anchor = commands
         .spawn((
             Transform::from_xyz(-manifest.asset_pivot[0], -manifest.asset_pivot[1], 0.0)
@@ -593,13 +648,32 @@ pub fn spawn_projected_prop_visual(
                 presentation_layer,
                 component.projection_depth_meters,
             ));
-            let outline = commands
-                .spawn((
-                    Mesh2d(meshes.add(bevy_closed_prism_mesh(
+            let outline_mesh = match contours {
+                ProjectedPropContours::CenteredPrism { depth_meters } => bevy_closed_prism_mesh(
+                    &stroke_mesh.vertices,
+                    &stroke_mesh.indices,
+                    depth_meters,
+                ),
+                ProjectedPropContours::AnkhFrontAndAuthoredDepthEdges => {
+                    let corner_positions = component
+                        .projection_depth_corners
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|corner| corner.position)
+                        .collect::<Vec<_>>();
+                    bevy_ankh_contour_mesh(
                         &stroke_mesh.vertices,
                         &stroke_mesh.indices,
-                        outline_depth_meters,
-                    ))),
+                        &corner_positions,
+                        component.projection_depth_meters,
+                        stroke_mesh.stroke_width_meters,
+                    )
+                }
+            };
+            let outline = commands
+                .spawn((
+                    Mesh2d(meshes.add(outline_mesh)),
                     MeshMaterial2d(material),
                     Transform::from_xyz(-pivot[0], -pivot[1], 0.0),
                 ))
@@ -902,6 +976,85 @@ fn bevy_closed_prism_mesh(
     bevy_mesh_from_parts_3d(&vertices, &indices)
 }
 
+fn bevy_ankh_contour_mesh(
+    contour_vertices: &[[f32; 2]],
+    contour_indices: &[u32],
+    corner_positions: &[[f32; 2]],
+    depth_meters: f32,
+    stroke_width_meters: f32,
+) -> Mesh {
+    let (vertices, indices) = ankh_contour_parts(
+        contour_vertices,
+        contour_indices,
+        corner_positions,
+        depth_meters,
+        stroke_width_meters,
+    );
+    bevy_mesh_from_parts_3d(&vertices, &indices)
+}
+
+fn ankh_contour_parts(
+    contour_vertices: &[[f32; 2]],
+    contour_indices: &[u32],
+    corner_positions: &[[f32; 2]],
+    depth_meters: f32,
+    stroke_width_meters: f32,
+) -> (Vec<[f32; 3]>, Vec<u32>) {
+    let half_depth = depth_meters.max(0.0) * 0.5;
+    let half_width = stroke_width_meters.max(0.0) * 0.5;
+    let mut vertices = contour_vertices
+        .iter()
+        .map(|vertex| [vertex[0], vertex[1], half_depth])
+        .collect::<Vec<_>>();
+    let mut indices = contour_indices.to_vec();
+
+    for position in corner_positions {
+        append_depth_edge_cuboid(
+            &mut vertices,
+            &mut indices,
+            *position,
+            half_depth,
+            half_width,
+        );
+    }
+
+    (vertices, indices)
+}
+
+fn append_depth_edge_cuboid(
+    vertices: &mut Vec<[f32; 3]>,
+    indices: &mut Vec<u32>,
+    position: [f32; 2],
+    half_depth: f32,
+    half_width: f32,
+) {
+    let base = vertices.len() as u32;
+    let x_min = position[0] - half_width;
+    let x_max = position[0] + half_width;
+    let y_min = position[1] - half_width;
+    let y_max = position[1] + half_width;
+    vertices.extend_from_slice(&[
+        [x_min, y_min, -half_depth],
+        [x_max, y_min, -half_depth],
+        [x_max, y_max, -half_depth],
+        [x_min, y_max, -half_depth],
+        [x_min, y_min, half_depth],
+        [x_max, y_min, half_depth],
+        [x_max, y_max, half_depth],
+        [x_min, y_max, half_depth],
+    ]);
+    for [a, b, c, d] in [
+        [0, 3, 2, 1],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [1, 2, 6, 5],
+        [2, 3, 7, 6],
+        [3, 0, 4, 7],
+    ] {
+        indices.extend_from_slice(&[base + a, base + b, base + c, base + a, base + c, base + d]);
+    }
+}
+
 fn closed_prism_parts(
     source_vertices: &[[f32; 2]],
     source_indices: &[u32],
@@ -1129,6 +1282,45 @@ mod tests {
     }
 
     #[test]
+    fn ankh_contour_places_the_authored_outline_on_only_the_front_face() {
+        let contour_vertices = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
+        let contour_indices = [0, 1, 2];
+        let (vertices, indices) =
+            ankh_contour_parts(&contour_vertices, &contour_indices, &[], 0.4, 0.02);
+
+        assert_eq!(
+            vertices,
+            vec![[0.0, 0.0, 0.2], [1.0, 0.0, 0.2], [0.0, 1.0, 0.2]]
+        );
+        assert_eq!(indices, contour_indices);
+    }
+
+    #[test]
+    fn ankh_contour_builds_one_full_depth_edge_per_authored_corner() {
+        let contour_vertices = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
+        let contour_indices = [0, 1, 2];
+        let corners = [[0.25, 0.5], [0.75, 0.5]];
+        let (vertices, indices) =
+            ankh_contour_parts(&contour_vertices, &contour_indices, &corners, 0.4, 0.02);
+
+        assert_eq!(vertices.len(), contour_vertices.len() + corners.len() * 8);
+        assert_eq!(indices.len(), contour_indices.len() + corners.len() * 36);
+        let first_edge = &vertices[contour_vertices.len()..contour_vertices.len() + 8];
+        assert!(first_edge[..4].iter().all(|vertex| vertex[2] == -0.2));
+        assert!(first_edge[4..].iter().all(|vertex| vertex[2] == 0.2));
+        assert!(
+            first_edge
+                .iter()
+                .all(|vertex| (vertex[0] - corners[0][0]).abs() <= 0.01 + f32::EPSILON)
+        );
+        assert!(
+            first_edge
+                .iter()
+                .all(|vertex| (vertex[1] - corners[0][1]).abs() <= 0.01 + f32::EPSILON)
+        );
+    }
+
+    #[test]
     fn embedded_ankh_exposes_depth_and_authored_contours() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
@@ -1159,6 +1351,9 @@ mod tests {
             body.projection_depth_corners.as_ref().map(Vec::len),
             Some(12)
         );
+        assert!(body.contour_stroke_mesh.as_ref().is_some_and(|stroke| {
+            (stroke.stroke_width_meters - 4.0 / 192.0).abs() < f32::EPSILON
+        }));
     }
 
     #[test]

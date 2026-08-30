@@ -25,8 +25,8 @@ use crate::input::{
     collect_movement_input, update_client_input_focus,
 };
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_pupil_mesh, repeated_flat_asset_mesh, spawn_character_visual,
-    spawn_projected_prop_visual,
+    CharacterAssetLibrary, bevy_pupil_mesh, repeated_flat_asset_mesh, spawn_ankh_projected_visual,
+    spawn_character_visual, spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
@@ -629,7 +629,7 @@ fn setup_ankh_visuals(
                 Visibility::default(),
             ))
             .id();
-        if let Err(error) = spawn_projected_prop_visual(
+        if let Err(error) = spawn_ankh_projected_visual(
             &mut commands,
             root,
             &mut meshes,
@@ -638,7 +638,6 @@ fn setup_ankh_visuals(
             Color::srgb(0.72, 0.56, 0.20),
             ankh_projection_rotation(),
             ANKH_PRESENTATION_LAYER,
-            ANKH_OUTLINE_DEPTH_METERS,
         ) {
             error!("cannot spawn Ankh prop visual: {error}");
         }
