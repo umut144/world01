@@ -27,11 +27,11 @@
     {
       "asset_key": "tree",
       "footprint_meters": {
-        "width": 4.0625,
-        "height": 5.0625
+        "width": 6.4375,
+        "height": 8.0625
       },
       "anchor_meters": {
-        "x": 2.03125,
+        "x": 3.21875,
         "y": 0.03125
       }
     }
