@@ -110,6 +110,10 @@ this document instead of copying a shared mechanic as if it were game-owned.
   PolyTools remains the source of this visual intent; runtime rendering
   consumes the exported local point positions rather than inferring corners
   from triangulation.
+- The Ankh's Fill, side surfaces, front contour, and authored depth edges use
+  geometric depth occlusion within their authored Component layer. Portions of
+  a depth edge behind the front face or an extruded side surface are hidden;
+  the result is a solid projected object rather than a wireframe.
 - World 01 may use multiple distinct 3D presentation models. The Ankh's
   authored-Corner contour model is not an automatic default for the Hammer or
   for other projected-depth Assets; each such presentation is decided

@@ -244,6 +244,8 @@ impl Error for PolyToolsAssetError {}
 
 const ASSET_LOCAL_Z_STEP: f32 = 0.01;
 const OUTLINE_Z_OFFSET: f32 = 0.001;
+const ANKH_GEOMETRIC_DEPTH_SCALE: f32 = 0.004;
+const ANKH_CONTOUR_DEPTH_BIAS: f32 = 0.0001;
 const PUPIL_Z_OFFSET: f32 = 0.002;
 const DYNAMIC_EYE_OUTLINE_Z_OFFSET: f32 = 0.003;
 const ATTACHED_WEAPON_LAYER_GAP_STEPS: i32 = 1;
@@ -620,12 +622,19 @@ fn spawn_projected_prop_visual_with_contours(
         let pivot = component.local_pivot.unwrap_or([0.0, 0.0]);
         let z = component.z_index as f32 * ASSET_LOCAL_Z_STEP;
         if let Some(mesh) = component.mesh.as_ref() {
-            let material = materials.add(ProjectionDepthMaterial::from_color(
+            let mut material = ProjectionDepthMaterial::from_color(
                 fill_color,
                 z,
                 presentation_layer,
                 component.projection_depth_meters,
-            ));
+            );
+            if matches!(
+                contours,
+                ProjectedPropContours::AnkhFrontAndAuthoredDepthEdges
+            ) {
+                material.set_geometric_depth(ANKH_GEOMETRIC_DEPTH_SCALE, 0.0);
+            }
+            let material = materials.add(material);
             let fill = commands
                 .spawn((
                     Mesh2d(meshes.add(bevy_closed_prism_mesh(
@@ -642,12 +651,27 @@ fn spawn_projected_prop_visual_with_contours(
         if let Some(stroke_mesh) = component.contour_stroke_mesh.as_ref()
             && stroke_mesh.has_outline
         {
-            let material = materials.add(ProjectionDepthMaterial::from_color(
+            let outline_layer = if matches!(
+                contours,
+                ProjectedPropContours::AnkhFrontAndAuthoredDepthEdges
+            ) {
+                z
+            } else {
+                z + OUTLINE_Z_OFFSET
+            };
+            let mut material = ProjectionDepthMaterial::from_color(
                 Color::srgb(0.045, 0.04, 0.055),
-                z + OUTLINE_Z_OFFSET,
+                outline_layer,
                 presentation_layer,
                 component.projection_depth_meters,
-            ));
+            );
+            if matches!(
+                contours,
+                ProjectedPropContours::AnkhFrontAndAuthoredDepthEdges
+            ) {
+                material.set_geometric_depth(ANKH_GEOMETRIC_DEPTH_SCALE, ANKH_CONTOUR_DEPTH_BIAS);
+            }
+            let material = materials.add(material);
             let outline_mesh = match contours {
                 ProjectedPropContours::CenteredPrism { depth_meters } => bevy_closed_prism_mesh(
                     &stroke_mesh.vertices,

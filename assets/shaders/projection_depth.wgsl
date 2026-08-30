@@ -22,6 +22,8 @@ struct ProjectionDepthMaterial {
     authored_layer: f32,
     presentation_layer: f32,
     projection_depth_meters: f32,
+    geometric_depth_scale: f32,
+    geometric_depth_bias: f32,
     padding: f32,
 };
 
@@ -67,9 +69,13 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     );
     out.world_position.x += material.deformation_offset.x * deformation_weight;
     out.world_position.y += material.deformation_offset.y * deformation_weight;
-    // Projection depth changes only the visible XY silhouette. Authored and
-    // contextual 2D layers remain the presentation ordering source of truth.
-    out.world_position.z = material.presentation_layer + material.authored_layer;
+    // Geometric depth is opt-in and compressed so authored Component layers
+    // remain the ordering source of truth outside one projected object.
+    let geometric_depth = out.world_position.z - material.presentation_layer;
+    out.world_position.z = material.presentation_layer
+        + material.authored_layer
+        + geometric_depth * material.geometric_depth_scale
+        + material.geometric_depth_bias;
     out.position = mesh_functions::mesh2d_position_world_to_clip(out.world_position);
 #endif
 
