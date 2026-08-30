@@ -186,6 +186,31 @@ this document instead of copying a shared mechanic as if it were game-owned.
 | `4` | Heavy | `2.00` | Glass, stone, ceramic |
 | `5` | Very Heavy | `4.00` | Steel, iron, massive metal parts |
 
+### Confirmed current catalog assignments
+
+The following assignment is the confirmed World-01 baseline for the current
+Character catalog. `Excluded` is intentionally separate from density class
+`0`: excluded Components are not material for this model, while class `0`
+remains available for material that has no relevant gameplay mass.
+
+| Character | Very Light (`1`) | Light (`2`) | Medium (`3`) | Excluded |
+|---|---|---|---|---|
+| ArcherF | `head_tip01`, `head_tip02`, `head_tip03` | — | `body`, `feet`, `head`, `forehead` | `eye_left`, `eye_right` |
+| Barde | — | — | `feet`, `body`, `head` | `belly`, `eye_left`, `eye_right` |
+| Chantres | — | `belly`, `hat` | `body`, `head` | `eye_left`, `eye_right`, `hat_line` |
+| Glavier | — | `belly`, `head_tip` | `body`, `head` | `eye_left`, `eye_right` |
+| Hammerer | — | `cloak`, `hat` | `body`, `feet`, `head` | `eye_left`, `eye_right` |
+| Mage | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
+| Monk | `eyebrow_left`, `eyebrow_right` | — | `feet`, `body`, `head`, `forehead` | `eye_left`, `eye_right`, `forehead_dot01`–`forehead_dot06` |
+| Rogue | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyebrow_left`, `eyebrow_right` |
+| Sorcerer | — | `hat_back`, `hat` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
+| Warrior | — | — | `body`, `head`, `forehead`, `body_side_left`, `body_side_right`, `thorn_side_left`, `thorn_side_right`, `thorn_left`, `thorn_right` | `eye_left`, `eye_right` |
+| Wizard | — | `hat` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
+
+| Weapon | Medium (`3`) | Very Heavy (`5`) |
+|---|---|---|
+| Hammer | `shaft_center` | `head_mid`, `head_left`, `head_right`, `shaft_bevel_top`, `shaft_bevel_bottom` |
+
 - A material-bearing Component contributes its transformed triangulated fill
   area in square meters multiplied by its density factor. A Character's mass
   is the sum of those Component contributions.
@@ -213,10 +238,9 @@ this document instead of copying a shared mechanic as if it were game-owned.
   `speed = 0.6 m/s * (Hammerer body mass / Character body mass)^0.25`.
 - RUN and DASH continue to derive from the resulting effective normal movement
   speed through their existing multipliers.
-- The density assignment for every current material-bearing Component remains
-  to be decided before mass and speed values are implemented. Appropriate
-  minimum or maximum speed safeguards should be evaluated from the resulting
-  catalog rather than chosen without that distribution.
+- The formula has no arbitrary minimum or maximum speed clamp. The Rogue is
+  intentionally the clear fastest current Character and may run more than
+  twice as fast as the Hammerer; the Hammerer is the slowest current Character.
 
 ## Shared movement abilities and status foundations
 
