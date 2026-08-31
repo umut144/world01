@@ -7,9 +7,8 @@ use world01_content::{
 };
 use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterLifeState, DashState, EyeBeamState,
-    GazeDirection, MageAttackPhase, MageAttackState, Position, SelectedCharacter,
-    StatusEffectState,
+    AttackIntent, BodyFacing, CharacterLifeState, DashState, EyeBeamState, GazeDirection,
+    MageAttackPhase, MageAttackState, Position, SelectedCharacter, StatusEffectState,
 };
 
 #[cfg(test)]

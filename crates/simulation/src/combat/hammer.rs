@@ -4,9 +4,8 @@ use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
 use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry};
 use world01_design::{HammerDesign, HammerStrikeDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterLifeState, DashState, GazeDirection,
-    HammerAttackPhase, HammerAttackState, Position, SelectedCharacter, StatusEffectState,
-    WeaponAimState,
+    AttackIntent, BodyFacing, CharacterLifeState, DashState, GazeDirection, HammerAttackPhase,
+    HammerAttackState, Position, SelectedCharacter, StatusEffectState, WeaponAimState,
 };
 
 use crate::damage::{DamageDealt, DamageSource};

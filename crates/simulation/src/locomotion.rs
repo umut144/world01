@@ -110,7 +110,6 @@ pub fn update_locomotion(
         life,
     ) in &mut players
     {
-        status.tick();
         let mut stamina_delta = stamina.maximum * rules.stamina_regeneration_per_tick_ratio;
 
         let run_pressed_edge = run_intent.pressed && !run.input_pressed;
