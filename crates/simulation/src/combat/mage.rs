@@ -219,15 +219,11 @@ fn fire(
     };
     let left_origin = emitter_origin(geometry.left);
     let right_origin = emitter_origin(geometry.right);
-    let convergence = (left_origin + right_origin) * 0.5 + gaze * range_meters;
-    let beam = |emitter: world01_content::EyeBeamEmitterGeometry, origin: Vec2| {
-        let direction = (convergence - origin).normalize_or_zero();
-        EyeBeamState {
-            origin: Position::new(origin.x, origin.y),
-            direction: GazeDirection::new(direction.x, direction.y),
-            width: emitter.width * rules.eye_width_ratio,
-            active: direction != Vec2::ZERO,
-        }
+    let beam = |emitter: world01_content::EyeBeamEmitterGeometry, origin: Vec2| EyeBeamState {
+        origin: Position::new(origin.x, origin.y),
+        direction: GazeDirection::new(gaze.x, gaze.y),
+        width: emitter.width * rules.eye_width_ratio,
+        active: true,
     };
     *state = MageAttackState {
         phase: MageAttackPhase::Cooldown,
@@ -538,6 +534,8 @@ mod tests {
         assert_eq!(state.projectile_length_meters, 1.0);
         assert_eq!(state.damage_per_beam, 10.0);
         assert!(state.left_beam.active && state.right_beam.active);
+        assert_eq!(state.left_beam.direction, GazeDirection::RIGHT);
+        assert_eq!(state.right_beam.direction, GazeDirection::RIGHT);
     }
 
     #[test]
@@ -675,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn both_beams_damage_a_target_at_the_convergence_point() {
+    fn both_parallel_beams_damage_a_target_in_their_shared_path() {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let rules = rules();
         let geometry = geometry();

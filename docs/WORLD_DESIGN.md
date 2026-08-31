@@ -544,11 +544,11 @@ the attack narrow, powerful, and spatially readable.
   free again after that interval while the projectiles continue traveling.
 - The Mage retains normal movement during charging and the gaze-lock interval.
   Firing snapshots both eye origins, the current gaze direction, and the
-  resulting convergence point in world space; later Character movement does
-  not bend or drag either projectile.
+  two parallel projectile directions in world space; later Character movement
+  does not bend or drag either projectile.
 - Firing begins a `2.0 s` cooldown during which another eye-beam charge cannot
   start. At maximum charge and without an earlier collision, the cooldown ends
-  when the two-second projectile travel reaches its convergence point.
+  when the two-second projectile travel reaches its maximum range.
 - During charging, the eyes become progressively redder until they reach their
   maximum-charge presentation.
 
@@ -561,16 +561,15 @@ World-01 baseline uses one deliberately simple linear model:
 |---|---:|---:|---:|
 | Gaze lock / emission time | `0.1 c s` | `0.1 s` | `0.2 s` |
 | Projectile length per beam | `c m` | `1 m` | `2 m` |
-| Travel/convergence distance | `10 c m` | `10 m` | `20 m` |
+| Maximum travel distance | `10 c m` | `10 m` | `20 m` |
 | Damage per eye beam | `10 c HP` | `10 HP` | `20 HP` |
 | Maximum combined damage | `20 c HP` | `20 HP` | `40 HP` |
 
 - Both eye-beam projectiles travel at `10 m/s`. Their spatial length follows
   directly from speed multiplied by the charge-scaled emission time.
-- Each beam begins at its corresponding authored eye and travels toward the
-  shared point on the locked gaze line at the charge-scaled convergence
-  distance. The two beams therefore meet at `10 m` for minimum charge and at
-  `20 m` for maximum charge.
+- Each beam begins at its corresponding authored eye and travels parallel to
+  the locked gaze direction. Their separation remains fixed for the full
+  charge-scaled travel distance.
 - Each beam's width is `90%` of the effective width of its corresponding
   authored eye. Mage character design exposes an eye-size ratio (`1.0`
   baseline) that scales the visible eye geometry and its pupil, plus the
@@ -583,8 +582,8 @@ World-01 baseline uses one deliberately simple linear model:
   penetrate their first collision and disappear immediately when the leading
   edge hits. A small laser spark at the impact point is an optional later
   presentation refinement rather than first-slice scope.
-- Without an earlier collision, both beams disappear when they reach their
-  shared charge-scaled convergence point.
+- Without an earlier collision, each beam disappears when it reaches its own
+  charge-scaled maximum travel distance.
 - Future reflective surfaces may redirect an eye beam. A reflected beam
   remains subject to the normal geometry-based damage rule and may therefore
   return to and damage the Mage who fired it. Reflection is not part of the
