@@ -22183,6 +22183,11 @@
         "asset_key": "grass"
       },
       {
+        "x": 27,
+        "y": 44,
+        "asset_key": "grass"
+      },
+      {
         "x": 28,
         "y": 44,
         "asset_key": "grass"
@@ -34203,21 +34208,6 @@
         "asset_key": "grass"
       },
       {
-        "x": 32,
-        "y": 68,
-        "asset_key": "grass"
-      },
-      {
-        "x": 33,
-        "y": 68,
-        "asset_key": "grass"
-      },
-      {
-        "x": 34,
-        "y": 68,
-        "asset_key": "grass"
-      },
-      {
         "x": 35,
         "y": 68,
         "asset_key": "grass"
@@ -34714,36 +34704,6 @@
       },
       {
         "x": 34,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 35,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 36,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 37,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 38,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 39,
-        "y": 69,
-        "asset_key": "grass"
-      },
-      {
-        "x": 40,
         "y": 69,
         "asset_key": "grass"
       },
@@ -35628,11 +35588,6 @@
         "asset_key": "grass"
       },
       {
-        "x": 17,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
         "x": 18,
         "y": 71,
         "asset_key": "grass"
@@ -35774,36 +35729,6 @@
       },
       {
         "x": 46,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 47,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 48,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 49,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 50,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 51,
-        "y": 71,
-        "asset_key": "grass"
-      },
-      {
-        "x": 52,
         "y": 71,
         "asset_key": "grass"
       },
@@ -36308,36 +36233,6 @@
         "asset_key": "grass"
       },
       {
-        "x": 53,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
-        "x": 54,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
-        "x": 55,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
-        "x": 56,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
-        "x": 57,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
-        "x": 58,
-        "y": 72,
-        "asset_key": "grass"
-      },
-      {
         "x": 59,
         "y": 72,
         "asset_key": "grass"
@@ -36838,36 +36733,6 @@
         "asset_key": "grass"
       },
       {
-        "x": 59,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
-        "x": 60,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
-        "x": 61,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
-        "x": 62,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
-        "x": 63,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
-        "x": 64,
-        "y": 73,
-        "asset_key": "grass"
-      },
-      {
         "x": 65,
         "y": 73,
         "asset_key": "grass"
@@ -37364,21 +37229,6 @@
       },
       {
         "x": 64,
-        "y": 74,
-        "asset_key": "grass"
-      },
-      {
-        "x": 65,
-        "y": 74,
-        "asset_key": "grass"
-      },
-      {
-        "x": 66,
-        "y": 74,
-        "asset_key": "grass"
-      },
-      {
-        "x": 67,
         "y": 74,
         "asset_key": "grass"
       },
@@ -38639,11 +38489,6 @@
       },
       {
         "x": 19,
-        "y": 77,
-        "asset_key": "grass"
-      },
-      {
-        "x": 20,
         "y": 77,
         "asset_key": "grass"
       },
@@ -39144,16 +38989,6 @@
       },
       {
         "x": 20,
-        "y": 78,
-        "asset_key": "grass"
-      },
-      {
-        "x": 21,
-        "y": 78,
-        "asset_key": "grass"
-      },
-      {
-        "x": 22,
         "y": 78,
         "asset_key": "grass"
       },
@@ -39654,11 +39489,6 @@
       },
       {
         "x": 22,
-        "y": 79,
-        "asset_key": "grass"
-      },
-      {
-        "x": 23,
         "y": 79,
         "asset_key": "grass"
       },
@@ -40669,16 +40499,6 @@
       },
       {
         "x": 25,
-        "y": 81,
-        "asset_key": "grass"
-      },
-      {
-        "x": 26,
-        "y": 81,
-        "asset_key": "grass"
-      },
-      {
-        "x": 27,
         "y": 81,
         "asset_key": "grass"
       },
@@ -41179,11 +40999,6 @@
       },
       {
         "x": 27,
-        "y": 82,
-        "asset_key": "grass"
-      },
-      {
-        "x": 28,
         "y": 82,
         "asset_key": "grass"
       },
@@ -41684,16 +41499,6 @@
       },
       {
         "x": 28,
-        "y": 83,
-        "asset_key": "grass"
-      },
-      {
-        "x": 29,
-        "y": 83,
-        "asset_key": "grass"
-      },
-      {
-        "x": 30,
         "y": 83,
         "asset_key": "grass"
       },
@@ -42194,11 +41999,6 @@
       },
       {
         "x": 30,
-        "y": 84,
-        "asset_key": "grass"
-      },
-      {
-        "x": 31,
         "y": 84,
         "asset_key": "grass"
       },
@@ -50050,6 +49850,14 @@
         "position_authoring_px": {
           "x": 1728,
           "y": 1600
+        }
+      },
+      {
+        "instance_id": "ankh_0002",
+        "asset_key": "ankh",
+        "position_authoring_px": {
+          "x": 414,
+          "y": 2309
         }
       },
       {

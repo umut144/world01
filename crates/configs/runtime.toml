@@ -6,6 +6,6 @@ snapshot_send_hz = 30
 remote_interpolation_ratio = 2.0
 
 [camera]
-view_preset = 1
+view_preset = 2
 view_width_tiles = 21
 view_height_tiles = 13
