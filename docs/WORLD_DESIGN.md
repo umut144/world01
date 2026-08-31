@@ -570,7 +570,10 @@ World-01 baseline uses one deliberately simple linear model:
   shared point on the locked gaze line at the charge-scaled convergence
   distance. The two beams therefore meet at `10 m` for minimum charge and at
   `20 m` for maximum charge.
-- Each beam's width is `90%` of the width of its corresponding authored eye.
+- Each beam's width is `90%` of the effective width of its corresponding
+  authored eye. Mage character design exposes an eye-size ratio (`1.0`
+  baseline) and the beam-width ratio (`0.9`); simulation applies both to the
+  authored eye width.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a

@@ -14,7 +14,7 @@ pub struct GameDesign {
     pub hammer: HammerDesign,
     pub hammer_strike: HammerStrikeDesign,
     pub hammerer: CharacterDesign,
-    pub mage: CharacterDesign,
+    pub mage: MageDesign,
     pub mage_eye_beams: MageEyeBeamsDesign,
     pub mass: MassModelDefinition,
 }
@@ -31,7 +31,6 @@ pub struct MageEyeBeamsDesign {
     pub gaze_lock_seconds_per_charge_second: f32,
     pub range_meters_per_charge_second: f32,
     pub damage_per_charge_second: f32,
-    pub eye_width_ratio: f32,
 }
 
 impl MageEyeBeamsDesign {
@@ -54,9 +53,26 @@ impl MageEyeBeamsDesign {
             && self.range_meters_per_charge_second > 0.0
             && self.damage_per_charge_second.is_finite()
             && self.damage_per_charge_second > 0.0
-            && self.eye_width_ratio.is_finite()
-            && self.eye_width_ratio > 0.0
-            && self.eye_width_ratio < 1.0
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MageDesign {
+    pub schema_version: u32,
+    pub asset_key: String,
+    pub eye_size_ratio: f32,
+    pub eye_beam_width_ratio: f32,
+}
+
+impl MageDesign {
+    pub fn is_valid(&self) -> bool {
+        self.schema_version == 1
+            && self.asset_key == "mage"
+            && self.eye_size_ratio.is_finite()
+            && self.eye_size_ratio > 0.0
+            && self.eye_beam_width_ratio.is_finite()
+            && self.eye_beam_width_ratio > 0.0
+            && self.eye_beam_width_ratio <= 1.0
     }
 }
 
@@ -210,7 +226,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         .map_err(|error| DesignError(format!("cannot parse HammerStrike design: {error}")))?;
     let hammerer: CharacterDesign = serde_json::from_str(HAMMERER_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse hammerer design: {error}")))?;
-    let mage: CharacterDesign = serde_json::from_str(MAGE_DESIGN)
+    let mage: MageDesign = serde_json::from_str(MAGE_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse Mage design: {error}")))?;
     let mage_eye_beams: MageEyeBeamsDesign = serde_json::from_str(MAGE_EYE_BEAMS_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse MageEyeBeams design: {error}")))?;
@@ -241,7 +257,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     if !hammerer.is_valid("hammerer") {
         return Err(DesignError("Hammerer design is invalid".into()));
     }
-    if !mage.is_valid("mage") || !mage_eye_beams.is_valid() {
+    if !mage.is_valid() || !mage_eye_beams.is_valid() {
         return Err(DesignError("Mage eye-beam design is invalid".into()));
     }
     if !mass.is_valid() {
@@ -287,6 +303,8 @@ mod tests {
         );
         assert_eq!(design.hammerer.asset_key, "hammerer");
         assert_eq!(design.mage.asset_key, "mage");
+        assert_eq!(design.mage.eye_size_ratio, 1.0);
+        assert_eq!(design.mage.eye_beam_width_ratio, 0.9);
         assert_eq!(design.mage_eye_beams.minimum_charge_seconds, 1.0);
         assert_eq!(design.mage_eye_beams.maximum_charge_seconds, 2.0);
         assert_eq!(design.mage_eye_beams.forced_release_seconds, 4.0);

@@ -5,7 +5,7 @@ use world01_content::{
     AuthoredFacing, CharacterHurtGeometryCatalog, MageEyeGeometry, RuntimeComponentGeometry,
     WorldCollisionGeometryCatalog,
 };
-use world01_design::MageEyeBeamsDesign;
+use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashState, EyeBeamState,
     GazeDirection, MageAttackPhase, MageAttackState, Position, SelectedCharacter,
@@ -27,31 +27,37 @@ pub struct MageAttackRules {
     projectile_length_per_charge_tick: f32,
     range_per_charge_tick: f32,
     damage_per_charge_tick: f32,
-    eye_width_ratio: f32,
+    eye_size_ratio: f32,
+    eye_beam_width_ratio: f32,
 }
 
 impl MageAttackRules {
     pub fn from_design(
         ticks_per_second: u32,
-        design: &MageEyeBeamsDesign,
+        mage_design: &MageDesign,
+        attack_design: &MageEyeBeamsDesign,
     ) -> Result<Self, MageAttackConfigError> {
-        if ticks_per_second == 0 || !design.is_valid() {
+        if ticks_per_second == 0 || !mage_design.is_valid() || !attack_design.is_valid() {
             return Err(MageAttackConfigError);
         }
         let ticks = |seconds: f32| (seconds * ticks_per_second as f32).round().max(1.0) as u32;
         Ok(Self {
-            minimum_charge_ticks: ticks(design.minimum_charge_seconds),
-            maximum_charge_ticks: ticks(design.maximum_charge_seconds),
-            forced_release_ticks: ticks(design.forced_release_seconds),
-            cooldown_ticks: ticks(design.cooldown_seconds),
-            speed_per_tick: design.projectile_speed_meters_per_second / ticks_per_second as f32,
-            gaze_lock_ticks_per_charge_tick: design.gaze_lock_seconds_per_charge_second,
-            projectile_length_per_charge_tick: design.projectile_speed_meters_per_second
-                * design.gaze_lock_seconds_per_charge_second
+            minimum_charge_ticks: ticks(attack_design.minimum_charge_seconds),
+            maximum_charge_ticks: ticks(attack_design.maximum_charge_seconds),
+            forced_release_ticks: ticks(attack_design.forced_release_seconds),
+            cooldown_ticks: ticks(attack_design.cooldown_seconds),
+            speed_per_tick: attack_design.projectile_speed_meters_per_second
                 / ticks_per_second as f32,
-            range_per_charge_tick: design.range_meters_per_charge_second / ticks_per_second as f32,
-            damage_per_charge_tick: design.damage_per_charge_second / ticks_per_second as f32,
-            eye_width_ratio: design.eye_width_ratio,
+            gaze_lock_ticks_per_charge_tick: attack_design.gaze_lock_seconds_per_charge_second,
+            projectile_length_per_charge_tick: attack_design.projectile_speed_meters_per_second
+                * attack_design.gaze_lock_seconds_per_charge_second
+                / ticks_per_second as f32,
+            range_per_charge_tick: attack_design.range_meters_per_charge_second
+                / ticks_per_second as f32,
+            damage_per_charge_tick: attack_design.damage_per_charge_second
+                / ticks_per_second as f32,
+            eye_size_ratio: mage_design.eye_size_ratio,
+            eye_beam_width_ratio: mage_design.eye_beam_width_ratio,
         })
     }
 
@@ -221,7 +227,7 @@ fn fire(
         EyeBeamState {
             origin: Position::new(origin.x, origin.y),
             direction: GazeDirection::new(direction.x, direction.y),
-            width: emitter.width * rules.eye_width_ratio,
+            width: emitter.width * rules.eye_size_ratio * rules.eye_beam_width_ratio,
             active: direction != Vec2::ZERO,
         }
     };
@@ -445,8 +451,12 @@ mod tests {
     fn rules() -> MageAttackRules {
         let config = load_embedded().expect("embedded config parses");
         let design = load_design().expect("embedded design parses");
-        MageAttackRules::from_design(config.simulation.ticks_per_second, &design.mage_eye_beams)
-            .expect("Mage design is valid")
+        MageAttackRules::from_design(
+            config.simulation.ticks_per_second,
+            &design.mage,
+            &design.mage_eye_beams,
+        )
+        .expect("Mage design is valid")
     }
 
     fn geometry() -> MageEyeGeometry {
@@ -528,6 +538,39 @@ mod tests {
         assert_eq!(state.projectile_length_meters, 1.0);
         assert_eq!(state.damage_per_beam, 10.0);
         assert!(state.left_beam.active && state.right_beam.active);
+    }
+
+    #[test]
+    fn character_eye_ratios_scale_the_authored_beam_widths() {
+        let config = load_embedded().expect("embedded config parses");
+        let mut design = load_design().expect("embedded design parses");
+        design.mage.eye_size_ratio = 0.5;
+        design.mage.eye_beam_width_ratio = 0.8;
+        let rules = MageAttackRules::from_design(
+            config.simulation.ticks_per_second,
+            &design.mage,
+            &design.mage_eye_beams,
+        )
+        .expect("Mage design is valid");
+        let geometry = geometry();
+        let mut volley = MageAttackState {
+            phase: MageAttackPhase::Charging,
+            charge_ticks: rules.minimum_charge_ticks(),
+            ..MageAttackState::IDLE
+        };
+
+        fire(
+            &rules,
+            &geometry,
+            GazeDirection::RIGHT,
+            Position::ZERO,
+            BodyFacing::Authored,
+            false,
+            &mut volley,
+        );
+
+        assert_eq!(volley.left_beam.width, geometry.left.width * 0.5 * 0.8);
+        assert_eq!(volley.right_beam.width, geometry.right.width * 0.5 * 0.8);
     }
 
     #[test]

@@ -8,6 +8,5 @@
   "projectile_speed_meters_per_second": 10.0,
   "gaze_lock_seconds_per_charge_second": 0.1,
   "range_meters_per_charge_second": 10.0,
-  "damage_per_charge_second": 10.0,
-  "eye_width_ratio": 0.9
+  "damage_per_charge_second": 10.0
 }

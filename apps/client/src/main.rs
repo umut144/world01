@@ -79,6 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
     let mage_attack_rules = MageAttackRules::from_design(
         config.simulation.ticks_per_second,
+        &game_design.mage,
         &game_design.mage_eye_beams,
     )?;
     let hammer_presentation_rules = HammerPresentationRules::from_design(
