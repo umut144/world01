@@ -4,8 +4,8 @@ pub mod aim;
 pub mod archetype;
 pub mod combat;
 pub mod damage;
+pub mod exertion;
 pub mod life;
-pub mod locomotion;
 pub mod mass;
 pub mod movement;
 pub mod respawn;
@@ -23,8 +23,8 @@ pub use combat::mage::{
     expire_mage_beams, finish_mage_cooldowns, visible_beam_segment,
 };
 pub use damage::{DamageDealt, DamageSource, apply_damage};
+pub use exertion::{ExertionConfigError, ExertionRules, update_exertion};
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
-pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use mass::{CharacterMassCatalog, MassModelError};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
 pub use respawn::{RespawnActor, choose_respawn_position};

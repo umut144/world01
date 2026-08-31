@@ -13,7 +13,7 @@ use crate::damage::{DamageDealt, DamageSource};
 use crate::movement::MovementStep;
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
-pub struct LocomotionRules {
+pub struct ExertionRules {
     seconds_per_tick: f32,
     default_max_stamina: f32,
     stamina_regeneration_per_tick_ratio: f32,
@@ -27,13 +27,13 @@ pub struct LocomotionRules {
     knockdown_damage_ratio: f32,
 }
 
-impl LocomotionRules {
+impl ExertionRules {
     pub fn from_design(
         ticks_per_second: u32,
         design: &LocomotionConfig,
-    ) -> Result<Self, LocomotionConfigError> {
+    ) -> Result<Self, ExertionConfigError> {
         if ticks_per_second == 0 || !design.is_valid() {
-            return Err(LocomotionConfigError);
+            return Err(ExertionConfigError);
         }
 
         let seconds_per_tick = 1.0 / ticks_per_second as f32;
@@ -61,21 +61,94 @@ impl LocomotionRules {
     pub fn default_max_stamina(self) -> f32 {
         self.default_max_stamina
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LocomotionConfigError;
+    pub fn seconds_per_tick(self) -> f32 {
+        self.seconds_per_tick
+    }
 
-impl fmt::Display for LocomotionConfigError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("locomotion configuration is invalid")
+    /// Stamina recovered in one tick, proportional to the actor's maximum.
+    pub fn regeneration_per_tick(self, maximum_stamina: f32) -> f32 {
+        maximum_stamina * self.stamina_regeneration_per_tick_ratio
+    }
+
+    /// Stamina spent in one tick of running.
+    pub fn run_drain_per_tick(self) -> f32 {
+        self.run_drain_per_tick
+    }
+
+    /// How much faster than its normal speed an actor moves while running.
+    pub fn speed_multiplier(self, running: bool) -> f32 {
+        if running {
+            self.run_speed_multiplier
+        } else {
+            1.0
+        }
+    }
+
+    /// Stamina a dash costs, proportional to the actor's maximum.
+    pub fn dash_cost(self, maximum_stamina: f32) -> f32 {
+        maximum_stamina * self.dash_cost_ratio
+    }
+
+    /// The velocity a dash locks in, taken from the actor's current motion.
+    pub fn dash_velocity(self, normal: MovementVelocity) -> MovementVelocity {
+        normal.scaled(self.dash_speed_multiplier)
+    }
+
+    /// Whether an actor in this state may begin a dash this tick.
+    ///
+    /// Reads no tuning value today; it is the place a stamina threshold or a
+    /// cooldown would land, and the question a bot or a UI needs to ask.
+    pub fn may_start_dash(
+        self,
+        pressed_edge: bool,
+        dash: DashState,
+        status: StatusEffectState,
+        alive: bool,
+        normal: MovementVelocity,
+    ) -> bool {
+        pressed_edge
+            && !dash.active
+            && !status.blocks_action_buttons()
+            && alive
+            && normal.length() > f32::EPSILON
+    }
+
+    /// Whether a dash that started this many seconds ago has run its course.
+    pub fn dash_has_ended(self, elapsed_seconds: f32) -> bool {
+        elapsed_seconds >= self.dash_duration_seconds
+    }
+
+    /// Whether a dash is inside its invulnerability window.
+    pub fn dash_is_invulnerable(self, elapsed_seconds: f32) -> bool {
+        let start = (self.dash_duration_seconds - self.dash_invulnerability_seconds) * 0.5;
+        elapsed_seconds >= start && elapsed_seconds < start + self.dash_invulnerability_seconds
+    }
+
+    /// How long exhaustion keeps an actor down.
+    pub fn knockdown_ticks(self) -> u32 {
+        self.knockdown_duration_ticks
+    }
+
+    /// The damage exhaustion deals, proportional to the actor's maximum health.
+    pub fn knockdown_damage(self, maximum_health: f32) -> f32 {
+        maximum_health * self.knockdown_damage_ratio
     }
 }
 
-impl Error for LocomotionConfigError {}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExertionConfigError;
 
-pub fn update_locomotion(
-    rules: Res<LocomotionRules>,
+impl fmt::Display for ExertionConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("exertion configuration is invalid")
+    }
+}
+
+impl Error for ExertionConfigError {}
+
+pub fn update_exertion(
+    rules: Res<ExertionRules>,
     movement_step: Res<MovementStep>,
     mut damage: MessageWriter<DamageDealt>,
     mut players: Query<(
@@ -110,7 +183,7 @@ pub fn update_locomotion(
         life,
     ) in &mut players
     {
-        let mut stamina_delta = stamina.maximum * rules.stamina_regeneration_per_tick_ratio;
+        let mut stamina_delta = rules.regeneration_per_tick(stamina.maximum);
 
         let run_pressed_edge = run_intent.pressed && !run.input_pressed;
         let dash_pressed_edge = dash_intent.pressed && !dash.input_pressed;
@@ -133,29 +206,25 @@ pub fn update_locomotion(
         let normal_velocity = if status.blocks_movement() || life_blocks_input {
             MovementVelocity::ZERO
         } else {
-            let multiplier = if run.toggled {
-                rules.run_speed_multiplier
-            } else {
-                1.0
-            };
             movement_step.velocity(
                 *movement_intent,
                 mass.normal_speed_meters_per_second,
-                multiplier,
+                rules.speed_multiplier(run.toggled),
             )
         };
 
         let mut started_dash = false;
-        if dash_pressed_edge
-            && !dash.active
-            && !status.blocks_action_buttons()
-            && !life_blocks_input
-            && normal_velocity.length() > f32::EPSILON
-        {
-            stamina_delta -= stamina.maximum * rules.dash_cost_ratio;
+        if rules.may_start_dash(
+            dash_pressed_edge,
+            *dash,
+            *status,
+            !life_blocks_input,
+            normal_velocity,
+        ) {
+            stamina_delta -= rules.dash_cost(stamina.maximum);
             dash.active = true;
             dash.elapsed_seconds = 0.0;
-            dash.velocity = normal_velocity.scaled(rules.dash_speed_multiplier);
+            dash.velocity = rules.dash_velocity(normal_velocity);
             started_dash = true;
         }
 
@@ -165,7 +234,7 @@ pub fn update_locomotion(
             && (normal_velocity.length() > f32::EPSILON || dash.active);
 
         if run.active {
-            stamina_delta -= rules.run_drain_per_tick;
+            stamina_delta -= rules.run_drain_per_tick();
         }
 
         let mut current_velocity = if dash.active {
@@ -183,27 +252,26 @@ pub fn update_locomotion(
             dash.invulnerable = false;
             dash.velocity = MovementVelocity::ZERO;
             current_velocity = MovementVelocity::ZERO;
-            status.knockdowned_ticks = rules.knockdown_duration_ticks;
+            status.knockdowned_ticks = rules.knockdown_ticks();
             damage.write(DamageDealt {
                 target: entity,
                 source: DamageSource::Exhaustion,
-                amount: health.maximum * rules.knockdown_damage_ratio,
+                amount: rules.knockdown_damage(health.maximum),
             });
         }
 
         if current_velocity != MovementVelocity::ZERO {
             let current = Vec2::new(position.x, position.y);
             let displacement =
-                Vec2::new(current_velocity.x, current_velocity.y) * rules.seconds_per_tick;
+                Vec2::new(current_velocity.x, current_velocity.y) * rules.seconds_per_tick();
             let proposed = current + displacement;
             *position = Position::new(proposed.x, proposed.y);
         }
 
         if dash.active {
-            dash.elapsed_seconds += rules.seconds_per_tick;
-            dash.invulnerable = dash.elapsed_seconds >= dash_invulnerability_start(*rules)
-                && dash.elapsed_seconds < dash_invulnerability_end(*rules);
-            if dash.elapsed_seconds >= rules.dash_duration_seconds {
+            dash.elapsed_seconds += rules.seconds_per_tick();
+            dash.invulnerable = rules.dash_is_invulnerable(dash.elapsed_seconds);
+            if rules.dash_has_ended(dash.elapsed_seconds) {
                 dash.active = false;
                 dash.invulnerable = false;
                 dash.velocity = MovementVelocity::ZERO;
@@ -213,14 +281,6 @@ pub fn update_locomotion(
 
         *velocity = current_velocity;
     }
-}
-
-fn dash_invulnerability_start(rules: LocomotionRules) -> f32 {
-    (rules.dash_duration_seconds - rules.dash_invulnerability_seconds) * 0.5
-}
-
-fn dash_invulnerability_end(rules: LocomotionRules) -> f32 {
-    dash_invulnerability_start(rules) + rules.dash_invulnerability_seconds
 }
 
 #[cfg(test)]
@@ -238,11 +298,11 @@ mod tests {
             MovementStep::from_runtime(&runtime).expect("embedded runtime configuration is valid"),
         )
         .insert_resource(
-            LocomotionRules::from_design(runtime.simulation.ticks_per_second, &design.locomotion)
-                .expect("embedded locomotion configuration is valid"),
+            ExertionRules::from_design(runtime.simulation.ticks_per_second, &design.locomotion)
+                .expect("embedded exertion configuration is valid"),
         )
         .add_message::<DamageDealt>()
-        .add_systems(Update, (update_locomotion, apply_damage).chain());
+        .add_systems(Update, (update_exertion, apply_damage).chain());
         app
     }
 

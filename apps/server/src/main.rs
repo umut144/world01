@@ -16,8 +16,8 @@ use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use world01_simulation::{
-    CharacterArchetypeCatalog, CharacterLifeRules, CharacterMassCatalog, HammerAttackRules,
-    HammerStrikeRules, LocomotionRules, MageAttackRules, MovementStep, SimulationAuthority,
+    CharacterArchetypeCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
+    HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
     SimulationSet, WeaponAimRules, add_simulation_step,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
@@ -48,8 +48,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_runtime(&config)?;
-    let locomotion_rules =
-        LocomotionRules::from_design(config.simulation.ticks_per_second, &world_design.locomotion)?;
+    let exertion_rules =
+        ExertionRules::from_design(config.simulation.ticks_per_second, &world_design.locomotion)?;
     let character_life_rules =
         CharacterLifeRules::from_design(config.simulation.ticks_per_second, &world_design.health)?;
     let weapon_aim_rules =
@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(content)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
-    .insert_resource(locomotion_rules)
+    .insert_resource(exertion_rules)
     .insert_resource(character_life_rules)
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)

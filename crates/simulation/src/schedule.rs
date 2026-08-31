@@ -4,7 +4,7 @@ use crate::{
     advance_hammer_attacks, advance_mage_attacks, apply_damage, apply_hammer_strike_damage,
     apply_mage_beam_damage, constrain_embedded_hammer_reach, damage::DamageDealt,
     expire_mage_beams, finish_mage_cooldowns, tick_status_effects, update_character_life,
-    update_character_orientation, update_gaze_direction, update_locomotion, update_weapon_aim,
+    update_character_orientation, update_exertion, update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,7 +51,7 @@ pub fn add_simulation_step(
             advance_hammer_attacks,
             advance_mage_attacks,
             tick_status_effects,
-            update_locomotion,
+            update_exertion,
             constrain_embedded_hammer_reach,
             update_character_orientation,
         )

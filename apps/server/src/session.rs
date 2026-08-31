@@ -5,7 +5,7 @@ use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
-use world01_simulation::{CharacterArchetypeCatalog, CharacterMassCatalog, LocomotionRules};
+use world01_simulation::{CharacterArchetypeCatalog, CharacterMassCatalog, ExertionRules};
 use world01_world_data::{
     ActorId, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
@@ -49,7 +49,7 @@ fn accept_join_requests(
     health: Res<CharacterHealthCatalog>,
     masses: Res<CharacterMassCatalog>,
     archetypes: Res<CharacterArchetypeCatalog>,
-    locomotion: Res<LocomotionRules>,
+    exertion: Res<ExertionRules>,
     mut commands: Commands,
 ) {
     if requests.is_empty() {
@@ -99,7 +99,7 @@ fn accept_join_requests(
             (
                 MovementDirection::ZERO,
                 MovementVelocity::ZERO,
-                StaminaState::full(locomotion.default_max_stamina()),
+                StaminaState::full(exertion.default_max_stamina()),
                 RunState::default(),
                 DashState::default(),
                 StatusEffectState::default(),
