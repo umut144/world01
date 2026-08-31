@@ -304,6 +304,10 @@ must be documented as an explicit game variant.
 - STUNNED blocks all input, SILENCED blocks shoulder-button abilities,
   DISARMED blocks action buttons, and ROOTED blocks movement from the left
   analog stick. Exact input mappings remain game-owned.
+- Entering `STUNNED`, `KNOCKDOWNED`, or `DEAD` cleanly aborts every active
+  gameplay action, including an action that has already crossed its ordinary
+  commitment threshold. The character may begin only actions allowed by the
+  resulting status or life state.
 
 ### Shared incapacitation presentation
 
@@ -317,6 +321,13 @@ must be documented as an explicit game variant.
 
 - Current and maximum HP are authoritative gameplay state when a game uses the
   shared health foundation.
+- World 01 has no friendly-fire category or friendly-fire toggle. Clan, party,
+  team, and other social relationships never grant immunity from an otherwise
+  valid collision or damage effect.
+- A damage source may therefore affect any valid Character HurtRegion,
+  including its originator when the geometry can return to that Character.
+  Source-specific rules needed to let an effect leave its own spawn geometry
+  are not allegiance-based damage immunity.
 - A character's maximum HP is derived from the summed area of its current
   triangulated PolyTools fill meshes for the semantic `body` component and,
   when present, the semantic `feet` component.
@@ -443,7 +454,7 @@ force, and returns to its compact form after the attack.
   target Hurt Components at authoritative impact.
 - Multiple targets may be hit by one impact, but overlapping attack Components
   deal damage only once to the same Character.
-- Friendly fire is enabled by the World-01 baseline, including possible
+- HammerStrike follows the World-01 geometry-based damage rule and can include
   self-hit when authored Components overlap.
 - A DASH-invulnerable target receives `0` damage and no additional effect.
 - `head_mid`, `head_left`, and `head_right` deal the same calculated
@@ -510,19 +521,33 @@ the attack narrow, powerful, and spatially readable.
 
 ### Charge, commitment, and release
 
+- Releasing before `1.0 s` cancels the charge without firing. This short charge
+  is an intentional feint that lets the Mage suggest an attack and deceive an
+  observer.
 - The attack requires at least `1.0 s` of charging before it can fire. At that
   threshold the attack is committed and can no longer be cancelled through
-  the ordinary attack flow; it must eventually fire.
+  the ordinary attack flow; unless an incapacitating or death transition
+  aborts the action, it must eventually fire.
 - Effective charge grows linearly from `1.0 s` to its `2.0 s` maximum. After
   reaching maximum charge, the Mage may continue holding for another `2.0 s`
   without gaining further power.
 - Releasing at or after the commitment threshold fires immediately in the
   current gaze direction. Continuing to hold for `4.0 s` total causes an
   automatic shot in the then-current gaze direction.
+- An automatic shot consumes the attack exactly as a release would. Continued
+  held input is ignored after it fires; the player must physically release the
+  input before a later press can begin another charge.
 - The Mage may change gaze freely throughout charging and the additional
   maximum-charge hold window. Release or automatic fire freezes the selected
   gaze direction only for that shot's charge-scaled emission interval. Gaze is
   free again after that interval while the projectiles continue traveling.
+- The Mage retains normal movement during charging and the gaze-lock interval.
+  Firing snapshots both eye origins, the current gaze direction, and the
+  resulting convergence point in world space; later Character movement does
+  not bend or drag either projectile.
+- Firing begins a `2.0 s` cooldown during which another eye-beam charge cannot
+  start. At maximum charge and without an earlier collision, the cooldown ends
+  when the two-second projectile travel reaches its convergence point.
 - During charging, the eyes become progressively redder until they reach their
   maximum-charge presentation.
 
@@ -550,7 +575,15 @@ World-01 baseline uses one deliberately simple linear model:
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a
   prop collision region, or a Character `HurtRegion`. Eye beams do not
-  penetrate their first collision.
+  penetrate their first collision and disappear immediately when the leading
+  edge hits. A small laser spark at the impact point is an optional later
+  presentation refinement rather than first-slice scope.
+- Without an earlier collision, both beams disappear when they reach their
+  shared charge-scaled convergence point.
+- Future reflective surfaces may redirect an eye beam. A reflected beam
+  remains subject to the normal geometry-based damage rule and may therefore
+  return to and damage the Mage who fired it. Reflection is not part of the
+  first eye-beam implementation slice.
 - The maximum two-beam damage is intentionally strong relative to the fully
   charged HammerStrike. The Hammerer requires `5.0 s` to reach the same
   `40 HP` output, but compensates with area coverage and possible STUNNED
