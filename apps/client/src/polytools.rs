@@ -53,6 +53,7 @@ pub struct CharacterAssetLibrary {
     pupil_area_ratio: f32,
     pupil_collision_reference_radius: f32,
     mage_pupil_size_ratio: f32,
+    mage_pupil_edge_clearance_ratio: f32,
 }
 
 impl CharacterAssetLibrary {
@@ -70,6 +71,7 @@ impl CharacterAssetLibrary {
             world_design.eyes.pupil_area_ratio,
             world_design.eyes.hammerer_collision_radius_ratio,
             game_design.mage.pupil_size_ratio,
+            game_design.mage.pupil_edge_clearance_ratio,
         )
     }
 
@@ -78,6 +80,7 @@ impl CharacterAssetLibrary {
         pupil_area_ratio: f32,
         hammerer_collision_radius_ratio: f32,
         mage_pupil_size_ratio: f32,
+        mage_pupil_edge_clearance_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
         if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
             return Err(PolyToolsAssetError::new(
@@ -95,6 +98,13 @@ impl CharacterAssetLibrary {
         if !mage_pupil_size_ratio.is_finite() || mage_pupil_size_ratio <= 0.0 {
             return Err(PolyToolsAssetError::new(
                 "Mage pupil size ratio must be finite and greater than zero",
+            ));
+        }
+        if !mage_pupil_edge_clearance_ratio.is_finite()
+            || !(0.0..=1.0).contains(&mage_pupil_edge_clearance_ratio)
+        {
+            return Err(PolyToolsAssetError::new(
+                "Mage pupil edge clearance ratio must be finite and between zero and one",
             ));
         }
         let hammerer = content
@@ -124,6 +134,7 @@ impl CharacterAssetLibrary {
             pupil_area_ratio,
             pupil_collision_reference_radius,
             mage_pupil_size_ratio,
+            mage_pupil_edge_clearance_ratio,
         })
     }
 
@@ -382,12 +393,21 @@ pub fn spawn_character_visual(
                     .closed_region_mesh
                     .as_ref()
                     .and_then(|mesh| {
-                        EyeCollider::from_region_mesh(
-                            &mesh.vertices,
-                            &mesh.indices,
-                            pupil_area_ratio,
-                            library.pupil_collision_reference_radius,
-                        )
+                        if character.0 == "mage" {
+                            EyeCollider::from_region_mesh_with_edge_clearance(
+                                &mesh.vertices,
+                                &mesh.indices,
+                                pupil_area_ratio,
+                                library.mage_pupil_edge_clearance_ratio,
+                            )
+                        } else {
+                            EyeCollider::from_region_mesh(
+                                &mesh.vertices,
+                                &mesh.indices,
+                                pupil_area_ratio,
+                                library.pupil_collision_reference_radius,
+                            )
+                        }
                     })
                     .or_else(|| {
                         (manifest.schema_version < 8)

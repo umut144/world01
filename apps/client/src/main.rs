@@ -65,6 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         world_design.eyes.pupil_area_ratio,
         world_design.eyes.hammerer_collision_radius_ratio,
         game_design.mage.pupil_size_ratio,
+        game_design.mage.pupil_edge_clearance_ratio,
     )?;
     let controller_input = ControllerInput::new()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {

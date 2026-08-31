@@ -570,11 +570,14 @@ World-01 baseline uses one deliberately simple linear model:
 - Each beam begins at its corresponding authored eye and travels parallel to
   the locked gaze direction. Their separation remains fixed for the full
   charge-scaled travel distance.
-- Each beam's width is `90%` of the width of its corresponding authored eye.
-  Mage character design exposes `pupil_size_ratio` (`2.0` current baseline)
+- Each beam's width is its corresponding authored eye width multiplied by
+  `laser_width_to_eye_width_ratio` (`1.0` current baseline).
+  Mage character design exposes `pupil_size_ratio` (`1.0` current baseline)
   as a radius multiplier for Mage's generated pupils only; it does not change
-  eye geometry, beam origins, or laser width. The laser-specific
-  `laser_width_to_eye_width_ratio` is currently `0.1`.
+  eye geometry, beam origins, or laser width. Mage's
+  `pupil_edge_clearance_ratio` (`0.35` baseline) controls how much of that
+  pupil radius must remain inside the eye while its gaze moves: `1.0` prevents
+  a visible edge cut, while smaller values permit more clipping.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a

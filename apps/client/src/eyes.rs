@@ -59,6 +59,40 @@ impl EyeCollider {
         )
     }
 
+    pub fn from_region_mesh_with_edge_clearance(
+        vertices: &[[f32; 2]],
+        indices: &[u32],
+        pupil_area_ratio: f32,
+        edge_clearance_ratio: f32,
+    ) -> Option<Self> {
+        if !valid_pupil_area_ratio(pupil_area_ratio)
+            || !edge_clearance_ratio.is_finite()
+            || !(0.0..=1.0).contains(&edge_clearance_ratio)
+        {
+            return None;
+        }
+        let vertices = vertices
+            .iter()
+            .copied()
+            .map(Vec2::from_array)
+            .collect::<Vec<_>>();
+        let triangles = region_triangles(&vertices, indices)?;
+        let area = triangles
+            .iter()
+            .map(|triangle| triangle_area(*triangle).abs())
+            .sum::<f32>();
+        if !area.is_finite() || area <= f32::EPSILON {
+            return None;
+        }
+        let radius = pupil_radius_from_area(area, pupil_area_ratio)?;
+        Self::from_geometry(
+            region_boundary(&vertices, indices)?,
+            triangles,
+            radius,
+            radius * edge_clearance_ratio,
+        )
+    }
+
     pub fn pupil_radius_from_region_mesh(
         vertices: &[[f32; 2]],
         indices: &[u32],
@@ -232,11 +266,13 @@ impl EyeCollider {
 }
 
 fn valid_pupil_parameters(pupil_area_ratio: f32, pupil_collision_reference_radius: f32) -> bool {
-    pupil_area_ratio.is_finite()
-        && pupil_area_ratio > 0.0
-        && pupil_area_ratio < 1.0
+    valid_pupil_area_ratio(pupil_area_ratio)
         && pupil_collision_reference_radius.is_finite()
         && pupil_collision_reference_radius > 0.0
+}
+
+fn valid_pupil_area_ratio(pupil_area_ratio: f32) -> bool {
+    pupil_area_ratio.is_finite() && pupil_area_ratio > 0.0 && pupil_area_ratio < 1.0
 }
 
 fn pupil_radius_from_area(area: f32, pupil_area_ratio: f32) -> Option<f32> {
@@ -744,6 +780,35 @@ mod tests {
                     .take(collider.boundary().len())
                     .any(|(start, end)| point_segment_distance(point, start, end) < 0.000_1)
         }));
+    }
+
+    #[test]
+    fn edge_clearance_ratio_controls_pupil_gaze_range() {
+        let vertices = [[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]];
+        let full_clearance = EyeCollider::from_region_mesh_with_edge_clearance(
+            &vertices,
+            &[0, 1, 2, 0, 2, 3],
+            0.26,
+            1.0,
+        )
+        .expect("square region fits a pupil");
+        let partial_clearance = EyeCollider::from_region_mesh_with_edge_clearance(
+            &vertices,
+            &[0, 1, 2, 0, 2, 3],
+            0.26,
+            0.35,
+        )
+        .expect("square region fits a pupil");
+
+        assert_eq!(full_clearance.collision_radius, full_clearance.radius);
+        assert_eq!(
+            partial_clearance.collision_radius,
+            partial_clearance.radius * 0.35
+        );
+        assert!(
+            partial_clearance.position_for_local_gaze(Vec2::X).x
+                > full_clearance.position_for_local_gaze(Vec2::X).x
+        );
     }
 
     #[test]
