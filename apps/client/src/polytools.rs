@@ -52,19 +52,24 @@ pub struct CharacterAssetLibrary {
     content: RuntimeContent,
     pupil_area_ratio: f32,
     pupil_collision_reference_radius: f32,
+    mage_eye_size_ratio: f32,
 }
 
 impl CharacterAssetLibrary {
     #[cfg(test)]
     fn load_embedded() -> Result<Self, PolyToolsAssetError> {
-        let design = world01_configs::load_embedded().map_err(|error| {
+        let config = world01_configs::load_embedded().map_err(|error| {
             PolyToolsAssetError::new(format!("cannot load embedded eye design: {error}"))
+        })?;
+        let design = world01_design::load_embedded().map_err(|error| {
+            PolyToolsAssetError::new(format!("cannot load embedded Mage design: {error}"))
         })?;
         Self::from_content(
             RuntimeContent::load_embedded()
                 .map_err(|error| PolyToolsAssetError::new(error.to_string()))?,
-            design.eyes.pupil_area_ratio,
-            design.eyes.hammerer_collision_radius_ratio,
+            config.eyes.pupil_area_ratio,
+            config.eyes.hammerer_collision_radius_ratio,
+            design.mage.eye_size_ratio,
         )
     }
 
@@ -72,6 +77,7 @@ impl CharacterAssetLibrary {
         content: RuntimeContent,
         pupil_area_ratio: f32,
         hammerer_collision_radius_ratio: f32,
+        mage_eye_size_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
         if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
             return Err(PolyToolsAssetError::new(
@@ -84,6 +90,11 @@ impl CharacterAssetLibrary {
         {
             return Err(PolyToolsAssetError::new(
                 "Hammerer collision radius ratio must be finite, greater than zero, and at most one",
+            ));
+        }
+        if !mage_eye_size_ratio.is_finite() || mage_eye_size_ratio <= 0.0 {
+            return Err(PolyToolsAssetError::new(
+                "Mage eye size ratio must be finite and greater than zero",
             ));
         }
         let hammerer = content
@@ -112,6 +123,7 @@ impl CharacterAssetLibrary {
             content,
             pupil_area_ratio,
             pupil_collision_reference_radius,
+            mage_eye_size_ratio,
         })
     }
 
@@ -329,7 +341,7 @@ pub fn spawn_character_visual(
     let mut component_entities = HashMap::new();
     let mut outline_visuals = Vec::new();
     for component in &manifest.components {
-        let transform = component_transform(component);
+        let transform = character_component_transform(library, character, component);
         let mut entity_commands = commands.spawn((transform, Visibility::default()));
         if component.name == "body" {
             entity_commands.insert(BodyAnchor);
@@ -987,6 +999,19 @@ fn component_transform(component: &RuntimeComponent) -> Transform {
     ))
 }
 
+fn character_component_transform(
+    library: &CharacterAssetLibrary,
+    character: &CharacterId,
+    component: &RuntimeComponent,
+) -> Transform {
+    let mut transform = component_transform(component);
+    if character.0 == "mage" && (component.name == "eye_left" || component.name == "eye_right") {
+        transform.scale.x *= library.mage_eye_size_ratio;
+        transform.scale.y *= library.mage_eye_size_ratio;
+    }
+    transform
+}
+
 fn bevy_mesh(mesh: &RuntimeMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
@@ -1206,6 +1231,38 @@ mod tests {
         assert_eq!(ids.len(), 11);
         assert!(ids.iter().any(|character| character.0 == "monk"));
         assert!(ids.iter().any(|character| character.0 == "warrior"));
+    }
+
+    #[test]
+    fn mage_eye_size_ratio_scales_only_the_visible_eye_components() {
+        let mut library =
+            CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
+        library.mage_eye_size_ratio = 1.5;
+        let mage_id = CharacterId("mage".into());
+        let mage = library
+            .character(&mage_id)
+            .expect("Mage manifest is present");
+        let eye = mage
+            .components
+            .iter()
+            .find(|component| component.name == "eye_left")
+            .expect("Mage has a left eye");
+        let body = mage
+            .components
+            .iter()
+            .find(|component| component.name == "body")
+            .expect("Mage has a body");
+
+        assert_eq!(
+            character_component_transform(&library, &mage_id, eye)
+                .scale
+                .truncate(),
+            component_transform(eye).scale.truncate() * 1.5,
+        );
+        assert_eq!(
+            character_component_transform(&library, &mage_id, body).scale,
+            component_transform(body).scale,
+        );
     }
 
     #[test]

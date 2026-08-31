@@ -27,8 +27,7 @@ pub struct MageAttackRules {
     projectile_length_per_charge_tick: f32,
     range_per_charge_tick: f32,
     damage_per_charge_tick: f32,
-    eye_size_ratio: f32,
-    eye_beam_width_ratio: f32,
+    eye_width_ratio: f32,
 }
 
 impl MageAttackRules {
@@ -56,8 +55,7 @@ impl MageAttackRules {
                 / ticks_per_second as f32,
             damage_per_charge_tick: attack_design.damage_per_charge_second
                 / ticks_per_second as f32,
-            eye_size_ratio: mage_design.eye_size_ratio,
-            eye_beam_width_ratio: mage_design.eye_beam_width_ratio,
+            eye_width_ratio: mage_design.eye_width_ratio,
         })
     }
 
@@ -227,7 +225,7 @@ fn fire(
         EyeBeamState {
             origin: Position::new(origin.x, origin.y),
             direction: GazeDirection::new(direction.x, direction.y),
-            width: emitter.width * rules.eye_size_ratio * rules.eye_beam_width_ratio,
+            width: emitter.width * rules.eye_width_ratio,
             active: direction != Vec2::ZERO,
         }
     };
@@ -460,8 +458,10 @@ mod tests {
     }
 
     fn geometry() -> MageEyeGeometry {
+        let design = load_design().expect("embedded design parses");
         MageEyeGeometry::from_content(
             &RuntimeContent::load_embedded().expect("embedded content is valid"),
+            design.mage.eye_size_ratio,
         )
         .expect("Mage eyes define beam emitters")
     }
@@ -545,14 +545,18 @@ mod tests {
         let config = load_embedded().expect("embedded config parses");
         let mut design = load_design().expect("embedded design parses");
         design.mage.eye_size_ratio = 0.5;
-        design.mage.eye_beam_width_ratio = 0.8;
+        design.mage.eye_width_ratio = 0.8;
         let rules = MageAttackRules::from_design(
             config.simulation.ticks_per_second,
             &design.mage,
             &design.mage_eye_beams,
         )
         .expect("Mage design is valid");
-        let geometry = geometry();
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let authored_geometry = MageEyeGeometry::from_content(&content, 1.0)
+            .expect("authored Mage eyes define beam emitters");
+        let geometry = MageEyeGeometry::from_content(&content, design.mage.eye_size_ratio)
+            .expect("scaled Mage eyes define beam emitters");
         let mut volley = MageAttackState {
             phase: MageAttackPhase::Charging,
             charge_ticks: rules.minimum_charge_ticks(),
@@ -569,8 +573,10 @@ mod tests {
             &mut volley,
         );
 
-        assert_eq!(volley.left_beam.width, geometry.left.width * 0.5 * 0.8);
-        assert_eq!(volley.right_beam.width, geometry.right.width * 0.5 * 0.8);
+        assert_eq!(geometry.left.width, authored_geometry.left.width * 0.5);
+        assert_eq!(geometry.right.width, authored_geometry.right.width * 0.5);
+        assert_eq!(volley.left_beam.width, geometry.left.width * 0.8);
+        assert_eq!(volley.right_beam.width, geometry.right.width * 0.8);
     }
 
     #[test]

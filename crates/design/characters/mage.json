@@ -2,5 +2,5 @@
   "schema_version": 1,
   "asset_key": "mage",
   "eye_size_ratio": 1.0,
-  "eye_beam_width_ratio": 0.9
+  "eye_width_ratio": 0.9
 }

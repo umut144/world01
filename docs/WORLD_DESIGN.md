@@ -572,8 +572,9 @@ World-01 baseline uses one deliberately simple linear model:
   `20 m` for maximum charge.
 - Each beam's width is `90%` of the effective width of its corresponding
   authored eye. Mage character design exposes an eye-size ratio (`1.0`
-  baseline) and the beam-width ratio (`0.9`); simulation applies both to the
-  authored eye width.
+  baseline) that scales the visible eye geometry and its pupil, plus the
+  laser-specific eye-width ratio (`0.9`). Simulation derives its emitter
+  geometry from the scaled eye before applying the laser-specific ratio.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a

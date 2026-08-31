@@ -143,14 +143,22 @@ impl fmt::Display for MageEyeGeometryError {
 impl Error for MageEyeGeometryError {}
 
 impl MageEyeGeometry {
-    pub fn from_content(content: &RuntimeContent) -> Result<Self, MageEyeGeometryError> {
+    pub fn from_content(
+        content: &RuntimeContent,
+        eye_size_ratio: f32,
+    ) -> Result<Self, MageEyeGeometryError> {
+        if !eye_size_ratio.is_finite() || eye_size_ratio <= 0.0 {
+            return Err(MageEyeGeometryError(
+                "Mage eye size ratio must be finite and greater than zero".into(),
+            ));
+        }
         let mage = content
             .character(&CharacterId("mage".into()))
             .ok_or_else(|| MageEyeGeometryError("content is missing Mage".into()))?;
         Ok(Self {
             authored_facing: mage.presentation.authored_facing,
-            left: eye_beam_emitter(mage, "eye_left")?,
-            right: eye_beam_emitter(mage, "eye_right")?,
+            left: eye_beam_emitter(mage, "eye_left", eye_size_ratio)?,
+            right: eye_beam_emitter(mage, "eye_right", eye_size_ratio)?,
         })
     }
 }
@@ -557,6 +565,7 @@ fn character_component_geometry(
 fn eye_beam_emitter(
     manifest: &RuntimeManifest,
     name: &str,
+    eye_size_ratio: f32,
 ) -> Result<EyeBeamEmitterGeometry, MageEyeGeometryError> {
     let component = manifest
         .components
@@ -583,8 +592,10 @@ fn eye_beam_emitter(
         .iter()
         .copied()
         .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
-    let width = maximum.x - minimum.x;
-    let offset = (minimum + maximum) * 0.5;
+    let width = (maximum.x - minimum.x) * eye_size_ratio;
+    let authored_offset = (minimum + maximum) * 0.5;
+    let scale_origin = transform_point(transform, [0.0, 0.0]) - pivot;
+    let offset = scale_origin + (authored_offset - scale_origin) * eye_size_ratio;
     if vertices.is_empty() || !offset.is_finite() || !width.is_finite() || width <= 0.0 {
         return Err(MageEyeGeometryError(format!(
             "Mage {name} does not define a valid eye span"
