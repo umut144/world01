@@ -188,7 +188,7 @@ pub fn apply_hammer_strike_damage(
     hammer_geometry: Res<HammerCombatGeometry>,
     hurt_geometry: Res<CharacterHurtGeometryCatalog>,
     mut players: bevy::ecs::system::ParamSet<(
-        Query<(&HammerAttackState, &SelectedCharacter)>,
+        Query<&HammerAttackState>,
         Query<(
             Entity,
             &SelectedCharacter,
@@ -206,12 +206,10 @@ pub fn apply_hammer_strike_damage(
         let attackers = players.p0();
         attackers
             .iter()
-            .filter(|(attack, character)| {
-                character.0.0 == "hammerer"
-                    && attack.phase == HammerAttackPhase::Embedded
-                    && attack.phase_ticks == 0
+            .filter(|attack| {
+                attack.phase == HammerAttackPhase::Embedded && attack.phase_ticks == 0
             })
-            .map(|(attack, _)| *attack)
+            .copied()
             .collect::<Vec<_>>()
     };
 
@@ -311,7 +309,6 @@ pub fn advance_hammer_attacks(
     rules: Res<HammerAttackRules>,
     hammer_geometry: Res<HammerCombatGeometry>,
     mut players: Query<(
-        &SelectedCharacter,
         &AttackIntent,
         &WeaponAimState,
         &Position,
@@ -320,11 +317,7 @@ pub fn advance_hammer_attacks(
         &mut HammerAttackState,
     )>,
 ) {
-    for (character, attack, weapon_aim, position, status, life, mut state) in &mut players {
-        if character.0.0 != "hammerer" {
-            *state = HammerAttackState::IDLE;
-            continue;
-        }
+    for (attack, weapon_aim, position, status, life, mut state) in &mut players {
         if status.is_some_and(|status| status.blocks_all_input())
             || life.is_some_and(|life| !life.is_alive())
         {
@@ -497,5 +490,42 @@ mod tests {
             app.world().get::<HammerAttackState>(player),
             Some(&HammerAttackState::IDLE)
         );
+    }
+
+    /// The component is the capability. `advance_hammer_attacks` no longer reads
+    /// a character name, which is what lets a bot drive the same systems as a
+    /// player without a second code path.
+    #[test]
+    fn an_attacker_without_a_character_identity_still_charges() {
+        let config = load_embedded().expect("embedded config parses");
+        let design = load_game_design().expect("embedded game design parses");
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let rules =
+            HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
+                .expect("embedded Hammer attack design is valid");
+        let geometry =
+            HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
+                .expect("embedded Hammer geometry is valid");
+        let mut app = App::new();
+        app.insert_resource(rules)
+            .insert_resource(geometry)
+            .add_systems(Update, advance_hammer_attacks);
+        let attacker = app
+            .world_mut()
+            .spawn((
+                AttackIntent::PRESSED,
+                WeaponAimState::RIGHT,
+                Position::ZERO,
+                HammerAttackState::IDLE,
+            ))
+            .id();
+
+        app.update();
+
+        let state = app
+            .world()
+            .get::<HammerAttackState>(attacker)
+            .expect("the attacker keeps its attack state");
+        assert_eq!(state.phase, HammerAttackPhase::Charging);
     }
 }

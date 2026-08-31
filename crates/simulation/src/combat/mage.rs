@@ -113,7 +113,6 @@ pub fn advance_mage_attacks(
     rules: Option<Res<MageAttackRules>>,
     geometry: Option<Res<MageEyeGeometry>>,
     mut players: Query<(
-        &SelectedCharacter,
         &AttackIntent,
         &GazeDirection,
         &Position,
@@ -126,9 +125,8 @@ pub fn advance_mage_attacks(
     let (Some(rules), Some(geometry)) = (rules, geometry) else {
         return;
     };
-    for (character, attack, gaze, position, facing, status, life, mut state) in &mut players {
-        if character.0.0 != "mage"
-            || status.is_some_and(|status| status.blocks_all_input())
+    for (attack, gaze, position, facing, status, life, mut state) in &mut players {
+        if status.is_some_and(|status| status.blocks_all_input())
             || life.is_some_and(|life| !life.is_alive())
         {
             *state = MageAttackState::IDLE;
@@ -244,7 +242,7 @@ pub fn apply_mage_beam_damage(
     hurt_geometry: Res<CharacterHurtGeometryCatalog>,
     world_collision: Res<WorldCollisionGeometryCatalog>,
     mut players: bevy::ecs::system::ParamSet<(
-        Query<(Entity, &SelectedCharacter, &MageAttackState)>,
+        Query<(Entity, &MageAttackState)>,
         Query<(
             Entity,
             &SelectedCharacter,
@@ -260,10 +258,8 @@ pub fn apply_mage_beam_damage(
     let volleys = players
         .p0()
         .iter()
-        .filter(|(_, character, state)| {
-            character.0.0 == "mage" && state.phase == MageAttackPhase::Cooldown
-        })
-        .map(|(entity, _, state)| (entity, *state))
+        .filter(|(_, state)| state.phase == MageAttackPhase::Cooldown)
+        .map(|(entity, state)| (entity, *state))
         .collect::<Vec<_>>();
 
     for (owner, volley) in volleys {
