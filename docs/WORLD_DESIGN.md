@@ -214,7 +214,7 @@ remains available for material that has no relevant gameplay mass.
 | Chantres | — | `belly`, `hat` | `body`, `head` | `eye_left`, `eye_right`, `hat_line` |
 | Glavier | — | `belly`, `head_tip` | `body`, `head` | `eye_left`, `eye_right` |
 | Hammerer | — | `cloak`, `hat` | `body`, `feet`, `head` | `eye_left`, `eye_right` |
-| Mage | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
+| Mage | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyeleash01`–`eyeleash03`, `eyeleash_right01`–`eyeleash_right03` |
 | Monk | `eyebrow_left`, `eyebrow_right` | — | `feet`, `body`, `head`, `forehead` | `eye_left`, `eye_right`, `forehead_dot01`–`forehead_dot06` |
 | Rogue | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyebrow_left`, `eyebrow_right` |
 | Sorcerer | — | `hat_back`, `hat` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
@@ -231,11 +231,12 @@ remains available for material that has no relevant gameplay mass.
 - Contours and contour-only Components do not contribute mass. This includes
   authored line Components such as `arm_line`, eye geometry, and decorative
   contour marks such as `forehead_dot`. Technical guides, attachment frames,
-  and presentation-only geometry likewise do not contribute mass.
-- Material-bearing and excluded Components must be classified explicitly. A
-  Component is not included merely because it has geometry or a recognizable
-  name; overlapping presentation geometry must not accidentally count the same
-  physical material twice.
+  and presentation-only geometry likewise do not contribute mass. Components
+  without a Fill Mesh are automatically excluded and need no mass assignment;
+  an optional legacy assignment is valid only when its class is `excluded`.
+- Every material-bearing Component must be classified explicitly. It may also
+  be deliberately classified as `excluded`, so overlapping presentation
+  geometry cannot accidentally count the same physical material twice.
 - Weapons have their own derived mass. Both Character-body mass and total
   equipped mass remain available as distinct values so games can choose which
   model they use.

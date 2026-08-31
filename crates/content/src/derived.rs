@@ -316,14 +316,30 @@ fn density_areas_for_manifest(
     for assignment in assignments {
         assignments_by_name.insert(assignment.component_name.as_str(), assignment);
     }
-    if assignments_by_name.len() != manifest.components.len() {
-        return Err(CharacterMassGeometryError(format!(
-            "{} mass assignments do not cover its Components exactly once",
-            manifest.asset_key
-        )));
+    for assignment in assignments {
+        let component = manifest
+            .components
+            .iter()
+            .find(|component| component.name == assignment.component_name)
+            .ok_or_else(|| {
+                CharacterMassGeometryError(format!(
+                    "{} mass assignments reference unknown Component {}",
+                    manifest.asset_key, assignment.component_name
+                ))
+            })?;
+        if component.mesh.is_none() && assignment.classification.density_class().is_some() {
+            return Err(CharacterMassGeometryError(format!(
+                "{} contour-only Component {} must be excluded from mass",
+                manifest.asset_key, component.name
+            )));
+        }
     }
     let mut areas = DensityAreas::ZERO;
-    for component in &manifest.components {
+    for component in manifest
+        .components
+        .iter()
+        .filter(|component| component.mesh.is_some())
+    {
         let assignment = assignments_by_name
             .get(component.name.as_str())
             .ok_or_else(|| {
@@ -686,6 +702,7 @@ fn transform_point(transform: Affine2, point: [f32; 2]) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use world01_world_data::{ComponentMassAssignment, ComponentMassClass};
 
     #[test]
     fn embedded_content_derives_health_and_hammer_geometry() {
@@ -729,5 +746,46 @@ mod tests {
             hurt.character(character)
                 .is_some_and(|geometry| geometry.components.len() == 2)
         }));
+    }
+
+    #[test]
+    fn contour_only_components_are_automatically_excluded_from_mass() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let mage = content
+            .character(&CharacterId("mage".into()))
+            .expect("embedded content contains Mage");
+        let assignments = [
+            ("body", ComponentMassClass::Medium),
+            ("head", ComponentMassClass::Medium),
+            ("hat", ComponentMassClass::Light),
+            ("hat_tip", ComponentMassClass::Light),
+        ]
+        .map(|(component_name, classification)| ComponentMassAssignment {
+            component_name: component_name.into(),
+            classification,
+        });
+
+        let areas = density_areas_for_manifest(mage, &assignments)
+            .expect("unassigned contour-only Components do not affect mass");
+
+        assert!(areas.area(DensityClass::Medium) > 0.0);
+        assert!(areas.area(DensityClass::Light) > 0.0);
+    }
+
+    #[test]
+    fn contour_only_components_cannot_receive_density() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let mage = content
+            .character(&CharacterId("mage".into()))
+            .expect("embedded content contains Mage");
+        let assignments = [ComponentMassAssignment {
+            component_name: "arm_line".into(),
+            classification: ComponentMassClass::Medium,
+        }];
+
+        let error = density_areas_for_manifest(mage, &assignments)
+            .expect_err("contour-only Components cannot contribute mass");
+
+        assert!(error.to_string().contains("must be excluded from mass"));
     }
 }
