@@ -8066,7 +8066,6 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "toml",
- "world01-world-data",
 ]
 
 [[package]]
@@ -8085,6 +8084,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "toml",
  "world01-world-data",
 ]
 

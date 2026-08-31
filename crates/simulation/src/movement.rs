@@ -1,7 +1,7 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use world01_configs::DesignConfig;
+use world01_configs::RuntimeConfig;
 use world01_world_data::{
     BodyFacing, CharacterLifeState, CharacterMass, MovementDirection, MovementIntent,
     MovementVelocity, Position,
@@ -13,7 +13,7 @@ pub struct MovementStep {
 }
 
 impl MovementStep {
-    pub fn from_design(config: &DesignConfig) -> Result<Self, MovementConfigError> {
+    pub fn from_runtime(config: &RuntimeConfig) -> Result<Self, MovementConfigError> {
         let ticks_per_second = config.simulation.ticks_per_second;
         if ticks_per_second == 0 {
             return Err(MovementConfigError::ZeroTickRate);

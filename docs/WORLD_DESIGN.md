@@ -336,7 +336,7 @@ must be documented as an explicit game variant.
   baseline values use the same HP-per-square-meter ratio.
 - Resizing or reauthoring a character's `body`/`feet` geometry changes derived
   MaxHP after the next asset sync/export. A second duplicated HP table is not
-  introduced in `design.toml`.
+  introduced in `world01.toml`.
 - Contours, outlines, eyes, clothing, weapons, and auxiliary overlays such as
   `body_side_*` are excluded from the area calculation.
 - When a temporary HP bar is used for development, Mage uses a bar-length

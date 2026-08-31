@@ -304,7 +304,7 @@ fn hot_reload_design(
     mut last_modified: Local<Option<SystemTime>>,
     mut camera_view: ResMut<CameraView>,
 ) {
-    let path = Path::new("crates/configs/design.toml");
+    let path = Path::new("crates/configs/runtime.toml");
     let Ok(modified) = std::fs::metadata(path).and_then(|metadata| metadata.modified()) else {
         return;
     };
@@ -317,16 +317,16 @@ fn hot_reload_design(
     }
     *last_modified = Some(modified);
 
-    let Ok(design) = load_file(path) else {
-        warn!("ignoring invalid hot-reloaded design configuration");
+    let Ok(runtime) = load_file(path) else {
+        warn!("ignoring invalid hot-reloaded runtime configuration");
         return;
     };
-    let Some((camera_width, camera_height)) = design.camera.effective_view_tiles() else {
+    let Some((camera_width, camera_height)) = runtime.camera.effective_view_tiles() else {
         warn!("ignoring hot-reloaded configuration with invalid camera dimensions");
         return;
     };
     *camera_view = CameraView::new(camera_width, camera_height);
-    info!("reloaded camera configuration");
+    info!("reloaded runtime camera configuration");
 }
 
 fn configure_ingame_camera(

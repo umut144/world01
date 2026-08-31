@@ -1,44 +1,25 @@
 use serde::Deserialize;
-use std::{collections::HashMap, path::Path, time::Duration};
-use world01_world_data::DensityClass;
+use std::{path::Path, time::Duration};
 
-const DESIGN_TOML: &str = include_str!("../design.toml");
+const RUNTIME_TOML: &str = include_str!("../runtime.toml");
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct DesignConfig {
+pub struct RuntimeConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
-    pub mass: MassConfig,
-    pub locomotion: LocomotionConfig,
-    pub health: HealthConfig,
-    pub weapon_aim: WeaponAimConfig,
     pub camera: CameraConfig,
-    pub eyes: EyesConfig,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct WeaponAimConfig {
-    pub default_degrees_per_second: f32,
-    #[serde(default)]
-    pub character_degrees_per_second: HashMap<String, f32>,
-}
-
-impl WeaponAimConfig {
-    pub fn is_valid(&self) -> bool {
-        self.default_degrees_per_second.is_finite()
-            && self.default_degrees_per_second > 0.0
-            && self
-                .character_degrees_per_second
-                .iter()
-                .all(|(character, speed)| {
-                    !character.is_empty() && speed.is_finite() && *speed > 0.0
-                })
-    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 pub struct SimulationConfig {
     pub ticks_per_second: u32,
+}
+
+impl SimulationConfig {
+    pub fn tick_duration(self) -> Option<Duration> {
+        (self.ticks_per_second > 0)
+            .then(|| Duration::from_secs_f64(1.0 / f64::from(self.ticks_per_second)))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
@@ -63,146 +44,6 @@ impl NetworkConfig {
     pub fn validated_remote_interpolation_ratio(self) -> Option<f32> {
         (self.remote_interpolation_ratio.is_finite() && self.remote_interpolation_ratio > 0.0)
             .then_some(self.remote_interpolation_ratio)
-    }
-}
-
-impl SimulationConfig {
-    pub fn tick_duration(self) -> Option<Duration> {
-        (self.ticks_per_second > 0)
-            .then(|| Duration::from_secs_f64(1.0 / f64::from(self.ticks_per_second)))
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
-pub struct MassConfig {
-    pub weightless_density_factor: f32,
-    pub very_light_density_factor: f32,
-    pub light_density_factor: f32,
-    pub medium_density_factor: f32,
-    pub heavy_density_factor: f32,
-    pub very_heavy_density_factor: f32,
-    pub hammerer_speed_meters_per_second: f32,
-    pub speed_mass_exponent: f32,
-    pub include_equipped_weapon_mass: bool,
-}
-
-impl MassConfig {
-    pub fn density_factor(self, class: DensityClass) -> f32 {
-        match class {
-            DensityClass::Weightless => self.weightless_density_factor,
-            DensityClass::VeryLight => self.very_light_density_factor,
-            DensityClass::Light => self.light_density_factor,
-            DensityClass::Medium => self.medium_density_factor,
-            DensityClass::Heavy => self.heavy_density_factor,
-            DensityClass::VeryHeavy => self.very_heavy_density_factor,
-        }
-    }
-
-    pub fn is_valid(self) -> bool {
-        [
-            self.weightless_density_factor,
-            self.very_light_density_factor,
-            self.light_density_factor,
-            self.medium_density_factor,
-            self.heavy_density_factor,
-            self.very_heavy_density_factor,
-        ]
-        .into_iter()
-        .all(|factor| factor.is_finite() && factor >= 0.0)
-            && self.medium_density_factor > 0.0
-            && self.hammerer_speed_meters_per_second.is_finite()
-            && self.hammerer_speed_meters_per_second > 0.0
-            && self.speed_mass_exponent.is_finite()
-            && self.speed_mass_exponent > 0.0
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
-pub struct LocomotionConfig {
-    pub default_max_stamina: f32,
-    pub stamina_regeneration_percent_per_second: f32,
-    pub run_speed_multiplier: f32,
-    pub run_drain_per_second: f32,
-    pub dash_cost_percent: f32,
-    pub dash_speed_multiplier: f32,
-    pub dash_duration_seconds: f32,
-    pub dash_invulnerability_seconds: f32,
-    pub knockdown_duration_seconds: f32,
-    pub knockdown_damage_percent_max_hp: f32,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
-pub struct HealthConfig {
-    pub death_confirmation_seconds: f32,
-    pub death_confirmation_initial_degrees_per_second: f32,
-    pub death_confirmation_max_degrees_per_second: f32,
-    pub revival_seconds: f32,
-    pub revival_health_percent: f32,
-    pub respawn_health_percent: f32,
-    pub ankh_respawn_radius_meters: f32,
-}
-
-impl HealthConfig {
-    pub fn is_valid(self) -> bool {
-        self.death_confirmation_seconds.is_finite()
-            && self.death_confirmation_seconds > 0.0
-            && self
-                .death_confirmation_initial_degrees_per_second
-                .is_finite()
-            && self.death_confirmation_initial_degrees_per_second >= 0.0
-            && self.death_confirmation_max_degrees_per_second.is_finite()
-            && self.death_confirmation_max_degrees_per_second
-                >= self.death_confirmation_initial_degrees_per_second
-            && self.revival_seconds.is_finite()
-            && self.revival_seconds > 0.0
-            && self.revival_health_percent.is_finite()
-            && (0.0..=100.0).contains(&self.revival_health_percent)
-            && self.respawn_health_percent.is_finite()
-            && (0.0..=100.0).contains(&self.respawn_health_percent)
-            && self.ankh_respawn_radius_meters.is_finite()
-            && self.ankh_respawn_radius_meters >= 0.0
-    }
-}
-
-impl LocomotionConfig {
-    pub fn is_valid(self) -> bool {
-        self.default_max_stamina.is_finite()
-            && self.default_max_stamina > 0.0
-            && self.stamina_regeneration_percent_per_second.is_finite()
-            && self.stamina_regeneration_percent_per_second >= 0.0
-            && self.run_speed_multiplier.is_finite()
-            && self.run_speed_multiplier >= 1.0
-            && self.run_drain_per_second.is_finite()
-            && self.run_drain_per_second >= 0.0
-            && self.dash_cost_percent.is_finite()
-            && (0.0..=100.0).contains(&self.dash_cost_percent)
-            && self.dash_speed_multiplier.is_finite()
-            && self.dash_speed_multiplier > 0.0
-            && self.dash_duration_seconds.is_finite()
-            && self.dash_duration_seconds > 0.0
-            && self.dash_invulnerability_seconds.is_finite()
-            && (0.0..=self.dash_duration_seconds).contains(&self.dash_invulnerability_seconds)
-            && self.knockdown_duration_seconds.is_finite()
-            && self.knockdown_duration_seconds > 0.0
-            && self.knockdown_damage_percent_max_hp.is_finite()
-            && (0.0..=100.0).contains(&self.knockdown_damage_percent_max_hp)
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
-pub struct EyesConfig {
-    pub pupil_area_ratio: f32,
-    pub hammerer_collision_radius_ratio: f32,
-}
-
-impl EyesConfig {
-    pub fn is_valid(self) -> bool {
-        self.pupil_area_ratio.is_finite()
-            && self.pupil_area_ratio > 0.0
-            && self.pupil_area_ratio < 1.0
-            && self.hammerer_collision_radius_ratio.is_finite()
-            && self.hammerer_collision_radius_ratio > 0.0
-            && self.hammerer_collision_radius_ratio <= 1.0
     }
 }
 
@@ -234,11 +75,11 @@ impl CameraConfig {
     }
 }
 
-pub fn load_embedded() -> Result<DesignConfig, toml::de::Error> {
-    toml::from_str(DESIGN_TOML)
+pub fn load_embedded() -> Result<RuntimeConfig, toml::de::Error> {
+    toml::from_str(RUNTIME_TOML)
 }
 
-pub fn load_file(path: &Path) -> Result<DesignConfig, Box<dyn std::error::Error + Send + Sync>> {
+pub fn load_file(path: &Path) -> Result<RuntimeConfig, Box<dyn std::error::Error + Send + Sync>> {
     let contents = std::fs::read_to_string(path)?;
     Ok(toml::from_str(&contents)?)
 }
@@ -248,96 +89,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn embedded_simulation_runs_at_sixty_hertz() {
-        let design = load_embedded().expect("embedded design configuration parses");
-
-        assert_eq!(design.simulation.ticks_per_second, 60);
-        assert_eq!(
-            design.simulation.tick_duration(),
-            Some(Duration::from_secs_f64(1.0 / 60.0))
-        );
-        assert_eq!(design.network.snapshot_send_hz, 30);
-        assert_eq!(
-            design.network.snapshot_interval(),
-            Some(Duration::from_secs_f64(1.0 / 30.0))
-        );
-        assert_eq!(design.network.remote_interpolation_ratio, 2.0);
-        assert_eq!(design.camera.effective_view_tiles(), Some((16, 10)));
-        assert!(design.camera.is_valid());
-        assert_eq!(design.eyes.pupil_area_ratio, 0.26);
-        assert_eq!(design.eyes.hammerer_collision_radius_ratio, 0.35);
-        assert!(design.eyes.is_valid());
-        assert_eq!(design.mass.weightless_density_factor, 0.0);
-        assert_eq!(design.mass.very_light_density_factor, 0.25);
-        assert_eq!(design.mass.light_density_factor, 0.5);
-        assert_eq!(design.mass.medium_density_factor, 1.0);
-        assert_eq!(design.mass.heavy_density_factor, 2.0);
-        assert_eq!(design.mass.very_heavy_density_factor, 4.0);
-        assert_eq!(design.mass.hammerer_speed_meters_per_second, 0.6);
-        assert_eq!(design.mass.speed_mass_exponent, 0.25);
-        assert!(!design.mass.include_equipped_weapon_mass);
-        assert!(design.mass.is_valid());
-        assert_eq!(design.locomotion.default_max_stamina, 100.0);
-        assert_eq!(
-            design.locomotion.stamina_regeneration_percent_per_second,
-            2.5
-        );
-        assert_eq!(design.locomotion.run_speed_multiplier, 1.5);
-        assert_eq!(design.locomotion.run_drain_per_second, 8.0);
-        assert_eq!(design.locomotion.dash_cost_percent, 17.0);
-        assert_eq!(design.locomotion.dash_speed_multiplier, 2.0);
-        assert_eq!(design.locomotion.dash_duration_seconds, 1.0);
-        assert_eq!(design.locomotion.dash_invulnerability_seconds, 0.337);
-        assert_eq!(design.locomotion.knockdown_duration_seconds, 2.0);
-        assert_eq!(design.locomotion.knockdown_damage_percent_max_hp, 5.0);
-        assert!(design.locomotion.is_valid());
-        assert_eq!(design.health.death_confirmation_seconds, 4.0);
-        assert_eq!(
-            design.health.death_confirmation_initial_degrees_per_second,
-            144.0
-        );
-        assert_eq!(
-            design.health.death_confirmation_max_degrees_per_second,
-            1440.0
-        );
-        assert_eq!(design.health.revival_seconds, 8.0);
-        assert_eq!(design.health.revival_health_percent, 80.0);
-        assert_eq!(design.health.respawn_health_percent, 40.0);
-        assert_eq!(design.health.ankh_respawn_radius_meters, 4.0);
-        assert!(design.health.is_valid());
-        assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
-        assert!(design.weapon_aim.character_degrees_per_second.is_empty());
-        assert!(design.weapon_aim.is_valid());
-        assert_eq!(
-            design.network.snapshot_interval_for(design.simulation),
-            Some(Duration::from_secs_f64(1.0 / 30.0))
-        );
-        assert_eq!(
-            design.network.validated_remote_interpolation_ratio(),
-            Some(2.0)
-        );
-    }
-
-    #[test]
-    fn network_cadence_rejects_invalid_profiles() {
-        let simulation = SimulationConfig {
-            ticks_per_second: 60,
-        };
-
-        for snapshot_send_hz in [0, 40, 120] {
-            let network = NetworkConfig {
-                snapshot_send_hz,
-                remote_interpolation_ratio: 1.0,
-            };
-            assert_eq!(network.snapshot_interval_for(simulation), None);
-        }
-
-        for remote_interpolation_ratio in [0.0, -1.0, f32::NAN, f32::INFINITY] {
-            let network = NetworkConfig {
-                snapshot_send_hz: 30,
-                remote_interpolation_ratio,
-            };
-            assert_eq!(network.validated_remote_interpolation_ratio(), None);
-        }
+    fn embedded_runtime_configuration_is_valid() {
+        let runtime = load_embedded().expect("embedded runtime configuration parses");
+        assert_eq!(runtime.simulation.ticks_per_second, 60);
+        assert_eq!(runtime.network.snapshot_send_hz, 30);
+        assert_eq!(runtime.network.remote_interpolation_ratio, 2.0);
+        assert_eq!(runtime.camera.effective_view_tiles(), Some((16, 10)));
+        assert!(runtime.camera.is_valid());
     }
 }

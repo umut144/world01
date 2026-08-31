@@ -1,7 +1,7 @@
 use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use world01_configs::DesignConfig;
+use world01_design::WeaponAimConfig;
 use world01_world_data::{
     CharacterLifeState, GazeDirection, GazeIntent, MageAttackPhase, MageAttackState,
     SelectedCharacter, WeaponAimState, WeaponTurnDirection,
@@ -17,19 +17,19 @@ pub struct WeaponAimRules {
 }
 
 impl WeaponAimRules {
-    pub fn from_design(config: &DesignConfig) -> Result<Self, WeaponAimConfigError> {
-        if config.simulation.ticks_per_second == 0 || !config.weapon_aim.is_valid() {
+    pub fn from_design(
+        ticks_per_second: u32,
+        design: &WeaponAimConfig,
+    ) -> Result<Self, WeaponAimConfigError> {
+        if ticks_per_second == 0 || !design.is_valid() {
             return Err(WeaponAimConfigError);
         }
-        let ticks_per_second = config.simulation.ticks_per_second as f32;
+        let ticks_per_second = ticks_per_second as f32;
         let radians_per_tick =
             |degrees_per_second: f32| degrees_per_second.to_radians() / ticks_per_second;
         Ok(Self {
-            default_radians_per_tick: radians_per_tick(
-                config.weapon_aim.default_degrees_per_second,
-            ),
-            character_radians_per_tick: config
-                .weapon_aim
+            default_radians_per_tick: radians_per_tick(design.default_degrees_per_second),
+            character_radians_per_tick: design
                 .character_degrees_per_second
                 .iter()
                 .map(|(character, speed)| (character.clone(), radians_per_tick(*speed)))

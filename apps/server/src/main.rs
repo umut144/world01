@@ -11,7 +11,7 @@ use world01_content::{
     CharacterHealthCatalog, CharacterHurtGeometryCatalog, CharacterMassGeometryCatalog,
     HammerCombatGeometry, MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
 };
-use world01_design::load_embedded as load_game_design;
+use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
@@ -29,6 +29,7 @@ mod session;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = load_embedded()?;
+    let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
     let world_map = WorldMap::load_embedded()?;
@@ -47,10 +48,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             "simulation tick rate must be greater than zero",
         )
     })?;
-    let movement_step = MovementStep::from_design(&config)?;
-    let locomotion_rules = LocomotionRules::from_design(&config)?;
-    let character_life_rules = CharacterLifeRules::from_design(&config)?;
-    let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
+    let movement_step = MovementStep::from_runtime(&config)?;
+    let locomotion_rules =
+        LocomotionRules::from_design(config.simulation.ticks_per_second, &world_design.locomotion)?;
+    let character_life_rules =
+        CharacterLifeRules::from_design(config.simulation.ticks_per_second, &world_design.health)?;
+    let weapon_aim_rules =
+        WeaponAimRules::from_design(config.simulation.ticks_per_second, &world_design.weapon_aim)?;
     let hammer_attack_rules =
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
     let hammer_strike_rules = HammerStrikeRules::from_design(
@@ -71,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
     let character_health = CharacterHealthCatalog::from_content(&content)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
-    let character_mass = CharacterMassCatalog::from_geometry(&config, &mass_geometry)?;
+    let character_mass = CharacterMassCatalog::from_geometry(&world_design, &mass_geometry)?;
     let snapshot_interval = config
         .network
         .snapshot_interval_for(config.simulation)

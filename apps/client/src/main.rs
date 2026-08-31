@@ -8,7 +8,7 @@ use world01_content::{
     CharacterHurtGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
     WorldCollisionGeometryCatalog,
 };
-use world01_design::load_embedded as load_game_design;
+use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
     CharacterLifeRules, HammerAttackRules, LocomotionRules, MageAttackRules, MovementStep,
@@ -43,6 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
     let network_simulation = network_simulation_from_env()?;
     let config = load_embedded()?;
+    let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
     let world_map = WorldMap::load_embedded()?;
@@ -62,8 +63,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
     let character_assets = CharacterAssetLibrary::from_content(
         content,
-        config.eyes.pupil_area_ratio,
-        config.eyes.hammerer_collision_radius_ratio,
+        world_design.eyes.pupil_area_ratio,
+        world_design.eyes.hammerer_collision_radius_ratio,
         game_design.mage.eye_size_ratio,
     )?;
     let controller_input = ControllerInput::new()?;
@@ -73,10 +74,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             "simulation tick rate must be greater than zero",
         )
     })?;
-    let movement_step = MovementStep::from_design(&config)?;
-    let locomotion_rules = LocomotionRules::from_design(&config)?;
-    let character_life_rules = CharacterLifeRules::from_design(&config)?;
-    let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
+    let movement_step = MovementStep::from_runtime(&config)?;
+    let locomotion_rules =
+        LocomotionRules::from_design(config.simulation.ticks_per_second, &world_design.locomotion)?;
+    let character_life_rules =
+        CharacterLifeRules::from_design(config.simulation.ticks_per_second, &world_design.health)?;
+    let weapon_aim_rules =
+        WeaponAimRules::from_design(config.simulation.ticks_per_second, &world_design.weapon_aim)?;
     let hammer_attack_rules =
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
     let mage_attack_rules = MageAttackRules::from_design(

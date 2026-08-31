@@ -1,6 +1,11 @@
 use serde::Deserialize;
-use std::{collections::HashSet, error::Error, fmt};
-use world01_world_data::MassModelDefinition;
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+    fmt,
+    path::Path,
+};
+use world01_world_data::{DensityClass, MassModelDefinition};
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
@@ -8,6 +13,169 @@ const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
 const MAGE_DESIGN: &str = include_str!("../characters/mage.json");
 const MAGE_EYE_BEAMS_DESIGN: &str = include_str!("../abilities/mage_eye_beams.json");
 const MASS_DESIGN: &str = include_str!("../mass.json");
+const WORLD01_TOML: &str = include_str!("../world01.toml");
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct World01Design {
+    pub mass: MassConfig,
+    pub locomotion: LocomotionConfig,
+    pub health: HealthConfig,
+    pub weapon_aim: WeaponAimConfig,
+    pub eyes: EyesConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct WeaponAimConfig {
+    pub default_degrees_per_second: f32,
+    #[serde(default)]
+    pub character_degrees_per_second: HashMap<String, f32>,
+}
+
+impl WeaponAimConfig {
+    pub fn is_valid(&self) -> bool {
+        self.default_degrees_per_second.is_finite()
+            && self.default_degrees_per_second > 0.0
+            && self
+                .character_degrees_per_second
+                .iter()
+                .all(|(character, speed)| {
+                    !character.is_empty() && speed.is_finite() && *speed > 0.0
+                })
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct MassConfig {
+    pub weightless_density_factor: f32,
+    pub very_light_density_factor: f32,
+    pub light_density_factor: f32,
+    pub medium_density_factor: f32,
+    pub heavy_density_factor: f32,
+    pub very_heavy_density_factor: f32,
+    pub hammerer_speed_meters_per_second: f32,
+    pub speed_mass_exponent: f32,
+    pub include_equipped_weapon_mass: bool,
+}
+
+impl MassConfig {
+    pub fn density_factor(self, class: DensityClass) -> f32 {
+        match class {
+            DensityClass::Weightless => self.weightless_density_factor,
+            DensityClass::VeryLight => self.very_light_density_factor,
+            DensityClass::Light => self.light_density_factor,
+            DensityClass::Medium => self.medium_density_factor,
+            DensityClass::Heavy => self.heavy_density_factor,
+            DensityClass::VeryHeavy => self.very_heavy_density_factor,
+        }
+    }
+
+    pub fn is_valid(self) -> bool {
+        [
+            self.weightless_density_factor,
+            self.very_light_density_factor,
+            self.light_density_factor,
+            self.medium_density_factor,
+            self.heavy_density_factor,
+            self.very_heavy_density_factor,
+        ]
+        .into_iter()
+        .all(|factor| factor.is_finite() && factor >= 0.0)
+            && self.medium_density_factor > 0.0
+            && self.hammerer_speed_meters_per_second.is_finite()
+            && self.hammerer_speed_meters_per_second > 0.0
+            && self.speed_mass_exponent.is_finite()
+            && self.speed_mass_exponent > 0.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct LocomotionConfig {
+    pub default_max_stamina: f32,
+    pub stamina_regeneration_percent_per_second: f32,
+    pub run_speed_multiplier: f32,
+    pub run_drain_per_second: f32,
+    pub dash_cost_percent: f32,
+    pub dash_speed_multiplier: f32,
+    pub dash_duration_seconds: f32,
+    pub dash_invulnerability_seconds: f32,
+    pub knockdown_duration_seconds: f32,
+    pub knockdown_damage_percent_max_hp: f32,
+}
+
+impl LocomotionConfig {
+    pub fn is_valid(self) -> bool {
+        self.default_max_stamina.is_finite()
+            && self.default_max_stamina > 0.0
+            && self.stamina_regeneration_percent_per_second.is_finite()
+            && self.stamina_regeneration_percent_per_second >= 0.0
+            && self.run_speed_multiplier.is_finite()
+            && self.run_speed_multiplier >= 1.0
+            && self.run_drain_per_second.is_finite()
+            && self.run_drain_per_second >= 0.0
+            && self.dash_cost_percent.is_finite()
+            && (0.0..=100.0).contains(&self.dash_cost_percent)
+            && self.dash_speed_multiplier.is_finite()
+            && self.dash_speed_multiplier > 0.0
+            && self.dash_duration_seconds.is_finite()
+            && self.dash_duration_seconds > 0.0
+            && self.dash_invulnerability_seconds.is_finite()
+            && (0.0..=self.dash_duration_seconds).contains(&self.dash_invulnerability_seconds)
+            && self.knockdown_duration_seconds.is_finite()
+            && self.knockdown_duration_seconds > 0.0
+            && self.knockdown_damage_percent_max_hp.is_finite()
+            && (0.0..=100.0).contains(&self.knockdown_damage_percent_max_hp)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct HealthConfig {
+    pub death_confirmation_seconds: f32,
+    pub death_confirmation_initial_degrees_per_second: f32,
+    pub death_confirmation_max_degrees_per_second: f32,
+    pub revival_seconds: f32,
+    pub revival_health_percent: f32,
+    pub respawn_health_percent: f32,
+    pub ankh_respawn_radius_meters: f32,
+}
+
+impl HealthConfig {
+    pub fn is_valid(self) -> bool {
+        self.death_confirmation_seconds.is_finite()
+            && self.death_confirmation_seconds > 0.0
+            && self
+                .death_confirmation_initial_degrees_per_second
+                .is_finite()
+            && self.death_confirmation_initial_degrees_per_second >= 0.0
+            && self.death_confirmation_max_degrees_per_second.is_finite()
+            && self.death_confirmation_max_degrees_per_second
+                >= self.death_confirmation_initial_degrees_per_second
+            && self.revival_seconds.is_finite()
+            && self.revival_seconds > 0.0
+            && self.revival_health_percent.is_finite()
+            && (0.0..=100.0).contains(&self.revival_health_percent)
+            && self.respawn_health_percent.is_finite()
+            && (0.0..=100.0).contains(&self.respawn_health_percent)
+            && self.ankh_respawn_radius_meters.is_finite()
+            && self.ankh_respawn_radius_meters >= 0.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+pub struct EyesConfig {
+    pub pupil_area_ratio: f32,
+    pub hammerer_collision_radius_ratio: f32,
+}
+
+impl EyesConfig {
+    pub fn is_valid(self) -> bool {
+        self.pupil_area_ratio.is_finite()
+            && self.pupil_area_ratio > 0.0
+            && self.pupil_area_ratio < 1.0
+            && self.hammerer_collision_radius_ratio.is_finite()
+            && self.hammerer_collision_radius_ratio > 0.0
+            && self.hammerer_collision_radius_ratio <= 1.0
+    }
+}
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct GameDesign {
@@ -219,6 +387,29 @@ impl fmt::Display for DesignError {
 
 impl Error for DesignError {}
 
+pub fn load_world01_embedded() -> Result<World01Design, DesignError> {
+    parse_world01_design(WORLD01_TOML)
+}
+
+pub fn load_world01_file(path: &Path) -> Result<World01Design, Box<dyn Error + Send + Sync>> {
+    let contents = std::fs::read_to_string(path)?;
+    Ok(parse_world01_design(&contents)?)
+}
+
+fn parse_world01_design(contents: &str) -> Result<World01Design, DesignError> {
+    let world01: World01Design = toml::from_str(contents)
+        .map_err(|error| DesignError(format!("cannot parse World 01 design: {error}")))?;
+    if !world01.mass.is_valid()
+        || !world01.locomotion.is_valid()
+        || !world01.health.is_valid()
+        || !world01.weapon_aim.is_valid()
+        || !world01.eyes.is_valid()
+    {
+        return Err(DesignError("World 01 design is invalid".into()));
+    }
+    Ok(world01)
+}
+
 pub fn load_embedded() -> Result<GameDesign, DesignError> {
     let hammer: HammerDesign = serde_json::from_str(HAMMER_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse hammer design: {error}")))?;
@@ -322,5 +513,15 @@ mod tests {
                 .iter()
                 .any(|assignment| assignment.asset_key == "hammerer")
         );
+    }
+
+    #[test]
+    fn embedded_world01_design_contains_shared_baselines() {
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
+        assert_eq!(design.eyes.pupil_area_ratio, 0.26);
+        assert_eq!(design.mass.hammerer_speed_meters_per_second, 0.6);
+        assert_eq!(design.locomotion.default_max_stamina, 100.0);
+        assert_eq!(design.health.revival_seconds, 8.0);
+        assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
     }
 }

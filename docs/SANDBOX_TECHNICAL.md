@@ -31,8 +31,8 @@ apps/
   client/                 graphical current-game application and composition
   server/                 headless authoritative current-game application
 crates/
-  configs/                typed configuration
-  design/                 game design data and typed design loading
+  configs/                typed technical runtime configuration
+  design/                 World-01 and game design data with typed design loading
   content/                PolyTools import, validation, runtime derivation
   world_data/             protocol-neutral serializable/domain components
   simulation/             deterministic movement, aim, and Hammer systems
@@ -75,8 +75,11 @@ their final schedule and plugin composition.
 The physical boundaries are useful, but their current contents still include
 Labyrinth behavior:
 
-- `configs` contains movement, weapon aim, Hammer attack, room, camera, and eye
-  values in one design configuration.
+- `configs` contains only technical simulation cadence, network cadence, and
+  camera framing configuration in `runtime.toml`.
+- `design` owns `world01.toml` for shared World-01 baseline values alongside
+  game design data such as characters, weapons, abilities, and mass
+  assignments.
 - `content` requires the current character catalog and Hammer package and
   derives Hammer combat geometry, Mage eye emitters, Character Hurt geometry,
   placed world Collision geometry, and character HP.
@@ -177,13 +180,14 @@ exposes Labyrinth-derived health and combat geometry. Asset keys provide
 stable identity inside this contract, while the set of supported package roles
 is not yet plugin-extensible.
 
-Game-specific design data is loaded through `design`, not `configs`. The design
-crate owns typed character and weapon data, including the mapping from gameplay
-roles to stable Component names. It does not parse PolyTools manifests;
+World-01 and game-specific design data are loaded through `design`, not
+`configs`. The design crate owns typed shared baseline values, character and
+weapon data, including the mapping from gameplay roles to stable Component
+names. It does not parse PolyTools manifests;
 `content` resolves those names against validated Component geometry before the
 simulation receives the resulting typed data. `configs` remains the boundary
-for technical runtime settings such as ports, addresses, window dimensions,
-and simulation cadence.
+for technical runtime settings such as simulation and network cadence and
+camera framing.
 
 ### Confirmed shared direction
 

@@ -1,7 +1,7 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Query, Res, Resource, Vec2};
-use world01_configs::DesignConfig;
+use world01_design::LocomotionConfig;
 use world01_world_data::{
     CharacterHealth, CharacterLifeState, CharacterMass, DashIntent, DashState, MovementIntent,
     MovementVelocity, Position, RunIntent, RunState, StaminaState, StatusEffectState,
@@ -25,13 +25,16 @@ pub struct LocomotionRules {
 }
 
 impl LocomotionRules {
-    pub fn from_design(config: &DesignConfig) -> Result<Self, LocomotionConfigError> {
-        if config.simulation.ticks_per_second == 0 || !config.locomotion.is_valid() {
+    pub fn from_design(
+        ticks_per_second: u32,
+        design: &LocomotionConfig,
+    ) -> Result<Self, LocomotionConfigError> {
+        if ticks_per_second == 0 || !design.is_valid() {
             return Err(LocomotionConfigError);
         }
 
-        let seconds_per_tick = 1.0 / config.simulation.ticks_per_second as f32;
-        let locomotion = config.locomotion;
+        let seconds_per_tick = 1.0 / ticks_per_second as f32;
+        let locomotion = *design;
         Ok(Self {
             seconds_per_tick,
             default_max_stamina: locomotion.default_max_stamina,
@@ -45,7 +48,7 @@ impl LocomotionRules {
             dash_duration_seconds: locomotion.dash_duration_seconds,
             dash_invulnerability_seconds: locomotion.dash_invulnerability_seconds,
             knockdown_duration_ticks: (locomotion.knockdown_duration_seconds
-                * config.simulation.ticks_per_second as f32)
+                * ticks_per_second as f32)
                 .round()
                 .max(1.0) as u32,
             knockdown_damage_ratio: locomotion.knockdown_damage_percent_max_hp / 100.0,
@@ -217,15 +220,17 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, Entity, Update};
     use world01_configs::load_embedded;
+    use world01_design::load_world01_embedded;
 
     fn test_app() -> App {
-        let design = load_embedded().expect("embedded design configuration parses");
+        let runtime = load_embedded().expect("embedded runtime configuration parses");
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
         let mut app = App::new();
         app.insert_resource(
-            MovementStep::from_design(&design).expect("embedded movement configuration is valid"),
+            MovementStep::from_runtime(&runtime).expect("embedded runtime configuration is valid"),
         )
         .insert_resource(
-            LocomotionRules::from_design(&design)
+            LocomotionRules::from_design(runtime.simulation.ticks_per_second, &design.locomotion)
                 .expect("embedded locomotion configuration is valid"),
         )
         .add_systems(Update, update_locomotion);

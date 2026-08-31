@@ -1,8 +1,8 @@
 use std::{error::Error, fmt};
 
 use bevy::prelude::{Entity, Mut, ParamSet, Query, Res, Resource};
-use world01_configs::DesignConfig;
 use world01_content::CharacterHurtGeometryCatalog;
+use world01_design::HealthConfig;
 use world01_world_data::{
     Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
     DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
@@ -29,35 +29,32 @@ pub struct CharacterLifeRules {
 }
 
 impl CharacterLifeRules {
-    pub fn from_design(config: &DesignConfig) -> Result<Self, CharacterLifeConfigError> {
-        if config.simulation.ticks_per_second == 0 || !config.health.is_valid() {
+    pub fn from_design(
+        ticks_per_second: u32,
+        design: &HealthConfig,
+    ) -> Result<Self, CharacterLifeConfigError> {
+        if ticks_per_second == 0 || !design.is_valid() {
             return Err(CharacterLifeConfigError);
         }
 
-        let seconds_per_tick = 1.0 / config.simulation.ticks_per_second as f32;
-        let confirmation_duration = config.health.death_confirmation_seconds;
-        let initial = config
-            .health
+        let seconds_per_tick = 1.0 / ticks_per_second as f32;
+        let confirmation_duration = design.death_confirmation_seconds;
+        let initial = design
             .death_confirmation_initial_degrees_per_second
             .to_radians();
-        let maximum = config
-            .health
+        let maximum = design
             .death_confirmation_max_degrees_per_second
             .to_radians();
-        let ticks = |seconds: f32| {
-            (seconds * config.simulation.ticks_per_second as f32)
-                .round()
-                .max(1.0) as u32
-        };
+        let ticks = |seconds: f32| (seconds * ticks_per_second as f32).round().max(1.0) as u32;
         Ok(Self {
             seconds_per_tick,
             confirmation_duration_ticks: ticks(confirmation_duration),
-            revival_duration_ticks: ticks(config.health.revival_seconds),
+            revival_duration_ticks: ticks(design.revival_seconds),
             confirmation_initial_radians_per_second: initial,
             confirmation_angular_acceleration: (maximum - initial) / confirmation_duration,
-            revival_health_ratio: config.health.revival_health_percent / 100.0,
-            respawn_health_ratio: config.health.respawn_health_percent / 100.0,
-            ankh_respawn_radius_meters: config.health.ankh_respawn_radius_meters,
+            revival_health_ratio: design.revival_health_percent / 100.0,
+            respawn_health_ratio: design.respawn_health_percent / 100.0,
+            ankh_respawn_radius_meters: design.ankh_respawn_radius_meters,
         })
     }
 
@@ -506,13 +503,15 @@ mod tests {
     use bevy::prelude::{App, Update};
     use world01_configs::load_embedded;
     use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
+    use world01_design::load_world01_embedded;
     use world01_world_data::{BodyFacing, CharacterId, MovementIntent, SelectedCharacter};
 
     fn test_app() -> App {
-        let config = load_embedded().expect("embedded config parses");
+        let runtime = load_embedded().expect("embedded runtime parses");
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
         let mut app = App::new();
         app.insert_resource(
-            CharacterLifeRules::from_design(&config)
+            CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
                 .expect("embedded character life design is valid"),
         )
         .insert_resource(
@@ -618,8 +617,11 @@ mod tests {
 
     #[test]
     fn confirmation_angle_matches_the_configured_velocity_ramp() {
-        let config = load_embedded().expect("embedded config parses");
-        let rules = CharacterLifeRules::from_design(&config).expect("valid life rules");
+        let runtime = load_embedded().expect("embedded runtime parses");
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
+        let rules =
+            CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
+                .expect("valid life rules");
         assert!((rules.confirmation_angle_radians(240.0).to_degrees() - 3168.0).abs() < 0.01);
         assert!((rules.confirmation_progress(120.0) - 0.5).abs() < 0.0001);
         assert_eq!(rules.revival_duration_ticks(), 480);

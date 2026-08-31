@@ -58,18 +58,18 @@ pub struct CharacterAssetLibrary {
 impl CharacterAssetLibrary {
     #[cfg(test)]
     fn load_embedded() -> Result<Self, PolyToolsAssetError> {
-        let config = world01_configs::load_embedded().map_err(|error| {
+        let world_design = world01_design::load_world01_embedded().map_err(|error| {
             PolyToolsAssetError::new(format!("cannot load embedded eye design: {error}"))
         })?;
-        let design = world01_design::load_embedded().map_err(|error| {
+        let game_design = world01_design::load_embedded().map_err(|error| {
             PolyToolsAssetError::new(format!("cannot load embedded Mage design: {error}"))
         })?;
         Self::from_content(
             RuntimeContent::load_embedded()
                 .map_err(|error| PolyToolsAssetError::new(error.to_string()))?,
-            config.eyes.pupil_area_ratio,
-            config.eyes.hammerer_collision_radius_ratio,
-            design.mage.eye_size_ratio,
+            world_design.eyes.pupil_area_ratio,
+            world_design.eyes.hammerer_collision_radius_ratio,
+            game_design.mage.eye_size_ratio,
         )
     }
 

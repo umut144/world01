@@ -33,6 +33,7 @@ mod tests {
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
     use world01_configs::load_embedded;
     use world01_content::{CharacterMassGeometryCatalog, HammerCombatGeometry, RuntimeContent};
+    use world01_design::load_world01_embedded;
     use world01_world_data::{
         AttackIntent, BodyFacing, CharacterId, CharacterMass, GazeDirection, GazeIntent,
         HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent, Position,
@@ -45,7 +46,7 @@ mod tests {
 
     fn movement_step() -> MovementStep {
         let config = load_embedded().expect("embedded design configuration parses");
-        MovementStep::from_design(&config).expect("embedded movement configuration is valid")
+        MovementStep::from_runtime(&config).expect("embedded runtime configuration is valid")
     }
 
     fn attack_rules() -> HammerAttackRules {
@@ -57,7 +58,9 @@ mod tests {
 
     fn weapon_aim_rules() -> WeaponAimRules {
         let config = load_embedded().expect("embedded design configuration parses");
-        WeaponAimRules::from_design(&config).expect("embedded weapon aim configuration is valid")
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
+        WeaponAimRules::from_design(config.simulation.ticks_per_second, &design.weapon_aim)
+            .expect("embedded weapon aim configuration is valid")
     }
 
     fn hammer_geometry() -> HammerCombatGeometry {
@@ -68,12 +71,12 @@ mod tests {
     }
 
     fn mass_catalog() -> CharacterMassCatalog {
-        let config = load_embedded().expect("embedded design configuration parses");
+        let world_design = load_world01_embedded().expect("embedded World 01 design parses");
         let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
-        let design = world01_design::load_embedded().expect("embedded game design parses");
-        let geometry = CharacterMassGeometryCatalog::from_content(&content, &design.mass)
+        let game_design = world01_design::load_embedded().expect("embedded game design parses");
+        let geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)
             .expect("mass design covers embedded content");
-        CharacterMassCatalog::from_geometry(&config, &geometry)
+        CharacterMassCatalog::from_geometry(&world_design, &geometry)
             .expect("embedded mass configuration is valid")
     }
 
@@ -322,12 +325,15 @@ mod tests {
 
     #[test]
     fn character_override_changes_only_that_characters_weapon_aim_speed() {
-        let mut config = load_embedded().expect("embedded design configuration parses");
-        config
+        let runtime = load_embedded().expect("embedded runtime configuration parses");
+        let mut design = load_world01_embedded().expect("embedded World 01 design parses");
+        design
             .weapon_aim
             .character_degrees_per_second
             .insert("hammerer".to_owned(), 30.0);
-        let rules = WeaponAimRules::from_design(&config).expect("weapon aim override is valid");
+        let rules =
+            WeaponAimRules::from_design(runtime.simulation.ticks_per_second, &design.weapon_aim)
+                .expect("weapon aim override is valid");
 
         assert!((rules.radians_per_tick(&character("wizard")) - PI / 180.0).abs() < EPSILON);
         assert!((rules.radians_per_tick(&character("hammerer")) - PI / 360.0).abs() < EPSILON);
@@ -405,11 +411,16 @@ mod tests {
         zero_tick_rate.simulation.ticks_per_second = 0;
 
         assert_eq!(
-            MovementStep::from_design(&zero_tick_rate),
+            MovementStep::from_runtime(&zero_tick_rate),
             Err(MovementConfigError::ZeroTickRate)
         );
         assert_eq!(
-            WeaponAimRules::from_design(&zero_tick_rate),
+            WeaponAimRules::from_design(
+                0,
+                &load_world01_embedded()
+                    .expect("World 01 design parses")
+                    .weapon_aim
+            ),
             Err(WeaponAimConfigError)
         );
     }

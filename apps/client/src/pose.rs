@@ -333,8 +333,11 @@ mod tests {
 
     #[test]
     fn death_confirmation_rotation_keeps_the_body_pivot_fixed() {
-        let design = world01_configs::load_embedded().expect("embedded design is valid");
-        let rules = CharacterLifeRules::from_design(&design).expect("life rules are valid");
+        let runtime = world01_configs::load_embedded().expect("embedded runtime is valid");
+        let design = world01_design::load_world01_embedded().expect("embedded design is valid");
+        let rules =
+            CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
+                .expect("life rules are valid");
         let mut app = App::new();
         app.insert_resource(rules)
             .add_systems(Update, apply_character_status_presentation);

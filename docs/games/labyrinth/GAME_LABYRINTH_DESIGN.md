@@ -85,7 +85,7 @@ Interpretation rules:
   relevant game world.
 - The current single-room map is authored in SceneMaker as a **100 × 100 tile**
   Grass field with one Tree and one Ankh; map dimensions and placements come
-  from the synchronized SceneMaker export rather than `design.toml`.
+  from the synchronized SceneMaker export rather than `world01.toml`.
 - Authored map dimensions remain independent from the camera's visible tile
   count.
 - The camera view is configured separately (`view_width_tiles` /
