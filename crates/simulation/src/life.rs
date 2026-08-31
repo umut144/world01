@@ -4,14 +4,14 @@ use bevy::prelude::{Entity, Mut, ParamSet, Query, Res, Resource};
 use world01_content::CharacterHurtGeometryCatalog;
 use world01_design::HealthConfig;
 use world01_world_data::{
-    Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
+    ActorId, Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
     DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
-    MovementVelocity, PlayerId, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
+    MovementVelocity, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
     StatusEffectState,
 };
 
 use crate::combat::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
-use crate::respawn::{RespawnPlayer, choose_respawn_position};
+use crate::respawn::{RespawnActor, choose_respawn_position};
 
 const DEAD_BODY_SCALE: f32 = 0.9;
 const DEAD_BODY_ROTATION_RADIANS: f32 = -14.0_f32.to_radians();
@@ -91,11 +91,11 @@ impl Error for CharacterLifeConfigError {}
 pub fn update_character_life(
     rules: Res<CharacterLifeRules>,
     hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
-    ankhs: Query<(&Ankh, &Position), bevy::prelude::Without<PlayerId>>,
-    mut players: ParamSet<(
+    ankhs: Query<(&Ankh, &Position), bevy::prelude::Without<ActorId>>,
+    mut actors: ParamSet<(
         Query<(
             Entity,
-            &PlayerId,
+            &ActorId,
             Option<&SelectedCharacter>,
             Option<&Position>,
             Option<&BodyFacing>,
@@ -105,7 +105,7 @@ pub fn update_character_life(
         )>,
         Query<(
             Entity,
-            &PlayerId,
+            &ActorId,
             Option<&SelectedCharacter>,
             Option<&mut Position>,
             Option<&BodyFacing>,
@@ -127,14 +127,14 @@ pub fn update_character_life(
         )>,
     )>,
 ) {
-    let snapshots = players
+    let snapshots = actors
         .p0()
         .iter()
         .map(
-            |(entity, player_id, character, position, facing, life, death_confirm, status)| {
+            |(entity, actor_id, character, position, facing, life, death_confirm, status)| {
                 LifeSnapshot {
                     entity,
-                    player_id: player_id.0,
+                    actor_id: actor_id.0,
                     character: character.map(|character| character.0.clone()),
                     position: position.copied(),
                     facing: facing.copied(),
@@ -145,10 +145,10 @@ pub fn update_character_life(
             },
         )
         .collect::<Vec<_>>();
-    let respawn_players = snapshots
+    let respawn_actors = snapshots
         .iter()
-        .map(|snapshot| RespawnPlayer {
-            player_id: snapshot.player_id,
+        .map(|snapshot| RespawnActor {
+            actor_id: snapshot.actor_id,
             character: snapshot.character.clone(),
             position: snapshot.position,
             facing: snapshot.facing,
@@ -161,7 +161,7 @@ pub fn update_character_life(
         .collect::<Vec<_>>();
     for (
         entity,
-        player_id,
+        actor_id,
         character,
         mut position,
         facing,
@@ -172,7 +172,7 @@ pub fn update_character_life(
         mut respawn,
         death_confirm,
         _status,
-    ) in &mut players.p1()
+    ) in &mut actors.p1()
     {
         let maximum = health.maximum.max(0.0);
         health.maximum = maximum;
@@ -199,18 +199,18 @@ pub fn update_character_life(
                         &mut revival,
                         &mut health,
                         &mut life,
-                        *player_id,
+                        *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
-                        &respawn_players,
+                        &respawn_actors,
                         hurt_geometry.as_deref(),
                     );
                 } else {
                     confirmation.held_ticks = confirmation.held_ticks.saturating_sub(1);
-                    if let Some(reviver_player_id) = find_reviver(
+                    if let Some(reviver_actor_id) = find_reviver(
                         entity,
                         character.map(|character| &character.0),
                         position.as_deref(),
@@ -220,7 +220,7 @@ pub fn update_character_life(
                     ) {
                         *life = CharacterLifeState::Reviving;
                         *revival = RevivalState {
-                            reviver_player_id: Some(reviver_player_id),
+                            reviver_actor_id: Some(reviver_actor_id),
                             held_ticks: 0,
                         };
                     }
@@ -235,13 +235,13 @@ pub fn update_character_life(
                         &mut revival,
                         &mut health,
                         &mut life,
-                        *player_id,
+                        *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
-                        &respawn_players,
+                        &respawn_actors,
                         hurt_geometry.as_deref(),
                     );
                 } else {
@@ -259,17 +259,17 @@ pub fn update_character_life(
                         &mut revival,
                         &mut health,
                         &mut life,
-                        *player_id,
+                        *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
-                        &respawn_players,
+                        &respawn_actors,
                         hurt_geometry.as_deref(),
                     );
                 } else if revival_continues(
-                    revival.reviver_player_id,
+                    revival.reviver_actor_id,
                     entity,
                     character.map(|character| &character.0),
                     position.as_deref(),
@@ -295,7 +295,7 @@ pub fn update_character_life(
         }
     }
 
-    for (life, velocity, direction, run, dash, attack) in &mut players.p2() {
+    for (life, velocity, direction, run, dash, attack) in &mut actors.p2() {
         if !life.is_alive() {
             clear_incapacitated_actions(velocity, direction, run, dash, attack);
         }
@@ -309,13 +309,13 @@ fn advance_confirmation(
     revival: &mut RevivalState,
     health: &mut CharacterHealth,
     life: &mut CharacterLifeState,
-    player_id: PlayerId,
+    actor_id: ActorId,
     respawn: &mut RespawnState,
     position: Option<&mut Position>,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
     ankhs: &[(Ankh, Position)],
-    players: &[RespawnPlayer],
+    actors: &[RespawnActor],
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
 ) {
     confirmation.held_ticks = confirmation
@@ -331,14 +331,14 @@ fn advance_confirmation(
         if let Some(position) = position {
             let fallback = *position;
             *position = choose_respawn_position(
-                player_id.0,
+                actor_id.0,
                 respawn.count,
                 fallback,
                 character,
                 facing,
                 rules.ankh_respawn_radius_meters,
                 ankhs,
-                players,
+                actors,
                 hurt_geometry,
             );
         }
@@ -372,7 +372,7 @@ fn clear_incapacitated_actions(
 #[derive(Clone)]
 struct LifeSnapshot {
     entity: Entity,
-    player_id: u64,
+    actor_id: u64,
     character: Option<CharacterId>,
     position: Option<Position>,
     facing: Option<BodyFacing>,
@@ -387,9 +387,9 @@ fn find_reviver(
     target_position: Option<&Position>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
-    players: &[LifeSnapshot],
+    actors: &[LifeSnapshot],
 ) -> Option<u64> {
-    let mut candidates = players
+    let mut candidates = actors
         .iter()
         .filter(|candidate| {
             candidate.entity != target_entity
@@ -404,29 +404,29 @@ fn find_reviver(
                     target_position,
                     target_facing,
                     hurt_geometry,
-                    players,
+                    actors,
                 )
         })
-        .map(|candidate| candidate.player_id)
+        .map(|candidate| candidate.actor_id)
         .collect::<Vec<_>>();
     candidates.sort_unstable();
     candidates.into_iter().next()
 }
 
 fn revival_continues(
-    reviver_player_id: Option<u64>,
+    reviver_actor_id: Option<u64>,
     target_entity: Entity,
     target_character: Option<&CharacterId>,
     target_position: Option<&Position>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
-    players: &[LifeSnapshot],
+    actors: &[LifeSnapshot],
 ) -> bool {
-    let Some(reviver_player_id) = reviver_player_id else {
+    let Some(reviver_actor_id) = reviver_actor_id else {
         return false;
     };
-    players.iter().any(|candidate| {
-        candidate.player_id == reviver_player_id
+    actors.iter().any(|candidate| {
+        candidate.actor_id == reviver_actor_id
             && candidate.entity != target_entity
             && candidate.life.is_alive()
             && candidate.death_confirm.pressed
@@ -439,7 +439,7 @@ fn revival_continues(
                 target_position,
                 target_facing,
                 hurt_geometry,
-                players,
+                actors,
             )
     })
 }
@@ -450,7 +450,7 @@ fn bodies_overlap(
     target_position: Option<&Position>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
-    players: &[LifeSnapshot],
+    actors: &[LifeSnapshot],
 ) -> bool {
     let (Some(hurt_geometry), Some(target_character), Some(target_position), Some(target_facing)) = (
         hurt_geometry,
@@ -460,9 +460,9 @@ fn bodies_overlap(
     ) else {
         return false;
     };
-    let Some(reviver) = players
+    let Some(reviver) = actors
         .iter()
-        .find(|player| player.entity == reviver_entity)
+        .find(|actor| actor.entity == reviver_entity)
     else {
         return false;
     };
@@ -524,10 +524,10 @@ mod tests {
         app
     }
 
-    fn spawn_player(app: &mut App, id: u64, health: f32, life: CharacterLifeState) -> Entity {
+    fn spawn_actor(app: &mut App, id: u64, health: f32, life: CharacterLifeState) -> Entity {
         app.world_mut()
             .spawn((
-                PlayerId(id),
+                ActorId(id),
                 SelectedCharacter(CharacterId("hammerer".into())),
                 Position::ZERO,
                 BodyFacing::Authored,
@@ -551,22 +551,22 @@ mod tests {
     #[test]
     fn zero_health_enters_dead_and_stops_movement() {
         let mut app = test_app();
-        let player = spawn_player(&mut app, 1, -10.0, CharacterLifeState::Alive);
+        let actor = spawn_actor(&mut app, 1, -10.0, CharacterLifeState::Alive);
         app.world_mut()
-            .get_mut::<MovementVelocity>(player)
+            .get_mut::<MovementVelocity>(actor)
             .unwrap()
             .x = 1.0;
         app.update();
         assert_eq!(
-            app.world().get::<CharacterLifeState>(player),
+            app.world().get::<CharacterLifeState>(actor),
             Some(&CharacterLifeState::Dead)
         );
         assert_eq!(
-            app.world().get::<CharacterHealth>(player).unwrap().current,
+            app.world().get::<CharacterHealth>(actor).unwrap().current,
             0.0
         );
         assert_eq!(
-            app.world().get::<MovementVelocity>(player),
+            app.world().get::<MovementVelocity>(actor),
             Some(&MovementVelocity::ZERO)
         );
     }
@@ -574,19 +574,19 @@ mod tests {
     #[test]
     fn releasing_confirmation_returns_to_dead_and_decays_one_tick() {
         let mut app = test_app();
-        let player = spawn_player(&mut app, 1, 0.0, CharacterLifeState::DeathConfirming);
+        let actor = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::DeathConfirming);
         app.world_mut()
-            .get_mut::<DeathConfirmationState>(player)
+            .get_mut::<DeathConfirmationState>(actor)
             .unwrap()
             .held_ticks = 60;
         app.update();
         assert_eq!(
-            app.world().get::<CharacterLifeState>(player),
+            app.world().get::<CharacterLifeState>(actor),
             Some(&CharacterLifeState::Dead)
         );
         assert_eq!(
             app.world()
-                .get::<DeathConfirmationState>(player)
+                .get::<DeathConfirmationState>(actor)
                 .unwrap()
                 .held_ticks,
             59
@@ -596,23 +596,23 @@ mod tests {
     #[test]
     fn confirming_for_four_seconds_respawns_with_forty_percent_health() {
         let mut app = test_app();
-        let player = spawn_player(&mut app, 1, 0.0, CharacterLifeState::Dead);
+        let actor = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Dead);
         app.world_mut()
-            .get_mut::<DeathConfirmIntent>(player)
+            .get_mut::<DeathConfirmIntent>(actor)
             .unwrap()
             .pressed = true;
         for _ in 0..240 {
             app.update();
         }
         assert_eq!(
-            app.world().get::<CharacterLifeState>(player),
+            app.world().get::<CharacterLifeState>(actor),
             Some(&CharacterLifeState::Alive)
         );
         assert!(
-            (app.world().get::<CharacterHealth>(player).unwrap().current - 40.0).abs()
+            (app.world().get::<CharacterHealth>(actor).unwrap().current - 40.0).abs()
                 < f32::EPSILON
         );
-        assert_eq!(app.world().get::<RespawnState>(player).unwrap().count, 1);
+        assert_eq!(app.world().get::<RespawnState>(actor).unwrap().count, 1);
     }
 
     #[test]
@@ -646,8 +646,8 @@ mod tests {
     #[test]
     fn overlapping_alive_player_revives_after_eight_seconds() {
         let mut app = test_app();
-        let target = spawn_player(&mut app, 1, 0.0, CharacterLifeState::Dead);
-        let reviver = spawn_player(&mut app, 2, 100.0, CharacterLifeState::Alive);
+        let target = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Dead);
+        let reviver = spawn_actor(&mut app, 2, 100.0, CharacterLifeState::Alive);
         app.world_mut()
             .get_mut::<DeathConfirmIntent>(reviver)
             .unwrap()
@@ -662,7 +662,7 @@ mod tests {
             app.world()
                 .get::<RevivalState>(target)
                 .unwrap()
-                .reviver_player_id,
+                .reviver_actor_id,
             Some(2)
         );
 
@@ -683,10 +683,10 @@ mod tests {
     #[test]
     fn target_confirmation_has_priority_over_an_active_revival() {
         let mut app = test_app();
-        let target = spawn_player(&mut app, 1, 0.0, CharacterLifeState::Reviving);
-        let reviver = spawn_player(&mut app, 2, 100.0, CharacterLifeState::Alive);
+        let target = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Reviving);
+        let reviver = spawn_actor(&mut app, 2, 100.0, CharacterLifeState::Alive);
         *app.world_mut().get_mut::<RevivalState>(target).unwrap() = RevivalState {
-            reviver_player_id: Some(2),
+            reviver_actor_id: Some(2),
             held_ticks: 420,
         };
         app.world_mut()
@@ -713,8 +713,8 @@ mod tests {
     #[test]
     fn stunning_the_reviver_cancels_revival() {
         let mut app = test_app();
-        let target = spawn_player(&mut app, 1, 0.0, CharacterLifeState::Dead);
-        let reviver = spawn_player(&mut app, 2, 100.0, CharacterLifeState::Alive);
+        let target = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Dead);
+        let reviver = spawn_actor(&mut app, 2, 100.0, CharacterLifeState::Alive);
         app.world_mut()
             .get_mut::<DeathConfirmIntent>(reviver)
             .unwrap()

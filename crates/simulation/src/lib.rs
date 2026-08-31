@@ -24,7 +24,7 @@ pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_li
 pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use mass::{CharacterMassCatalog, MassModelError};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
-pub use respawn::{RespawnPlayer, choose_respawn_position};
+pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
 
 #[cfg(test)]

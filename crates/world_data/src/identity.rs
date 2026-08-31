@@ -24,9 +24,18 @@ impl CharacterId {
     }
 }
 
+/// Identifies a simulated character, whoever or whatever drives it.
+///
+/// Every entity the simulation steps carries one, so simulation code never has
+/// to ask whether a human is behind it. The id is assigned by the server and
+/// replicated, which makes it stable across the client's prediction as well.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct PlayerId(pub u64);
+pub struct ActorId(pub u64);
 
+/// The connected peer that owns an actor.
+///
+/// Present only while a human client controls the actor; a server-driven actor
+/// has none. No simulation system reads it - ownership is a transport concern.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PlayerOwner(pub u64);
 

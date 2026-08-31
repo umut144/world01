@@ -7,8 +7,8 @@ use crate::combat::overlap::{components_overlap, hurt_transform};
 const MAX_CANDIDATES_PER_ANKH: u32 = 64;
 
 #[derive(Clone)]
-pub struct RespawnPlayer {
-    pub player_id: u64,
+pub struct RespawnActor {
+    pub actor_id: u64,
     pub character: Option<CharacterId>,
     pub position: Option<Position>,
     pub facing: Option<BodyFacing>,
@@ -16,14 +16,14 @@ pub struct RespawnPlayer {
 }
 
 pub fn choose_respawn_position(
-    player_id: u64,
+    actor_id: u64,
     respawn_count: u32,
     fallback: Position,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
     radius: f32,
     ankhs: &[(Ankh, Position)],
-    players: &[RespawnPlayer],
+    actors: &[RespawnActor],
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
 ) -> Position {
     let Some(character) = character else {
@@ -52,7 +52,7 @@ pub fn choose_respawn_position(
         for attempt in 0..MAX_CANDIDATES_PER_ANKH {
             let candidate = candidate_position(
                 position,
-                player_id,
+                actor_id,
                 respawn_count,
                 ankh.index,
                 attempt,
@@ -60,10 +60,10 @@ pub fn choose_respawn_position(
             );
             if !candidate_is_blocked(
                 candidate,
-                player_id,
+                actor_id,
                 facing,
                 target_geometry,
-                players,
+                actors,
                 hurt_geometry,
             ) {
                 return candidate;
@@ -76,19 +76,19 @@ pub fn choose_respawn_position(
 
 fn candidate_is_blocked(
     candidate: Position,
-    target_player_id: u64,
+    target_actor_id: u64,
     facing: BodyFacing,
     target_geometry: &world01_content::CharacterHurtGeometry,
-    players: &[RespawnPlayer],
+    actors: &[RespawnActor],
     hurt_geometry: &CharacterHurtGeometryCatalog,
 ) -> bool {
     let target_transform = hurt_transform(target_geometry, candidate, facing);
-    players.iter().any(|player| {
-        if player.life != CharacterLifeState::Alive || player.player_id == target_player_id {
+    actors.iter().any(|actor| {
+        if actor.life != CharacterLifeState::Alive || actor.actor_id == target_actor_id {
             return false;
         }
         let (Some(other_character), Some(other_position), Some(other_facing)) =
-            (&player.character, player.position, player.facing)
+            (&actor.character, actor.position, actor.facing)
         else {
             return false;
         };
@@ -111,14 +111,14 @@ fn candidate_is_blocked(
 
 fn candidate_position(
     anchor: Position,
-    player_id: u64,
+    actor_id: u64,
     respawn_count: u32,
     ankh_index: u32,
     attempt: u32,
     radius: f32,
 ) -> Position {
     let seed = mix64(
-        player_id
+        actor_id
             ^ (u64::from(respawn_count) << 32)
             ^ (u64::from(ankh_index) << 16)
             ^ u64::from(attempt),
@@ -200,8 +200,8 @@ mod tests {
         let nearest = (Ankh::new(0), Position::ZERO);
         let next = (Ankh::new(1), Position::new(10.0, 0.0));
         let blockers = (0..64)
-            .map(|attempt| RespawnPlayer {
-                player_id: 100 + u64::from(attempt),
+            .map(|attempt| RespawnActor {
+                actor_id: 100 + u64::from(attempt),
                 character: Some(CharacterId("hammerer".into())),
                 position: Some(candidate_position(
                     nearest.1,
@@ -232,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn no_ankh_falls_back_to_the_players_current_position() {
+    fn no_ankh_falls_back_to_the_actors_current_position() {
         let result = choose_respawn_position(
             7,
             1,

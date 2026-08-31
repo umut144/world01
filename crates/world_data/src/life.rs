@@ -29,13 +29,13 @@ pub struct DeathConfirmationState {
     Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
 )]
 pub struct RevivalState {
-    pub reviver_player_id: Option<u64>,
+    pub reviver_actor_id: Option<u64>,
     pub held_ticks: u32,
 }
 
 impl RevivalState {
     pub const IDLE: Self = Self {
-        reviver_player_id: None,
+        reviver_actor_id: None,
         held_ticks: 0,
     };
 }

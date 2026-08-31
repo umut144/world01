@@ -7,17 +7,16 @@ use world01_network::{
 };
 use world01_simulation::{CharacterArchetypeCatalog, CharacterMassCatalog, LocomotionRules};
 use world01_world_data::{
-    Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
-    DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner, Position,
-    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState,
+    ActorId, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
+    DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerOwner, Position, RespawnState,
+    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
 };
 
 #[derive(Resource, Debug)]
-struct NextPlayerId(u64);
+struct NextActorId(u64);
 
-impl Default for NextPlayerId {
+impl Default for NextActorId {
     fn default() -> Self {
         Self(1)
     }
@@ -27,7 +26,7 @@ pub struct ServerSessionPlugin;
 
 impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<NextPlayerId>()
+        app.init_resource::<NextActorId>()
             .add_systems(Startup, spawn_room_ankhs)
             .add_systems(
                 Update,
@@ -45,7 +44,7 @@ fn spawn_room_ankhs(layout: Res<AnkhLayout>, mut commands: Commands) {
 fn accept_join_requests(
     requests: Query<(Entity, &ServerJoinRequest)>,
     players: Query<&PlayerOwner>,
-    mut next_player_id: ResMut<NextPlayerId>,
+    mut next_actor_id: ResMut<NextActorId>,
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
     masses: Res<CharacterMassCatalog>,
@@ -76,16 +75,16 @@ fn accept_join_requests(
             warn!(owner = request.owner(), character = ?selected, "ignoring join without derived character mass");
             continue;
         };
-        let player_id = next_player_id.0;
-        let Some(following_id) = player_id.checked_add(1) else {
-            warn!("player id space exhausted; ignoring join request");
+        let actor_id = next_actor_id.0;
+        let Some(following_id) = actor_id.checked_add(1) else {
+            warn!("actor id space exhausted; ignoring join request");
             continue;
         };
-        next_player_id.0 = following_id;
-        let spawn = spawn_position(player_id);
+        next_actor_id.0 = following_id;
+        let spawn = spawn_position(actor_id);
         let mut player = commands.spawn((
             (
-                PlayerId(player_id),
+                ActorId(actor_id),
                 PlayerOwner(request.owner()),
                 SelectedCharacter(selected.clone()),
             ),
@@ -122,7 +121,7 @@ fn accept_join_requests(
     }
 }
 
-fn spawn_position(player_id: u64) -> Vec2 {
+fn spawn_position(actor_id: u64) -> Vec2 {
     const POSITIONS: [Vec2; MAX_CLIENTS] = [
         Vec2::new(-4.0, 0.0),
         Vec2::new(-2.0, 0.0),
@@ -130,7 +129,7 @@ fn spawn_position(player_id: u64) -> Vec2 {
         Vec2::new(2.0, 0.0),
         Vec2::new(4.0, 0.0),
     ];
-    let index = (player_id.saturating_sub(1) % POSITIONS.len() as u64) as usize;
+    let index = (actor_id.saturating_sub(1) % POSITIONS.len() as u64) as usize;
     POSITIONS[index]
 }
 
