@@ -614,7 +614,10 @@ mod tests {
             .get(&CharacterId("hammerer".into()))
             .expect("Hammerer has a character profile");
         assert_eq!(hammerer.ability_name_keys, ["HammerStrike"]);
-        assert_eq!(hammerer.equipped_weapon_asset_key.as_deref(), Some("hammer"));
+        assert_eq!(
+            hammerer.equipped_weapon_asset_key.as_deref(),
+            Some("hammer")
+        );
 
         let mage = design
             .characters

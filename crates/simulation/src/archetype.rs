@@ -60,7 +60,7 @@ impl CharacterArchetypeCatalog {
     }
 
     /// Attaches the authoritative state every ability of `character` needs.
-    pub fn insert_ability_state(&self, character: &CharacterId, entity: &mut EntityCommands) {
+    pub fn insert_ability_state(&self, character: &CharacterId, entity: &mut EntityCommands<'_>) {
         for ability in self.abilities(character) {
             match ability {
                 Ability::HammerStrike => {
@@ -89,6 +89,7 @@ impl Error for ArchetypeError {}
 mod tests {
     use super::*;
     use world01_design::{CharacterProfile, load_embedded};
+    use world01_world_data::SelectedCharacter;
 
     #[test]
     fn embedded_design_resolves_the_implemented_abilities() {
@@ -121,19 +122,20 @@ mod tests {
         assert!(CharacterArchetypeCatalog::from_design(&design).is_err());
     }
 
-    fn spawn_with_abilities(
-        world: &mut World,
-        catalog: &CharacterArchetypeCatalog,
-        character: &str,
-    ) -> Entity {
-        let entity = world.spawn_empty().id();
-        {
-            let mut commands = world.commands();
-            let mut entity_commands = commands.entity(entity);
-            catalog.insert_ability_state(&CharacterId(character.to_owned()), &mut entity_commands);
+    /// Mirrors how the server attaches ability state: through `Commands`.
+    fn attach_abilities(
+        catalog: Res<CharacterArchetypeCatalog>,
+        characters: Query<(Entity, &SelectedCharacter)>,
+        mut commands: Commands,
+    ) {
+        for (entity, character) in &characters {
+            let mut entity = commands.entity(entity);
+            catalog.insert_ability_state(&character.0, &mut entity);
         }
-        world.flush();
-        entity
+    }
+
+    fn character(name: &str) -> SelectedCharacter {
+        SelectedCharacter(CharacterId(name.to_owned()))
     }
 
     #[test]
@@ -141,12 +143,16 @@ mod tests {
         let design = load_embedded().expect("embedded game design parses");
         let catalog =
             CharacterArchetypeCatalog::from_design(&design).expect("every ability is implemented");
-        let mut world = World::new();
+        let mut app = App::new();
+        app.insert_resource(catalog)
+            .add_systems(Update, attach_abilities);
+        let hammerer = app.world_mut().spawn(character("hammerer")).id();
+        let mage = app.world_mut().spawn(character("mage")).id();
+        let rogue = app.world_mut().spawn(character("rogue")).id();
 
-        let hammerer = spawn_with_abilities(&mut world, &catalog, "hammerer");
-        let mage = spawn_with_abilities(&mut world, &catalog, "mage");
-        let rogue = spawn_with_abilities(&mut world, &catalog, "rogue");
+        app.update();
 
+        let world = app.world();
         assert_eq!(
             world.get::<HammerAttackState>(hammerer),
             Some(&HammerAttackState::IDLE)

@@ -67,7 +67,11 @@ pub fn add_simulation_step(
     }
     app.add_systems(
         schedule.clone(),
-        (expire_mage_beams, finish_mage_cooldowns, update_character_life)
+        (
+            expire_mage_beams,
+            finish_mage_cooldowns,
+            update_character_life,
+        )
             .chain()
             .in_set(SimulationSet::Resolution),
     );
