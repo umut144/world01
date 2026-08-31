@@ -47,7 +47,7 @@ dieses Dokuments maßgeblich.
 | MaxHP | Hammerer | `140 HP` | `HP(C) = 140 × A_HP(C) / A_HP(Hammerer)` | Referenz für die flächenbasierte HP-Normierung |
 | MaxHP-Fläche | Alle Charaktere | `body + optional feet` | `A_HP(C) = A_body(C) + A_feet(C)` | Fläche aus exportierten triangulierten Fill-Meshes; automatisch datengetrieben |
 | HP-Balkenlänge | Mage | Faktor `1.0` | `L_factor(C) = MaxHP(C) / MaxHP(Mage)` | Temporäre UI-Verifikation; kein vorgesehenes finales HP-Display |
-| Pupillenfläche | Jeweilige Augenregion | `26.0%` | `A_pupil(C) = 0.26 × A_eye(C)` | Pupillenradius wird unabhängig aus der jeweiligen Augenfläche abgeleitet |
+| Pupillenfläche | Jeweilige Augenregion | `26.0%` Basis | `A_pupil(C) = min(0.26 × S_pupil(C)^2, 1.0) × A_eye(C)` | Pupillenradius wird unabhängig aus der jeweiligen Augenfläche abgeleitet und an die Augenregion geclippt |
 | Pupillenkollision | Hammerer | `35.0%` seines Pupillenradius | `r_collision(C) = min(0.35 × r_pupil(Hammerer), r_pupil(C))` | Gemeinsame absolute Kollisionsreferenz, begrenzt auf den jeweiligen Pupillenradius |
 
 ## World 01 identity
@@ -214,7 +214,7 @@ remains available for material that has no relevant gameplay mass.
 | Chantres | — | `belly`, `hat` | `body`, `head` | `eye_left`, `eye_right`, `hat_line` |
 | Glavier | — | `belly`, `head_tip` | `body`, `head` | `eye_left`, `eye_right` |
 | Hammerer | — | `cloak`, `hat` | `body`, `feet`, `head` | `eye_left`, `eye_right` |
-| Mage | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyeleash01`–`eyeleash03`, `eyeleash_right01`–`eyeleash_right03` |
+| Mage | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyeleash_left01`–`eyeleash_left03`, `eyeleash_right01`–`eyeleash_right03` |
 | Monk | `eyebrow_left`, `eyebrow_right` | — | `feet`, `body`, `head`, `forehead` | `eye_left`, `eye_right`, `forehead_dot01`–`forehead_dot06` |
 | Rogue | — | `hat`, `hat_tip` | `body`, `head` | `arm_line`, `eye_left`, `eye_right`, `eyebrow_left`, `eyebrow_right` |
 | Sorcerer | — | `hat_back`, `hat` | `body`, `head` | `arm_line`, `eye_left`, `eye_right` |
@@ -570,11 +570,11 @@ World-01 baseline uses one deliberately simple linear model:
 - Each beam begins at its corresponding authored eye and travels parallel to
   the locked gaze direction. Their separation remains fixed for the full
   charge-scaled travel distance.
-- Each beam's width is `90%` of the effective width of its corresponding
-  authored eye. Mage character design exposes an eye-size ratio (`1.0`
-  baseline) that scales the visible eye geometry and its pupil, plus the
-  laser-specific eye-width ratio (`0.9`). Simulation derives its emitter
-  geometry from the scaled eye before applying the laser-specific ratio.
+- Each beam's width is `90%` of the width of its corresponding authored eye.
+  Mage character design exposes `pupil_size_ratio` (`2.0` current baseline)
+  as a radius multiplier for Mage's generated pupils only; it does not change
+  eye geometry, beam origins, or laser width. The laser-specific
+  `eye_width_ratio` remains `0.9`.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a

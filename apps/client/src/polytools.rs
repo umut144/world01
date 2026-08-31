@@ -52,7 +52,7 @@ pub struct CharacterAssetLibrary {
     content: RuntimeContent,
     pupil_area_ratio: f32,
     pupil_collision_reference_radius: f32,
-    mage_eye_size_ratio: f32,
+    mage_pupil_size_ratio: f32,
 }
 
 impl CharacterAssetLibrary {
@@ -69,7 +69,7 @@ impl CharacterAssetLibrary {
                 .map_err(|error| PolyToolsAssetError::new(error.to_string()))?,
             world_design.eyes.pupil_area_ratio,
             world_design.eyes.hammerer_collision_radius_ratio,
-            game_design.mage.eye_size_ratio,
+            game_design.mage.pupil_size_ratio,
         )
     }
 
@@ -77,7 +77,7 @@ impl CharacterAssetLibrary {
         content: RuntimeContent,
         pupil_area_ratio: f32,
         hammerer_collision_radius_ratio: f32,
-        mage_eye_size_ratio: f32,
+        mage_pupil_size_ratio: f32,
     ) -> Result<Self, PolyToolsAssetError> {
         if !pupil_area_ratio.is_finite() || pupil_area_ratio <= 0.0 || pupil_area_ratio >= 1.0 {
             return Err(PolyToolsAssetError::new(
@@ -92,9 +92,9 @@ impl CharacterAssetLibrary {
                 "Hammerer collision radius ratio must be finite, greater than zero, and at most one",
             ));
         }
-        if !mage_eye_size_ratio.is_finite() || mage_eye_size_ratio <= 0.0 {
+        if !mage_pupil_size_ratio.is_finite() || mage_pupil_size_ratio <= 0.0 {
             return Err(PolyToolsAssetError::new(
-                "Mage eye size ratio must be finite and greater than zero",
+                "Mage pupil size ratio must be finite and greater than zero",
             ));
         }
         let hammerer = content
@@ -123,7 +123,7 @@ impl CharacterAssetLibrary {
             content,
             pupil_area_ratio,
             pupil_collision_reference_radius,
-            mage_eye_size_ratio,
+            mage_pupil_size_ratio,
         })
     }
 
@@ -133,6 +133,15 @@ impl CharacterAssetLibrary {
 
     fn character(&self, character: &CharacterId) -> Option<&RuntimeManifest> {
         self.content.character(character)
+    }
+
+    fn pupil_area_ratio_for(&self, character: &CharacterId) -> f32 {
+        let size_ratio = if character.0 == "mage" {
+            self.mage_pupil_size_ratio
+        } else {
+            1.0
+        };
+        (self.pupil_area_ratio * size_ratio * size_ratio).min(1.0 - f32::EPSILON)
     }
 
     pub fn prop(&self, asset_key: &str) -> Option<&RuntimeManifest> {
@@ -341,7 +350,7 @@ pub fn spawn_character_visual(
     let mut component_entities = HashMap::new();
     let mut outline_visuals = Vec::new();
     for component in &manifest.components {
-        let transform = character_component_transform(library, character, component);
+        let transform = component_transform(component);
         let mut entity_commands = commands.spawn((transform, Visibility::default()));
         if component.name == "body" {
             entity_commands.insert(BodyAnchor);
@@ -366,6 +375,7 @@ pub fn spawn_character_visual(
         let outline_color = materials.add(Color::srgb(0.045, 0.04, 0.055));
         let is_dynamic_eye = character.0 != "barde"
             && (component.name == "eye_left" || component.name == "eye_right");
+        let pupil_area_ratio = library.pupil_area_ratio_for(character);
         let eye_collider = is_dynamic_eye
             .then(|| {
                 let collider = component
@@ -375,7 +385,7 @@ pub fn spawn_character_visual(
                         EyeCollider::from_region_mesh(
                             &mesh.vertices,
                             &mesh.indices,
-                            library.pupil_area_ratio,
+                            pupil_area_ratio,
                             library.pupil_collision_reference_radius,
                         )
                     })
@@ -386,7 +396,7 @@ pub fn spawn_character_visual(
                                     EyeCollider::from_outline_area_ratio(
                                         &mesh.vertices,
                                         &mesh.indices,
-                                        library.pupil_area_ratio,
+                                        pupil_area_ratio,
                                         library.pupil_collision_reference_radius,
                                     )
                                 })
@@ -999,19 +1009,6 @@ fn component_transform(component: &RuntimeComponent) -> Transform {
     ))
 }
 
-fn character_component_transform(
-    library: &CharacterAssetLibrary,
-    character: &CharacterId,
-    component: &RuntimeComponent,
-) -> Transform {
-    let mut transform = component_transform(component);
-    if character.0 == "mage" && (component.name == "eye_left" || component.name == "eye_right") {
-        transform.scale.x *= library.mage_eye_size_ratio;
-        transform.scale.y *= library.mage_eye_size_ratio;
-    }
-    transform
-}
-
 fn bevy_mesh(mesh: &RuntimeMesh) -> Mesh {
     bevy_mesh_from_parts(&mesh.vertices, &mesh.indices)
 }
@@ -1234,34 +1231,20 @@ mod tests {
     }
 
     #[test]
-    fn mage_eye_size_ratio_scales_only_the_visible_eye_components() {
+    fn mage_pupil_size_ratio_scales_only_mage_pupil_area() {
         let mut library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        library.mage_eye_size_ratio = 1.5;
+        library.mage_pupil_size_ratio = 1.5;
         let mage_id = CharacterId("mage".into());
-        let mage = library
-            .character(&mage_id)
-            .expect("Mage manifest is present");
-        let eye = mage
-            .components
-            .iter()
-            .find(|component| component.name == "eye_left")
-            .expect("Mage has a left eye");
-        let body = mage
-            .components
-            .iter()
-            .find(|component| component.name == "body")
-            .expect("Mage has a body");
+        let hammerer_id = CharacterId("hammerer".into());
 
         assert_eq!(
-            character_component_transform(&library, &mage_id, eye)
-                .scale
-                .truncate(),
-            component_transform(eye).scale.truncate() * 1.5,
+            library.pupil_area_ratio_for(&mage_id),
+            library.pupil_area_ratio * 1.5 * 1.5,
         );
         assert_eq!(
-            character_component_transform(&library, &mage_id, body).scale,
-            component_transform(body).scale,
+            library.pupil_area_ratio_for(&hammerer_id),
+            library.pupil_area_ratio
         );
     }
 

@@ -58,14 +58,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let hammer_geometry =
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
-    let mage_eye_geometry =
-        MageEyeGeometry::from_content(&content, game_design.mage.eye_size_ratio)?;
+    let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
     let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
     let character_assets = CharacterAssetLibrary::from_content(
         content,
         world_design.eyes.pupil_area_ratio,
         world_design.eyes.hammerer_collision_radius_ratio,
-        game_design.mage.eye_size_ratio,
+        game_design.mage.pupil_size_ratio,
     )?;
     let controller_input = ControllerInput::new()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
