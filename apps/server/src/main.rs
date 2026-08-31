@@ -17,9 +17,8 @@ use world01_network::{
 };
 use world01_simulation::{
     CharacterLifeRules, CharacterMassCatalog, HammerAttackRules, HammerStrikeRules,
-    LocomotionRules, MageAttackRules, MovementStep, SimulationSet, WeaponAimRules,
-    add_simulation_step, apply_hammer_strike_damage, apply_mage_beam_damage, expire_mage_beams,
-    finish_mage_cooldowns, update_character_life,
+    LocomotionRules, MageAttackRules, MovementStep, SimulationAuthority, SimulationSet,
+    WeaponAimRules, add_simulation_step,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -108,22 +107,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(character_mass)
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
-    add_simulation_step(&mut app, FixedUpdate);
+    add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
     app.configure_sets(
         FixedUpdate,
         SimulationSet::GameplayStep.after(ServerNetworkSet::PrepareSimulation),
-    );
-    app.add_systems(
-        FixedUpdate,
-        (
-            apply_hammer_strike_damage,
-            apply_mage_beam_damage,
-            expire_mage_beams,
-            finish_mage_cooldowns,
-            update_character_life,
-        )
-            .chain()
-            .after(SimulationSet::GameplayStep),
     );
     app.add_plugins(ServerSessionPlugin);
     configure_server(

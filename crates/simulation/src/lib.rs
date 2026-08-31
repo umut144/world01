@@ -23,7 +23,7 @@ pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use mass::{CharacterMassCatalog, MassModelError};
 pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
 pub use respawn::{RespawnPlayer, choose_respawn_position};
-pub use schedule::{SimulationSet, add_simulation_step};
+pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
 
 #[cfg(test)]
 mod tests {
