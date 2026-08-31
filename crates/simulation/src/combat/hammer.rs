@@ -206,9 +206,7 @@ pub fn apply_hammer_strike_damage(
         let attackers = players.p0();
         attackers
             .iter()
-            .filter(|attack| {
-                attack.phase == HammerAttackPhase::Embedded && attack.phase_ticks == 0
-            })
+            .filter(|attack| attack.phase == HammerAttackPhase::Embedded && attack.phase_ticks == 0)
             .copied()
             .collect::<Vec<_>>()
     };
