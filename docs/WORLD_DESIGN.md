@@ -7,7 +7,7 @@
 > [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md). Game-specific decisions live
 > in the corresponding document below [`games/`](games/).
 
-Last updated: 2026-08-30
+Last updated: 2026-08-31
 
 ## Purpose and authority
 
@@ -500,6 +500,61 @@ The visible Hammer transform is never authoritative collision state. A game
 uses the shared semantic attack geometry and authoritative impact rules; its
 presentation may use the focused procedural 3D transform and Hammer-specific
 shader described above.
+
+## The Mage and the converging eye beams
+
+The Mage's first shared World-01 attack is projected directly from her two
+eyes. It is deliberately modeled as two traveling projectiles rather than as
+hitscan. Charging provides visible anticipation, while the two eye beams make
+the attack narrow, powerful, and spatially readable.
+
+### Charge, commitment, and release
+
+- The attack requires at least `1.0 s` of charging before it can fire. At that
+  threshold the attack is committed and can no longer be cancelled through
+  the ordinary attack flow; it must eventually fire.
+- Effective charge grows linearly from `1.0 s` to its `2.0 s` maximum. After
+  reaching maximum charge, the Mage may continue holding for another `2.0 s`
+  without gaining further power.
+- Releasing at or after the commitment threshold fires immediately in the
+  current gaze direction. Continuing to hold for `4.0 s` total causes an
+  automatic shot in the then-current gaze direction.
+- The Mage may change gaze freely throughout charging and the additional
+  maximum-charge hold window. Release or automatic fire freezes the selected
+  gaze direction only for that shot's charge-scaled emission interval. Gaze is
+  free again after that interval while the projectiles continue traveling.
+- During charging, the eyes become progressively redder until they reach their
+  maximum-charge presentation.
+
+### Linear eye-beam model
+
+For a valid effective charge `c` in seconds, clamped to `1.0 <= c <= 2.0`, the
+World-01 baseline uses one deliberately simple linear model:
+
+| Property | Model | At `c = 1.0 s` | At `c = 2.0 s` |
+|---|---:|---:|---:|
+| Gaze lock / emission time | `0.1 c s` | `0.1 s` | `0.2 s` |
+| Projectile length per beam | `c m` | `1 m` | `2 m` |
+| Travel/convergence distance | `10 c m` | `10 m` | `20 m` |
+| Damage per eye beam | `10 c HP` | `10 HP` | `20 HP` |
+| Maximum combined damage | `20 c HP` | `20 HP` | `40 HP` |
+
+- Both eye-beam projectiles travel at `10 m/s`. Their spatial length follows
+  directly from speed multiplied by the charge-scaled emission time.
+- Each beam begins at its corresponding authored eye and travels toward the
+  shared point on the locked gaze line at the charge-scaled convergence
+  distance. The two beams therefore meet at `10 m` for minimum charge and at
+  `20 m` for maximum charge.
+- Each beam's width is `90%` of the width of its corresponding authored eye.
+- The two beams are distinct damage sources. At maximum charge, a target hit
+  by both receives `40 HP` total damage.
+- Each beam stops at its first collision with a `CollisionRegion`, such as a
+  prop collision region, or a Character `HurtRegion`. Eye beams do not
+  penetrate their first collision.
+- The maximum two-beam damage is intentionally strong relative to the fully
+  charged HammerStrike. The Hammerer requires `5.0 s` to reach the same
+  `40 HP` output, but compensates with area coverage and possible STUNNED
+  effects from the Hammer's side Components.
 
 ## Shared UI and progression direction
 
