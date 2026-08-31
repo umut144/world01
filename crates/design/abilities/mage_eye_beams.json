@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "name_key": "MageEyeBeams",
+  "minimum_charge_seconds": 1.0,
+  "maximum_charge_seconds": 2.0,
+  "forced_release_seconds": 4.0,
+  "cooldown_seconds": 2.0,
+  "projectile_speed_meters_per_second": 10.0,
+  "gaze_lock_seconds_per_charge_second": 0.1,
+  "range_meters_per_charge_second": 10.0,
+  "damage_per_charge_second": 10.0,
+  "eye_width_ratio": 0.9
+}

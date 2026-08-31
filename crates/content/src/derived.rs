@@ -5,7 +5,9 @@ use std::{
 };
 
 use bevy::prelude::{Resource, Vec2};
-use world01_world_data::{CharacterId, ComponentMassAssignment, DensityClass, MassModelDefinition};
+use world01_world_data::{
+    CharacterId, ComponentMassAssignment, DensityClass, MassModelDefinition, Position, WorldMap,
+};
 
 use crate::manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeComponent, RuntimeContent,
@@ -115,6 +117,83 @@ impl fmt::Display for CharacterHurtGeometryError {
 }
 
 impl Error for CharacterHurtGeometryError {}
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct MageEyeGeometry {
+    pub authored_facing: AuthoredFacing,
+    pub left: EyeBeamEmitterGeometry,
+    pub right: EyeBeamEmitterGeometry,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EyeBeamEmitterGeometry {
+    pub offset: Vec2,
+    pub width: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MageEyeGeometryError(String);
+
+impl fmt::Display for MageEyeGeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Error for MageEyeGeometryError {}
+
+impl MageEyeGeometry {
+    pub fn from_content(content: &RuntimeContent) -> Result<Self, MageEyeGeometryError> {
+        let mage = content
+            .character(&CharacterId("mage".into()))
+            .ok_or_else(|| MageEyeGeometryError("content is missing Mage".into()))?;
+        Ok(Self {
+            authored_facing: mage.presentation.authored_facing,
+            left: eye_beam_emitter(mage, "eye_left")?,
+            right: eye_beam_emitter(mage, "eye_right")?,
+        })
+    }
+}
+
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct WorldCollisionGeometryCatalog {
+    pub regions: Vec<PlacedCollisionGeometry>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlacedCollisionGeometry {
+    pub instance_id: String,
+    pub position: Position,
+    pub component: RuntimeComponentGeometry,
+}
+
+impl WorldCollisionGeometryCatalog {
+    pub fn from_content_and_map(content: &RuntimeContent, map: &WorldMap) -> Self {
+        let regions = map
+            .placements()
+            .iter()
+            .chain(map.transitions())
+            .flat_map(|placement| {
+                content
+                    .prop(&placement.asset_key)
+                    .or_else(|| content.terrain(&placement.asset_key))
+                    .into_iter()
+                    .flat_map(move |manifest| {
+                        manifest
+                            .regions
+                            .iter()
+                            .filter(|region| region.role == "collision")
+                            .map(move |region| PlacedCollisionGeometry {
+                                instance_id: placement.instance_id.clone(),
+                                position: placement.position,
+                                component: region_geometry(region),
+                            })
+                    })
+            })
+            .collect();
+        Self { regions }
+    }
+}
 
 impl CharacterHealthCatalog {
     pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHealthError> {
@@ -473,6 +552,45 @@ fn character_component_geometry(
             .collect(),
         indices: mesh.indices.clone(),
     })
+}
+
+fn eye_beam_emitter(
+    manifest: &RuntimeManifest,
+    name: &str,
+) -> Result<EyeBeamEmitterGeometry, MageEyeGeometryError> {
+    let component = manifest
+        .components
+        .iter()
+        .find(|component| component.name == name)
+        .ok_or_else(|| MageEyeGeometryError(format!("Mage is missing {name}")))?;
+    let region = component
+        .closed_region_mesh
+        .as_ref()
+        .ok_or_else(|| MageEyeGeometryError(format!("Mage {name} has no closed eye region")))?;
+    let transform = component_world_transform(component, &manifest.components, &mut HashSet::new())
+        .map_err(|error| MageEyeGeometryError(error.to_string()))?;
+    let pivot = Vec2::from_array(manifest.asset_pivot);
+    let vertices = region
+        .vertices
+        .iter()
+        .map(|vertex| transform_point(transform, *vertex) - pivot)
+        .collect::<Vec<_>>();
+    let minimum = vertices
+        .iter()
+        .copied()
+        .fold(Vec2::splat(f32::INFINITY), Vec2::min);
+    let maximum = vertices
+        .iter()
+        .copied()
+        .fold(Vec2::splat(f32::NEG_INFINITY), Vec2::max);
+    let width = maximum.x - minimum.x;
+    let offset = (minimum + maximum) * 0.5;
+    if vertices.is_empty() || !offset.is_finite() || !width.is_finite() || width <= 0.0 {
+        return Err(MageEyeGeometryError(format!(
+            "Mage {name} does not define a valid eye span"
+        )));
+    }
+    Ok(EyeBeamEmitterGeometry { offset, width })
 }
 
 fn region_geometry(region: &RuntimeRegion) -> RuntimeComponentGeometry {

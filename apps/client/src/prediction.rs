@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use world01_network::{apply_tick_player_input, client_input_timeline_synced};
-use world01_simulation::{SimulationSet, add_simulation_step, update_character_life};
+use world01_simulation::{
+    SimulationSet, add_simulation_step, expire_mage_beams, finish_mage_cooldowns,
+    update_character_life,
+};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum PredictionSet {
@@ -24,7 +27,13 @@ impl Plugin for ClientPredictionPlugin {
         );
         app.add_systems(
             FixedUpdate,
-            update_character_life.after(SimulationSet::GameplayStep),
+            (
+                expire_mage_beams,
+                finish_mage_cooldowns,
+                update_character_life,
+            )
+                .chain()
+                .after(SimulationSet::GameplayStep),
         );
     }
 }

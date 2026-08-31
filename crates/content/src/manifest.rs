@@ -337,7 +337,10 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if !matches!(manifest.schema_version, 14 | RUNTIME_MANIFEST_SCHEMA_VERSION) {
+    if !matches!(
+        manifest.schema_version,
+        14 | RUNTIME_MANIFEST_SCHEMA_VERSION
+    ) {
         return Err(ContentError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -368,8 +371,10 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if !matches!(manifest.schema_version, 14 | RUNTIME_MANIFEST_SCHEMA_VERSION)
-        || manifest.asset_key != HAMMER_ASSET_KEY
+    if !matches!(
+        manifest.schema_version,
+        14 | RUNTIME_MANIFEST_SCHEMA_VERSION
+    ) || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
         return Err(ContentError::new(

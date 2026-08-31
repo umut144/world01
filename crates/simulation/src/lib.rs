@@ -14,6 +14,10 @@ pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, HammerStrikeConfigError, HammerStrikeRules,
     advance_hammer_attacks, apply_hammer_strike_damage, constrain_embedded_hammer_reach,
 };
+pub use combat::mage::{
+    MageAttackConfigError, MageAttackRules, advance_mage_attacks, apply_mage_beam_damage,
+    expire_mage_beams, finish_mage_cooldowns, visible_beam_segment,
+};
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
 pub use locomotion::{LocomotionConfigError, LocomotionRules, update_locomotion};
 pub use mass::{CharacterMassCatalog, MassModelError};

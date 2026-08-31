@@ -4,11 +4,15 @@ use bevy::log::{Level, LogPlugin};
 use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use world01_configs::load_embedded;
-use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry, RuntimeContent};
+use world01_content::{
+    CharacterHurtGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
+    WorldCollisionGeometryCatalog,
+};
 use world01_design::load_embedded as load_game_design;
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
-    CharacterLifeRules, HammerAttackRules, LocomotionRules, MovementStep, WeaponAimRules,
+    CharacterLifeRules, HammerAttackRules, LocomotionRules, MageAttackRules, MovementStep,
+    WeaponAimRules,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -24,6 +28,7 @@ mod controller;
 mod eyes;
 mod hammer;
 mod input;
+mod mage;
 mod polytools;
 mod pose;
 mod prediction;
@@ -52,6 +57,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let hammer_geometry =
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
+    let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
+    let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
     let character_assets = CharacterAssetLibrary::from_content(
         content,
         config.eyes.pupil_area_ratio,
@@ -70,6 +77,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let weapon_aim_rules = WeaponAimRules::from_design(&config)?;
     let hammer_attack_rules =
         HammerAttackRules::from_design(config.simulation.ticks_per_second, &game_design.hammer)?;
+    let mage_attack_rules = MageAttackRules::from_design(
+        config.simulation.ticks_per_second,
+        &game_design.mage_eye_beams,
+    )?;
     let hammer_presentation_rules = HammerPresentationRules::from_design(
         &game_design.hammer,
         config.simulation.ticks_per_second,
@@ -125,9 +136,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(character_life_rules);
     app.insert_resource(weapon_aim_rules);
     app.insert_resource(hammer_attack_rules);
+    app.insert_resource(mage_attack_rules);
     app.insert_resource(hammer_presentation_rules);
     app.insert_resource(hammer_geometry);
     app.insert_resource(hurt_geometry);
+    app.insert_resource(mage_eye_geometry);
+    app.insert_resource(world_collision);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);

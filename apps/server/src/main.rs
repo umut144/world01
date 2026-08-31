@@ -9,7 +9,7 @@ use bevy::{
 use world01_configs::load_embedded;
 use world01_content::{
     CharacterHealthCatalog, CharacterHurtGeometryCatalog, CharacterMassGeometryCatalog,
-    HammerCombatGeometry, RuntimeContent,
+    HammerCombatGeometry, MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
 };
 use world01_design::load_embedded as load_game_design;
 use world01_network::{
@@ -17,8 +17,9 @@ use world01_network::{
 };
 use world01_simulation::{
     CharacterLifeRules, CharacterMassCatalog, HammerAttackRules, HammerStrikeRules,
-    LocomotionRules, MovementStep, SimulationSet, WeaponAimRules, add_simulation_step,
-    apply_hammer_strike_damage, update_character_life,
+    LocomotionRules, MageAttackRules, MovementStep, SimulationSet, WeaponAimRules,
+    add_simulation_step, apply_hammer_strike_damage, apply_mage_beam_damage, expire_mage_beams,
+    finish_mage_cooldowns, update_character_life,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -57,9 +58,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         &game_design.hammer,
         &game_design.hammer_strike,
     )?;
+    let mage_attack_rules = MageAttackRules::from_design(
+        config.simulation.ticks_per_second,
+        &game_design.mage_eye_beams,
+    )?;
     let hammer_geometry =
         HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
+    let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
+    let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
     let character_health = CharacterHealthCatalog::from_content(&content)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
     let character_mass = CharacterMassCatalog::from_geometry(&config, &mass_geometry)?;
@@ -87,8 +94,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(weapon_aim_rules)
     .insert_resource(hammer_attack_rules)
     .insert_resource(hammer_strike_rules)
+    .insert_resource(mage_attack_rules)
     .insert_resource(hammer_geometry)
     .insert_resource(hurt_geometry)
+    .insert_resource(mage_eye_geometry)
+    .insert_resource(world_collision)
     .insert_resource(character_health)
     .insert_resource(character_mass)
     .insert_resource(world_map)
@@ -100,7 +110,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
     app.add_systems(
         FixedUpdate,
-        (apply_hammer_strike_damage, update_character_life)
+        (
+            apply_hammer_strike_damage,
+            apply_mage_beam_damage,
+            expire_mage_beams,
+            finish_mage_cooldowns,
+            update_character_life,
+        )
             .chain()
             .after(SimulationSet::GameplayStep),
     );

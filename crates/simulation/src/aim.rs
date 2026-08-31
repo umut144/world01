@@ -3,8 +3,8 @@ use std::{collections::HashMap, error::Error, f32::consts::PI, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use world01_configs::DesignConfig;
 use world01_world_data::{
-    CharacterLifeState, GazeDirection, GazeIntent, SelectedCharacter, WeaponAimState,
-    WeaponTurnDirection,
+    CharacterLifeState, GazeDirection, GazeIntent, MageAttackPhase, MageAttackState,
+    SelectedCharacter, WeaponAimState, WeaponTurnDirection,
 };
 
 const OPPOSITE_ANGLE_EPSILON: f32 = 0.000_01;
@@ -59,10 +59,20 @@ impl fmt::Display for WeaponAimConfigError {
 impl Error for WeaponAimConfigError {}
 
 pub fn update_gaze_direction(
-    mut players: Query<(&GazeIntent, &mut GazeDirection, Option<&CharacterLifeState>)>,
+    mut players: Query<(
+        &GazeIntent,
+        &mut GazeDirection,
+        Option<&CharacterLifeState>,
+        Option<&MageAttackState>,
+    )>,
 ) {
-    for (intent, mut gaze, life) in &mut players {
-        if life.is_some_and(|life| !life.is_alive()) {
+    for (intent, mut gaze, life, mage_attack) in &mut players {
+        if life.is_some_and(|life| !life.is_alive())
+            || mage_attack.is_some_and(|attack| {
+                attack.phase == MageAttackPhase::Cooldown
+                    && attack.phase_ticks < attack.gaze_lock_ticks
+            })
+        {
             continue;
         }
         let direction = Vec2::new(intent.x, intent.y);

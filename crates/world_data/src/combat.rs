@@ -51,6 +51,64 @@ impl HammerAttackState {
     };
 }
 
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub enum MageAttackPhase {
+    #[default]
+    Idle,
+    Charging,
+    Cooldown,
+    WaitingForRelease,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct EyeBeamState {
+    pub origin: Position,
+    pub direction: GazeDirection,
+    pub width: f32,
+    pub active: bool,
+}
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct MageAttackState {
+    pub phase: MageAttackPhase,
+    pub phase_ticks: u32,
+    pub charge_ticks: u32,
+    pub gaze_lock_ticks: u32,
+    pub release_required: bool,
+    pub range_meters: f32,
+    pub projectile_length_meters: f32,
+    pub damage_per_beam: f32,
+    pub left_beam: EyeBeamState,
+    pub right_beam: EyeBeamState,
+}
+
+impl MageAttackState {
+    pub const IDLE: Self = Self {
+        phase: MageAttackPhase::Idle,
+        phase_ticks: 0,
+        charge_ticks: 0,
+        gaze_lock_ticks: 0,
+        release_required: false,
+        range_meters: 0.0,
+        projectile_length_meters: 0.0,
+        damage_per_beam: 0.0,
+        left_beam: EyeBeamState {
+            origin: Position::ZERO,
+            direction: GazeDirection::ZERO,
+            width: 0.0,
+            active: false,
+        },
+        right_beam: EyeBeamState {
+            origin: Position::ZERO,
+            direction: GazeDirection::ZERO,
+            width: 0.0,
+            active: false,
+        },
+    };
+}
+
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct GazeDirection {
     pub x: f32,

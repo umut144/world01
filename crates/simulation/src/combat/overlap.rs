@@ -9,6 +9,21 @@ pub(crate) struct GeometryTransform {
     pub axis_y: Vec2,
 }
 
+impl GeometryTransform {
+    pub const IDENTITY: Self = Self {
+        origin: Vec2::ZERO,
+        axis_x: Vec2::X,
+        axis_y: Vec2::Y,
+    };
+
+    pub fn translated(position: Position) -> Self {
+        Self {
+            origin: Vec2::new(position.x, position.y),
+            ..Self::IDENTITY
+        }
+    }
+}
+
 pub(crate) fn hurt_transform(
     geometry: &CharacterHurtGeometry,
     position: Position,
@@ -76,6 +91,20 @@ fn triangle_points(
 
 fn transform_point(transform: GeometryTransform, point: Vec2) -> Vec2 {
     transform.origin + transform.axis_x * point.x + transform.axis_y * point.y
+}
+
+pub(crate) fn component_projection_minimum(
+    component: &RuntimeComponentGeometry,
+    transform: GeometryTransform,
+    origin: Vec2,
+    direction: Vec2,
+) -> f32 {
+    component
+        .vertices
+        .iter()
+        .map(|point| (transform_point(transform, *point) - origin).dot(direction))
+        .fold(f32::INFINITY, f32::min)
+        .max(0.0)
 }
 
 pub(crate) fn triangles_overlap(first: [Vec2; 3], second: [Vec2; 3]) -> bool {

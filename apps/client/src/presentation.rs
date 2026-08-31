@@ -24,6 +24,7 @@ use crate::input::{
     collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
     collect_movement_input, update_client_input_focus,
 };
+use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
     CharacterAssetLibrary, bevy_pupil_mesh, repeated_flat_asset_mesh, spawn_ankh_projected_visual,
     spawn_character_visual, spawn_projected_prop_visual,
@@ -125,6 +126,8 @@ impl Plugin for ClientPresentationPlugin {
                     update_health_bars,
                     follow_local_character,
                     apply_eye_gaze,
+                    apply_mage_eye_charge,
+                    sync_mage_beam_visuals,
                     apply_character_status_presentation,
                     apply_hammer_pose,
                 )

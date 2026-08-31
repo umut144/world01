@@ -1,6 +1,6 @@
 # World 01 Multiplayer Sandbox — Technical Specification
 
-Last updated: 2026-08-30
+Last updated: 2026-08-31
 
 ## Purpose and interpretation
 
@@ -78,17 +78,21 @@ Labyrinth behavior:
 - `configs` contains movement, weapon aim, Hammer attack, room, camera, and eye
   values in one design configuration.
 - `content` requires the current character catalog and Hammer package and
-  derives Hammer combat geometry and character HP.
+  derives Hammer combat geometry, Mage eye emitters, Character Hurt geometry,
+  placed world Collision geometry, and character HP.
 - `world_data` is free of Lightyear and asset parsing, but includes
-  `SelectedCharacter`, `CharacterHealth`, weapon aim, and Hammer attack state.
+  `SelectedCharacter`, `CharacterHealth`, weapon aim, Hammer attack state, and
+  Mage eye-beam state.
 - `simulation` contains deterministic general movement alongside gaze, weapon
-  aim, and Hammer rules; its canonical step currently schedules all of them.
+  aim, Hammer rules, and Mage charge/projectile rules; its canonical step
+  currently schedules all of them.
 - `network` has separate client/server transport modules, but its internal
   protocol registration is fixed to the current join request, `PlayerInput`,
-  character state, health, and Hammer state.
+  character state, health, Hammer state, and Mage eye-beam state.
 - `apps/client` and `apps/server` compose a concrete Labyrinth session,
   including character selection, five-player spawning, room presentation,
-  health bars, eyes, and Hammer presentation.
+  health bars, eyes, Hammer presentation, and Mage eye-beam combat and
+  presentation.
 
 These are facts about the starting implementation, not requirements that every
 future multiplayer game must inherit. Several current components embody
@@ -189,6 +193,14 @@ explicitly needs, while visible mesh hierarchy and material policy remain in
 presentation. A future game-owned asset contract must extend this boundary
 rather than parse raw manifests elsewhere. No general asset-contract
 registration API exists yet.
+
+PolyTools schema 15 additionally exposes optional authored Regions with
+`attack`, `hurt`, or `collision` roles. The content boundary validates and
+converts them into typed geometry. Current Character Hurt and Hammer attack
+derivation retains its earlier Component-based fallback when the corresponding
+authored Regions are absent. Placed props participate in Mage projectile
+collision only when they declare a `collision` Region; visible Component
+geometry is not silently treated as collision geometry.
 
 ## Entity and character state
 

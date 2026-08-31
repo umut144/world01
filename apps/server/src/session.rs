@@ -9,9 +9,9 @@ use world01_simulation::{CharacterMassCatalog, LocomotionRules};
 use world01_world_data::{
     Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
     DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner,
-    Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WeaponAimState,
+    HammerAttackState, MageAttackState, MovementDirection, MovementIntent, MovementVelocity,
+    PlayerId, PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState,
+    SelectedCharacter, StaminaState, StatusEffectState, WeaponAimState,
 };
 
 #[derive(Resource, Debug)]
@@ -118,6 +118,8 @@ fn accept_join_requests(
         ));
         if selected.0 == "hammerer" {
             player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));
+        } else if selected.0 == "mage" {
+            player.insert(MageAttackState::IDLE);
         }
         configure_replicated_player(&mut player, request);
     }

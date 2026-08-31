@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 use world01_world_data::{
     AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, CharacterMass,
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerInput,
-    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
-    StaminaState, StatusEffectState, WeaponAimState,
+    HammerAttackState, MageAttackState, MovementDirection, MovementIntent, MovementVelocity,
+    PlayerId, PlayerInput, PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState,
+    SelectedCharacter, StaminaState, StatusEffectState, WeaponAimState,
 };
 
 pub const MAX_CLIENTS: usize = 5;
@@ -100,6 +100,7 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<GazeDirection>().replicate().predict();
     app.component::<WeaponAimState>().replicate().predict();
     app.component::<HammerAttackState>().replicate().predict();
+    app.component::<MageAttackState>().replicate().predict();
     app.component::<CharacterHealth>().replicate().predict();
     app.component::<CharacterLifeState>().replicate().predict();
     app.component::<DeathConfirmationState>()
