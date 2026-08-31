@@ -1,4 +1,6 @@
 {
-  "schema_version": 1,
-  "asset_key": "hammerer"
+  "schema_version": 2,
+  "asset_key": "hammerer",
+  "ability_name_keys": ["HammerStrike"],
+  "equipped_weapon_asset_key": "hammer"
 }

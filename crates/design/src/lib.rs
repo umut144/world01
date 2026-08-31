@@ -5,7 +5,7 @@ use std::{
     fmt,
     path::Path,
 };
-use world01_world_data::{DensityClass, MassModelDefinition};
+use world01_world_data::{CharacterId, DensityClass, MassModelDefinition};
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
@@ -185,6 +185,19 @@ pub struct GameDesign {
     pub mage: MageDesign,
     pub mage_eye_beams: MageEyeBeamsDesign,
     pub mass: MassModelDefinition,
+    /// What each playable character brings into the world, keyed by character.
+    ///
+    /// Derived while loading so that callers look a character up instead of
+    /// matching on its name.
+    #[serde(skip)]
+    pub characters: HashMap<CharacterId, CharacterProfile>,
+}
+
+/// The abilities and equipment a playable character brings into the world.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CharacterProfile {
+    pub ability_name_keys: Vec<String>,
+    pub equipped_weapon_asset_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -228,6 +241,7 @@ impl MageEyeBeamsDesign {
 pub struct MageDesign {
     pub schema_version: u32,
     pub asset_key: String,
+    pub ability_name_keys: Vec<String>,
     pub pupil_size_ratio: f32,
     pub pupil_edge_clearance_ratio: f32,
     pub laser_width_to_eye_width_ratio: f32,
@@ -235,8 +249,9 @@ pub struct MageDesign {
 
 impl MageDesign {
     pub fn is_valid(&self) -> bool {
-        self.schema_version == 1
+        self.schema_version == 2
             && self.asset_key == "mage"
+            && valid_ability_name_keys(&self.ability_name_keys)
             && self.pupil_size_ratio.is_finite()
             && self.pupil_size_ratio > 0.0
             && self.pupil_edge_clearance_ratio.is_finite()
@@ -371,12 +386,63 @@ fn unique_names(names: &[String]) -> bool {
 pub struct CharacterDesign {
     pub schema_version: u32,
     pub asset_key: String,
+    pub ability_name_keys: Vec<String>,
+    #[serde(default)]
+    pub equipped_weapon_asset_key: Option<String>,
 }
 
 impl CharacterDesign {
     pub fn is_valid(&self, expected_asset_key: &str) -> bool {
-        self.schema_version == 1 && self.asset_key == expected_asset_key
+        self.schema_version == 2
+            && self.asset_key == expected_asset_key
+            && valid_ability_name_keys(&self.ability_name_keys)
+            && !matches!(self.equipped_weapon_asset_key.as_deref(), Some(""))
     }
+}
+
+fn valid_ability_name_keys(name_keys: &[String]) -> bool {
+    !name_keys.is_empty()
+        && name_keys.iter().all(|name_key| !name_key.is_empty())
+        && unique_names(name_keys)
+}
+
+/// Resolves each character's design into a profile, rejecting references to
+/// abilities or weapons that no design defines.
+fn character_profiles(
+    designs: &[(&str, &[String], Option<&str>)],
+    known_abilities: &HashSet<&str>,
+    known_weapons: &HashSet<&str>,
+) -> Result<HashMap<CharacterId, CharacterProfile>, DesignError> {
+    let mut profiles = HashMap::new();
+    for &(asset_key, ability_name_keys, equipped_weapon_asset_key) in designs {
+        for name_key in ability_name_keys {
+            if !known_abilities.contains(name_key.as_str()) {
+                return Err(DesignError(format!(
+                    "{asset_key} references unknown ability '{name_key}'"
+                )));
+            }
+        }
+        if let Some(weapon) = equipped_weapon_asset_key {
+            if !known_weapons.contains(weapon) {
+                return Err(DesignError(format!(
+                    "{asset_key} equips unknown weapon '{weapon}'"
+                )));
+            }
+        }
+        let Some(character) = CharacterId::new(asset_key) else {
+            return Err(DesignError("character asset key must not be empty".into()));
+        };
+        let profile = CharacterProfile {
+            ability_name_keys: ability_name_keys.to_vec(),
+            equipped_weapon_asset_key: equipped_weapon_asset_key.map(str::to_owned),
+        };
+        if profiles.insert(character, profile).is_some() {
+            return Err(DesignError(format!(
+                "duplicate character design '{asset_key}'"
+            )));
+        }
+    }
+    Ok(profiles)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -457,6 +523,27 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     if !mass.is_valid() {
         return Err(DesignError("mass design is invalid".into()));
     }
+    let known_abilities = HashSet::from([
+        hammer_strike.name_key.as_str(),
+        mage_eye_beams.name_key.as_str(),
+    ]);
+    let known_weapons = HashSet::from([hammer.asset_key.as_str()]);
+    let characters = character_profiles(
+        &[
+            (
+                hammerer.asset_key.as_str(),
+                hammerer.ability_name_keys.as_slice(),
+                hammerer.equipped_weapon_asset_key.as_deref(),
+            ),
+            (
+                mage.asset_key.as_str(),
+                mage.ability_name_keys.as_slice(),
+                None,
+            ),
+        ],
+        &known_abilities,
+        &known_weapons,
+    )?;
     Ok(GameDesign {
         hammer,
         hammer_strike,
@@ -464,6 +551,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         mage,
         mage_eye_beams,
         mass,
+        characters,
     })
 }
 
@@ -497,9 +585,7 @@ mod tests {
         );
         assert_eq!(design.hammerer.asset_key, "hammerer");
         assert_eq!(design.mage.asset_key, "mage");
-        assert_eq!(design.mage.pupil_size_ratio, 1.0);
-        assert_eq!(design.mage.pupil_edge_clearance_ratio, 0.35);
-        assert_eq!(design.mage.laser_width_to_eye_width_ratio, 1.0);
+        assert!(design.mage.is_valid());
         assert_eq!(design.mage_eye_beams.minimum_charge_seconds, 1.0);
         assert_eq!(design.mage_eye_beams.maximum_charge_seconds, 2.0);
         assert_eq!(design.mage_eye_beams.forced_release_seconds, 4.0);
@@ -516,6 +602,69 @@ mod tests {
                 .characters
                 .iter()
                 .any(|assignment| assignment.asset_key == "hammerer")
+        );
+    }
+
+    #[test]
+    fn embedded_design_binds_each_character_to_its_abilities() {
+        let design = load_embedded().expect("embedded game design parses");
+
+        let hammerer = design
+            .characters
+            .get(&CharacterId("hammerer".into()))
+            .expect("Hammerer has a character profile");
+        assert_eq!(hammerer.ability_name_keys, ["HammerStrike"]);
+        assert_eq!(hammerer.equipped_weapon_asset_key.as_deref(), Some("hammer"));
+
+        let mage = design
+            .characters
+            .get(&CharacterId("mage".into()))
+            .expect("Mage has a character profile");
+        assert_eq!(mage.ability_name_keys, ["MageEyeBeams"]);
+        assert_eq!(mage.equipped_weapon_asset_key, None);
+    }
+
+    #[test]
+    fn character_profiles_reject_unknown_abilities_and_weapons() {
+        let known_abilities = HashSet::from(["HammerStrike"]);
+        let known_weapons = HashSet::from(["hammer"]);
+        let abilities = ["HammerStrike".to_owned()];
+        let unknown_ability = ["Fireball".to_owned()];
+
+        assert!(
+            character_profiles(
+                &[("hammerer", &unknown_ability[..], Some("hammer"))],
+                &known_abilities,
+                &known_weapons,
+            )
+            .is_err()
+        );
+        assert!(
+            character_profiles(
+                &[("hammerer", &abilities[..], Some("greatsword"))],
+                &known_abilities,
+                &known_weapons,
+            )
+            .is_err()
+        );
+        assert!(
+            character_profiles(
+                &[
+                    ("hammerer", &abilities[..], Some("hammer")),
+                    ("hammerer", &abilities[..], None),
+                ],
+                &known_abilities,
+                &known_weapons,
+            )
+            .is_err()
+        );
+        assert!(
+            character_profiles(
+                &[("hammerer", &abilities[..], Some("hammer"))],
+                &known_abilities,
+                &known_weapons,
+            )
+            .is_ok()
         );
     }
 

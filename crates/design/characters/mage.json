@@ -1,6 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "asset_key": "mage",
+  "ability_name_keys": [
+    "MageEyeBeams"
+  ],
   "pupil_size_ratio": 0.9,
   "pupil_edge_clearance_ratio": 0.9,
   "laser_width_to_eye_width_ratio": 0.25

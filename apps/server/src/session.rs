@@ -5,13 +5,13 @@ use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
-use world01_simulation::{CharacterMassCatalog, LocomotionRules};
+use world01_simulation::{CharacterArchetypeCatalog, CharacterMassCatalog, LocomotionRules};
 use world01_world_data::{
     Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashIntent,
     DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    HammerAttackState, MageAttackState, MovementDirection, MovementIntent, MovementVelocity,
-    PlayerId, PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState,
-    SelectedCharacter, StaminaState, StatusEffectState, WeaponAimState,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerId, PlayerOwner, Position,
+    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState,
 };
 
 #[derive(Resource, Debug)]
@@ -49,6 +49,7 @@ fn accept_join_requests(
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
     masses: Res<CharacterMassCatalog>,
+    archetypes: Res<CharacterArchetypeCatalog>,
     locomotion: Res<LocomotionRules>,
     mut commands: Commands,
 ) {
@@ -116,11 +117,7 @@ fn accept_join_requests(
                 mass,
             ),
         ));
-        if selected.0 == "hammerer" {
-            player.insert((WeaponAimState::RIGHT, HammerAttackState::IDLE));
-        } else if selected.0 == "mage" {
-            player.insert(MageAttackState::IDLE);
-        }
+        archetypes.insert_ability_state(&selected, &mut player);
         configure_replicated_player(&mut player, request);
     }
 }
