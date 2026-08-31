@@ -92,13 +92,14 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 
   `./scripts/check.sh`
 
-- The wrapper checks the headless server and graphical client separately, uses quiet Cargo output, and enables dynamic linking only for the client development check.
+- The wrapper verifies `rustfmt`, checks the headless server and graphical client separately, uses quiet Cargo output, and enables dynamic linking only for the client development check.
 - The workspace `dev` profile is the single source of truth for development compilation settings. It disables incremental compilation to keep `target/debug/incremental` empty while retaining normal dependency artifacts for warm checks.
 - Use the wrapper or its exact package/feature combinations for routine development. In particular, client development checks use `--features dev`; do not create an additional debug client variant without that feature.
 - Silent output means success; do not rerun with verbose output when the wrapper succeeds.
 - If the check fails, use the existing error output first. Run more verbose or targeted commands only when needed to diagnose the failure.
 - Run relevant targeted tests when behavior covered by tests was changed.
 - Do not automatically run the complete test suite unless the change scope justifies it.
+- `./scripts/check.sh --tests` additionally runs the library crates' test suites. Use it before and after a refactor that touches simulation, content, or protocol behaviour; the default path stays test-free so routine edits do not build test binaries.
 - Never run `cargo build`, `cargo run`, release builds, benchmarks, or graphical/manual tests unless explicitly requested.
 - Use dynamic linking for development validation only, never as a release requirement.
 
