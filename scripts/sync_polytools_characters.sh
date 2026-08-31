@@ -5,7 +5,6 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_world_dir="${POLYTOOLS_WORLD_DIR:-$project_root/../../GodotProjects/PolyTools/worlds/world01}"
 source_catalog="$source_world_dir/catalog.json"
 assets_dir="$project_root/assets"
-required_schema=14
 
 success_color=''
 success_reset=''
@@ -126,10 +125,11 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
   if ! jq -e \
     --arg key "$asset_key" \
     --arg type "$asset_type" \
-    --argjson schema "$required_schema" '
-      .schema_version == $schema
+    '
+      (.schema_version == 14 or .schema_version == 15)
       and .asset_key == $key
       and .asset_type == $type
+      and (if .schema_version == 15 then (.regions | type == "array") else true end)
       and (.asset_pivot | type == "array" and length == 2 and all(.[]; type == "number" and isfinite))
       and (.components | type == "array" and length > 0)
       and (.components | all(.[];

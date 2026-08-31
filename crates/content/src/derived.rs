@@ -9,7 +9,7 @@ use world01_world_data::{CharacterId, ComponentMassAssignment, DensityClass, Mas
 
 use crate::manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeComponent, RuntimeContent,
-    RuntimeManifest, RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
+    RuntimeManifest, RuntimeRegion, RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
     WEAPON_REACH_LIMIT_ROLE, WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE, attachment_frame,
 };
 
@@ -69,10 +69,20 @@ impl CharacterHurtGeometryCatalog {
     pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHurtGeometryError> {
         let mut geometries = HashMap::new();
         for (character_id, manifest) in content.characters() {
-            let components = ["body", "head"]
-                .into_iter()
-                .map(|name| character_component_geometry(manifest, name))
-                .collect::<Result<Vec<_>, _>>()?;
+            let authored_regions = manifest
+                .regions
+                .iter()
+                .filter(|region| region.role == "hurt")
+                .map(region_geometry)
+                .collect::<Vec<_>>();
+            let components = if authored_regions.is_empty() {
+                ["body", "head"]
+                    .into_iter()
+                    .map(|name| character_component_geometry(manifest, name))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                authored_regions
+            };
             geometries.insert(
                 character_id.clone(),
                 CharacterHurtGeometry {
@@ -291,10 +301,20 @@ impl HammerCombatGeometry {
         let secondary_grip = unique_frame(hammer, WEAPON_SECONDARY_GRIP_ROLE)?;
         let attack_point = unique_frame(hammer, WEAPON_ATTACK_POINT_ROLE)?;
         let reach_limit = unique_frame(hammer, WEAPON_REACH_LIMIT_ROLE)?;
-        let attack_components = attack_component_names
+        let authored_regions = hammer
+            .regions
             .iter()
-            .map(|name| component_geometry(hammer, name))
-            .collect::<Result<Vec<_>, _>>()?;
+            .filter(|region| region.role == "attack")
+            .map(region_geometry)
+            .collect::<Vec<_>>();
+        let attack_components = if authored_regions.is_empty() {
+            attack_component_names
+                .iter()
+                .map(|name| component_geometry(hammer, name))
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
+            authored_regions
+        };
         let geometry = Self {
             socket_offset: socket - hammerer_pivot,
             primary_grip,
@@ -453,6 +473,19 @@ fn character_component_geometry(
             .collect(),
         indices: mesh.indices.clone(),
     })
+}
+
+fn region_geometry(region: &RuntimeRegion) -> RuntimeComponentGeometry {
+    RuntimeComponentGeometry {
+        component_id: region.region_id.clone(),
+        name: region.name.clone(),
+        vertices: region
+            .vertices
+            .iter()
+            .map(|vertex| Vec2::from_array(*vertex))
+            .collect(),
+        indices: region.indices.clone(),
+    }
 }
 
 fn transformed_mesh_area(

@@ -14,7 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 14;
+const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 15;
 
 #[derive(Resource, Clone)]
 pub struct RuntimeContent {
@@ -180,6 +180,8 @@ pub struct RuntimeManifest {
     pub components: Vec<RuntimeComponent>,
     #[serde(default)]
     pub attachment_frames: Vec<RuntimeAttachmentFrame>,
+    #[serde(default)]
+    pub regions: Vec<RuntimeRegion>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -262,6 +264,15 @@ pub struct RuntimeRegionMesh {
 }
 
 #[derive(Clone, Deserialize)]
+pub struct RuntimeRegion {
+    pub region_id: String,
+    pub name: String,
+    pub role: String,
+    pub vertices: Vec<[f32; 2]>,
+    pub indices: Vec<u32>,
+}
+
+#[derive(Clone, Deserialize)]
 pub struct RuntimeStrokeMesh {
     pub has_outline: bool,
     pub stroke_width_meters: f32,
@@ -326,7 +337,7 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
+    if !matches!(manifest.schema_version, 14 | RUNTIME_MANIFEST_SCHEMA_VERSION) {
         return Err(ContentError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -357,12 +368,12 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION
+    if !matches!(manifest.schema_version, 14 | RUNTIME_MANIFEST_SCHEMA_VERSION)
         || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
         return Err(ContentError::new(
-            "Hammer must be a schema-14 weapons manifest",
+            "Hammer must be a schema-14 or schema-15 weapons manifest",
         ));
     }
     validate_asset_contents(manifest)?;
@@ -418,6 +429,37 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
     {
         return Err(ContentError::new(format!(
             "{} has duplicate component identities",
+            manifest.asset_key
+        )));
+    }
+
+    let region_ids = manifest
+        .regions
+        .iter()
+        .map(|region| region.region_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let region_names = manifest
+        .regions
+        .iter()
+        .map(|region| region.name.as_str())
+        .collect::<BTreeSet<_>>();
+    if region_ids.len() != manifest.regions.len()
+        || region_names.len() != manifest.regions.len()
+        || manifest.regions.iter().any(|region| {
+            region.region_id.is_empty()
+                || region.name.is_empty()
+                || !matches!(region.role.as_str(), "attack" | "hurt" | "collision")
+                || region.vertices.iter().any(|vertex| !finite_pair(*vertex))
+                || region.indices.is_empty()
+                || region.indices.len() % 3 != 0
+                || region
+                    .indices
+                    .iter()
+                    .any(|index| *index as usize >= region.vertices.len())
+        })
+    {
+        return Err(ContentError::new(format!(
+            "{} has invalid authored Regions",
             manifest.asset_key
         )));
     }
