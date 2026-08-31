@@ -574,7 +574,7 @@ World-01 baseline uses one deliberately simple linear model:
   Mage character design exposes `pupil_size_ratio` (`2.0` current baseline)
   as a radius multiplier for Mage's generated pupils only; it does not change
   eye geometry, beam origins, or laser width. The laser-specific
-  `eye_width_ratio` remains `0.9`.
+  `laser_width_to_eye_width_ratio` is currently `0.1`.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a

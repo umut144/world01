@@ -2,5 +2,5 @@
   "schema_version": 1,
   "asset_key": "mage",
   "pupil_size_ratio": 2.0,
-  "eye_width_ratio": 0.9
+  "laser_width_to_eye_width_ratio": 0.1
 }

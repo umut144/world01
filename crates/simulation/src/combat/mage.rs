@@ -27,7 +27,7 @@ pub struct MageAttackRules {
     projectile_length_per_charge_tick: f32,
     range_per_charge_tick: f32,
     damage_per_charge_tick: f32,
-    eye_width_ratio: f32,
+    laser_width_to_eye_width_ratio: f32,
 }
 
 impl MageAttackRules {
@@ -55,7 +55,7 @@ impl MageAttackRules {
                 / ticks_per_second as f32,
             damage_per_charge_tick: attack_design.damage_per_charge_second
                 / ticks_per_second as f32,
-            eye_width_ratio: mage_design.eye_width_ratio,
+            laser_width_to_eye_width_ratio: mage_design.laser_width_to_eye_width_ratio,
         })
     }
 
@@ -222,7 +222,7 @@ fn fire(
     let beam = |emitter: world01_content::EyeBeamEmitterGeometry, origin: Vec2| EyeBeamState {
         origin: Position::new(origin.x, origin.y),
         direction: GazeDirection::new(gaze.x, gaze.y),
-        width: emitter.width * rules.eye_width_ratio,
+        width: emitter.width * rules.laser_width_to_eye_width_ratio,
         active: true,
     };
     *state = MageAttackState {
@@ -537,10 +537,10 @@ mod tests {
     }
 
     #[test]
-    fn eye_width_ratio_scales_the_authored_beam_widths() {
+    fn laser_width_to_eye_width_ratio_scales_the_authored_beam_widths() {
         let config = load_embedded().expect("embedded config parses");
         let mut design = load_design().expect("embedded design parses");
-        design.mage.eye_width_ratio = 0.8;
+        design.mage.laser_width_to_eye_width_ratio = 0.8;
         let rules = MageAttackRules::from_design(
             config.simulation.ticks_per_second,
             &design.mage,

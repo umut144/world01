@@ -229,7 +229,7 @@ pub struct MageDesign {
     pub schema_version: u32,
     pub asset_key: String,
     pub pupil_size_ratio: f32,
-    pub eye_width_ratio: f32,
+    pub laser_width_to_eye_width_ratio: f32,
 }
 
 impl MageDesign {
@@ -238,9 +238,9 @@ impl MageDesign {
             && self.asset_key == "mage"
             && self.pupil_size_ratio.is_finite()
             && self.pupil_size_ratio > 0.0
-            && self.eye_width_ratio.is_finite()
-            && self.eye_width_ratio > 0.0
-            && self.eye_width_ratio <= 1.0
+            && self.laser_width_to_eye_width_ratio.is_finite()
+            && self.laser_width_to_eye_width_ratio > 0.0
+            && self.laser_width_to_eye_width_ratio <= 1.0
     }
 }
 
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(design.hammerer.asset_key, "hammerer");
         assert_eq!(design.mage.asset_key, "mage");
         assert_eq!(design.mage.pupil_size_ratio, 2.0);
-        assert_eq!(design.mage.eye_width_ratio, 0.9);
+        assert_eq!(design.mage.laser_width_to_eye_width_ratio, 0.1);
         assert_eq!(design.mage_eye_beams.minimum_charge_seconds, 1.0);
         assert_eq!(design.mage_eye_beams.maximum_charge_seconds, 2.0);
         assert_eq!(design.mage_eye_beams.forced_release_seconds, 4.0);
