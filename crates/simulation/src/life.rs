@@ -460,10 +460,7 @@ fn bodies_overlap(
     ) else {
         return false;
     };
-    let Some(reviver) = actors
-        .iter()
-        .find(|actor| actor.entity == reviver_entity)
-    else {
+    let Some(reviver) = actors.iter().find(|actor| actor.entity == reviver_entity) else {
         return false;
     };
     let (Some(reviver_character), Some(reviver_position), Some(reviver_facing)) =

@@ -1,13 +1,15 @@
 use std::{collections::HashSet, error::Error, fmt};
 
-use bevy::prelude::{Entity, Query, Res, Resource, Vec2};
+use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
 use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry};
 use world01_design::{HammerDesign, HammerStrikeDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashState, GazeDirection,
+    AttackIntent, BodyFacing, CharacterLifeState, DashState, GazeDirection,
     HammerAttackPhase, HammerAttackState, Position, SelectedCharacter, StatusEffectState,
     WeaponAimState,
 };
+
+use crate::damage::{DamageDealt, DamageSource};
 
 #[cfg(test)]
 use super::overlap::triangles_overlap;
@@ -187,8 +189,9 @@ pub fn apply_hammer_strike_damage(
     rules: Res<HammerStrikeRules>,
     hammer_geometry: Res<HammerCombatGeometry>,
     hurt_geometry: Res<CharacterHurtGeometryCatalog>,
+    mut damage: MessageWriter<DamageDealt>,
     mut players: bevy::ecs::system::ParamSet<(
-        Query<&HammerAttackState>,
+        Query<(Entity, &HammerAttackState)>,
         Query<(
             Entity,
             &SelectedCharacter,
@@ -197,7 +200,6 @@ pub fn apply_hammer_strike_damage(
             &DashState,
             Option<&CharacterLifeState>,
             Option<&mut HammerAttackState>,
-            &mut CharacterHealth,
             &mut StatusEffectState,
         )>,
     )>,
@@ -206,8 +208,10 @@ pub fn apply_hammer_strike_damage(
         let attackers = players.p0();
         attackers
             .iter()
-            .filter(|attack| attack.phase == HammerAttackPhase::Embedded && attack.phase_ticks == 0)
-            .copied()
+            .filter(|(_, attack)| {
+                attack.phase == HammerAttackPhase::Embedded && attack.phase_ticks == 0
+            })
+            .map(|(entity, attack)| (entity, *attack))
             .collect::<Vec<_>>()
     };
 
@@ -216,7 +220,7 @@ pub fn apply_hammer_strike_damage(
     }
 
     let mut targets = players.p1();
-    for attack in impacts {
+    for (attacker, attack) in impacts {
         let Some(attack_direction) = valid_direction(attack.direction) else {
             continue;
         };
@@ -227,7 +231,7 @@ pub fn apply_hammer_strike_damage(
         ) else {
             continue;
         };
-        for (_, character, position, facing, dash, life, attack_state, mut health, mut status) in
+        for (target, character, position, facing, dash, life, attack_state, mut status) in
             &mut targets
         {
             if dash.invulnerable || life.is_some_and(|life| !life.is_alive()) {
@@ -256,8 +260,11 @@ pub fn apply_hammer_strike_damage(
             if !hit {
                 continue;
             }
-            health.current =
-                (health.current - rules.damage_for_charge(attack.charge_ticks)).max(0.0);
+            damage.write(DamageDealt {
+                target,
+                source: DamageSource::Actor(attacker),
+                amount: rules.damage_for_charge(attack.charge_ticks),
+            });
             if stunned {
                 status.stunned_ticks = status.stunned_ticks.max(rules.stunned_duration_ticks());
                 if let Some(mut attack_state) = attack_state {

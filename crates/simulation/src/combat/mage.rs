@@ -1,16 +1,20 @@
 use std::{error::Error, fmt};
 
-use bevy::prelude::{Entity, Query, Res, Resource, Vec2};
+use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
 use world01_content::{
     AuthoredFacing, CharacterHurtGeometryCatalog, MageEyeGeometry, RuntimeComponentGeometry,
     WorldCollisionGeometryCatalog,
 };
 use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState, DashState, EyeBeamState,
+    AttackIntent, BodyFacing, CharacterLifeState, DashState, EyeBeamState,
     GazeDirection, MageAttackPhase, MageAttackState, Position, SelectedCharacter,
     StatusEffectState,
 };
+
+#[cfg(test)]
+use crate::damage::apply_damage;
+use crate::damage::{DamageDealt, DamageSource};
 
 use super::overlap::{
     GeometryTransform, component_projection_minimum, components_overlap, hurt_transform,
@@ -241,6 +245,7 @@ pub fn apply_mage_beam_damage(
     rules: Res<MageAttackRules>,
     hurt_geometry: Res<CharacterHurtGeometryCatalog>,
     world_collision: Res<WorldCollisionGeometryCatalog>,
+    mut damage: MessageWriter<DamageDealt>,
     mut players: bevy::ecs::system::ParamSet<(
         Query<(Entity, &MageAttackState)>,
         Query<(
@@ -250,7 +255,6 @@ pub fn apply_mage_beam_damage(
             &BodyFacing,
             &DashState,
             Option<&CharacterLifeState>,
-            &mut CharacterHealth,
         )>,
         Query<&mut MageAttackState>,
     )>,
@@ -303,7 +307,7 @@ pub fn apply_mage_beam_damage(
 
             {
                 let mut targets = players.p1();
-                for (entity, character, position, facing, dash, life, _) in &mut targets {
+                for (entity, character, position, facing, dash, life) in &mut targets {
                     if entity == owner
                         || dash.invulnerable
                         || life.is_some_and(|life| !life.is_alive())
@@ -333,10 +337,12 @@ pub fn apply_mage_beam_damage(
                 }
             }
 
-            if let Some(entity) = hit_target
-                && let Ok((_, _, _, _, _, _, mut health)) = players.p1().get_mut(entity)
-            {
-                health.current = (health.current - volley.damage_per_beam).max(0.0);
+            if let Some(target) = hit_target {
+                damage.write(DamageDealt {
+                    target,
+                    source: DamageSource::Actor(owner),
+                    amount: volley.damage_per_beam,
+                });
             }
             if blocked || hit_target.is_some() || reached_range {
                 if let Ok(mut state) = players.p2().get_mut(owner) {
@@ -436,7 +442,7 @@ mod tests {
         CharacterHurtGeometryCatalog, MageEyeGeometry, PlacedCollisionGeometry, RuntimeContent,
     };
     use world01_design::load_embedded as load_design;
-    use world01_world_data::{CharacterId, StatusEffectState};
+    use world01_world_data::{CharacterHealth, CharacterId, StatusEffectState};
 
     fn rules() -> MageAttackRules {
         let config = load_embedded().expect("embedded config parses");
@@ -689,7 +695,8 @@ mod tests {
                     .expect("embedded hurt geometry is valid"),
             )
             .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
-            .add_systems(Update, apply_mage_beam_damage);
+            .add_message::<DamageDealt>()
+            .add_systems(Update, (apply_mage_beam_damage, apply_damage).chain());
         let owner = app
             .world_mut()
             .spawn((SelectedCharacter(CharacterId("mage".into())), volley))
@@ -759,7 +766,8 @@ mod tests {
                     component: blocker,
                 }],
             })
-            .add_systems(Update, apply_mage_beam_damage);
+            .add_message::<DamageDealt>()
+            .add_systems(Update, (apply_mage_beam_damage, apply_damage).chain());
         app.world_mut()
             .spawn((SelectedCharacter(CharacterId("mage".into())), volley));
         let target = app

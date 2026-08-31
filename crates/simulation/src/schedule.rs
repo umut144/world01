@@ -1,9 +1,9 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::{
-    advance_hammer_attacks, advance_mage_attacks, apply_hammer_strike_damage,
-    apply_mage_beam_damage, constrain_embedded_hammer_reach, expire_mage_beams,
-    finish_mage_cooldowns, update_character_life, update_character_orientation,
+    advance_hammer_attacks, advance_mage_attacks, apply_damage, apply_hammer_strike_damage,
+    apply_mage_beam_damage, constrain_embedded_hammer_reach, damage::DamageDealt,
+    expire_mage_beams, finish_mage_cooldowns, update_character_life, update_character_orientation,
     update_gaze_direction, update_locomotion, update_weapon_aim,
 };
 
@@ -42,6 +42,7 @@ pub fn add_simulation_step(
     schedule: impl ScheduleLabel + Clone,
     authority: SimulationAuthority,
 ) {
+    app.add_message::<DamageDealt>();
     app.add_systems(
         schedule.clone(),
         (
@@ -61,13 +62,14 @@ pub fn add_simulation_step(
             schedule.clone(),
             (apply_hammer_strike_damage, apply_mage_beam_damage)
                 .chain()
-                .before(expire_mage_beams)
+                .before(apply_damage)
                 .in_set(SimulationSet::Resolution),
         );
     }
     app.add_systems(
         schedule.clone(),
         (
+            apply_damage,
             expire_mage_beams,
             finish_mage_cooldowns,
             update_character_life,

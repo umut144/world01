@@ -1,12 +1,15 @@
 use std::{error::Error, fmt};
 
-use bevy::prelude::{Query, Res, Resource, Vec2};
+use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
 use world01_design::LocomotionConfig;
 use world01_world_data::{
     CharacterHealth, CharacterLifeState, CharacterMass, DashIntent, DashState, MovementIntent,
     MovementVelocity, Position, RunIntent, RunState, StaminaState, StatusEffectState,
 };
 
+#[cfg(test)]
+use crate::damage::apply_damage;
+use crate::damage::{DamageDealt, DamageSource};
 use crate::movement::MovementStep;
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -74,7 +77,9 @@ impl Error for LocomotionConfigError {}
 pub fn update_locomotion(
     rules: Res<LocomotionRules>,
     movement_step: Res<MovementStep>,
+    mut damage: MessageWriter<DamageDealt>,
     mut players: Query<(
+        Entity,
         &MovementIntent,
         &CharacterMass,
         &RunIntent,
@@ -85,11 +90,12 @@ pub fn update_locomotion(
         &mut RunState,
         &mut DashState,
         &mut StatusEffectState,
-        &mut CharacterHealth,
+        &CharacterHealth,
         Option<&CharacterLifeState>,
     )>,
 ) {
     for (
+        entity,
         movement_intent,
         mass,
         run_intent,
@@ -100,7 +106,7 @@ pub fn update_locomotion(
         mut run,
         mut dash,
         mut status,
-        mut health,
+        health,
         life,
     ) in &mut players
     {
@@ -179,8 +185,11 @@ pub fn update_locomotion(
             dash.velocity = MovementVelocity::ZERO;
             current_velocity = MovementVelocity::ZERO;
             status.knockdowned_ticks = rules.knockdown_duration_ticks;
-            health.current =
-                (health.current - health.maximum * rules.knockdown_damage_ratio).max(0.0);
+            damage.write(DamageDealt {
+                target: entity,
+                source: DamageSource::Exhaustion,
+                amount: health.maximum * rules.knockdown_damage_ratio,
+            });
         }
 
         if current_velocity != MovementVelocity::ZERO {
@@ -218,7 +227,7 @@ fn dash_invulnerability_end(rules: LocomotionRules) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::prelude::{App, Entity, Update};
+    use bevy::prelude::{App, Entity, IntoScheduleConfigs, Update};
     use world01_configs::load_embedded;
     use world01_design::load_world01_embedded;
 
@@ -233,7 +242,8 @@ mod tests {
             LocomotionRules::from_design(runtime.simulation.ticks_per_second, &design.locomotion)
                 .expect("embedded locomotion configuration is valid"),
         )
-        .add_systems(Update, update_locomotion);
+        .add_message::<DamageDealt>()
+        .add_systems(Update, (update_locomotion, apply_damage).chain());
         app
     }
 

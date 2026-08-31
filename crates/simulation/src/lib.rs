@@ -3,6 +3,7 @@
 pub mod aim;
 pub mod archetype;
 pub mod combat;
+pub mod damage;
 pub mod life;
 pub mod locomotion;
 pub mod mass;
@@ -12,6 +13,7 @@ mod schedule;
 
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
 pub use archetype::{Ability, ArchetypeError, CharacterArchetypeCatalog};
+pub use damage::{DamageDealt, DamageSource, apply_damage};
 pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, HammerStrikeConfigError, HammerStrikeRules,
     advance_hammer_attacks, apply_hammer_strike_damage, constrain_embedded_hammer_reach,
