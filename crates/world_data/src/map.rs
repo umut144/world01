@@ -317,25 +317,95 @@ struct PointDocument {
 }
 
 #[cfg(test)]
+pub(crate) const TEST_GRASS_CELL: &str = r#"{ "x": 0, "y": 0, "asset_key": "grass" }"#;
+
+/// Builds a four-by-four export that satisfies the import contract.
+///
+/// Tests pin conversion and validation against this instead of the authored
+/// scene, which is edited by hand and must stay free to change.
+#[cfg(test)]
+pub(crate) fn test_export(terrain_cells: &str, placements: &str) -> String {
+    format!(
+        r#"{{
+            "format": "{FORMAT}",
+            "version": {FORMAT_VERSION},
+            "workspace_key": "{WORKSPACE_KEY}",
+            "grid": {{
+                "terrain_cell_meters": 1.0,
+                "authoring_pixels_per_meter": 32.0,
+                "game_pixels_per_meter": 192.0
+            }},
+            "asset_profiles": [
+                {{ "asset_key": "grass" }},
+                {{ "asset_key": "ankh" }},
+                {{ "asset_key": "tree" }}
+            ],
+            "scene": {{
+                "schema": "{SCENE_SCHEMA}",
+                "version": {SCENE_VERSION},
+                "scene_id": "{SCENE_ID}",
+                "scene_kind": "instance",
+                "size_cells": {{ "width": 4, "height": 4 }},
+                "coordinate_space": "{COORDINATE_SPACE}",
+                "terrain_cells": [{terrain_cells}],
+                "placements": [{placements}],
+                "transitions": []
+            }}
+        }}"#
+    )
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    const ANKH: &str = r#"{
+        "instance_id": "ankh_0001",
+        "asset_key": "ankh",
+        "position_authoring_px": { "x": 64, "y": 96 }
+    }"#;
+
+    /// The server refuses to start without an Ankh, so that much must hold for
+    /// whatever scene is currently authored.
     #[test]
-    fn embedded_map_is_the_authored_world01_scene() {
+    fn the_embedded_scene_still_imports() {
         let map = WorldMap::load_embedded().expect("embedded SceneMaker map is valid");
 
         assert_eq!((map.width_tiles(), map.height_tiles()), (100, 100));
-        assert_eq!(map.terrain_cells().len(), 10_000);
+        assert!(!map.terrain_cells().is_empty());
+        assert!(map.terrain_cells().len() <= 100 * 100);
         assert!(
-            map.terrain_cells()
+            map.placements()
                 .iter()
-                .all(|cell| cell.asset_key == "grass")
+                .any(|placement| placement.asset_key == "ankh")
         );
-        assert_eq!(map.placements().len(), 2);
-        assert_eq!(map.placements()[0].asset_key, "ankh");
-        assert_eq!(map.placements()[0].position, Position::new(4.0, 0.0));
-        assert_eq!(map.placements()[1].asset_key, "tree");
-        assert_eq!(map.placements()[1].position, Position::new(-4.0, 0.0));
-        assert!(map.transitions().is_empty());
+    }
+
+    #[test]
+    fn authoring_pixels_become_positions_around_the_map_centre() {
+        let source = test_export(TEST_GRASS_CELL, ANKH);
+        let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
+
+        assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
+        assert_eq!(map.placements()[0].position, Position::new(0.0, 1.0));
+    }
+
+    #[test]
+    fn cells_outside_the_map_or_without_a_profile_are_rejected() {
+        let outside = test_export(r#"{ "x": 9, "y": 0, "asset_key": "grass" }"#, "");
+        let unprofiled = test_export(r#"{ "x": 0, "y": 0, "asset_key": "lava" }"#, "");
+
+        assert!(WorldMap::from_source(&outside).is_err());
+        assert!(WorldMap::from_source(&unprofiled).is_err());
+    }
+
+    #[test]
+    fn duplicated_cells_and_instance_ids_are_rejected() {
+        let twice = format!("{TEST_GRASS_CELL}, {TEST_GRASS_CELL}");
+        let duplicated_cell = test_export(&twice, "");
+        let duplicated_id = test_export(TEST_GRASS_CELL, &format!("{ANKH}, {ANKH}"));
+
+        assert!(WorldMap::from_source(&duplicated_cell).is_err());
+        assert!(WorldMap::from_source(&duplicated_id).is_err());
     }
 }
