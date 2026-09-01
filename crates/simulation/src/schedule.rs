@@ -96,3 +96,120 @@ pub fn add_simulation_step(
         SimulationSet::Resolution.after(SimulationSet::GameplayStep),
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use world01_configs::load_embedded;
+    use world01_content::{HammerCombatGeometry, RuntimeContent};
+    use world01_design::{load_embedded as load_game_design, load_world01_embedded};
+    use world01_world_data::{
+        CharacterHealth, CharacterMass, DashIntent, DashState, MovementIntent, MovementVelocity,
+        Position, RunIntent, RunState, StaminaState, StatusEffectState,
+    };
+
+    use crate::{
+        CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
+        WeaponAimRules,
+    };
+
+    /// What an actor looks like at the moment the collision phase runs.
+    #[derive(Resource, Debug, Default)]
+    struct CollisionProbe {
+        velocity: MovementVelocity,
+        position: Position,
+        ran: bool,
+    }
+
+    fn record_collision_phase(
+        mut probe: ResMut<CollisionProbe>,
+        actors: Query<(&MovementVelocity, &Position)>,
+    ) {
+        for (velocity, position) in &actors {
+            probe.velocity = *velocity;
+            probe.position = *position;
+            probe.ran = true;
+        }
+    }
+
+    /// Pins the contract a collision system depends on: by the time the phase
+    /// runs the velocity for this tick is decided, and the position it will
+    /// produce has not been written yet.
+    #[test]
+    fn the_collision_phase_sees_a_decided_velocity_and_an_unmoved_position() {
+        let config = load_embedded().expect("embedded runtime configuration parses");
+        let world_design = load_world01_embedded().expect("embedded World 01 design parses");
+        let game_design = load_game_design().expect("embedded game design parses");
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let ticks = config.simulation.ticks_per_second;
+
+        let mut app = App::new();
+        app.init_resource::<CollisionProbe>()
+            .insert_resource(MovementStep::from_runtime(&config).expect("runtime is valid"))
+            .insert_resource(
+                ExertionRules::from_design(ticks, &world_design.locomotion)
+                    .expect("exertion design is valid"),
+            )
+            .insert_resource(
+                WeaponAimRules::from_design(ticks, &world_design.weapon_aim)
+                    .expect("weapon aim design is valid"),
+            )
+            .insert_resource(
+                CharacterLifeRules::from_design(ticks, &world_design.health)
+                    .expect("life design is valid"),
+            )
+            .insert_resource(
+                HammerAttackRules::from_design(ticks, &game_design.hammer)
+                    .expect("hammer design is valid"),
+            )
+            .insert_resource(
+                HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)
+                    .expect("hammer geometry is valid"),
+            )
+            .insert_resource(
+                MageAttackRules::from_design(ticks, &game_design.mage, &game_design.mage_eye_beams)
+                    .expect("mage design is valid"),
+            );
+        add_simulation_step(&mut app, Update, SimulationAuthority::Predicted);
+        app.add_systems(Update, record_collision_phase.in_set(SimulationSet::Collision));
+
+        let actor = app
+            .world_mut()
+            .spawn((
+                MovementIntent::new(1.0, 0.0),
+                CharacterMass::new(1.0, 0.0, 1.0, 0.6),
+                RunIntent::RELEASED,
+                DashIntent::RELEASED,
+                MovementVelocity::ZERO,
+                StaminaState::full(100.0),
+                RunState::default(),
+                DashState::default(),
+                StatusEffectState::default(),
+                CharacterHealth::full(100.0),
+                Position::ZERO,
+            ))
+            .id();
+
+        app.update();
+
+        let probe = app.world().resource::<CollisionProbe>();
+        assert!(probe.ran, "the collision phase runs inside the step");
+        assert!(
+            probe.velocity.x > 0.0,
+            "the velocity is decided before the collision phase"
+        );
+        assert_eq!(
+            probe.position,
+            Position::ZERO,
+            "the position is written only after the collision phase"
+        );
+        assert!(
+            app.world()
+                .get::<Position>(actor)
+                .expect("the actor keeps its position")
+                .x
+                > 0.0,
+            "the decided velocity still reaches the position"
+        );
+    }
+}
