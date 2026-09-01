@@ -144,7 +144,11 @@ authors the Anchor; a Template is the content that occupies it.
   different one later.
 - A group may hold fewer Templates than the map has Anchors of that group. The
   Anchors that get none stay empty. Too few Templates is a normal state, not a
-  failure to load.
+  failure to load, and an empty Anchor stays empty - nothing ordinary appears
+  because nothing else did.
+- Which Template occupies which Anchor is a deliberate decision the game makes,
+  driven by what is happening in the world. SceneMaker's own seeded selection is
+  look development for the editor and describes nothing about a session.
 
 ### What a Template replaces
 
@@ -158,9 +162,10 @@ a dungeon entrance, and Template terrain does not erase a river. Rank is design
 data that grows one entry at a time as Assets are added, never a list of pairs
 of things that beat each other.
 
-Rank is resolved on the server only. A client is told what a place ended up as
-and never derives it, or it would predict movement through a world the server
-does not have.
+Rank lives in the design data next to the other tuning the game owns, and it
+grows one entry at a time as Assets are added. It is resolved on the server
+only: a client is told what a place ended up as and never derives it, or it
+would predict movement through a world the server does not have.
 
 Two consequences the implementation has to carry rather than assume away:
 
@@ -827,14 +832,9 @@ questions and close them progressively.
   canonical World-01 defaults, or should some become game-owned tuning data?
 - Which additional characters, weapons, status effects, and progression rules
   belong in World Design as they are introduced?
-- Does an Anchor that receives no Template stay empty, or does something
-  ordinary belong there? Content that appears because nothing else did is a
-  fallback, and the shared principles forbid those; the alternative is an
-  ordinary "nothing much happens here" Template that is chosen like any other.
 - Are Terrain rank and Prop rank one scale or two? A river outranking Template
   terrain and a dungeon entrance outranking a Template tree are decisions about
   different layers, and one number may not serve both.
-- SceneMaker's preview composes without knowing about rank, because rank is game
-  meaning and SceneMaker deliberately holds none. The preview therefore shows the
-  arrangement before rank resolves. Is that the right place to accept a
-  difference between editor and game?
+- What decides which Template a place receives, now that it is a deliberate
+  choice rather than a draw? Event state, player progress and season are the
+  candidates, and the answer belongs with the event system rather than here.
