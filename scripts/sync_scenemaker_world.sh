@@ -2,10 +2,10 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-source_export="${SCENEMAKER_EXPORT:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01/exports/world01.scene_export.json}"
+source_export="${SCENEMAKER_EXPORT:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01/exports/overworld01.scene_export.json}"
 asset_catalog="$project_root/assets/catalog.json"
 destination_directory="$project_root/assets/maps"
-destination="$destination_directory/world01.scene_export.json"
+destination="$destination_directory/overworld01.scene_export.json"
 
 fail() {
   printf 'SCENEMAKER SYNC FAILED: %s\n' "$1" >&2
@@ -26,7 +26,7 @@ jq -e '
   and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
   and .scene.schema == "srt.scene_maker_scene"
   and .scene.version == 7
-  and .scene.scene_id == "world01"
+  and .scene.scene_id == "overworld01"
   and .scene.scene_kind == "instance"
   and .scene.coordinate_space == "scene_local_bottom_left_y_up"
   and (.scene.size_cells.width | type == "number" and . == floor and . > 0)
@@ -70,7 +70,7 @@ done < <(jq -r '
 ' "$source_export")
 
 mkdir -p "$destination_directory"
-staging="$(mktemp "$destination_directory/.world01.scene_export.XXXXXX")"
+staging="$(mktemp "$destination_directory/.overworld01.scene_export.XXXXXX")"
 trap 'rm -f -- "$staging"' EXIT
 cp "$source_export" "$staging"
 mv "$staging" "$destination"

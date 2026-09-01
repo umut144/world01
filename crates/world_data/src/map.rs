@@ -35,7 +35,7 @@ impl WorldMap {
     /// nothing loads a map the caller did not name.
     pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
         Self::from_source(
-            include_str!("../../../assets/maps/world01.scene_export.json"),
+            include_str!("../../../assets/maps/overworld01.scene_export.json"),
             scene_id,
         )
     }
@@ -398,7 +398,7 @@ struct PointDocument {
 }
 
 #[cfg(test)]
-pub(crate) const TEST_SCENE_ID: &str = "world01";
+pub(crate) const TEST_SCENE_ID: &str = "overworld01";
 
 #[cfg(test)]
 pub(crate) const TEST_GRASS_CELL: &str =
@@ -495,14 +495,15 @@ mod tests {
     /// and a name that is not there fails instead of loading whatever is.
     #[test]
     fn a_map_that_is_not_embedded_is_refused_rather_than_substituted() {
-        assert!(WorldMap::load_embedded("test_scene02").is_err());
+        assert!(WorldMap::load_embedded("cave01").is_err());
         assert!(WorldMap::from_source(&test_export(TEST_GRASS_CELL, ""), "elsewhere").is_err());
     }
 
     #[test]
     fn authoring_pixels_become_positions_around_the_map_centre() {
         let source = test_export(TEST_GRASS_CELL, ANKH);
-        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
+        let map =
+            WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
         assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
@@ -516,7 +517,8 @@ mod tests {
             r#"{ "x": 1, "y": 0, "asset_key": "grass", "elevation_meters": 2.5 }"#,
             ANKH,
         );
-        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
+        let map =
+            WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].surface, "land");
         assert_eq!(map.terrain_cells()[0].elevation_meters, 2.5);
@@ -540,7 +542,8 @@ mod tests {
     #[test]
     fn template_anchors_are_kept_for_a_composition_step_that_does_not_exist_yet() {
         let source = test_export_with_anchors(TEST_GRASS_CELL, ANKH, ANCHOR);
-        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
+        let map =
+            WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.template_anchors().len(), 1);
         assert_eq!(map.template_anchors()[0].group_number, 1);

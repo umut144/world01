@@ -61,7 +61,8 @@ mod tests {
     #[test]
     fn layout_keeps_only_ankh_placements_in_authored_order() {
         let source = test_export(TEST_GRASS_CELL, PROPS);
-        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
+        let map =
+            WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         let layout = AnkhLayout::from_map(&map);
 
