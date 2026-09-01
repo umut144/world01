@@ -42,17 +42,20 @@ mod tests {
     const PROPS: &str = r#"{
         "instance_id": "ankh_0001",
         "asset_key": "ankh",
-        "position_authoring_px": { "x": 64, "y": 96 }
+        "position_authoring_px": { "x": 64, "y": 96 },
+        "elevation_meters": 1.0
     },
     {
         "instance_id": "tree_0001",
         "asset_key": "tree",
-        "position_authoring_px": { "x": 0, "y": 0 }
+        "position_authoring_px": { "x": 0, "y": 0 },
+        "elevation_meters": 1.0
     },
     {
         "instance_id": "ankh_0002",
         "asset_key": "ankh",
-        "position_authoring_px": { "x": 96, "y": 64 }
+        "position_authoring_px": { "x": 96, "y": 64 },
+        "elevation_meters": 1.0
     }"#;
 
     #[test]
