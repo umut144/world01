@@ -2,10 +2,10 @@ use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::{
     advance_dash, advance_hammer_attacks, advance_mage_attacks, apply_damage,
-    apply_hammer_strike_damage, apply_mage_beam_damage, constrain_embedded_hammer_reach,
-    damage::DamageDealt, expire_mage_beams, finish_mage_cooldowns, integrate_movement,
-    tick_status_effects, update_character_life, update_character_orientation, update_exertion,
-    update_gaze_direction, update_weapon_aim,
+    apply_hammer_strike_damage, apply_mage_beam_damage, block_colliding_movement,
+    constrain_embedded_hammer_reach, damage::DamageDealt, expire_mage_beams,
+    finish_mage_cooldowns, integrate_movement, tick_status_effects, update_character_life,
+    update_character_orientation, update_exertion, update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,7 +14,7 @@ pub enum SimulationSet {
     GameplayStep,
     /// Sits between deciding a velocity and applying it to a position.
     ///
-    /// Reserved for world and actor collision; no system runs here yet.
+    /// Where a movement that would end inside geometry is refused.
     Collision,
     /// Resolves the consequences of the gameplay step: damage, expiry, and life state.
     Resolution,
@@ -65,6 +65,10 @@ pub fn add_simulation_step(
             .chain()
             .in_set(SimulationSet::GameplayStep),
     );
+    app.add_systems(
+        schedule.clone(),
+        block_colliding_movement.in_set(SimulationSet::Collision),
+    );
     if authority.resolves_damage() {
         app.add_systems(
             schedule.clone(),
@@ -101,7 +105,10 @@ pub fn add_simulation_step(
 mod tests {
     use super::*;
     use world01_configs::load_embedded;
-    use world01_content::{HammerCombatGeometry, RuntimeContent};
+    use world01_content::{
+        CharacterCollisionGeometryCatalog, HammerCombatGeometry, RuntimeContent,
+        WorldCollisionGeometryCatalog,
+    };
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
         CharacterHealth, CharacterMass, DashIntent, DashState, MovementIntent, MovementVelocity,
@@ -110,7 +117,7 @@ mod tests {
 
     use crate::{
         CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-        WeaponAimRules,
+        WeaponAimRules, WorldColliderGrid,
     };
 
     /// What an actor looks like at the moment the collision phase runs.
@@ -145,6 +152,9 @@ mod tests {
 
         let mut app = App::new();
         app.init_resource::<CollisionProbe>()
+            .init_resource::<CharacterCollisionGeometryCatalog>()
+            .init_resource::<WorldCollisionGeometryCatalog>()
+            .init_resource::<WorldColliderGrid>()
             .insert_resource(MovementStep::from_runtime(&config).expect("runtime is valid"))
             .insert_resource(
                 ExertionRules::from_design(ticks, &world_design.locomotion)

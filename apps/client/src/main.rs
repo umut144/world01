@@ -5,14 +5,14 @@ use bevy::prelude::*;
 use bevy::window::WindowResolution;
 use world01_configs::load_embedded;
 use world01_content::{
-    CharacterHurtGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
-    WorldCollisionGeometryCatalog,
+    CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, HammerCombatGeometry,
+    MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
 };
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-    WeaponAimRules,
+    WeaponAimRules, WorldColliderGrid,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -60,6 +60,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
     let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
+    let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
+    let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content);
     let character_assets = CharacterAssetLibrary::from_content(
         content,
         world_design.eyes.pupil_area_ratio,
@@ -149,6 +151,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hurt_geometry);
     app.insert_resource(mage_eye_geometry);
     app.insert_resource(world_collision);
+    app.insert_resource(world_collider_grid);
+    app.insert_resource(collision_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);

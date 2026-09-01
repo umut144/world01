@@ -1,5 +1,5 @@
 use bevy::prelude::Vec2;
-use world01_content::{CharacterHurtGeometry, RuntimeComponentGeometry};
+use world01_content::{AuthoredFacing, CharacterHurtGeometry, RuntimeComponentGeometry};
 use world01_world_data::{BodyFacing, Position};
 
 #[derive(Debug, Clone, Copy)]
@@ -24,21 +24,33 @@ impl GeometryTransform {
     }
 }
 
-pub(crate) fn hurt_transform(
-    geometry: &CharacterHurtGeometry,
+/// Places geometry authored for one side at a position, mirrored if the actor
+/// faces the other way.
+///
+/// Hurt and collision geometry are separate concerns with separate authoring,
+/// but they are posed identically, so they share this.
+pub(crate) fn facing_transform(
+    authored: AuthoredFacing,
     position: Position,
     facing: BodyFacing,
 ) -> GeometryTransform {
     let mirrored = matches!(
-        (geometry.authored_facing, facing),
-        (world01_content::AuthoredFacing::Left, BodyFacing::Right)
-            | (world01_content::AuthoredFacing::Right, BodyFacing::Left)
+        (authored, facing),
+        (AuthoredFacing::Left, BodyFacing::Right) | (AuthoredFacing::Right, BodyFacing::Left)
     );
     GeometryTransform {
         origin: Vec2::new(position.x, position.y),
         axis_x: if mirrored { -Vec2::X } else { Vec2::X },
         axis_y: Vec2::Y,
     }
+}
+
+pub(crate) fn hurt_transform(
+    geometry: &CharacterHurtGeometry,
+    position: Position,
+    facing: BodyFacing,
+) -> GeometryTransform {
+    facing_transform(geometry.authored_facing, position, facing)
 }
 
 pub(crate) fn posed_hurt_transform(
@@ -91,6 +103,20 @@ fn triangle_points(
 
 fn transform_point(transform: GeometryTransform, point: Vec2) -> Vec2 {
     transform.origin + transform.axis_x * point.x + transform.axis_y * point.y
+}
+
+/// Every vertex of every component, posed. The broad phase bounds geometry with
+/// this rather than reaching into the transform itself.
+pub(crate) fn transformed_points(
+    components: &[RuntimeComponentGeometry],
+    transform: GeometryTransform,
+) -> impl Iterator<Item = Vec2> + '_ {
+    components.iter().flat_map(move |component| {
+        component
+            .vertices
+            .iter()
+            .map(move |point| transform_point(transform, *point))
+    })
 }
 
 pub(crate) fn component_projection_minimum(

@@ -4,11 +4,12 @@ mod derived;
 mod manifest;
 
 pub use derived::{
-    CharacterHealthCatalog, CharacterHealthError, CharacterHurtGeometry,
-    CharacterHurtGeometryCatalog, CharacterHurtGeometryError, CharacterMassGeometryCatalog,
-    CharacterMassGeometryError, DensityAreas, EyeBeamEmitterGeometry, HammerCombatGeometry,
-    HammerCombatGeometryError, MageEyeGeometry, MageEyeGeometryError, PlacedCollisionGeometry,
-    RuntimeComponentGeometry, WorldCollisionGeometryCatalog,
+    CharacterCollisionGeometry, CharacterCollisionGeometryCatalog, CharacterHealthCatalog,
+    CharacterHealthError, CharacterHurtGeometry, CharacterHurtGeometryCatalog,
+    CharacterHurtGeometryError, CharacterMassGeometryCatalog, CharacterMassGeometryError,
+    DensityAreas, EyeBeamEmitterGeometry, HammerCombatGeometry, HammerCombatGeometryError,
+    MageEyeGeometry, MageEyeGeometryError, PlacedCollisionGeometry, RuntimeComponentGeometry,
+    WorldCollisionGeometryCatalog,
 };
 pub use manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,

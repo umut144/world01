@@ -8,8 +8,9 @@ use bevy::{
 };
 use world01_configs::load_embedded;
 use world01_content::{
-    CharacterHealthCatalog, CharacterHurtGeometryCatalog, CharacterMassGeometryCatalog,
-    HammerCombatGeometry, MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
+    CharacterCollisionGeometryCatalog, CharacterHealthCatalog, CharacterHurtGeometryCatalog,
+    CharacterMassGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
+    WorldCollisionGeometryCatalog,
 };
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{
@@ -18,7 +19,7 @@ use world01_network::{
 use world01_simulation::{
     CharacterArchetypeCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
-    SimulationSet, WeaponAimRules, add_simulation_step,
+    SimulationSet, WeaponAimRules, WorldColliderGrid, add_simulation_step,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -71,6 +72,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
     let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map);
+    let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
+    let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content);
     let character_health = CharacterHealthCatalog::from_content(&content)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
     let character_mass = CharacterMassCatalog::from_geometry(&world_design, &mass_geometry)?;
@@ -104,6 +107,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(hurt_geometry)
     .insert_resource(mage_eye_geometry)
     .insert_resource(world_collision)
+    .insert_resource(world_collider_grid)
+    .insert_resource(collision_geometry)
     .insert_resource(character_health)
     .insert_resource(character_mass)
     .insert_resource(character_archetypes)

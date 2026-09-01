@@ -2,6 +2,7 @@
 
 pub mod aim;
 pub mod archetype;
+pub mod collision;
 pub mod combat;
 pub mod condition;
 pub mod damage;
@@ -16,6 +17,7 @@ pub mod status;
 
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
 pub use archetype::{Ability, ArchetypeError, CharacterArchetypeCatalog};
+pub use collision::block_colliding_movement;
 pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, HammerStrikeConfigError, HammerStrikeRules,
     advance_hammer_attacks, apply_hammer_strike_damage, constrain_embedded_hammer_reach,

@@ -303,6 +303,31 @@ must be documented as an explicit game variant.
   movement ends it, while only input-blocking statuses additionally clear the
   RUN toggle.
 
+### Space and blocking
+
+- A character occupies space through an authored `CollisionRegion`, never
+  through its mesh. Authored art and gameplay footprint are separate decisions:
+  the tree's collider covers part of its trunk, not the crown it draws.
+- `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
+  for each other. Hurt geometry may fall back to the character's body and head
+  components when nothing is authored; collision geometry never falls back.
+- A character without a `CollisionRegion` is a **Ghost**: it can be hit at its
+  authored hurt regions, but it occupies no space, blocks nobody, and is blocked
+  by nothing.
+- Characters block each other. Movement is refused, not redirected: a step that
+  would end inside world geometry or another character does not happen, and the
+  character keeps its position for that tick. Sliding along the surface it hit
+  is a later refinement and needs a contact normal this rule does not name yet.
+- Blocking is decided against where everyone stands at the start of the tick, so
+  two characters walking into each other are judged identically regardless of
+  the order the simulation visits them in.
+- A character that already overlaps geometry may still move. Without that,
+  anything spawned inside a prop or pushed there by a server correction would
+  stay stuck forever.
+- The DASH invulnerability window suppresses damage only. A dashing character
+  still occupies space and still blocks, which is what lets it intercept a Mage
+  beam for someone standing behind it.
+
 ### Stamina and statuses
 
 - Stamina is a numeric resource. `100` is the standard baseline, but a

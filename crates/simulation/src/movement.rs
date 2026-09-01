@@ -23,7 +23,15 @@ impl MovementStep {
     }
 
     pub fn displacement(self, intent: MovementIntent, normal_speed: f32) -> Vec2 {
-        let velocity = self.velocity(intent, normal_speed, 1.0);
+        self.step(self.velocity(intent, normal_speed, 1.0))
+    }
+
+    /// The offset one tick of `velocity` produces.
+    ///
+    /// The collision phase proposes a position with this before
+    /// [`integrate_movement`] applies it, so both agree by construction on what
+    /// a tick of movement means.
+    pub fn step(self, velocity: MovementVelocity) -> Vec2 {
         Vec2::new(velocity.x, velocity.y) * self.seconds_per_tick
     }
 
@@ -68,8 +76,7 @@ pub fn integrate_movement(
             continue;
         }
         let current = Vec2::new(position.x, position.y);
-        let displacement = Vec2::new(velocity.x, velocity.y) * step.seconds_per_tick;
-        let proposed = current + displacement;
+        let proposed = current + step.step(*velocity);
         *position = Position::new(proposed.x, proposed.y);
     }
 }

@@ -155,7 +155,70 @@ impl MageEyeGeometry {
     }
 }
 
-#[derive(Resource, Debug, Clone, PartialEq)]
+/// The space a character occupies, as authored.
+///
+/// Deliberately not derived from the mesh and deliberately without a fallback:
+/// a character whose manifest carries no `collision` Region is a Ghost. It can
+/// still be hit - hurt geometry is a separate concern with its own fallback -
+/// but it neither blocks nor is blocked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CharacterCollisionGeometry {
+    pub authored_facing: AuthoredFacing,
+    pub components: Vec<RuntimeComponentGeometry>,
+}
+
+#[derive(Resource, Debug, Clone, Default, PartialEq)]
+pub struct CharacterCollisionGeometryCatalog {
+    geometries: HashMap<CharacterId, CharacterCollisionGeometry>,
+}
+
+impl CharacterCollisionGeometryCatalog {
+    /// Cannot fail. Missing collision geometry is a design decision the content
+    /// is allowed to express, not an import error.
+    pub fn from_content(content: &RuntimeContent) -> Self {
+        let mut geometries = HashMap::new();
+        for (character_id, manifest) in content.characters() {
+            let components = manifest
+                .regions
+                .iter()
+                .filter(|region| region.role == "collision")
+                .map(region_geometry)
+                .collect::<Vec<_>>();
+            if components.is_empty() {
+                continue;
+            }
+            geometries.insert(
+                character_id.clone(),
+                CharacterCollisionGeometry {
+                    authored_facing: manifest.presentation.authored_facing,
+                    components,
+                },
+            );
+        }
+        Self { geometries }
+    }
+
+    /// Builds a catalog from geometry that did not come from a manifest, so a
+    /// test can pin collision behaviour without depending on authored content.
+    pub fn from_geometries(
+        geometries: impl IntoIterator<Item = (CharacterId, CharacterCollisionGeometry)>,
+    ) -> Self {
+        Self {
+            geometries: geometries.into_iter().collect(),
+        }
+    }
+
+    pub fn character(&self, character: &CharacterId) -> Option<&CharacterCollisionGeometry> {
+        self.geometries.get(character)
+    }
+
+    /// True while no character occupies space at all.
+    pub fn is_empty(&self) -> bool {
+        self.geometries.is_empty()
+    }
+}
+
+#[derive(Resource, Debug, Clone, Default, PartialEq)]
 pub struct WorldCollisionGeometryCatalog {
     pub regions: Vec<PlacedCollisionGeometry>,
 }
