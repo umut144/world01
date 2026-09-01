@@ -45,9 +45,8 @@ mod tests {
     use world01_content::{CharacterMassGeometryCatalog, HammerCombatGeometry, RuntimeContent};
     use world01_design::load_world01_embedded;
     use world01_world_data::{
-        AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent,
-        HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent,
-        MovementVelocity, Position,
+        AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackPhase,
+        HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, Position,
         SelectedCharacter, WeaponAimState, WeaponTurnDirection,
     };
 
