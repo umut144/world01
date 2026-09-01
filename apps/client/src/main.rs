@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let world_map = WorldMap::load_embedded()?;
+    let world_map = WorldMap::load_embedded(&config.world.start_map)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
     if ankh_layout.positions.is_empty() {
         return Err(io::Error::new(

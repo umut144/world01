@@ -8,6 +8,30 @@ pub struct RuntimeConfig {
     pub simulation: SimulationConfig,
     pub network: NetworkConfig,
     pub camera: CameraConfig,
+    pub world: WorldConfig,
+}
+
+/// Which world this process serves.
+///
+/// A deployment choice rather than a design one: two servers running the same
+/// game host different maps, while the rules they play by are identical. What a
+/// Hammerer is belongs in the design crate; which world this process is, does
+/// not.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct WorldConfig {
+    /// The `scene_id` of the authored map to load.
+    ///
+    /// The server's value is the one that counts. A client is told which map it
+    /// joined and checks that it has that one, rather than picking its own -
+    /// two processes reading this key independently is how a client ends up
+    /// predicting movement through a world the server does not have.
+    pub start_map: String,
+}
+
+impl WorldConfig {
+    pub fn is_valid(&self) -> bool {
+        !self.start_map.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
@@ -96,5 +120,7 @@ mod tests {
         assert_eq!(runtime.network.remote_interpolation_ratio, 2.0);
         assert_eq!(runtime.camera.effective_view_tiles(), Some((16, 10)));
         assert!(runtime.camera.is_valid());
+        assert_eq!(runtime.world.start_map, "world01");
+        assert!(runtime.world.is_valid());
     }
 }

@@ -14,7 +14,6 @@ const FORMAT_VERSION: u32 = 5;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 7;
 const WORKSPACE_KEY: &str = "world01";
-const SCENE_ID: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
 
 #[derive(Resource, Debug, Clone, PartialEq)]
@@ -28,16 +27,23 @@ pub struct WorldMap {
 }
 
 impl WorldMap {
-    pub fn load_embedded() -> Result<Self, WorldMapError> {
-        Self::from_source(include_str!(
-            "../../../assets/maps/world01.scene_export.json"
-        ))
+    /// Loads the embedded Instance named `scene_id`.
+    ///
+    /// Exactly one Instance is embedded today, so naming another is an error
+    /// rather than a choice. The directory sync that brings the Workspace's
+    /// other Scenes along is a separate change; what already holds here is that
+    /// nothing loads a map the caller did not name.
+    pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
+        Self::from_source(
+            include_str!("../../../assets/maps/world01.scene_export.json"),
+            scene_id,
+        )
     }
 
-    pub fn from_source(source: &str) -> Result<Self, WorldMapError> {
+    pub fn from_source(source: &str, scene_id: &str) -> Result<Self, WorldMapError> {
         let export: ExportDocument = serde_json::from_str(source)
             .map_err(|error| WorldMapError::new(format!("cannot parse SceneMaker map: {error}")))?;
-        validate_header(&export)?;
+        validate_header(&export, scene_id)?;
 
         let width_tiles = export.scene.size_cells.width;
         let height_tiles = export.scene.size_cells.height;
@@ -221,14 +227,19 @@ pub struct MapTemplateAnchor {
     pub position: Position,
 }
 
-fn validate_header(export: &ExportDocument) -> Result<(), WorldMapError> {
+fn validate_header(export: &ExportDocument, scene_id: &str) -> Result<(), WorldMapError> {
     let scene = &export.scene;
+    if scene.scene_id != scene_id {
+        return Err(WorldMapError::new(format!(
+            "requested map '{scene_id}', but this document is '{}'",
+            scene.scene_id
+        )));
+    }
     if export.format != FORMAT
         || export.version != FORMAT_VERSION
         || export.workspace_key != WORKSPACE_KEY
         || scene.schema != SCENE_SCHEMA
         || scene.version != SCENE_VERSION
-        || scene.scene_id != SCENE_ID
         || scene.scene_kind != "instance"
         || scene.coordinate_space != COORDINATE_SPACE
     {
@@ -387,6 +398,9 @@ struct PointDocument {
 }
 
 #[cfg(test)]
+pub(crate) const TEST_SCENE_ID: &str = "world01";
+
+#[cfg(test)]
 pub(crate) const TEST_GRASS_CELL: &str =
     r#"{ "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": 1.0 }"#;
 
@@ -430,7 +444,7 @@ fn export_document(
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
-                "scene_id": "{SCENE_ID}",
+                "scene_id": "{TEST_SCENE_ID}",
                 "scene_kind": "instance",
                 "size_cells": {{ "width": 4, "height": 4 }},
                 "coordinate_space": "{COORDINATE_SPACE}",
@@ -464,7 +478,7 @@ mod tests {
     /// whatever scene is currently authored.
     #[test]
     fn the_embedded_scene_still_imports() {
-        let map = WorldMap::load_embedded().expect("embedded SceneMaker map is valid");
+        let map = WorldMap::load_embedded(TEST_SCENE_ID).expect("embedded SceneMaker map is valid");
 
         let cells = (map.width_tiles() as usize) * (map.height_tiles() as usize);
         assert!(map.width_tiles() > 0 && map.height_tiles() > 0);
@@ -477,10 +491,18 @@ mod tests {
         );
     }
 
+    /// The Workspace holds more than one Instance, so a map is loaded by name
+    /// and a name that is not there fails instead of loading whatever is.
+    #[test]
+    fn a_map_that_is_not_embedded_is_refused_rather_than_substituted() {
+        assert!(WorldMap::load_embedded("test_scene02").is_err());
+        assert!(WorldMap::from_source(&test_export(TEST_GRASS_CELL, ""), "elsewhere").is_err());
+    }
+
     #[test]
     fn authoring_pixels_become_positions_around_the_map_centre() {
         let source = test_export(TEST_GRASS_CELL, ANKH);
-        let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
+        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
         assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
@@ -494,7 +516,7 @@ mod tests {
             r#"{ "x": 1, "y": 0, "asset_key": "grass", "elevation_meters": 2.5 }"#,
             ANKH,
         );
-        let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
+        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].surface, "land");
         assert_eq!(map.terrain_cells()[0].elevation_meters, 2.5);
@@ -510,7 +532,7 @@ mod tests {
             "",
         );
 
-        assert!(WorldMap::from_source(&source).is_err());
+        assert!(WorldMap::from_source(&source, TEST_SCENE_ID).is_err());
     }
 
     /// Anchors survive the import even though nothing composes them yet, so the
@@ -518,7 +540,7 @@ mod tests {
     #[test]
     fn template_anchors_are_kept_for_a_composition_step_that_does_not_exist_yet() {
         let source = test_export_with_anchors(TEST_GRASS_CELL, ANKH, ANCHOR);
-        let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
+        let map = WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.template_anchors().len(), 1);
         assert_eq!(map.template_anchors()[0].group_number, 1);
@@ -536,8 +558,8 @@ mod tests {
             "",
         );
 
-        assert!(WorldMap::from_source(&outside).is_err());
-        assert!(WorldMap::from_source(&unprofiled).is_err());
+        assert!(WorldMap::from_source(&outside, TEST_SCENE_ID).is_err());
+        assert!(WorldMap::from_source(&unprofiled, TEST_SCENE_ID).is_err());
     }
 
     #[test]
@@ -546,7 +568,7 @@ mod tests {
         let duplicated_cell = test_export(&twice, "");
         let duplicated_id = test_export(TEST_GRASS_CELL, &format!("{ANKH}, {ANKH}"));
 
-        assert!(WorldMap::from_source(&duplicated_cell).is_err());
-        assert!(WorldMap::from_source(&duplicated_id).is_err());
+        assert!(WorldMap::from_source(&duplicated_cell, TEST_SCENE_ID).is_err());
+        assert!(WorldMap::from_source(&duplicated_id, TEST_SCENE_ID).is_err());
     }
 }

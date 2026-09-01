@@ -9,3 +9,6 @@ remote_interpolation_ratio = 2.0
 view_preset = 2
 view_width_tiles = 21
 view_height_tiles = 13
+
+[world]
+start_map = "world01"
