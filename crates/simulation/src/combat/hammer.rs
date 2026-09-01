@@ -4,7 +4,7 @@ use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
 use world01_content::{CharacterHurtGeometryCatalog, HammerCombatGeometry};
 use world01_design::{HammerDesign, HammerStrikeDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterLifeState, DashState, GazeDirection, HammerAttackPhase,
+    AttackIntent, BodyFacing, CharacterLifeState, GazeDirection, HammerAttackPhase,
     HammerAttackState, Position, SelectedCharacter, StatusEffectState, WeaponAimState,
 };
 
@@ -197,7 +197,6 @@ pub fn apply_hammer_strike_damage(
             &SelectedCharacter,
             &Position,
             &BodyFacing,
-            &DashState,
             Option<&CharacterLifeState>,
             Option<&mut HammerAttackState>,
             &mut StatusEffectState,
@@ -231,10 +230,8 @@ pub fn apply_hammer_strike_damage(
         ) else {
             continue;
         };
-        for (target, character, position, facing, dash, life, attack_state, mut status) in
-            &mut targets
-        {
-            if dash.invulnerable || life.is_some_and(|life| !life.is_alive()) {
+        for (target, character, position, facing, life, attack_state, mut status) in &mut targets {
+            if life.is_some_and(|life| !life.is_alive()) {
                 continue;
             }
             let Some(hurt) = hurt_geometry.character(&character.0) else {

@@ -7,7 +7,7 @@ use world01_content::{
 };
 use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterLifeState, DashState, EyeBeamState, GazeDirection,
+    AttackIntent, BodyFacing, CharacterLifeState, EyeBeamState, GazeDirection,
     MageAttackPhase, MageAttackState, Position, SelectedCharacter, StatusEffectState,
 };
 
@@ -251,7 +251,6 @@ pub fn apply_mage_beam_damage(
             &SelectedCharacter,
             &Position,
             &BodyFacing,
-            &DashState,
             Option<&CharacterLifeState>,
         )>,
         Query<&mut MageAttackState>,
@@ -305,11 +304,8 @@ pub fn apply_mage_beam_damage(
 
             {
                 let mut targets = players.p1();
-                for (entity, character, position, facing, dash, life) in &mut targets {
-                    if entity == owner
-                        || dash.invulnerable
-                        || life.is_some_and(|life| !life.is_alive())
-                    {
+                for (entity, character, position, facing, life) in &mut targets {
+                    if entity == owner || life.is_some_and(|life| !life.is_alive()) {
                         continue;
                     }
                     let Some(hurt) = hurt_geometry.character(&character.0) else {
@@ -440,7 +436,7 @@ mod tests {
         CharacterHurtGeometryCatalog, MageEyeGeometry, PlacedCollisionGeometry, RuntimeContent,
     };
     use world01_design::load_embedded as load_design;
-    use world01_world_data::{CharacterHealth, CharacterId, StatusEffectState};
+    use world01_world_data::{CharacterHealth, CharacterId, DashState, StatusEffectState};
 
     fn rules() -> MageAttackRules {
         let config = load_embedded().expect("embedded config parses");
@@ -783,6 +779,71 @@ mod tests {
         assert_eq!(
             app.world().get::<CharacterHealth>(target).unwrap().current,
             100.0
+        );
+    }
+
+    /// A dashing ally shields whoever stands behind them: the beam still stops
+    /// at their body, they just take no damage while the window is open.
+    #[test]
+    fn an_invulnerable_target_absorbs_a_beam_without_taking_damage() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let rules = rules();
+        let geometry = geometry();
+        let mut volley = MageAttackState {
+            phase: MageAttackPhase::Charging,
+            charge_ticks: 60,
+            ..MageAttackState::IDLE
+        };
+        fire(
+            &rules,
+            &geometry,
+            GazeDirection::RIGHT,
+            Position::ZERO,
+            BodyFacing::Authored,
+            false,
+            &mut volley,
+        );
+        volley.phase_ticks = 60;
+
+        let mut app = App::new();
+        app.insert_resource(rules)
+            .insert_resource(
+                CharacterHurtGeometryCatalog::from_content(&content)
+                    .expect("embedded hurt geometry is valid"),
+            )
+            .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
+            .add_message::<DamageDealt>()
+            .add_systems(Update, (apply_mage_beam_damage, apply_damage).chain());
+        let owner = app
+            .world_mut()
+            .spawn((SelectedCharacter(CharacterId("mage".into())), volley))
+            .id();
+        let target = app
+            .world_mut()
+            .spawn((
+                SelectedCharacter(CharacterId("hammerer".into())),
+                Position::new(10.0, -0.3),
+                BodyFacing::Authored,
+                DashState {
+                    invulnerable: true,
+                    ..DashState::default()
+                },
+                CharacterLifeState::Alive,
+                CharacterHealth::full(100.0),
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<CharacterHealth>(target).unwrap().current,
+            100.0,
+            "the invulnerability window prevents the health change"
+        );
+        let state = app.world().get::<MageAttackState>(owner).unwrap();
+        assert!(
+            !state.left_beam.active && !state.right_beam.active,
+            "and the beam still ends at the body it hit"
         );
     }
 }

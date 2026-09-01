@@ -1,7 +1,7 @@
 //! One message for every source of damage, and the only writer of health.
 
 use bevy::prelude::*;
-use world01_world_data::CharacterHealth;
+use world01_world_data::{CharacterHealth, DashState};
 
 /// What caused a point of damage.
 ///
@@ -28,17 +28,26 @@ pub struct DamageDealt {
 }
 
 /// Applies every hit resolved this tick. The single writer of health.
+///
+/// This is also where a dash's invulnerability window takes effect, because
+/// the window prevents HP loss and nothing else: an emitter still resolves its
+/// overlap and applies its status effects, and a beam still stops at the body
+/// it hit. Every future damage source - a poison or burn tick - inherits the
+/// rule by arriving here.
 pub fn apply_damage(
     mut dealt: MessageReader<DamageDealt>,
-    mut targets: Query<&mut CharacterHealth>,
+    mut targets: Query<(&mut CharacterHealth, Option<&DashState>)>,
 ) {
     for damage in dealt.read() {
         if !damage.amount.is_finite() || damage.amount <= 0.0 {
             continue;
         }
-        let Ok(mut health) = targets.get_mut(damage.target) else {
+        let Ok((mut health, dash)) = targets.get_mut(damage.target) else {
             continue;
         };
+        if dash.is_some_and(|dash| dash.invulnerable) {
+            continue;
+        }
         health.current = (health.current - damage.amount).max(0.0);
     }
 }
@@ -133,6 +142,33 @@ mod tests {
         assert_eq!(
             app.world().get::<CharacterHealth>(actor).unwrap().current,
             50.0
+        );
+    }
+
+    #[test]
+    fn the_dash_window_prevents_the_health_change() {
+        let mut app = test_app();
+        let dashing = app
+            .world_mut()
+            .spawn((
+                CharacterHealth::full(100.0),
+                DashState {
+                    invulnerable: true,
+                    ..DashState::default()
+                },
+            ))
+            .id();
+
+        app.world_mut().write_message(DamageDealt {
+            target: dashing,
+            source: DamageSource::Exhaustion,
+            amount: 30.0,
+        });
+        app.update();
+
+        assert_eq!(
+            app.world().get::<CharacterHealth>(dashing).unwrap().current,
+            100.0
         );
     }
 }
