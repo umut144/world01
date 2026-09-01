@@ -11,6 +11,7 @@ use world01_world_data::{
     MageAttackPhase, MageAttackState, Position, SelectedCharacter, StatusEffectState,
 };
 
+use crate::condition::ActorCondition;
 #[cfg(test)]
 use crate::damage::apply_damage;
 use crate::damage::{DamageDealt, DamageSource};
@@ -129,14 +130,12 @@ pub fn advance_mage_attacks(
         return;
     };
     for (attack, gaze, position, facing, status, life, mut state) in &mut players {
-        if status.is_some_and(|status| status.blocks_all_input())
-            || life.is_some_and(|life| !life.is_alive())
-        {
+        let condition = ActorCondition::new(status, life);
+        if condition.blocks_all_input() {
             *state = MageAttackState::IDLE;
             continue;
         }
-        let action_pressed =
-            attack.pressed && !status.is_some_and(|status| status.blocks_action_buttons());
+        let action_pressed = attack.pressed && !condition.blocks_action_buttons();
         match state.phase {
             MageAttackPhase::Idle => {
                 if action_pressed {

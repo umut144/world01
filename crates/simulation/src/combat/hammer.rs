@@ -8,6 +8,7 @@ use world01_world_data::{
     HammerAttackState, Position, SelectedCharacter, StatusEffectState, WeaponAimState,
 };
 
+use crate::condition::ActorCondition;
 use crate::damage::{DamageDealt, DamageSource};
 
 #[cfg(test)]
@@ -322,9 +323,7 @@ pub fn advance_hammer_attacks(
     )>,
 ) {
     for (attack, weapon_aim, position, status, life, mut state) in &mut players {
-        if status.is_some_and(|status| status.blocks_all_input())
-            || life.is_some_and(|life| !life.is_alive())
-        {
+        if ActorCondition::new(status, life).blocks_all_input() {
             *state = HammerAttackState::IDLE;
             continue;
         }

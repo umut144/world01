@@ -7,6 +7,7 @@ use world01_world_data::{
     MovementVelocity, Position, RunIntent, RunState, StaminaState, StatusEffectState,
 };
 
+use crate::condition::ActorCondition;
 #[cfg(test)]
 use crate::damage::apply_damage;
 use crate::damage::{DamageDealt, DamageSource};
@@ -103,14 +104,12 @@ impl ExertionRules {
         self,
         pressed_edge: bool,
         dash: DashState,
-        status: StatusEffectState,
-        alive: bool,
+        condition: ActorCondition,
         normal: MovementVelocity,
     ) -> bool {
         pressed_edge
             && !dash.active
-            && !status.blocks_action_buttons()
-            && alive
+            && !condition.blocks_action_buttons()
             && normal.length() > f32::EPSILON
     }
 
@@ -183,6 +182,7 @@ pub fn update_exertion(
         life,
     ) in &mut players
     {
+        let condition = ActorCondition::new(Some(&*status), life);
         let mut stamina_delta = rules.regeneration_per_tick(stamina.maximum);
 
         let run_pressed_edge = run_intent.pressed && !run.input_pressed;
@@ -190,12 +190,11 @@ pub fn update_exertion(
         run.input_pressed = run_intent.pressed;
         dash.input_pressed = dash_intent.pressed;
 
-        if run_pressed_edge && !status.blocks_action_buttons() {
+        if run_pressed_edge && !condition.blocks_action_buttons() {
             run.toggled = !run.toggled;
         }
 
-        let life_blocks_input = life.is_some_and(|life| !life.is_alive());
-        if status.blocks_all_input() || life_blocks_input {
+        if condition.blocks_all_input() {
             run.active = false;
             run.toggled = false;
             dash.active = false;
@@ -203,7 +202,7 @@ pub fn update_exertion(
             dash.velocity = MovementVelocity::ZERO;
         }
 
-        let normal_velocity = if status.blocks_movement() || life_blocks_input {
+        let normal_velocity = if condition.blocks_movement() {
             MovementVelocity::ZERO
         } else {
             movement_step.velocity(
@@ -214,13 +213,7 @@ pub fn update_exertion(
         };
 
         let mut started_dash = false;
-        if rules.may_start_dash(
-            dash_pressed_edge,
-            *dash,
-            *status,
-            !life_blocks_input,
-            normal_velocity,
-        ) {
+        if rules.may_start_dash(dash_pressed_edge, *dash, condition, normal_velocity) {
             stamina_delta -= rules.dash_cost(stamina.maximum);
             dash.active = true;
             dash.elapsed_seconds = 0.0;
@@ -229,8 +222,7 @@ pub fn update_exertion(
         }
 
         run.active = run.toggled
-            && !status.blocks_all_input()
-            && !life_blocks_input
+            && !condition.blocks_all_input()
             && (normal_velocity.length() > f32::EPSILON || dash.active);
 
         if run.active {

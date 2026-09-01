@@ -3,6 +3,7 @@
 pub mod aim;
 pub mod archetype;
 pub mod combat;
+pub mod condition;
 pub mod damage;
 pub mod exertion;
 pub mod life;
@@ -22,6 +23,7 @@ pub use combat::mage::{
     MageAttackConfigError, MageAttackRules, advance_mage_attacks, apply_mage_beam_damage,
     expire_mage_beams, finish_mage_cooldowns, visible_beam_segment,
 };
+pub use condition::ActorCondition;
 pub use damage::{DamageDealt, DamageSource, apply_damage};
 pub use exertion::{ExertionConfigError, ExertionRules, update_exertion};
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
