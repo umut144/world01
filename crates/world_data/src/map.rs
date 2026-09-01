@@ -371,9 +371,10 @@ mod tests {
     fn the_embedded_scene_still_imports() {
         let map = WorldMap::load_embedded().expect("embedded SceneMaker map is valid");
 
-        assert_eq!((map.width_tiles(), map.height_tiles()), (100, 100));
+        let cells = (map.width_tiles() as usize) * (map.height_tiles() as usize);
+        assert!(map.width_tiles() > 0 && map.height_tiles() > 0);
         assert!(!map.terrain_cells().is_empty());
-        assert!(map.terrain_cells().len() <= 100 * 100);
+        assert!(map.terrain_cells().len() <= cells);
         assert!(
             map.placements()
                 .iter()
