@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::Position;
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 4;
+const FORMAT_VERSION: u32 = 5;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 7;
 const WORKSPACE_KEY: &str = "world01";
@@ -24,7 +24,6 @@ pub struct WorldMap {
     terrain_cell_meters: f32,
     terrain_cells: Vec<MapTerrainCell>,
     props: Vec<MapProp>,
-    required_template_groups: Vec<u32>,
     template_anchors: Vec<MapTemplateAnchor>,
 }
 
@@ -144,7 +143,6 @@ impl WorldMap {
             terrain_cell_meters,
             terrain_cells,
             props,
-            required_template_groups: export.required_template_groups,
             template_anchors,
         })
     }
@@ -177,14 +175,10 @@ impl WorldMap {
         &self.props
     }
 
-    /// The Template groups this map's Anchors ask for.
+    /// Every place a Template may be put, with the group it asks for.
     ///
-    /// Composition itself is not implemented: the map loads with its Anchors
-    /// unresolved, so it is missing whatever the Templates would place there.
-    pub fn required_template_groups(&self) -> &[u32] {
-        &self.required_template_groups
-    }
-
+    /// Placement itself is not implemented: the map loads with its Anchors
+    /// empty, so it is missing whatever would stand there.
     pub fn template_anchors(&self) -> &[MapTemplateAnchor] {
         &self.template_anchors
     }
@@ -326,7 +320,6 @@ struct ExportDocument {
     workspace_key: String,
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
-    required_template_groups: Vec<u32>,
     scene: SceneDocument,
 }
 
@@ -419,7 +412,6 @@ fn export_document(
     props: &str,
     anchors: &str,
 ) -> String {
-    let groups = if anchors.is_empty() { "[]" } else { "[1]" };
     format!(
         r#"{{
             "format": "{FORMAT}",
@@ -435,7 +427,6 @@ fn export_document(
                 {{ "asset_key": "ankh", "surface": null }},
                 {{ "asset_key": "tree", "surface": null }}
             ],
-            "required_template_groups": {groups},
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -529,7 +520,6 @@ mod tests {
         let source = test_export_with_anchors(TEST_GRASS_CELL, ANKH, ANCHOR);
         let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
 
-        assert_eq!(map.required_template_groups(), [1]);
         assert_eq!(map.template_anchors().len(), 1);
         assert_eq!(map.template_anchors()[0].group_number, 1);
         assert_eq!(map.template_anchors()[0].position, Position::new(0.0, 1.0));

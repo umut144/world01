@@ -19,7 +19,7 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required.'
 jq -e '
   . as $root
   | .format == "scene_maker_scene_export"
-  and .version == 4
+  and .version == 5
   and .workspace_key == "world01"
   and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
   and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
@@ -34,7 +34,6 @@ jq -e '
   and (.scene.terrain_cells | type == "array")
   and (.scene.props | type == "array")
   and (.scene.template_anchors | type == "array")
-  and (.required_template_groups | type == "array")
   and (.asset_profiles | type == "array")
   and (([.asset_profiles[].asset_key] | unique | length) == (.asset_profiles | length))
   and ([.asset_profiles[] | select(.surface != null) | .asset_key] | length) > 0
