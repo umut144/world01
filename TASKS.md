@@ -31,6 +31,7 @@ active game document for that game's deviations.
 | `SBX-27` | Client presentation | Split `presentation.rs` into separate input, character-selection and render-reconciliation plugins, and source character colours from content instead of the two hand-maintained palettes in `polytools.rs` and `presentation.rs`. | Planned |
 | `SBX-28` | Sandbox architecture | Retire the leftovers the architecture review found: the unused `move_players`, the simulation tests living in `lib.rs` instead of beside their modules, the public `CharacterId` field that bypasses its validating constructor, and the server address hard-coded in the network crate. | Planned |
 | `SBX-29` | Sandbox architecture | Move the rules and catalog types out of `simulation` into a `world_rules` crate so they can be queried without the ECS systems. | **Deferred until a second consumer needs the rules without the systems, such as the `ai` crate or a balancing tool** |
+| `SBX-30` | Sandbox architecture | Decide whether a root stops a dash. `rooted_ticks` only sets `blocks_movement`, which is applied to the normal velocity, while a dash moves on its own frozen vector and is cancelled only by `blocks_all_input` - so a rooted actor keeps dashing at full speed. | **Deferred until an ability applies root** |
 
 ## Tracker rules
 
