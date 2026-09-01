@@ -25,10 +25,12 @@ pub use combat::mage::{
 };
 pub use condition::ActorCondition;
 pub use damage::{DamageDealt, DamageSource, apply_damage};
-pub use exertion::{ExertionConfigError, ExertionRules, update_exertion};
+pub use exertion::{ExertionConfigError, ExertionRules, advance_dash, update_exertion};
 pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_life};
 pub use mass::{CharacterMassCatalog, MassModelError};
-pub use movement::{MovementConfigError, MovementStep, move_players, update_character_orientation};
+pub use movement::{
+    MovementConfigError, MovementStep, integrate_movement, update_character_orientation,
+};
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
 pub use status::tick_status_effects;
@@ -43,8 +45,9 @@ mod tests {
     use world01_content::{CharacterMassGeometryCatalog, HammerCombatGeometry, RuntimeContent};
     use world01_design::load_world01_embedded;
     use world01_world_data::{
-        AttackIntent, BodyFacing, CharacterId, CharacterMass, GazeDirection, GazeIntent,
-        HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent, Position,
+        AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent,
+        HammerAttackPhase, HammerAttackState, MovementDirection, MovementIntent,
+        MovementVelocity, Position,
         SelectedCharacter, WeaponAimState, WeaponTurnDirection,
     };
 
@@ -154,27 +157,21 @@ mod tests {
     }
 
     #[test]
-    fn movement_system_updates_authoritative_position() {
+    fn integration_applies_the_velocity_decided_this_tick() {
         let mut app = App::new();
         app.insert_resource(movement_step())
-            .insert_resource(attack_rules())
-            .insert_resource(hammer_geometry())
-            .add_systems(Update, move_players);
-        let player = app
+            .add_systems(Update, integrate_movement);
+        let actor = app
             .world_mut()
-            .spawn((
-                MovementIntent::new(-1.0, 0.0),
-                CharacterMass::new(2.0, 0.0, 2.0, 0.6),
-                Position::ZERO,
-            ))
+            .spawn((MovementVelocity::new(-0.6, 0.0), Position::ZERO))
             .id();
 
         app.update();
 
         let position = app
             .world()
-            .get::<Position>(player)
-            .expect("spawned test player has a Position");
+            .get::<Position>(actor)
+            .expect("the spawned actor keeps its Position");
         assert!((position.x + 0.6 / 60.0).abs() < EPSILON);
         assert_eq!(position.y, 0.0);
     }
@@ -581,45 +578,6 @@ mod tests {
         assert_eq!(swinging.phase, HammerAttackPhase::Swing);
         assert_direction(swinging.direction, Vec2::from_angle(30.0_f32.to_radians()));
         assert_direction(*app.world().get::<GazeDirection>(player).unwrap(), Vec2::Y);
-    }
-
-    #[test]
-    fn charging_retains_normal_authoritative_movement() {
-        let mut app = App::new();
-        app.insert_resource(movement_step())
-            .insert_resource(attack_rules())
-            .insert_resource(hammer_geometry())
-            .add_systems(Update, move_players);
-        let player = app
-            .world_mut()
-            .spawn((
-                MovementIntent::new(1.0, 0.0),
-                CharacterMass::new(2.191_913, 4.643_827, 2.191_913, 0.6),
-                HammerAttackState {
-                    phase: HammerAttackPhase::Charging,
-                    ..HammerAttackState::IDLE
-                },
-                Position::ZERO,
-            ))
-            .id();
-
-        app.update();
-        let charging_position = app
-            .world()
-            .get::<Position>(player)
-            .expect("charging Hammerer retains Position");
-        assert!((charging_position.x - 0.6 / 60.0).abs() < EPSILON);
-
-        app.world_mut()
-            .get_mut::<HammerAttackState>(player)
-            .expect("Hammerer has attack state")
-            .phase = HammerAttackPhase::Swing;
-        app.update();
-        let position = app
-            .world()
-            .get::<Position>(player)
-            .expect("Hammerer has Position");
-        assert!((position.x - 2.0 * 0.6 / 60.0).abs() < EPSILON);
     }
 
     #[test]

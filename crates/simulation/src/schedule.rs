@@ -1,16 +1,21 @@
 use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 
 use crate::{
-    advance_hammer_attacks, advance_mage_attacks, apply_damage, apply_hammer_strike_damage,
-    apply_mage_beam_damage, constrain_embedded_hammer_reach, damage::DamageDealt,
-    expire_mage_beams, finish_mage_cooldowns, tick_status_effects, update_character_life,
-    update_character_orientation, update_exertion, update_gaze_direction, update_weapon_aim,
+    advance_dash, advance_hammer_attacks, advance_mage_attacks, apply_damage,
+    apply_hammer_strike_damage, apply_mage_beam_damage, constrain_embedded_hammer_reach,
+    damage::DamageDealt, expire_mage_beams, finish_mage_cooldowns, integrate_movement,
+    tick_status_effects, update_character_life, update_character_orientation, update_exertion,
+    update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SimulationSet {
     /// Advances intent-driven character state for the current tick.
     GameplayStep,
+    /// Sits between deciding a velocity and applying it to a position.
+    ///
+    /// Reserved for world and actor collision; no system runs here yet.
+    Collision,
     /// Resolves the consequences of the gameplay step: damage, expiry, and life state.
     Resolution,
 }
@@ -52,6 +57,8 @@ pub fn add_simulation_step(
             advance_mage_attacks,
             tick_status_effects,
             update_exertion,
+            integrate_movement,
+            advance_dash,
             constrain_embedded_hammer_reach,
             update_character_orientation,
         )
@@ -77,6 +84,12 @@ pub fn add_simulation_step(
         )
             .chain()
             .in_set(SimulationSet::Resolution),
+    );
+    app.configure_sets(
+        schedule.clone(),
+        SimulationSet::Collision
+            .after(update_exertion)
+            .before(integrate_movement),
     );
     app.configure_sets(
         schedule,

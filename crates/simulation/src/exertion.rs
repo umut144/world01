@@ -1,10 +1,10 @@
 use std::{error::Error, fmt};
 
-use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource, Vec2};
+use bevy::prelude::{Entity, MessageWriter, Query, Res, Resource};
 use world01_design::LocomotionConfig;
 use world01_world_data::{
     CharacterHealth, CharacterLifeState, CharacterMass, DashIntent, DashState, MovementIntent,
-    MovementVelocity, Position, RunIntent, RunState, StaminaState, StatusEffectState,
+    MovementVelocity, RunIntent, RunState, StaminaState, StatusEffectState,
 };
 
 use crate::condition::ActorCondition;
@@ -156,7 +156,6 @@ pub fn update_exertion(
         &CharacterMass,
         &RunIntent,
         &DashIntent,
-        &mut Position,
         &mut MovementVelocity,
         &mut StaminaState,
         &mut RunState,
@@ -172,7 +171,6 @@ pub fn update_exertion(
         mass,
         run_intent,
         dash_intent,
-        mut position,
         mut velocity,
         mut stamina,
         mut run,
@@ -252,26 +250,50 @@ pub fn update_exertion(
             });
         }
 
-        if current_velocity != MovementVelocity::ZERO {
-            let current = Vec2::new(position.x, position.y);
-            let displacement =
-                Vec2::new(current_velocity.x, current_velocity.y) * rules.seconds_per_tick();
-            let proposed = current + displacement;
-            *position = Position::new(proposed.x, proposed.y);
-        }
-
-        if dash.active {
-            dash.elapsed_seconds += rules.seconds_per_tick();
-            dash.invulnerable = rules.dash_is_invulnerable(dash.elapsed_seconds);
-            if rules.dash_has_ended(dash.elapsed_seconds) {
-                dash.active = false;
-                dash.invulnerable = false;
-                dash.velocity = MovementVelocity::ZERO;
-                current_velocity = normal_velocity;
-            }
-        }
-
         *velocity = current_velocity;
+    }
+}
+
+/// Advances a running dash after the movement it produced has been applied.
+///
+/// The tick a dash ends still moves at dash speed - the velocity was already
+/// integrated - and only then falls back to the actor's normal velocity, so
+/// facing follows the current input again immediately. That ordering is why
+/// this runs after `integrate_movement` rather than inside `update_exertion`.
+pub fn advance_dash(
+    rules: Res<ExertionRules>,
+    movement_step: Res<MovementStep>,
+    mut actors: Query<(
+        &MovementIntent,
+        &CharacterMass,
+        &RunState,
+        &mut DashState,
+        &mut MovementVelocity,
+        Option<&StatusEffectState>,
+        Option<&CharacterLifeState>,
+    )>,
+) {
+    for (intent, mass, run, mut dash, mut velocity, status, life) in &mut actors {
+        if !dash.active {
+            continue;
+        }
+        dash.elapsed_seconds += rules.seconds_per_tick();
+        dash.invulnerable = rules.dash_is_invulnerable(dash.elapsed_seconds);
+        if !rules.dash_has_ended(dash.elapsed_seconds) {
+            continue;
+        }
+        dash.active = false;
+        dash.invulnerable = false;
+        dash.velocity = MovementVelocity::ZERO;
+        *velocity = if ActorCondition::new(status, life).blocks_movement() {
+            MovementVelocity::ZERO
+        } else {
+            movement_step.velocity(
+                *intent,
+                mass.normal_speed_meters_per_second,
+                rules.speed_multiplier(run.toggled),
+            )
+        };
     }
 }
 
@@ -281,6 +303,7 @@ mod tests {
     use bevy::prelude::{App, Entity, IntoScheduleConfigs, Update};
     use world01_configs::load_embedded;
     use world01_design::load_world01_embedded;
+    use world01_world_data::Position;
 
     fn test_app() -> App {
         let runtime = load_embedded().expect("embedded runtime configuration parses");
@@ -294,7 +317,16 @@ mod tests {
                 .expect("embedded exertion configuration is valid"),
         )
         .add_message::<DamageDealt>()
-        .add_systems(Update, (update_exertion, apply_damage).chain());
+        .add_systems(
+            Update,
+            (
+                update_exertion,
+                crate::movement::integrate_movement,
+                advance_dash,
+                apply_damage,
+            )
+                .chain(),
+        );
         app
     }
 

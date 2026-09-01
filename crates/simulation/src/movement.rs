@@ -3,8 +3,7 @@ use std::{error::Error, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use world01_configs::RuntimeConfig;
 use world01_world_data::{
-    BodyFacing, CharacterLifeState, CharacterMass, MovementDirection, MovementIntent,
-    MovementVelocity, Position,
+    BodyFacing, MovementDirection, MovementIntent, MovementVelocity, Position,
 };
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -56,25 +55,20 @@ impl fmt::Display for MovementConfigError {
 
 impl Error for MovementConfigError {}
 
-pub fn move_players(
+/// Applies the velocity decided this tick to the actor's position.
+///
+/// The only writer of `Position` during the gameplay step, which is what makes
+/// a collision phase possible between deciding a velocity and applying it.
+pub fn integrate_movement(
     step: Res<MovementStep>,
-    mut players: Query<(
-        &MovementIntent,
-        Option<&MovementVelocity>,
-        Option<&CharacterLifeState>,
-        &CharacterMass,
-        &mut Position,
-    )>,
+    mut actors: Query<(&MovementVelocity, &mut Position)>,
 ) {
-    for (intent, velocity, life, mass, mut position) in &mut players {
-        if life.is_some_and(|life| !life.is_alive()) {
+    for (velocity, mut position) in &mut actors {
+        if *velocity == MovementVelocity::ZERO {
             continue;
         }
-        let displacement = velocity.map_or_else(
-            || step.displacement(*intent, mass.normal_speed_meters_per_second),
-            |velocity| Vec2::new(velocity.x, velocity.y) * step.seconds_per_tick,
-        );
         let current = Vec2::new(position.x, position.y);
+        let displacement = Vec2::new(velocity.x, velocity.y) * step.seconds_per_tick;
         let proposed = current + displacement;
         *position = Position::new(proposed.x, proposed.y);
     }
