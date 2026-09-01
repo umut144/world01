@@ -85,7 +85,7 @@ impl WorldColliderGrid {
                     .component
                     .vertices
                     .iter()
-                    .map(|vertex| placement + Vec2::new(vertex[0], vertex[1])),
+                    .map(|vertex| placement + *vertex),
             );
             grid.bounds.push(bounds);
             let Some(bounds) = bounds else {
@@ -146,7 +146,12 @@ mod tests {
             component: RuntimeComponentGeometry {
                 component_id: name.to_owned(),
                 name: name.to_owned(),
-                vertices: vec![[0.0, 0.0], [size, 0.0], [size, size], [0.0, size]],
+                vertices: vec![
+                    Vec2::ZERO,
+                    Vec2::new(size, 0.0),
+                    Vec2::splat(size),
+                    Vec2::new(0.0, size),
+                ],
                 indices: vec![0, 1, 2, 0, 2, 3],
             },
         }
@@ -159,7 +164,7 @@ mod tests {
                 .component
                 .vertices
                 .iter()
-                .map(|vertex| placement + Vec2::new(vertex[0], vertex[1])),
+                .map(|vertex| placement + *vertex),
         )
     }
 
@@ -227,7 +232,7 @@ mod tests {
     fn geometry_the_broad_phase_cannot_place_is_never_offered() {
         let mut catalog = catalog();
         let mut broken = square("broken", 0.0, 0.0, 1.0);
-        broken.component.vertices[2] = [f32::NAN, 0.0];
+        broken.component.vertices[2] = Vec2::new(f32::NAN, 0.0);
         catalog.regions.push(broken);
         let broken_index = (catalog.regions.len() - 1) as u32;
         let grid = WorldColliderGrid::from_catalog(&catalog);
