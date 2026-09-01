@@ -10,8 +10,8 @@ use world01_world_data::{
     StatusEffectState,
 };
 
-use crate::spatial::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
 use crate::respawn::{RespawnActor, choose_respawn_position};
+use crate::spatial::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
 
 const DEAD_BODY_SCALE: f32 = 0.9;
 const DEAD_BODY_ROTATION_RADIANS: f32 = -14.0_f32.to_radians();
