@@ -288,6 +288,17 @@ must be documented as an explicit game variant.
   same simulation tick, disables RUN, and interrupts DASH.
 - DASH provides an invulnerability window of `0.337` seconds centered on the
   middle of its one-second duration: `[0.3315s, 0.6685s)`.
+- The invulnerability window prevents HP loss and nothing else. It grants no
+  immunity to status effects: STUNNED, ROOTED, and later damage-over-time
+  effects still apply to a dashing character while the window is open. A Hammer
+  side impact during the window therefore still applies STUNNED while its
+  charged damage is prevented.
+- Avoiding a control effect requires actually leaving the affected geometry.
+  DASH helps against ROOTED and STUNNED through displacement, never through the
+  window.
+- ROOTED ends an active DASH. A dash is movement, so every status that blocks
+  movement ends it, while only input-blocking statuses additionally clear the
+  RUN toggle.
 
 ### Stamina and statuses
 
@@ -345,6 +356,29 @@ must be documented as an explicit game variant.
   presentation.
 - Games may tune resulting HP or use a different health model, but the
   override must be explicit.
+
+### Damage and healing over time
+
+This section records confirmed direction. None of it is implemented yet, and
+values introduced with `for example` are illustrative rather than tuned.
+
+- POISONED, BURNED, and BLEEDING are stacking status effects. Each carries its
+  own independent timer rather than sharing one global tick.
+- POISONED deals damage scaled by its current stack count when its timer
+  elapses, and then loses one stack. Its cadence is slow, for example `13`
+  seconds.
+- BURNED works the same way structurally, except that its damage is a high
+  constant that does not scale with the stack count.
+- BLEEDING slows the affected character by `10%` and increases incoming damage
+  by a further `10%`. Its duration per stack is long, roughly one minute.
+- Healing over time uses the same shape with the opposite sign, for example
+  `8` HP every `4` seconds for `40` seconds.
+- Every one of these ticks is damage, so the DASH invulnerability window
+  prevents an individual POISONED or BURNED tick that lands inside it. Precise
+  DASH timing is a skill-based alternative to spending an item.
+- Items such as an antidote, a bandage, a wound cream, or a potion remove
+  negative effects or heal over time. Removal may be complete, or may clear a
+  number of stacks large enough to be complete in practice.
 
 ### Life, death, revival, and respawn
 
