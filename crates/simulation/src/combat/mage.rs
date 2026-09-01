@@ -7,16 +7,15 @@ use world01_content::{
 };
 use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
-    AttackIntent, BodyFacing, CharacterLifeState, EyeBeamState, GazeDirection,
-    MageAttackPhase, MageAttackState, Position, SelectedCharacter, StatusEffectState,
+    AttackIntent, BodyFacing, CharacterLifeState, EyeBeamState, GazeDirection, MageAttackPhase,
+    MageAttackState, Position, SelectedCharacter, StatusEffectState,
 };
 
 use crate::condition::ActorCondition;
 #[cfg(test)]
 use crate::damage::apply_damage;
 use crate::damage::{DamageDealt, DamageSource};
-
-use super::overlap::{
+use crate::spatial::overlap::{
     GeometryTransform, component_projection_minimum, components_overlap, hurt_transform,
 };
 

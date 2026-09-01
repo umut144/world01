@@ -10,10 +10,9 @@ use world01_world_data::{
 
 use crate::condition::ActorCondition;
 use crate::damage::{DamageDealt, DamageSource};
-
 #[cfg(test)]
-use super::overlap::triangles_overlap;
-use super::overlap::{components_overlap, hurt_transform, rotate};
+use crate::spatial::overlap::triangles_overlap;
+use crate::spatial::overlap::{components_overlap, hurt_transform, rotate};
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
 pub struct HammerAttackRules {
@@ -276,12 +275,12 @@ fn attack_transform(
     geometry: &HammerCombatGeometry,
     direction: Vec2,
     impact_point: Vec2,
-) -> Option<super::overlap::GeometryTransform> {
+) -> Option<crate::spatial::overlap::GeometryTransform> {
     let source = geometry.attack_point() - geometry.secondary_grip();
     (source.is_finite() && source.length_squared() > f32::EPSILON).then(|| {
         let angle = direction.to_angle() - source.to_angle();
         let axis_x = Vec2::from_angle(angle);
-        super::overlap::GeometryTransform {
+        crate::spatial::overlap::GeometryTransform {
             origin: impact_point - rotate(axis_x, geometry.attack_point()),
             axis_x,
             axis_y: axis_x.perp(),

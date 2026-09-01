@@ -2,7 +2,7 @@ use bevy::prelude::Vec2;
 use world01_content::CharacterHurtGeometryCatalog;
 use world01_world_data::{Ankh, BodyFacing, CharacterId, CharacterLifeState, Position};
 
-use crate::combat::overlap::{components_overlap, hurt_transform};
+use crate::spatial::overlap::{components_overlap, hurt_transform};
 
 const MAX_CANDIDATES_PER_ANKH: u32 = 64;
 

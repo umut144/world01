@@ -11,6 +11,7 @@ pub mod mass;
 pub mod movement;
 pub mod respawn;
 mod schedule;
+pub mod spatial;
 pub mod status;
 
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
@@ -33,6 +34,7 @@ pub use movement::{
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
+pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
 
 #[cfg(test)]

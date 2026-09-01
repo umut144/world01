@@ -10,7 +10,7 @@ use world01_world_data::{
     StatusEffectState,
 };
 
-use crate::combat::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
+use crate::spatial::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
 use crate::respawn::{RespawnActor, choose_respawn_position};
 
 const DEAD_BODY_SCALE: f32 = 0.9;
