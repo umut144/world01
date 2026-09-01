@@ -311,9 +311,10 @@ must be documented as an explicit game variant.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Hurt geometry may fall back to the character's body and head
   components when nothing is authored; collision geometry never falls back.
-- A character without a `CollisionRegion` is a **Ghost**: it can be hit at its
-  authored hurt regions, but it occupies no space, blocks nobody, and is blocked
-  by nothing.
+- A character without a `CollisionRegion` occupies no space: it blocks nobody
+  and nothing blocks it, while it can still be hit at its authored hurt regions.
+  Missing collision geometry is a legal content state, not an error; a character
+  becomes solid by authoring the Region.
 - Characters block each other. Movement is refused, not redirected: a step that
   would end inside world geometry or another character does not happen, and the
   character keeps its position for that tick. Sliding along the surface it hit

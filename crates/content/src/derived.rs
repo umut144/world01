@@ -157,10 +157,11 @@ impl MageEyeGeometry {
 
 /// The space a character occupies, as authored.
 ///
-/// Deliberately not derived from the mesh and deliberately without a fallback:
-/// a character whose manifest carries no `collision` Region is a Ghost. It can
-/// still be hit - hurt geometry is a separate concern with its own fallback -
-/// but it neither blocks nor is blocked.
+/// Deliberately not derived from the mesh and deliberately without a fallback.
+/// A character whose manifest carries no `collision` Region simply occupies no
+/// space: it neither blocks nor is blocked, and it can still be hit, because
+/// hurt geometry is a separate authored concern. Adding the Region later is all
+/// it takes to make that character solid.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CharacterCollisionGeometry {
     pub authored_facing: AuthoredFacing,
@@ -173,8 +174,8 @@ pub struct CharacterCollisionGeometryCatalog {
 }
 
 impl CharacterCollisionGeometryCatalog {
-    /// Cannot fail. Missing collision geometry is a design decision the content
-    /// is allowed to express, not an import error.
+    /// Cannot fail. A character without collision geometry is a content state
+    /// the design allows, not an import error.
     pub fn from_content(content: &RuntimeContent) -> Self {
         let mut geometries = HashMap::new();
         for (character_id, manifest) in content.characters() {

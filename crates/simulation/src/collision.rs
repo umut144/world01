@@ -5,8 +5,8 @@
 //! of `Position` and keeps the refusal itself readable as a zeroed velocity.
 //!
 //! What blocks is authored, not derived. An actor whose character has no
-//! `collision` Region is a Ghost - it passes through everything and stops
-//! nobody - which is a content decision rather than a missing feature.
+//! `collision` Region occupies no space: it passes through everything and stops
+//! nobody. That is a content state the design allows, not a missing feature.
 
 use bevy::prelude::{Entity, Query, Res, Vec2};
 use world01_content::{
@@ -148,9 +148,11 @@ fn blocked(
 
 fn overlaps(actor: PosedCollider<'_>, blocker: PosedCollider<'_>) -> bool {
     actor.geometry.components.iter().any(|component| {
-        blocker.geometry.components.iter().any(|other| {
-            components_overlap(component, actor.transform, other, blocker.transform)
-        })
+        blocker
+            .geometry
+            .components
+            .iter()
+            .any(|other| components_overlap(component, actor.transform, other, blocker.transform))
     })
 }
 
@@ -215,7 +217,10 @@ mod tests {
             .insert_resource(catalog())
             .insert_resource(WorldColliderGrid::from_catalog(&world))
             .insert_resource(world)
-            .add_systems(Update, (block_colliding_movement, integrate_movement).chain());
+            .add_systems(
+                Update,
+                (block_colliding_movement, integrate_movement).chain(),
+            );
         app
     }
 
@@ -297,9 +302,9 @@ mod tests {
     #[test]
     fn a_character_without_collision_geometry_walks_through_everything() {
         let mut app = app(wall());
-        let ghost = spawn(
+        let unblocked = spawn(
             &mut app,
-            "ghost",
+            "no_collider",
             Vec2::ZERO,
             Vec2::new(ONE_METER_PER_TICK, 0.0),
         );
@@ -307,7 +312,7 @@ mod tests {
 
         app.update();
 
-        assert_eq!(position_of(&app, ghost), Position::new(1.0, 0.0));
+        assert_eq!(position_of(&app, unblocked), Position::new(1.0, 0.0));
     }
 
     #[test]
