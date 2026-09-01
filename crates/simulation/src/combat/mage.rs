@@ -691,9 +691,7 @@ mod tests {
 
         let mut app = App::new();
         app.insert_resource(rules)
-            .insert_resource(
-                hurt_geometry(&content),
-            )
+            .insert_resource(hurt_geometry(&content))
             .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
             .add_message::<DamageDealt>()
             .add_systems(Update, (apply_mage_beam_damage, apply_damage).chain());
@@ -755,9 +753,7 @@ mod tests {
 
         let mut app = App::new();
         app.insert_resource(rules)
-            .insert_resource(
-                hurt_geometry(&content),
-            )
+            .insert_resource(hurt_geometry(&content))
             .insert_resource(WorldCollisionGeometryCatalog {
                 regions: vec![PlacedCollisionGeometry {
                     instance_id: "blocker".into(),
@@ -812,9 +808,7 @@ mod tests {
 
         let mut app = App::new();
         app.insert_resource(rules)
-            .insert_resource(
-                hurt_geometry(&content),
-            )
+            .insert_resource(hurt_geometry(&content))
             .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
             .add_message::<DamageDealt>()
             .add_systems(Update, (apply_mage_beam_damage, apply_damage).chain());

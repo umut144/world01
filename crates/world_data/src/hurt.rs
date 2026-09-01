@@ -42,7 +42,10 @@ impl HurtGeometryDefinition {
     pub fn is_valid(&self) -> bool {
         self.schema_version == 1
             && unique_nonempty(self.characters.iter().map(|entry| &entry.asset_key))
-            && self.characters.iter().all(CharacterHurtAssignment::is_valid)
+            && self
+                .characters
+                .iter()
+                .all(CharacterHurtAssignment::is_valid)
     }
 
     pub fn character(&self, asset_key: &str) -> Option<&CharacterHurtAssignment> {

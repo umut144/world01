@@ -155,7 +155,9 @@ mod tests {
     fn hurt_geometry() -> CharacterHurtGeometryCatalog {
         CharacterHurtGeometryCatalog::from_content(
             &RuntimeContent::load_embedded().expect("embedded content is valid"),
-            &load_game_design().expect("embedded game design parses").hurt,
+            &load_game_design()
+                .expect("embedded game design parses")
+                .hurt,
         )
         .expect("embedded hurt geometry is valid")
     }
