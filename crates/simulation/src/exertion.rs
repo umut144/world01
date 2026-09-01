@@ -195,6 +195,10 @@ pub fn update_exertion(
         if condition.blocks_all_input() {
             run.active = false;
             run.toggled = false;
+        }
+        // A dash is movement, so anything that blocks movement ends it - which
+        // includes ROOTED, where the actor keeps its input but loses its feet.
+        if condition.blocks_movement() {
             dash.active = false;
             dash.invulnerable = false;
             dash.velocity = MovementVelocity::ZERO;
@@ -469,6 +473,47 @@ mod tests {
                 .unwrap()
                 .length(),
             0.0
+        );
+    }
+
+    #[test]
+    fn a_root_ends_a_dash_but_leaves_the_run_toggle_alone() {
+        let mut app = test_app();
+        let actor = spawn_player(&mut app, 100.0);
+        app.world_mut().entity_mut(actor).insert((
+            MovementIntent::new(1.0, 0.0),
+            DashState {
+                active: true,
+                elapsed_seconds: 0.1,
+                velocity: MovementVelocity::new(1.6, 0.0),
+                invulnerable: true,
+                input_pressed: false,
+            },
+            RunState {
+                toggled: true,
+                active: true,
+                input_pressed: false,
+            },
+            StatusEffectState {
+                rooted_ticks: 30,
+                ..StatusEffectState::default()
+            },
+        ));
+
+        app.update();
+
+        let dash = app.world().get::<DashState>(actor).unwrap();
+        assert!(!dash.active, "a root ends the dash");
+        assert!(!dash.invulnerable, "and with it the invulnerability window");
+        assert_eq!(dash.velocity, MovementVelocity::ZERO);
+        assert!(
+            app.world().get::<RunState>(actor).unwrap().toggled,
+            "a root does not clear the run toggle, which only blocked input does"
+        );
+        assert_eq!(
+            app.world().get::<Position>(actor),
+            Some(&Position::ZERO),
+            "and the rooted actor does not move"
         );
     }
 }

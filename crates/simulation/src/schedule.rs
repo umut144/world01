@@ -171,7 +171,10 @@ mod tests {
                     .expect("mage design is valid"),
             );
         add_simulation_step(&mut app, Update, SimulationAuthority::Predicted);
-        app.add_systems(Update, record_collision_phase.in_set(SimulationSet::Collision));
+        app.add_systems(
+            Update,
+            record_collision_phase.in_set(SimulationSet::Collision),
+        );
 
         let actor = app
             .world_mut()
