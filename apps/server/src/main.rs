@@ -17,7 +17,7 @@ use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
 use world01_simulation::{
-    CharacterArchetypeCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
+    CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
     SimulationSet, WeaponAimRules, WorldColliderGrid, add_simulation_step,
 };
@@ -77,7 +77,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let character_health = CharacterHealthCatalog::from_content(&content)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
     let character_mass = CharacterMassCatalog::from_geometry(&world_design, &mass_geometry)?;
-    let character_archetypes = CharacterArchetypeCatalog::from_design(&game_design)?;
+    let character_abilities = CharacterAbilityCatalog::from_design(&game_design)?;
     let snapshot_interval = config
         .network
         .snapshot_interval_for(config.simulation)
@@ -111,7 +111,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(collision_geometry)
     .insert_resource(character_health)
     .insert_resource(character_mass)
-    .insert_resource(character_archetypes)
+    .insert_resource(character_abilities)
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);

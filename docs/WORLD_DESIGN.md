@@ -119,6 +119,28 @@ this document instead of copying a shared mechanic as if it were game-owned.
   for other projected-depth Assets; each such presentation is decided
   separately.
 
+## Character archetypes
+
+Every character belongs to exactly one archetype. World 01 defines nine; seven
+are named so far.
+
+| Archetype | Characters |
+|---|---|
+| Magical | Mage, Wizard, Sorcerer |
+| Human | Hammerer, Warrior, Monk |
+| Wild | ArcherF, Glavier |
+| Nature | Chantres |
+| Goblin | Rogue |
+| Kobold | Barde |
+| Ghost | Two playable characters planned for the vanilla release, not yet authored |
+
+- An archetype carries properties that apply to every character of its kind. In
+  the RPG sense a character may additionally carry properties of its own. Both
+  levels are design direction; neither is implemented yet.
+- Archetype is not a runtime concept today and no code reads it. When it becomes
+  one it belongs in content or design data, resolved once into a catalog, and
+  never as a character-name comparison inside a simulation system.
+
 ## Shared character presentation
 
 ### Visual language

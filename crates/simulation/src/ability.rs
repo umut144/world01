@@ -32,18 +32,18 @@ impl Ability {
 /// Every spawner - the join handler today, bot spawners later - asks this
 /// catalog what to attach, so players and bots cannot drift apart.
 #[derive(Resource, Debug, Clone, Default, PartialEq)]
-pub struct CharacterArchetypeCatalog {
+pub struct CharacterAbilityCatalog {
     by_character: HashMap<CharacterId, Vec<Ability>>,
 }
 
-impl CharacterArchetypeCatalog {
-    pub fn from_design(design: &GameDesign) -> Result<Self, ArchetypeError> {
+impl CharacterAbilityCatalog {
+    pub fn from_design(design: &GameDesign) -> Result<Self, AbilityError> {
         let mut by_character = HashMap::with_capacity(design.characters.len());
         for (character, profile) in &design.characters {
             let mut abilities = Vec::with_capacity(profile.ability_name_keys.len());
             for name_key in &profile.ability_name_keys {
                 let Some(ability) = Ability::from_name_key(name_key) else {
-                    return Err(ArchetypeError(format!(
+                    return Err(AbilityError(format!(
                         "{} needs ability '{name_key}', which is not implemented",
                         character.0
                     )));
@@ -75,15 +75,15 @@ impl CharacterArchetypeCatalog {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ArchetypeError(String);
+pub struct AbilityError(String);
 
-impl fmt::Display for ArchetypeError {
+impl fmt::Display for AbilityError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
 
-impl Error for ArchetypeError {}
+impl Error for AbilityError {}
 
 #[cfg(test)]
 mod tests {
@@ -95,7 +95,7 @@ mod tests {
     fn embedded_design_resolves_the_implemented_abilities() {
         let design = load_embedded().expect("embedded game design parses");
         let catalog =
-            CharacterArchetypeCatalog::from_design(&design).expect("every ability is implemented");
+            CharacterAbilityCatalog::from_design(&design).expect("every ability is implemented");
 
         assert_eq!(
             catalog.abilities(&CharacterId("hammerer".into())),
@@ -119,12 +119,12 @@ mod tests {
             },
         );
 
-        assert!(CharacterArchetypeCatalog::from_design(&design).is_err());
+        assert!(CharacterAbilityCatalog::from_design(&design).is_err());
     }
 
     /// Mirrors how the server attaches ability state: through `Commands`.
     fn attach_abilities(
-        catalog: Res<CharacterArchetypeCatalog>,
+        catalog: Res<CharacterAbilityCatalog>,
         characters: Query<(Entity, &SelectedCharacter)>,
         mut commands: Commands,
     ) {
@@ -142,7 +142,7 @@ mod tests {
     fn spawning_attaches_only_the_state_a_character_uses() {
         let design = load_embedded().expect("embedded game design parses");
         let catalog =
-            CharacterArchetypeCatalog::from_design(&design).expect("every ability is implemented");
+            CharacterAbilityCatalog::from_design(&design).expect("every ability is implemented");
         let mut app = App::new();
         app.insert_resource(catalog)
             .add_systems(Update, attach_abilities);

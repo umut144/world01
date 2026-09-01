@@ -1,7 +1,7 @@
 //! Input-, transport-, and presentation-independent game simulation.
 
+pub mod ability;
 pub mod aim;
-pub mod archetype;
 pub mod collision;
 pub mod combat;
 pub mod condition;
@@ -15,8 +15,8 @@ mod schedule;
 pub mod spatial;
 pub mod status;
 
+pub use ability::{Ability, AbilityError, CharacterAbilityCatalog};
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
-pub use archetype::{Ability, ArchetypeError, CharacterArchetypeCatalog};
 pub use collision::block_colliding_movement;
 pub use combat::hammer::{
     HammerAttackConfigError, HammerAttackRules, HammerStrikeConfigError, HammerStrikeRules,

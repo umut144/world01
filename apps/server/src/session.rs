@@ -5,7 +5,7 @@ use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
 };
-use world01_simulation::{CharacterArchetypeCatalog, CharacterMassCatalog, ExertionRules};
+use world01_simulation::{CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules};
 use world01_world_data::{
     ActorId, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
@@ -48,7 +48,7 @@ fn accept_join_requests(
     content: Res<RuntimeContent>,
     health: Res<CharacterHealthCatalog>,
     masses: Res<CharacterMassCatalog>,
-    archetypes: Res<CharacterArchetypeCatalog>,
+    abilities: Res<CharacterAbilityCatalog>,
     exertion: Res<ExertionRules>,
     mut commands: Commands,
 ) {
@@ -116,7 +116,7 @@ fn accept_join_requests(
                 mass,
             ),
         ));
-        archetypes.insert_ability_state(&selected, &mut player);
+        abilities.insert_ability_state(&selected, &mut player);
         configure_replicated_player(&mut player, request);
     }
 }
