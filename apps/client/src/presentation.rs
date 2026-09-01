@@ -683,24 +683,15 @@ fn setup_map_visuals(
         }
     }
 
-    for placement in map
-        .placements()
-        .iter()
-        .chain(map.transitions().iter())
-        .filter(|placement| placement.asset_key != "ankh")
-    {
-        let Some(manifest) = character_assets.prop(&placement.asset_key) else {
-            error!(asset_key = %placement.asset_key, "cannot render map prop: missing PolyTools manifest");
+    for prop in map.props().iter().filter(|prop| prop.asset_key != "ankh") {
+        let Some(manifest) = character_assets.prop(&prop.asset_key) else {
+            error!(asset_key = %prop.asset_key, "cannot render map prop: missing PolyTools manifest");
             continue;
         };
         let root = commands
             .spawn((
                 RenderedMap,
-                Transform::from_xyz(
-                    placement.position.x,
-                    placement.position.y,
-                    PROP_PRESENTATION_LAYER,
-                ),
+                Transform::from_xyz(prop.position.x, prop.position.y, PROP_PRESENTATION_LAYER),
                 Visibility::default(),
             ))
             .id();
@@ -710,12 +701,12 @@ fn setup_map_visuals(
             &mut meshes,
             &mut projection_materials,
             manifest,
-            map_asset_color(&placement.asset_key),
+            map_asset_color(&prop.asset_key),
             Quat::IDENTITY,
             PROP_PRESENTATION_LAYER,
             ANKH_OUTLINE_DEPTH_METERS,
         ) {
-            error!(asset_key = %placement.asset_key, %error, "cannot spawn map prop visual");
+            error!(asset_key = %prop.asset_key, %error, "cannot spawn map prop visual");
         }
     }
 }

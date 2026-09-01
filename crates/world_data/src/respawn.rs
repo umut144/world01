@@ -25,7 +25,7 @@ impl AnkhLayout {
     pub fn from_map(map: &WorldMap) -> Self {
         Self {
             positions: map
-                .placements()
+                .props()
                 .iter()
                 .filter(|placement| placement.asset_key == "ankh")
                 .map(|placement| placement.position)
@@ -39,7 +39,7 @@ mod tests {
     use super::*;
     use crate::map::{TEST_GRASS_CELL, test_export};
 
-    const PLACEMENTS: &str = r#"{
+    const PROPS: &str = r#"{
         "instance_id": "ankh_0001",
         "asset_key": "ankh",
         "position_authoring_px": { "x": 64, "y": 96 }
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn layout_keeps_only_ankh_placements_in_authored_order() {
-        let source = test_export(TEST_GRASS_CELL, PLACEMENTS);
+        let source = test_export(TEST_GRASS_CELL, PROPS);
         let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
 
         let layout = AnkhLayout::from_map(&map);

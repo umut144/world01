@@ -170,9 +170,8 @@ pub struct PlacedCollisionGeometry {
 impl WorldCollisionGeometryCatalog {
     pub fn from_content_and_map(content: &RuntimeContent, map: &WorldMap) -> Self {
         let regions = map
-            .placements()
+            .props()
             .iter()
-            .chain(map.transitions())
             .flat_map(|placement| {
                 content
                     .prop(&placement.asset_key)

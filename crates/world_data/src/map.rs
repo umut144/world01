@@ -6,9 +6,13 @@ use serde::Deserialize;
 use crate::Position;
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 3;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 5;
+const SCENE_VERSION: u32 = 6;
+/// SceneMaker called Props `placements` and kept a separate `transitions`
+/// list. Both are read while the authored maps catch up.
+const LEGACY_FORMAT_VERSION: u32 = 1;
+const LEGACY_SCENE_VERSION: u32 = 5;
 const WORKSPACE_KEY: &str = "world01";
 const SCENE_ID: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
@@ -19,8 +23,7 @@ pub struct WorldMap {
     height_tiles: u32,
     terrain_cell_meters: f32,
     terrain_cells: Vec<MapTerrainCell>,
-    placements: Vec<MapPlacement>,
-    transitions: Vec<MapPlacement>,
+    props: Vec<MapProp>,
 }
 
 impl WorldMap {
@@ -97,16 +100,15 @@ impl WorldMap {
         }
 
         let mut instance_ids = HashSet::new();
-        let placements = convert_placements(
-            export.scene.placements,
-            &profile_keys,
-            &mut instance_ids,
-            authoring_pixels_per_meter,
-            half_width,
-            half_height,
-        )?;
-        let transitions = convert_placements(
-            export.scene.transitions,
+        let authored = export
+            .scene
+            .props
+            .into_iter()
+            .chain(export.scene.placements)
+            .chain(export.scene.transitions)
+            .collect::<Vec<_>>();
+        let props = convert_props(
+            authored,
             &profile_keys,
             &mut instance_ids,
             authoring_pixels_per_meter,
@@ -119,8 +121,7 @@ impl WorldMap {
             height_tiles,
             terrain_cell_meters,
             terrain_cells,
-            placements,
-            transitions,
+            props,
         })
     }
 
@@ -148,12 +149,8 @@ impl WorldMap {
         &self.terrain_cells
     }
 
-    pub fn placements(&self) -> &[MapPlacement] {
-        &self.placements
-    }
-
-    pub fn transitions(&self) -> &[MapPlacement] {
-        &self.transitions
+    pub fn props(&self) -> &[MapProp] {
+        &self.props
     }
 }
 
@@ -166,7 +163,7 @@ pub struct MapTerrainCell {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct MapPlacement {
+pub struct MapProp {
     pub instance_id: String,
     pub asset_key: String,
     pub position: Position,
@@ -175,10 +172,10 @@ pub struct MapPlacement {
 fn validate_header(export: &ExportDocument) -> Result<(), WorldMapError> {
     let scene = &export.scene;
     if export.format != FORMAT
-        || export.version != FORMAT_VERSION
+        || !matches!(export.version, FORMAT_VERSION | LEGACY_FORMAT_VERSION)
         || export.workspace_key != WORKSPACE_KEY
         || scene.schema != SCENE_SCHEMA
-        || scene.version != SCENE_VERSION
+        || !matches!(scene.version, SCENE_VERSION | LEGACY_SCENE_VERSION)
         || scene.scene_id != SCENE_ID
         || scene.scene_kind != "instance"
         || scene.coordinate_space != COORDINATE_SPACE
@@ -199,14 +196,14 @@ fn require_profile(profile_keys: &HashSet<String>, asset_key: &str) -> Result<()
     Ok(())
 }
 
-fn convert_placements(
-    source: Vec<PlacementDocument>,
+fn convert_props(
+    source: Vec<PropDocument>,
     profile_keys: &HashSet<String>,
     instance_ids: &mut HashSet<String>,
     authoring_pixels_per_meter: f32,
     half_width: f32,
     half_height: f32,
-) -> Result<Vec<MapPlacement>, WorldMapError> {
+) -> Result<Vec<MapProp>, WorldMapError> {
     source
         .into_iter()
         .map(|placement| {
@@ -229,7 +226,7 @@ fn convert_placements(
                     placement.instance_id
                 )));
             }
-            Ok(MapPlacement {
+            Ok(MapProp {
                 instance_id: placement.instance_id,
                 asset_key: placement.asset_key,
                 position,
@@ -286,8 +283,14 @@ struct SceneDocument {
     size_cells: SizeDocument,
     coordinate_space: String,
     terrain_cells: Vec<TerrainCellDocument>,
-    placements: Vec<PlacementDocument>,
-    transitions: Vec<PlacementDocument>,
+    /// SceneMaker's current name for every placed thing.
+    #[serde(default)]
+    props: Vec<PropDocument>,
+    /// The two lists it used before they were unified under Props.
+    #[serde(default)]
+    placements: Vec<PropDocument>,
+    #[serde(default)]
+    transitions: Vec<PropDocument>,
 }
 
 #[derive(Deserialize)]
@@ -304,7 +307,7 @@ struct TerrainCellDocument {
 }
 
 #[derive(Deserialize)]
-struct PlacementDocument {
+struct PropDocument {
     instance_id: String,
     asset_key: String,
     position_authoring_px: PointDocument,
@@ -319,16 +322,38 @@ struct PointDocument {
 #[cfg(test)]
 pub(crate) const TEST_GRASS_CELL: &str = r#"{ "x": 0, "y": 0, "asset_key": "grass" }"#;
 
-/// Builds a four-by-four export that satisfies the import contract.
+/// Builds a four-by-four export that satisfies the current import contract.
 ///
 /// Tests pin conversion and validation against this instead of the authored
 /// scene, which is edited by hand and must stay free to change.
 #[cfg(test)]
-pub(crate) fn test_export(terrain_cells: &str, placements: &str) -> String {
+pub(crate) fn test_export(terrain_cells: &str, props: &str) -> String {
+    export_document(
+        FORMAT_VERSION,
+        SCENE_VERSION,
+        terrain_cells,
+        &format!(r#""props": [{props}]"#),
+    )
+}
+
+/// The shape SceneMaker wrote before Props absorbed placements and
+/// transitions. Read for as long as authored maps still carry it.
+#[cfg(test)]
+fn test_export_legacy(terrain_cells: &str, props: &str) -> String {
+    export_document(
+        LEGACY_FORMAT_VERSION,
+        LEGACY_SCENE_VERSION,
+        terrain_cells,
+        &format!(r#""placements": [{props}], "transitions": []"#),
+    )
+}
+
+#[cfg(test)]
+fn export_document(version: u32, scene_version: u32, terrain_cells: &str, props: &str) -> String {
     format!(
         r#"{{
             "format": "{FORMAT}",
-            "version": {FORMAT_VERSION},
+            "version": {version},
             "workspace_key": "{WORKSPACE_KEY}",
             "grid": {{
                 "terrain_cell_meters": 1.0,
@@ -342,14 +367,13 @@ pub(crate) fn test_export(terrain_cells: &str, placements: &str) -> String {
             ],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
-                "version": {SCENE_VERSION},
+                "version": {scene_version},
                 "scene_id": "{SCENE_ID}",
                 "scene_kind": "instance",
                 "size_cells": {{ "width": 4, "height": 4 }},
                 "coordinate_space": "{COORDINATE_SPACE}",
                 "terrain_cells": [{terrain_cells}],
-                "placements": [{placements}],
-                "transitions": []
+                {props}
             }}
         }}"#
     )
@@ -376,10 +400,22 @@ mod tests {
         assert!(!map.terrain_cells().is_empty());
         assert!(map.terrain_cells().len() <= cells);
         assert!(
-            map.placements()
+            map.props()
                 .iter()
                 .any(|placement| placement.asset_key == "ankh")
         );
+    }
+
+    /// The authored scene still carries the shape SceneMaker wrote before Props
+    /// absorbed placements and transitions, so both must import.
+    #[test]
+    fn the_shape_before_props_absorbed_placements_still_imports() {
+        let source = test_export_legacy(TEST_GRASS_CELL, ANKH);
+        let map = WorldMap::from_source(&source).expect("the legacy export is valid");
+
+        assert_eq!(map.props().len(), 1);
+        assert_eq!(map.props()[0].asset_key, "ankh");
+        assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
     }
 
     #[test]
@@ -388,7 +424,7 @@ mod tests {
         let map = WorldMap::from_source(&source).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
-        assert_eq!(map.placements()[0].position, Position::new(0.0, 1.0));
+        assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
     }
 
     #[test]
