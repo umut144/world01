@@ -293,6 +293,9 @@ must be documented as an explicit game variant.
   effects still apply to a dashing character while the window is open. A Hammer
   side impact during the window therefore still applies STUNNED while its
   charged damage is prevented.
+- A character inside the window still occupies space for hit resolution. A Mage
+  beam stops at their body without dealing damage, so a precisely timed DASH
+  shields whoever stands behind them.
 - Avoiding a control effect requires actually leaving the affected geometry.
   DASH helps against ROOTED and STUNNED through displacement, never through the
   window.
@@ -316,6 +319,12 @@ must be documented as an explicit game variant.
 - STUNNED blocks all input, SILENCED blocks shoulder-button abilities,
   DISARMED blocks action buttons, and ROOTED blocks movement from the left
   analog stick. Exact input mappings remain game-owned.
+- These statuses form an action mask over three categories - movement,
+  action-button abilities, and shoulder-button abilities. The mask is a shared
+  query rather than a set of scattered conditions, so a character controller
+  and a bot's evaluation function decide what is available from the same rule
+  and cannot drift apart. Damage modifiers such as BLEEDING's increased
+  incoming damage belong to the same shared surface.
 - Entering `STUNNED`, `KNOCKDOWNED`, or `DEAD` cleanly aborts every active
   gameplay action, including an action that has already crossed its ordinary
   commitment threshold. The character may begin only actions allowed by the

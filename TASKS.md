@@ -32,6 +32,7 @@ active game document for that game's deviations.
 | `SBX-28` | Sandbox architecture | Retire the leftovers the architecture review found: the unused `move_players`, the simulation tests living in `lib.rs` instead of beside their modules, the public `CharacterId` field that bypasses its validating constructor, and the server address hard-coded in the network crate. | Planned |
 | `SBX-29` | Sandbox architecture | Move the rules and catalog types out of `simulation` into a `world_rules` crate so they can be queried without the ECS systems. | **Deferred until a second consumer needs the rules without the systems, such as the `ai` crate or a balancing tool** |
 | `SBX-31` | Sandbox architecture | Make the DASH invulnerability window suppress damage rather than the whole hit. Emitters resolve overlaps and apply their status effects regardless of the window, and the single damage applier is where an invulnerable target loses only the health change - so a Hammer side impact during the window still stuns, and a later poison or burn tick inside it deals nothing. | **Next** |
+| `SBX-32` | Bots | Expose the status action mask and the incoming-damage modifiers as queries on `ActorCondition`, covering the three categories the design names, so that the simulation and a bot's evaluation function read one rule rather than two. `silenced_ticks` currently ticks down and nothing reads it. | **Blocked on `SBX-25`, or on the first shoulder-button ability** |
 
 ## Tracker rules
 
