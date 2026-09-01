@@ -126,6 +126,33 @@ this document instead of copying a shared mechanic as if it were game-owned.
   for other projected-depth Assets; each such presentation is decided
   separately.
 
+## Template Anchors and events
+
+A Template Anchor is a place in the world where something may happen. SceneMaker
+authors the Anchor; a Template is the content that occupies it.
+
+- A Template is **optional**. An Anchor with nothing in it is an ordinary piece
+  of the world, not a hole and not an error.
+- A Template is **exchangeable while the game runs**, so that a place can become
+  something else: an event appears, resolves, and the place returns or turns
+  into the next thing. This is the mechanism World 01 steers its events with.
+- A Template has no minimum size. A chest, a single NPC, a boss, a dungeon
+  entrance are all Templates, and so is a landscape with a village, a river and
+  a forest. Size is authoring, not category.
+- An Anchor names a group; every Template of that group is an equally acceptable
+  occupant. Which one appears is a runtime decision, and it is allowed to be a
+  different one later.
+
+Two consequences the implementation has to carry rather than assume away:
+
+- The world is not constant for the length of a session. Anything derived from
+  it - collision, walkability, a bot's navigation representation - is derived
+  again when an Anchor's occupant changes, not once at startup.
+- The occupant of an Anchor is authoritative game state, like a character's
+  health. The server decides it and the client is told; a client may not pick
+  its own, or it would predict movement through a world the server does not
+  have.
+
 ## Character archetypes
 
 Every character belongs to exactly one archetype. World 01 defines nine; seven
