@@ -29732,7 +29732,39 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
+	"regions": [
+		{
+			"indices": [
+				0,
+				2,
+				1,
+				0,
+				3,
+				2
+			],
+			"name": "collision_region",
+			"region_id": "component_155",
+			"role": "collision",
+			"vertices": [
+				[
+					-1.11999998092651,
+					2.23999996185303
+				],
+				[
+					1.11999998092651,
+					2.23999996185303
+				],
+				[
+					1.11999988555908,
+					0.00000019073486328125
+				],
+				[
+					-1.11999998092651,
+					0.00000019073486328125
+				]
+			]
+		}
+	],
 	"schema_version": 15,
 	"z_order": {
 		"back_to_front": "ascending",
