@@ -500,7 +500,7 @@ mod tests {
     use bevy::prelude::{App, Update};
     use world01_configs::load_embedded;
     use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
-    use world01_design::load_world01_embedded;
+    use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{BodyFacing, CharacterId, MovementIntent, SelectedCharacter};
 
     fn test_app() -> App {
@@ -514,6 +514,7 @@ mod tests {
         .insert_resource(
             CharacterHurtGeometryCatalog::from_content(
                 &RuntimeContent::load_embedded().expect("embedded runtime content is valid"),
+                &load_game_design().expect("embedded game design parses").hurt,
             )
             .expect("embedded hurt geometry is valid"),
         )

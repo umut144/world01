@@ -115,7 +115,7 @@ fn valid_component_assignments(assignments: &[ComponentMassAssignment]) -> bool 
         )
 }
 
-fn unique_nonempty<'a>(values: impl Iterator<Item = &'a String>) -> bool {
+pub(crate) fn unique_nonempty<'a>(values: impl Iterator<Item = &'a String>) -> bool {
     let mut values = values.peekable();
     if values.peek().is_none() {
         return false;
@@ -123,7 +123,7 @@ fn unique_nonempty<'a>(values: impl Iterator<Item = &'a String>) -> bool {
     all_unique_nonempty(values)
 }
 
-fn all_unique_nonempty<'a>(mut values: impl Iterator<Item = &'a String>) -> bool {
+pub(crate) fn all_unique_nonempty<'a>(mut values: impl Iterator<Item = &'a String>) -> bool {
     let mut unique = std::collections::HashSet::new();
     values.all(|value| !value.is_empty() && unique.insert(value))
 }

@@ -30,7 +30,7 @@ active game document for that game's deviations.
 | `SBX-28` | Sandbox architecture | Retire the leftovers the architecture review found: the simulation tests living in `lib.rs` instead of beside their modules, the public `CharacterId` field that bypasses its validating constructor, and the server address hard-coded in the network crate. | Planned |
 | `SBX-29` | Sandbox architecture | Move the rules and catalog types out of `simulation` into a `world_rules` crate so they can be queried without the ECS systems. | **Deferred until a second consumer needs the rules without the systems, such as the `ai` crate or a balancing tool** |
 | `SBX-32` | Bots | Expose the status action mask and the incoming-damage modifiers as queries on `ActorCondition`, covering the three categories the design names, so that the simulation and a bot's evaluation function read one rule rather than two. `silenced_ticks` currently ticks down and nothing reads it. | **Blocked on `SBX-25`, or on the first shoulder-button ability** |
-| `SBX-33` | Content authoring | Author a `collision` Region per playable character in PolyTools, so the collision phase has geometry to work with. Until then every character is a Ghost and nothing blocks in the running game, while the tree prop already carries its collider. | **Next** |
+| `SBX-33` | Content authoring | Author a `collision` Region per playable character in PolyTools, so the collision phase has geometry to work with. Until then no character occupies space and nothing blocks in the running game, while the tree prop already carries its collider. | **Next** |
 
 ## Tracker rules
 

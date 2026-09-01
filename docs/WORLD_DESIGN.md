@@ -91,6 +91,13 @@ this document instead of copying a shared mechanic as if it were game-owned.
 - Simulation/gameplay and presentation/art are separate iteration layers.
 - Shared foundations should not prevent plausible future team play, but future
   systems should not be implemented speculatively.
+- **No fallbacks.** Where a Character or Asset needs data, it declares that data
+  explicitly. Nothing is guessed from a default, a name convention, or a
+  substitute source, because a fallback turns forgotten data into behaviour that
+  looks plausible instead of into a failure a test reports. Where absence is a
+  legitimate state - a Character that occupies no space - absence is modelled as
+  itself and stays legal; where it is not, loading fails and says what is
+  missing.
 
 ## World scale and authored assets
 
@@ -334,9 +341,9 @@ must be documented as an explicit game variant.
   for each other. Hurt geometry may fall back to the character's body and head
   components when nothing is authored; collision geometry never falls back.
 - A character without a `CollisionRegion` occupies no space: it blocks nobody
-  and nothing blocks it, while it can still be hit at its authored hurt regions.
-  Missing collision geometry is a legal content state, not an error; a character
-  becomes solid by authoring the Region.
+  and nothing blocks it, while it can still be hit at its declared hurt
+  geometry. Missing collision geometry is a legal content state, not an error; a
+  character becomes solid by authoring the Region.
 - Characters block each other. Movement is refused, not redirected: a step that
   would end inside world geometry or another character does not happen, and the
   character keeps its position for that tick. Sliding along the surface it hit
@@ -387,6 +394,14 @@ must be documented as an explicit game variant.
   its own duration.
 
 ## Shared health and damage foundations
+
+Hurt geometry - what part of a Character a hit has to reach - is declared per
+Character in the design data, never defaulted. A declaration names either mesh
+Components or authored `HurtRegion`s, and a Character the declaration forgets is
+a load error. The current roster provisionally declares `body` and `head` for
+everyone; individual Characters are expected to move to other Components or to
+`HurtRegion`s as their art settles, and the design's Ghost - hit only at its
+eyes - is the case that needs Regions.
 
 - Current and maximum HP are authoritative gameplay state when a game uses the
   shared health foundation.

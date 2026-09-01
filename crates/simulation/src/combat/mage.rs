@@ -437,6 +437,14 @@ mod tests {
     use world01_design::load_embedded as load_design;
     use world01_world_data::{CharacterHealth, CharacterId, DashState, StatusEffectState};
 
+    fn hurt_geometry(content: &RuntimeContent) -> CharacterHurtGeometryCatalog {
+        CharacterHurtGeometryCatalog::from_content(
+            content,
+            &load_design().expect("embedded design parses").hurt,
+        )
+        .expect("embedded hurt geometry is valid")
+    }
+
     fn rules() -> MageAttackRules {
         let config = load_embedded().expect("embedded config parses");
         let design = load_design().expect("embedded design parses");
@@ -684,8 +692,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(
-                CharacterHurtGeometryCatalog::from_content(&content)
-                    .expect("embedded hurt geometry is valid"),
+                hurt_geometry(&content),
             )
             .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
             .add_message::<DamageDealt>()
@@ -749,8 +756,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(
-                CharacterHurtGeometryCatalog::from_content(&content)
-                    .expect("embedded hurt geometry is valid"),
+                hurt_geometry(&content),
             )
             .insert_resource(WorldCollisionGeometryCatalog {
                 regions: vec![PlacedCollisionGeometry {
@@ -807,8 +813,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(
-                CharacterHurtGeometryCatalog::from_content(&content)
-                    .expect("embedded hurt geometry is valid"),
+                hurt_geometry(&content),
             )
             .insert_resource(WorldCollisionGeometryCatalog { regions: vec![] })
             .add_message::<DamageDealt>()

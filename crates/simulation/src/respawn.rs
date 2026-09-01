@@ -150,10 +150,12 @@ fn unit_interval(value: u64) -> f32 {
 mod tests {
     use super::*;
     use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
+    use world01_design::load_embedded as load_game_design;
 
     fn hurt_geometry() -> CharacterHurtGeometryCatalog {
         CharacterHurtGeometryCatalog::from_content(
             &RuntimeContent::load_embedded().expect("embedded content is valid"),
+            &load_game_design().expect("embedded game design parses").hurt,
         )
         .expect("embedded hurt geometry is valid")
     }
