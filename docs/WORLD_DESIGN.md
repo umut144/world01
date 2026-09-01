@@ -142,6 +142,25 @@ authors the Anchor; a Template is the content that occupies it.
 - An Anchor names a group; every Template of that group is an equally acceptable
   occupant. Which one appears is a runtime decision, and it is allowed to be a
   different one later.
+- A group may hold fewer Templates than the map has Anchors of that group. The
+  Anchors that get none stay empty. Too few Templates is a normal state, not a
+  failure to load.
+
+### What a Template replaces
+
+A Template covers the cells it authors, placed at its Anchor, and within that
+footprint it may replace everything: Terrain surface, height, and Props. A
+dragon attack that leaves lava behind is the case this exists for.
+
+But a Template does not win by default. Resolution is by **rank**: every placed
+thing carries one, and the higher rank stays. A Template's tree does not replace
+a dungeon entrance, and Template terrain does not erase a river. Rank is design
+data that grows one entry at a time as Assets are added, never a list of pairs
+of things that beat each other.
+
+Rank is resolved on the server only. A client is told what a place ended up as
+and never derives it, or it would predict movement through a world the server
+does not have.
 
 Two consequences the implementation has to carry rather than assume away:
 
@@ -808,3 +827,14 @@ questions and close them progressively.
   canonical World-01 defaults, or should some become game-owned tuning data?
 - Which additional characters, weapons, status effects, and progression rules
   belong in World Design as they are introduced?
+- Does an Anchor that receives no Template stay empty, or does something
+  ordinary belong there? Content that appears because nothing else did is a
+  fallback, and the shared principles forbid those; the alternative is an
+  ordinary "nothing much happens here" Template that is chosen like any other.
+- Are Terrain rank and Prop rank one scale or two? A river outranking Template
+  terrain and a dungeon entrance outranking a Template tree are decisions about
+  different layers, and one number may not serve both.
+- SceneMaker's preview composes without knowing about rank, because rank is game
+  meaning and SceneMaker deliberately holds none. The preview therefore shows the
+  arrangement before rank resolves. Is that the right place to accept a
+  difference between editor and game?
