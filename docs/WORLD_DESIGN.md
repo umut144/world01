@@ -388,6 +388,11 @@ must be documented as an explicit game variant.
 - A character occupies space through an authored `CollisionRegion`, never
   through its mesh. Authored art and gameplay footprint are separate decisions:
   the tree's collider covers part of its trunk, not the crown it draws.
+- A `CollisionRegion` may be drawn freely or may borrow the shape of a
+  Component. Every playable character currently borrows its body, so a collider
+  is the standing silhouette rather than a footprint. Flatter shapes close to
+  the feet are the intended refinement; because the Region is authored either
+  way, that change is content and touches no code.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Hurt geometry may fall back to the character's body and head
   components when nothing is authored; collision geometry never falls back.
