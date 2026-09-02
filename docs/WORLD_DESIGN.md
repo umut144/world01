@@ -407,9 +407,24 @@ must be documented as an explicit game variant.
 - Blocking is decided against where everyone stands at the start of the tick, so
   two characters walking into each other are judged identically regardless of
   the order the simulation visits them in.
-- A character that already overlaps geometry may still move. Without that,
-  anything spawned inside a prop or pushed there by a server correction would
-  stay stuck forever.
+- A character that already overlaps geometry may leave it but may not move
+  deeper in. Being able to leave is what keeps anything spawned inside a prop,
+  or put there by a server correction, from being stuck forever. Being able to
+  continue would be a way through.
+- Characters that overlap are pushed apart along the contact normal, and they
+  share the distance by **inverse mass**: the heavier one gives way less. Mass
+  is what a character brings to holding its ground, and nothing else enters -
+  RUN and DASH do not shove.
+  - Speed is deliberately absent. Two characters standing still can overlap
+    after a spawn or a server correction, and any rule built on momentum or
+    kinetic energy has nothing to say there. Mass always does.
+  - It also has to be a rule a bot can plan against and a client can reproduce.
+    Who is heavier is both. Who currently carries more momentum is neither: it
+    changes every tick and it is the first thing to diverge after a correction.
+  - Kinetic energy would be the wrong shape besides. It is a scalar with no
+    direction, so the push still comes from the contact normal, and squaring
+    speed leaves mass meaningless - a running Rogue would move a standing
+    Hammerer aside.
 - The DASH invulnerability window suppresses damage only. A dashing character
   still occupies space and still blocks, which is what lets it intercept a Mage
   beam for someone standing behind it.
