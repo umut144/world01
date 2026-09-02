@@ -738,8 +738,7 @@ fn character_hurt_region_geometry(
                 manifest.asset_key
             ))
         })?;
-    region_geometry(manifest, region)
-        .map_err(|error| CharacterHurtGeometryError(error.to_string()))
+    region_geometry(manifest, region).map_err(|error| CharacterHurtGeometryError(error.to_string()))
 }
 
 /// The shape of a Region, wherever it keeps it.

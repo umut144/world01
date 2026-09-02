@@ -660,6 +660,7 @@ fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> 
         ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
         ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
         ("terrain", "grass") => Some(include_str!("../../../assets/terrain/grass/manifest.json")),
+        ("terrain", "river") => Some(include_str!("../../../assets/terrain/river/manifest.json")),
         ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
         ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
         ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),

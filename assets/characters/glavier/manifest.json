@@ -4952,7 +4952,15 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
+	"regions": [
+		{
+			"geometry_source": "component",
+			"name": "collision_region",
+			"region_id": "component_173",
+			"role": "collision",
+			"source_component_id": "component_22"
+		}
+	],
 	"schema_version": 16,
 	"z_order": {
 		"back_to_front": "ascending",
