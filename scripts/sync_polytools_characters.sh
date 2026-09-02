@@ -126,10 +126,21 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
     --arg key "$asset_key" \
     --arg type "$asset_type" \
     '
-      (.schema_version == 14 or .schema_version == 15)
+      .schema_version == 16
       and .asset_key == $key
       and .asset_type == $type
-      and (if .schema_version == 15 then (.regions | type == "array") else true end)
+      and (.regions | type == "array")
+      and (.regions | all(.[];
+        (.region_id | type == "string" and length > 0)
+        and (.name | type == "string" and length > 0)
+        and (.role | . == "attack" or . == "hurt" or . == "collision")
+        and (.geometry_source | . == "authored" or . == "component")
+        and (.source_component_id | type == "string" and length > 0)
+        and (if .geometry_source == "authored" then
+          (.vertices | type == "array" and length >= 3)
+          and (.indices | type == "array" and length >= 3 and length % 3 == 0)
+        else true end)
+      ))
       and (.asset_pivot | type == "array" and length == 2 and all(.[]; type == "number" and isfinite))
       and (.components | type == "array" and length > 0)
       and (.components | all(.[];

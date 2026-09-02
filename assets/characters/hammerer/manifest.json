@@ -17737,8 +17737,23 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
-	"schema_version": 15,
+	"regions": [
+		{
+			"geometry_source": "component",
+			"name": "collision_region",
+			"region_id": "component_165",
+			"role": "collision",
+			"source_component_id": "component_47"
+		},
+		{
+			"geometry_source": "component",
+			"name": "collision_region_2",
+			"region_id": "component_166",
+			"role": "collision",
+			"source_component_id": "component_46"
+		}
+	],
+	"schema_version": 16,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

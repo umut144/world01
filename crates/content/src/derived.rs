@@ -186,17 +186,18 @@ pub struct CharacterCollisionGeometryCatalog {
 }
 
 impl CharacterCollisionGeometryCatalog {
-    /// Cannot fail. A character without collision geometry is a content state
-    /// the design allows, not an import error.
-    pub fn from_content(content: &RuntimeContent) -> Self {
+    /// A character without a collision Region is absent from the catalog, which
+    /// is a content state the design allows. A Region that cannot be resolved
+    /// is something else entirely - a broken manifest - and fails.
+    pub fn from_content(content: &RuntimeContent) -> Result<Self, RegionGeometryError> {
         let mut geometries = HashMap::new();
         for (character_id, manifest) in content.characters() {
             let components = manifest
                 .regions
                 .iter()
                 .filter(|region| region.role == "collision")
-                .map(region_geometry)
-                .collect::<Vec<_>>();
+                .map(|region| region_geometry(manifest, region))
+                .collect::<Result<Vec<_>, _>>()?;
             if components.is_empty() {
                 continue;
             }
@@ -208,7 +209,7 @@ impl CharacterCollisionGeometryCatalog {
                 },
             );
         }
-        Self { geometries }
+        Ok(Self { geometries })
     }
 
     /// Builds a catalog from geometry that did not come from a manifest, so a
@@ -244,29 +245,30 @@ pub struct PlacedCollisionGeometry {
 }
 
 impl WorldCollisionGeometryCatalog {
-    pub fn from_content_and_map(content: &RuntimeContent, map: &WorldMap) -> Self {
-        let regions = map
-            .props()
-            .iter()
-            .flat_map(|placement| {
-                content
-                    .prop(&placement.asset_key)
-                    .or_else(|| content.terrain(&placement.asset_key))
-                    .into_iter()
-                    .flat_map(move |manifest| {
-                        manifest
-                            .regions
-                            .iter()
-                            .filter(|region| region.role == "collision")
-                            .map(move |region| PlacedCollisionGeometry {
-                                instance_id: placement.instance_id.clone(),
-                                position: placement.position,
-                                component: region_geometry(region),
-                            })
-                    })
-            })
-            .collect();
-        Self { regions }
+    pub fn from_content_and_map(
+        content: &RuntimeContent,
+        map: &WorldMap,
+    ) -> Result<Self, RegionGeometryError> {
+        let mut regions = Vec::new();
+        for placement in map.props() {
+            let Some(manifest) = content
+                .prop(&placement.asset_key)
+                .or_else(|| content.terrain(&placement.asset_key))
+            else {
+                continue;
+            };
+            for region in &manifest.regions {
+                if region.role != "collision" {
+                    continue;
+                }
+                regions.push(PlacedCollisionGeometry {
+                    instance_id: placement.instance_id.clone(),
+                    position: placement.position,
+                    component: region_geometry(manifest, region)?,
+                });
+            }
+        }
+        Ok(Self { regions })
     }
 }
 
@@ -475,8 +477,9 @@ impl HammerCombatGeometry {
             .regions
             .iter()
             .filter(|region| region.role == "attack")
-            .map(region_geometry)
-            .collect::<Vec<_>>();
+            .map(|region| region_geometry(hammer, region))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
         let attack_components = if authored_regions.is_empty() {
             attack_component_names
                 .iter()
@@ -592,11 +595,29 @@ fn component_geometry(
         .ok_or_else(|| {
             HammerCombatGeometryError::new(format!("Hammer is missing attack Component {name}"))
         })?;
+    placed_component_geometry(manifest, component)
+        .map_err(|message| HammerCombatGeometryError::new(message))
+}
+
+/// A Component's Fill Mesh in Asset space.
+///
+/// The Asset pivot is not subtracted here. Authored Region vertices arrive in
+/// this same space, and a Region that borrows a Component has to land where the
+/// authored one would, so the two paths must agree with each other. Every
+/// Asset's pivot is the origin today, which is why the question of what a
+/// non-zero pivot would mean for a Region has not had to be answered yet.
+fn placed_component_geometry(
+    manifest: &RuntimeManifest,
+    component: &RuntimeComponent,
+) -> Result<RuntimeComponentGeometry, String> {
     let mesh = component.mesh.as_ref().ok_or_else(|| {
-        HammerCombatGeometryError::new(format!("Hammer attack Component {name} has no Fill Mesh"))
+        format!(
+            "Component {} has no Fill Mesh to take geometry from",
+            component.name
+        )
     })?;
     let transform = component_world_transform(component, &manifest.components, &mut HashSet::new())
-        .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
+        .map_err(|error| error.to_string())?;
     Ok(RuntimeComponentGeometry {
         component_id: component.component_id.clone(),
         name: component.name.clone(),
@@ -707,31 +728,76 @@ fn character_hurt_region_geometry(
     manifest: &RuntimeManifest,
     name: &str,
 ) -> Result<RuntimeComponentGeometry, CharacterHurtGeometryError> {
-    manifest
+    let region = manifest
         .regions
         .iter()
         .find(|region| region.role == "hurt" && region.name == name)
-        .map(region_geometry)
         .ok_or_else(|| {
             CharacterHurtGeometryError(format!(
                 "{} does not author a hurt Region named '{name}'",
                 manifest.asset_key
             ))
-        })
+        })?;
+    region_geometry(manifest, region)
+        .map_err(|error| CharacterHurtGeometryError(error.to_string()))
 }
 
-fn region_geometry(region: &RuntimeRegion) -> RuntimeComponentGeometry {
-    RuntimeComponentGeometry {
+/// The shape of a Region, wherever it keeps it.
+///
+/// An authored Region carries its own vertices. A Component Region points at a
+/// Component and borrows its Fill Mesh, which then has to be placed the same
+/// way any other Component geometry is - through its world transform and minus
+/// the Asset pivot - or a collider drawn from a Component would sit at the
+/// Asset's origin instead of where the Component is.
+fn region_geometry(
+    manifest: &RuntimeManifest,
+    region: &RuntimeRegion,
+) -> Result<RuntimeComponentGeometry, RegionGeometryError> {
+    if region.is_authored_geometry() {
+        return Ok(RuntimeComponentGeometry {
+            component_id: region.region_id.clone(),
+            name: region.name.clone(),
+            vertices: region
+                .vertices
+                .iter()
+                .map(|vertex| Vec2::from_array(*vertex))
+                .collect(),
+            indices: region.indices.clone(),
+        });
+    }
+    let component = manifest
+        .components
+        .iter()
+        .find(|component| component.component_id == region.source_component_id)
+        .ok_or_else(|| {
+            RegionGeometryError(format!(
+                "{} Region '{}' names Component {}, which the manifest does not have",
+                manifest.asset_key, region.name, region.source_component_id
+            ))
+        })?;
+    let geometry = placed_component_geometry(manifest, component).map_err(|message| {
+        RegionGeometryError(format!(
+            "{} Region '{}': {message}",
+            manifest.asset_key, region.name
+        ))
+    })?;
+    Ok(RuntimeComponentGeometry {
         component_id: region.region_id.clone(),
         name: region.name.clone(),
-        vertices: region
-            .vertices
-            .iter()
-            .map(|vertex| Vec2::from_array(*vertex))
-            .collect(),
-        indices: region.indices.clone(),
+        ..geometry
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionGeometryError(String);
+
+impl fmt::Display for RegionGeometryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
     }
 }
+
+impl Error for RegionGeometryError {}
 
 fn transformed_mesh_area(
     component: &RuntimeComponent,

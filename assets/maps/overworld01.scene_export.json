@@ -27,6 +27,12 @@
       "anchor_meters": null
     },
     {
+      "asset_key": "river",
+      "surface": "land",
+      "footprint_meters": null,
+      "anchor_meters": null
+    },
+    {
       "asset_key": "tree",
       "surface": null,
       "footprint_meters": {

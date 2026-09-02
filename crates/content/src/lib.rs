@@ -8,8 +8,8 @@ pub use derived::{
     CharacterHealthError, CharacterHurtGeometry, CharacterHurtGeometryCatalog,
     CharacterHurtGeometryError, CharacterMassGeometryCatalog, CharacterMassGeometryError,
     DensityAreas, EyeBeamEmitterGeometry, HammerCombatGeometry, HammerCombatGeometryError,
-    MageEyeGeometry, MageEyeGeometryError, PlacedCollisionGeometry, RuntimeComponentGeometry,
-    WorldCollisionGeometryCatalog,
+    MageEyeGeometry, MageEyeGeometryError, PlacedCollisionGeometry, RegionGeometryError,
+    RuntimeComponentGeometry, WorldCollisionGeometryCatalog,
 };
 pub use manifest::{
     AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,

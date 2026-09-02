@@ -14,7 +14,9 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 15;
+const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 16;
+pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
+pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
 #[derive(Resource, Clone)]
 pub struct RuntimeContent {
@@ -263,13 +265,29 @@ pub struct RuntimeRegionMesh {
     pub indices: Vec<u32>,
 }
 
+/// An authored Region: a named piece of an Asset with a gameplay role.
+///
+/// Since schema 16 a Region does not have to carry its own shape.
+/// `geometry_source` says where the shape comes from - `authored` means the
+/// `vertices` and `indices` below, `component` means the mesh of
+/// `source_component_id`, in that Component's own frame.
 #[derive(Clone, Deserialize)]
 pub struct RuntimeRegion {
     pub region_id: String,
     pub name: String,
     pub role: String,
+    pub geometry_source: String,
+    pub source_component_id: String,
+    #[serde(default)]
     pub vertices: Vec<[f32; 2]>,
+    #[serde(default)]
     pub indices: Vec<u32>,
+}
+
+impl RuntimeRegion {
+    pub fn is_authored_geometry(&self) -> bool {
+        self.geometry_source == REGION_GEOMETRY_AUTHORED
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -337,10 +355,7 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if !matches!(
-        manifest.schema_version,
-        14 | RUNTIME_MANIFEST_SCHEMA_VERSION
-    ) {
+    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
         return Err(ContentError::new(format!(
             "{} uses unsupported schema {}",
             manifest.asset_key, manifest.schema_version
@@ -371,14 +386,12 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if !matches!(
-        manifest.schema_version,
-        14 | RUNTIME_MANIFEST_SCHEMA_VERSION
-    ) || manifest.asset_key != HAMMER_ASSET_KEY
+    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION
+        || manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
     {
         return Err(ContentError::new(
-            "Hammer must be a schema-14 or schema-15 weapons manifest",
+            "Hammer must be a schema-16 weapons manifest",
         ));
     }
     validate_asset_contents(manifest)?;
@@ -454,13 +467,12 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
             region.region_id.is_empty()
                 || region.name.is_empty()
                 || !matches!(region.role.as_str(), "attack" | "hurt" | "collision")
-                || region.vertices.iter().any(|vertex| !finite_pair(*vertex))
-                || region.indices.is_empty()
-                || region.indices.len() % 3 != 0
-                || region
-                    .indices
-                    .iter()
-                    .any(|index| *index as usize >= region.vertices.len())
+                || !matches!(
+                    region.geometry_source.as_str(),
+                    REGION_GEOMETRY_AUTHORED | REGION_GEOMETRY_COMPONENT
+                )
+                || region.source_component_id.is_empty()
+                || (region.is_authored_geometry() && !valid_region_mesh(region))
         })
     {
         return Err(ContentError::new(format!(
@@ -595,6 +607,19 @@ fn validate_mesh_parts(
 
 fn finite_pair(values: [f32; 2]) -> bool {
     values.into_iter().all(f32::is_finite)
+}
+
+/// Only an `authored` Region carries a mesh here. A `component` Region is
+/// checked where its Component is resolved, because that is where the
+/// Component is within reach.
+fn valid_region_mesh(region: &RuntimeRegion) -> bool {
+    !region.vertices.iter().any(|vertex| !finite_pair(*vertex))
+        && !region.indices.is_empty()
+        && region.indices.len() % 3 == 0
+        && !region
+            .indices
+            .iter()
+            .any(|index| *index as usize >= region.vertices.len())
 }
 
 fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> {

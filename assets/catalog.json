@@ -79,6 +79,12 @@
 			"runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
 		},
 		{
+			"asset_key": "river",
+			"asset_type": "terrain",
+			"display_name": "River",
+			"runtime_package": "PolyToolsRuntimeExports/river/manifest.json"
+		},
+		{
 			"asset_key": "rogue",
 			"asset_type": "character",
 			"display_name": "Rogue",

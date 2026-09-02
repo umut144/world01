@@ -5,6 +5,12 @@
       "asset_type": "terrain",
       "display_name": "Grass",
       "runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
+    },
+    {
+      "asset_key": "river",
+      "asset_type": "terrain",
+      "display_name": "River",
+      "runtime_package": "PolyToolsRuntimeExports/river/manifest.json"
     }
   ],
   "schema_version": 1,

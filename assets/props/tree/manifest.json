@@ -29734,6 +29734,7 @@
 	},
 	"regions": [
 		{
+			"geometry_source": "authored",
 			"indices": [
 				0,
 				2,
@@ -29745,6 +29746,7 @@
 			"name": "collision_region",
 			"region_id": "component_155",
 			"role": "collision",
+			"source_component_id": "component_141",
 			"vertices": [
 				[
 					-1.11999998092651,
@@ -29765,7 +29767,7 @@
 			]
 		}
 	],
-	"schema_version": 15,
+	"schema_version": 16,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
