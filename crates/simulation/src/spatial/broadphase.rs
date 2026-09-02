@@ -235,7 +235,7 @@ mod tests {
     fn geometry_the_broad_phase_cannot_place_is_never_offered() {
         let mut catalog = catalog();
         let mut broken = square("broken", 0.0, 0.0, 1.0);
-        broken.component.vertices[2] = Vec2::new(f32::NAN, 0.0);
+        broken.position = Position::new(f32::NAN, 0.0);
         catalog.regions.push(broken);
         let broken_index = (catalog.regions.len() - 1) as u32;
         let grid = WorldColliderGrid::from_catalog(&catalog);
