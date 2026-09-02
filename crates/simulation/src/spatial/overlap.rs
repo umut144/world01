@@ -197,8 +197,7 @@ pub(crate) fn triangle_contact(first: [Vec2; 3], second: [Vec2; 3]) -> Option<Co
             let first_maximum = max_value(first_projection);
             let second_minimum = min_value(second_projection);
             let second_maximum = max_value(second_projection);
-            let depth =
-                first_maximum.min(second_maximum) - first_minimum.max(second_minimum);
+            let depth = first_maximum.min(second_maximum) - first_minimum.max(second_minimum);
             if depth < 0.0 {
                 return None;
             }

@@ -61,20 +61,24 @@ impl PosedCollider<'_> {
 /// do not push each other, so two characters meeting exactly head-on both stand
 /// still, while the slightest offset makes both slide past.
 ///
-/// Every test is against the other actors' *current* positions, so two actors
-/// walking into each other are judged identically no matter which one the query
-/// visits first.
+/// An actor is tested against both where the others stand and where their own
+/// steps would take them. Measuring only against where they stand is
+/// order-independent, which is why it was chosen, but it lets two actors
+/// approaching each other each take a step that is legal on its own while the
+/// pair of them ends up overlapping. Counting the other's step as well is
+/// equally order-independent and does not have that hole.
 ///
-/// An actor that already overlaps something may still move. Without that escape
-/// valve a character spawned inside a prop, or pushed there by a correction from
-/// the server, would never get out again.
+/// An actor that already overlaps something may leave but may not go deeper.
+/// Being able to leave is what keeps a character spawned inside a prop, or put
+/// there by a correction from the server, from being stuck forever; not being
+/// able to go deeper is what stops it from continuing straight out the far
+/// side.
 pub fn block_colliding_movement(
     step: Res<MovementStep>,
     catalog: Res<CharacterCollisionGeometryCatalog>,
     world: Res<WorldCollisionGeometryCatalog>,
     grid: Res<WorldColliderGrid>,
-    standing: Query<(Entity, &SelectedCharacter, &Position, &BodyFacing)>,
-    mut movers: Query<(
+    mut actors: Query<(
         Entity,
         &SelectedCharacter,
         &Position,
@@ -85,16 +89,23 @@ pub fn block_colliding_movement(
     if catalog.is_empty() {
         return;
     }
-    let blockers = standing
-        .iter()
-        .filter_map(|(entity, character, position, facing)| {
-            let geometry = catalog.character(&character.0)?;
-            posed(entity, geometry, *position, *facing)
-        })
-        .collect::<Vec<_>>();
+    let mut blockers = Vec::new();
+    for (entity, character, position, facing, velocity) in actors.iter() {
+        let Some(geometry) = catalog.character(&character.0) else {
+            continue;
+        };
+        let Some(standing) = posed(entity, geometry, *position, *facing) else {
+            continue;
+        };
+        let displacement = step.step(*velocity);
+        if displacement != Vec2::ZERO && displacement.is_finite() {
+            blockers.push(standing.translated(displacement));
+        }
+        blockers.push(standing);
+    }
 
     let mut candidates = Vec::new();
-    for (entity, character, position, facing, mut velocity) in &mut movers {
+    for (entity, character, position, facing, mut velocity) in &mut actors {
         let Some(geometry) = catalog.character(&character.0) else {
             continue;
         };
@@ -106,9 +117,13 @@ pub fn block_colliding_movement(
             continue;
         };
         let proposed = current.translated(displacement);
-        if !blocked(proposed, &blockers, &world, &grid, &mut candidates)
-            || blocked(current, &blockers, &world, &grid, &mut candidates)
-        {
+        if !blocked(proposed, &blockers, &world, &grid, &mut candidates) {
+            continue;
+        }
+        if let Some(contact) = deepest_contact(current, &blockers, &world, &grid, &mut candidates) {
+            if displacement.dot(contact.normal) < 0.0 {
+                *velocity = MovementVelocity::ZERO;
+            }
             continue;
         }
         let slid = deepest_contact(proposed, &blockers, &world, &grid, &mut candidates)
@@ -467,18 +482,54 @@ mod tests {
         assert_eq!(position_of(&app, unblocked), Position::new(1.0, 0.0));
     }
 
+    /// Leaving is what keeps an actor from being stuck forever. Going deeper is
+    /// what used to let it continue straight out the far side.
     #[test]
-    fn an_actor_that_already_overlaps_may_still_move() {
+    fn an_actor_that_already_overlaps_may_leave_but_not_go_deeper() {
         let mut app = app(wall());
-        let stuck = spawn(
+        let deeper = spawn(
             &mut app,
             "walker",
             Vec2::new(1.0, 0.0),
             Vec2::new(ONE_METER_PER_TICK, 0.0),
         );
+        let leaving = spawn(
+            &mut app,
+            "walker",
+            Vec2::new(1.0, 8.0),
+            Vec2::new(-ONE_METER_PER_TICK, 0.0),
+        );
 
         app.update();
 
-        assert_eq!(position_of(&app, stuck), Position::new(2.0, 0.0));
+        assert_eq!(position_of(&app, deeper), Position::new(1.0, 0.0));
+        assert_eq!(position_of(&app, leaving), Position::new(0.0, 8.0));
+    }
+
+    /// The two-moveables hole: measured only against where the other stands,
+    /// each of these steps is legal on its own, and together they end with the
+    /// two actors inside each other - from where they walk through.
+    #[test]
+    fn two_actors_walking_into_each_other_do_not_end_up_overlapping() {
+        let mut app = app(WorldCollisionGeometryCatalog::default());
+        let left = spawn(
+            &mut app,
+            "walker",
+            Vec2::ZERO,
+            Vec2::new(ONE_METER_PER_TICK, 0.0),
+        );
+        let right = spawn(
+            &mut app,
+            "walker",
+            Vec2::new(2.1, 0.0),
+            Vec2::new(-ONE_METER_PER_TICK, 0.0),
+        );
+
+        app.update();
+
+        assert_eq!(velocity_of(&app, left), MovementVelocity::ZERO);
+        assert_eq!(velocity_of(&app, right), MovementVelocity::ZERO);
+        assert_eq!(position_of(&app, left), Position::ZERO);
+        assert_eq!(position_of(&app, right), Position::new(2.1, 0.0));
     }
 }
