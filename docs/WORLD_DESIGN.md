@@ -394,19 +394,26 @@ must be documented as an explicit game variant.
   the feet are the intended refinement; because the Region is authored either
   way, that change is content and touches no code.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
-  for each other. Hurt geometry may fall back to the character's body and head
-  components when nothing is authored; collision geometry never falls back.
+  for each other. Each is declared, neither is defaulted, and where a character
+  can be hit says nothing about where it stands.
 - A character without a `CollisionRegion` occupies no space: it blocks nobody
   and nothing blocks it, while it can still be hit at its declared hurt
   geometry. Missing collision geometry is a legal content state, not an error; a
   character becomes solid by authoring the Region.
-- Characters block each other. Movement is refused, not redirected: a step that
-  would end inside world geometry or another character does not happen, and the
-  character keeps its position for that tick. Sliding along the surface it hit
-  is a later refinement and needs a contact normal this rule does not name yet.
-- Blocking is decided against where everyone stands at the start of the tick, so
-  two characters walking into each other are judged identically regardless of
-  the order the simulation visits them in.
+- Characters block each other. A step that would end inside world geometry or
+  another character is retried once with the part that points into the surface
+  removed, so a character walking at a tree slides past it. If the shortened
+  step is blocked too, the character keeps its position for that tick.
+- Blocking is decided against where everyone stands at the start of the tick and
+  against where their own steps would take them. Both, because measuring only
+  against where they stand is order-independent but lets two characters walking
+  into each other each take a step that is legal on its own while the pair of
+  them ends up overlapping.
+- The direction a character slides is only as good as the contact normal, and
+  the normal a triangulated body offers is not exactly its surface: an interior
+  edge of the triangulation can supply it. This is why a head-on meeting can
+  deflect slightly rather than stop dead. It is tolerable for sliding and it is
+  not tolerable for separation, which pushes characters along that same normal.
 - A character that already overlaps geometry may leave it but may not move
   deeper in. Being able to leave is what keeps anything spawned inside a prop,
   or put there by a server correction, from being stuck forever. Being able to
