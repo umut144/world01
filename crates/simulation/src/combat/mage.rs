@@ -432,7 +432,8 @@ mod tests {
     use bevy::prelude::{App, IntoScheduleConfigs, Update};
     use world01_configs::load_embedded;
     use world01_content::{
-        CharacterHurtGeometryCatalog, MageEyeGeometry, PlacedCollisionGeometry, RuntimeContent,
+        CharacterHurtGeometryCatalog, CollisionComponentGeometry, MageEyeGeometry,
+        PlacedCollisionGeometry, RuntimeContent,
     };
     use world01_design::load_embedded as load_design;
     use world01_world_data::{CharacterHealth, CharacterId, DashState, StatusEffectState};
@@ -758,7 +759,8 @@ mod tests {
                 regions: vec![PlacedCollisionGeometry {
                     instance_id: "blocker".into(),
                     position: Position::ZERO,
-                    component: blocker,
+                    component: CollisionComponentGeometry::from_geometry(blocker)
+                        .expect("the test blocker has valid collision topology"),
                 }],
             })
             .add_message::<DamageDealt>()

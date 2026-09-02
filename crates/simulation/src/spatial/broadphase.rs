@@ -136,14 +136,16 @@ fn cell_of(point: Vec2) -> (i32, i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use world01_content::{PlacedCollisionGeometry, RuntimeComponentGeometry};
+    use world01_content::{
+        CollisionComponentGeometry, PlacedCollisionGeometry, RuntimeComponentGeometry,
+    };
     use world01_world_data::Position;
 
     fn square(name: &str, x: f32, y: f32, size: f32) -> PlacedCollisionGeometry {
         PlacedCollisionGeometry {
             instance_id: name.to_owned(),
             position: Position::new(x, y),
-            component: RuntimeComponentGeometry {
+            component: CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
                 component_id: name.to_owned(),
                 name: name.to_owned(),
                 vertices: vec![
@@ -153,7 +155,8 @@ mod tests {
                     Vec2::new(0.0, size),
                 ],
                 indices: vec![0, 1, 2, 0, 2, 3],
-            },
+            })
+            .expect("the test square has valid collision topology"),
         }
     }
 

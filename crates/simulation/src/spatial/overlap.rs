@@ -132,18 +132,16 @@ fn transform_point(transform: GeometryTransform, point: Vec2) -> Vec2 {
     transform.origin + transform.axis_x * point.x + transform.axis_y * point.y
 }
 
-/// Every vertex of every component, posed. The broad phase bounds geometry with
+/// Every vertex of a component, posed. The broad phase bounds geometry with
 /// this rather than reaching into the transform itself.
 pub(crate) fn transformed_points(
-    components: &[RuntimeComponentGeometry],
+    component: &RuntimeComponentGeometry,
     transform: GeometryTransform,
 ) -> impl Iterator<Item = Vec2> + '_ {
-    components.iter().flat_map(move |component| {
-        component
-            .vertices
-            .iter()
-            .map(move |point| transform_point(transform, *point))
-    })
+    component
+        .vertices
+        .iter()
+        .map(move |point| transform_point(transform, *point))
 }
 
 pub(crate) fn component_projection_minimum(

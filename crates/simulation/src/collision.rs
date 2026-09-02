@@ -171,7 +171,12 @@ fn posed<'a>(
         entity,
         geometry,
         transform,
-        bounds: Aabb::around(transformed_points(&geometry.components, transform))?,
+        bounds: Aabb::around(
+            geometry
+                .components
+                .iter()
+                .flat_map(|component| transformed_points(component.geometry(), transform)),
+        )?,
     })
 }
 
@@ -261,7 +266,10 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, IntoScheduleConfigs, Update};
     use world01_configs::load_embedded;
-    use world01_content::{AuthoredFacing, PlacedCollisionGeometry, RuntimeComponentGeometry};
+    use world01_content::{
+        AuthoredFacing, CollisionComponentGeometry, PlacedCollisionGeometry,
+        RuntimeComponentGeometry,
+    };
     use world01_world_data::CharacterId;
 
     use crate::movement::integrate_movement;
@@ -278,8 +286,8 @@ mod tests {
     /// of one another on that axis.
     const WALKER_WIDTH: f32 = 0.4;
 
-    fn square(name: &str, corner: Vec2, size: f32) -> RuntimeComponentGeometry {
-        RuntimeComponentGeometry {
+    fn square(name: &str, corner: Vec2, size: f32) -> CollisionComponentGeometry {
+        CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
             component_id: name.to_owned(),
             name: name.to_owned(),
             vertices: vec![
@@ -289,7 +297,8 @@ mod tests {
                 corner + Vec2::new(0.0, size),
             ],
             indices: vec![0, 1, 2, 0, 2, 3],
-        }
+        })
+        .expect("the test square has valid collision topology")
     }
 
     /// A character whose collider is a 0.4 m box centred on its position.
@@ -307,8 +316,8 @@ mod tests {
         )])
     }
 
-    fn block(name: &str, corner: Vec2, width: f32, height: f32) -> RuntimeComponentGeometry {
-        RuntimeComponentGeometry {
+    fn block(name: &str, corner: Vec2, width: f32, height: f32) -> CollisionComponentGeometry {
+        CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
             component_id: name.to_owned(),
             name: name.to_owned(),
             vertices: vec![
@@ -318,7 +327,8 @@ mod tests {
                 corner + Vec2::new(0.0, height),
             ],
             indices: vec![0, 1, 2, 0, 2, 3],
-        }
+        })
+        .expect("the test block has valid collision topology")
     }
 
     /// A wall covering x in [1, 2] and y in [-2, 2].

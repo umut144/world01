@@ -1,7 +1,8 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     error::Error,
     fmt,
+    ops::Deref,
 };
 
 use bevy::prelude::{Resource, Vec2};
@@ -177,7 +178,7 @@ impl MageEyeGeometry {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CharacterCollisionGeometry {
     pub authored_facing: AuthoredFacing,
-    pub components: Vec<RuntimeComponentGeometry>,
+    pub components: Vec<CollisionComponentGeometry>,
 }
 
 #[derive(Resource, Debug, Clone, Default, PartialEq)]
@@ -196,7 +197,10 @@ impl CharacterCollisionGeometryCatalog {
                 .regions
                 .iter()
                 .filter(|region| region.role == "collision")
-                .map(|region| region_geometry(manifest, region))
+                .map(|region| {
+                    region_geometry(manifest, region)
+                        .and_then(CollisionComponentGeometry::from_geometry)
+                })
                 .collect::<Result<Vec<_>, _>>()?;
             if components.is_empty() {
                 continue;
@@ -241,7 +245,7 @@ pub struct WorldCollisionGeometryCatalog {
 pub struct PlacedCollisionGeometry {
     pub instance_id: String,
     pub position: Position,
-    pub component: RuntimeComponentGeometry,
+    pub component: CollisionComponentGeometry,
 }
 
 impl WorldCollisionGeometryCatalog {
@@ -264,7 +268,9 @@ impl WorldCollisionGeometryCatalog {
                 regions.push(PlacedCollisionGeometry {
                     instance_id: placement.instance_id.clone(),
                     position: placement.position,
-                    component: region_geometry(manifest, region)?,
+                    component: CollisionComponentGeometry::from_geometry(region_geometry(
+                        manifest, region,
+                    )?)?,
                 });
             }
         }
@@ -543,6 +549,95 @@ pub struct RuntimeComponentGeometry {
     pub name: String,
     pub vertices: Vec<Vec2>,
     pub indices: Vec<u32>,
+}
+
+/// Geometry prepared specifically for collision queries.
+///
+/// Fill meshes are triangulated, but a triangulation edge shared by two
+/// triangles is not part of the authored surface. Boundary edges are derived
+/// once when a collision catalog is built so simulation never has to recover
+/// that topology per contact.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollisionComponentGeometry {
+    geometry: RuntimeComponentGeometry,
+    boundary_edges: Vec<[u32; 2]>,
+}
+
+impl CollisionComponentGeometry {
+    pub fn from_geometry(geometry: RuntimeComponentGeometry) -> Result<Self, RegionGeometryError> {
+        if geometry.vertices.is_empty()
+            || geometry.indices.is_empty()
+            || geometry.indices.len() % 3 != 0
+            || geometry.vertices.iter().any(|vertex| !vertex.is_finite())
+            || geometry
+                .indices
+                .iter()
+                .any(|index| *index as usize >= geometry.vertices.len())
+        {
+            return Err(RegionGeometryError(format!(
+                "collision geometry '{}' is invalid",
+                geometry.name
+            )));
+        }
+        let mut edge_counts = BTreeMap::<[u32; 2], u8>::new();
+        for triangle in geometry.indices.chunks_exact(3) {
+            for edge in [
+                [triangle[0], triangle[1]],
+                [triangle[1], triangle[2]],
+                [triangle[2], triangle[0]],
+            ] {
+                if edge[0] == edge[1] {
+                    return Err(RegionGeometryError(format!(
+                        "collision geometry '{}' contains a degenerate edge",
+                        geometry.name
+                    )));
+                }
+                let key = if edge[0] < edge[1] {
+                    edge
+                } else {
+                    [edge[1], edge[0]]
+                };
+                let count = edge_counts.entry(key).or_default();
+                *count = count.saturating_add(1);
+                if *count > 2 {
+                    return Err(RegionGeometryError(format!(
+                        "collision geometry '{}' has a non-manifold edge",
+                        geometry.name
+                    )));
+                }
+            }
+        }
+        let boundary_edges = edge_counts
+            .into_iter()
+            .filter_map(|(edge, count)| (count == 1).then_some(edge))
+            .collect::<Vec<_>>();
+        if boundary_edges.is_empty() {
+            return Err(RegionGeometryError(format!(
+                "collision geometry '{}' has no boundary edges",
+                geometry.name
+            )));
+        }
+        Ok(Self {
+            geometry,
+            boundary_edges,
+        })
+    }
+
+    pub fn geometry(&self) -> &RuntimeComponentGeometry {
+        &self.geometry
+    }
+
+    pub fn boundary_edges(&self) -> &[[u32; 2]] {
+        &self.boundary_edges
+    }
+}
+
+impl Deref for CollisionComponentGeometry {
+    type Target = RuntimeComponentGeometry;
+
+    fn deref(&self) -> &Self::Target {
+        &self.geometry
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -911,6 +1006,30 @@ mod tests {
             hurt.character(character)
                 .is_some_and(|geometry| geometry.components.len() == 2)
         }));
+
+        let character_collision = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded Character collision topology is valid");
+        assert!(content.ids().iter().all(|character| {
+            character_collision
+                .character(character)
+                .is_some_and(|geometry| {
+                    geometry
+                        .components
+                        .iter()
+                        .all(|component| !component.boundary_edges().is_empty())
+                })
+        }));
+
+        let map = WorldMap::load_embedded("overworld01").expect("embedded world map is valid");
+        let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
+            .expect("embedded world collision topology is valid");
+        assert!(!world_collision.regions.is_empty());
+        assert!(
+            world_collision
+                .regions
+                .iter()
+                .all(|region| !region.component.boundary_edges().is_empty())
+        );
     }
 
     /// The provisional declaration the shipped design also makes: body and head
@@ -957,6 +1076,40 @@ mod tests {
         definition.characters[0].regions = vec!["eye_left".to_owned()];
 
         assert!(CharacterHurtGeometryCatalog::from_content(&content, &definition).is_err());
+    }
+
+    fn collision_geometry(indices: Vec<u32>, vertex_count: usize) -> RuntimeComponentGeometry {
+        RuntimeComponentGeometry {
+            component_id: "test_collision".into(),
+            name: "test_collision".into(),
+            vertices: (0..vertex_count)
+                .map(|index| Vec2::new(index as f32, 0.0))
+                .collect(),
+            indices,
+        }
+    }
+
+    #[test]
+    fn collision_boundary_excludes_the_shared_triangulation_edge() {
+        let geometry = CollisionComponentGeometry::from_geometry(collision_geometry(
+            vec![0, 1, 2, 0, 2, 3],
+            4,
+        ))
+        .expect("two triangles form valid collision geometry");
+
+        assert_eq!(geometry.boundary_edges(), [[0, 1], [0, 3], [1, 2], [2, 3]]);
+        assert!(!geometry.boundary_edges().contains(&[0, 2]));
+    }
+
+    #[test]
+    fn a_non_manifold_collision_edge_is_rejected() {
+        let error = CollisionComponentGeometry::from_geometry(collision_geometry(
+            vec![0, 1, 2, 1, 0, 3, 0, 1, 4],
+            5,
+        ))
+        .expect_err("three triangles cannot share one collision edge");
+
+        assert!(error.to_string().contains("non-manifold edge"));
     }
 
     #[test]
