@@ -35,6 +35,14 @@ impl MovementStep {
         Vec2::new(velocity.x, velocity.y) * self.seconds_per_tick
     }
 
+    /// The inverse of [`Self::step`]: the velocity that produces `displacement`
+    /// in one tick, so a collision that shortens a step says so as a velocity
+    /// rather than by writing a position.
+    pub fn velocity_of(self, displacement: Vec2) -> MovementVelocity {
+        let velocity = displacement / self.seconds_per_tick;
+        MovementVelocity::new(velocity.x, velocity.y)
+    }
+
     pub fn velocity(
         self,
         intent: MovementIntent,

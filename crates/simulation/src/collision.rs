@@ -17,7 +17,8 @@ use world01_world_data::{BodyFacing, MovementVelocity, Position, SelectedCharact
 use crate::movement::MovementStep;
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
-    GeometryTransform, components_overlap, facing_transform, transformed_points,
+    Contact, GeometryTransform, components_contact, components_overlap, facing_transform,
+    transformed_points,
 };
 
 /// An actor's collision geometry, placed where it stands.
@@ -45,12 +46,20 @@ impl PosedCollider<'_> {
     }
 }
 
-/// Refuses movement that would end inside world geometry or another actor.
+/// Shortens movement that would end inside world geometry or another actor.
 ///
-/// Blocking is all or nothing for now: the actor keeps its position instead of
-/// sliding along the surface it hit. Sliding is a separate decision and belongs
-/// in a later change, because it needs a contact normal this phase does not
-/// compute yet.
+/// A blocked step is retried once along the surface it hit: the component of
+/// the step that points into the surface is removed and the rest is kept, so an
+/// actor walking at a tree slides past it instead of stopping dead. If that
+/// shortened step is blocked too - a corner, or a second collider the slide
+/// runs into - the actor does not move. One retry rather than several, because
+/// each further one can pick a different surface and walk the actor around a
+/// shape it never touched.
+///
+/// Head-on is still a stop, and that is the correct answer rather than a
+/// limitation: a step straight into a surface has no component along it. Actors
+/// do not push each other, so two characters meeting exactly head-on both stand
+/// still, while the slightest offset makes both slide past.
 ///
 /// Every test is against the other actors' *current* positions, so two actors
 /// walking into each other are judged identically no matter which one the query
@@ -97,12 +106,38 @@ pub fn block_colliding_movement(
             continue;
         };
         let proposed = current.translated(displacement);
-        if blocked(proposed, &blockers, &world, &grid, &mut candidates)
-            && !blocked(current, &blockers, &world, &grid, &mut candidates)
+        if !blocked(proposed, &blockers, &world, &grid, &mut candidates)
+            || blocked(current, &blockers, &world, &grid, &mut candidates)
         {
-            *velocity = MovementVelocity::ZERO;
+            continue;
         }
+        let slid = deepest_contact(proposed, &blockers, &world, &grid, &mut candidates)
+            .and_then(|contact| slide_along(displacement, contact))
+            .filter(|slid| {
+                !blocked(
+                    current.translated(*slid),
+                    &blockers,
+                    &world,
+                    &grid,
+                    &mut candidates,
+                )
+            });
+        *velocity = slid.map_or(MovementVelocity::ZERO, |slid| step.velocity_of(slid));
     }
+}
+
+/// The part of `displacement` that runs along the surface rather than into it.
+///
+/// `None` when the step does not point into the surface at all, which means the
+/// contact is not what stopped this step and sliding along it would invent
+/// movement, and when nothing is left to slide with.
+fn slide_along(displacement: Vec2, contact: Contact) -> Option<Vec2> {
+    let into_surface = displacement.dot(contact.normal);
+    if into_surface >= 0.0 {
+        return None;
+    }
+    let slid = displacement - contact.normal * into_surface;
+    (slid.length_squared() > 0.0).then_some(slid)
 }
 
 /// Returns `None` for geometry the broad phase cannot bound, which drops the
@@ -121,6 +156,54 @@ fn posed<'a>(
         transform,
         bounds: Aabb::around(transformed_points(&geometry.components, transform))?,
     })
+}
+
+/// The contact the actor is furthest into, across world geometry and actors
+/// alike, which is the surface its step actually ran into.
+fn deepest_contact(
+    actor: PosedCollider<'_>,
+    blockers: &[PosedCollider<'_>],
+    world: &WorldCollisionGeometryCatalog,
+    grid: &WorldColliderGrid,
+    candidates: &mut Vec<u32>,
+) -> Option<Contact> {
+    let mut deepest: Option<Contact> = None;
+    let mut keep = |contact: Option<Contact>| {
+        if let Some(contact) = contact
+            && deepest.is_none_or(|best| contact.depth > best.depth)
+        {
+            deepest = Some(contact);
+        }
+    };
+    grid.candidates(actor.bounds, candidates);
+    for index in candidates.iter() {
+        let region = &world.regions[*index as usize];
+        let placement = GeometryTransform::translated(region.position);
+        for component in &actor.geometry.components {
+            keep(components_contact(
+                component,
+                actor.transform,
+                &region.component,
+                placement,
+            ));
+        }
+    }
+    for blocker in blockers {
+        if blocker.entity == actor.entity || !blocker.bounds.overlaps(actor.bounds) {
+            continue;
+        }
+        for component in &actor.geometry.components {
+            for other in &blocker.geometry.components {
+                keep(components_contact(
+                    component,
+                    actor.transform,
+                    other,
+                    blocker.transform,
+                ));
+            }
+        }
+    }
+    deepest
 }
 
 fn blocked(
@@ -199,13 +282,27 @@ mod tests {
         )])
     }
 
-    /// A 1 m block covering x in [1, 2] and y in [-0.5, 0.5].
+    fn block(name: &str, corner: Vec2, width: f32, height: f32) -> RuntimeComponentGeometry {
+        RuntimeComponentGeometry {
+            component_id: name.to_owned(),
+            name: name.to_owned(),
+            vertices: vec![
+                corner,
+                corner + Vec2::new(width, 0.0),
+                corner + Vec2::new(width, height),
+                corner + Vec2::new(0.0, height),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        }
+    }
+
+    /// A wall covering x in [1, 2] and y in [-2, 2].
     fn wall() -> WorldCollisionGeometryCatalog {
         WorldCollisionGeometryCatalog {
             regions: vec![PlacedCollisionGeometry {
                 instance_id: "wall".to_owned(),
-                position: Position::new(1.0, -0.5),
-                component: square("block", Vec2::ZERO, 1.0),
+                position: Position::new(1.0, -2.0),
+                component: block("block", Vec2::ZERO, 1.0, 4.0),
             }],
         }
     }
@@ -247,6 +344,29 @@ mod tests {
             .expect("the actor keeps its velocity")
     }
 
+    /// The reason this change exists: a diagonal step at a wall keeps the half
+    /// of itself that runs along the wall instead of being thrown away.
+    #[test]
+    fn a_step_that_grazes_a_wall_keeps_the_part_that_runs_along_it() {
+        let mut app = app(wall());
+        let actor = spawn(
+            &mut app,
+            "walker",
+            Vec2::ZERO,
+            Vec2::splat(ONE_METER_PER_TICK),
+        );
+
+        app.update();
+
+        assert_eq!(
+            velocity_of(&app, actor),
+            MovementVelocity::new(0.0, ONE_METER_PER_TICK)
+        );
+        assert_eq!(position_of(&app, actor), Position::new(0.0, 1.0));
+    }
+
+    /// Not a limitation: a step straight into a surface has no part that runs
+    /// along it, so there is nothing to keep.
     #[test]
     fn a_step_into_world_geometry_is_refused_and_the_actor_stays_put() {
         let mut app = app(wall());
@@ -280,6 +400,38 @@ mod tests {
             MovementVelocity::new(0.0, ONE_METER_PER_TICK)
         );
         assert_eq!(position_of(&app, actor), Position::new(0.0, 1.0));
+    }
+
+    /// Sliding may only shorten a step, never redirect it into something else.
+    #[test]
+    fn a_slide_that_would_end_inside_a_second_collider_stops_instead() {
+        let mut app = app(WorldCollisionGeometryCatalog {
+            regions: vec![
+                PlacedCollisionGeometry {
+                    instance_id: "wall".to_owned(),
+                    position: Position::new(1.0, -2.0),
+                    component: block("block", Vec2::ZERO, 1.0, 4.0),
+                },
+                // Clear of where the diagonal step would end, but across the
+                // slide that step would turn into.
+                PlacedCollisionGeometry {
+                    instance_id: "ledge".to_owned(),
+                    position: Position::new(-1.0, 0.5),
+                    component: block("block", Vec2::ZERO, 1.5, 1.0),
+                },
+            ],
+        });
+        let actor = spawn(
+            &mut app,
+            "walker",
+            Vec2::ZERO,
+            Vec2::splat(ONE_METER_PER_TICK),
+        );
+
+        app.update();
+
+        assert_eq!(velocity_of(&app, actor), MovementVelocity::ZERO);
+        assert_eq!(position_of(&app, actor), Position::ZERO);
     }
 
     #[test]
