@@ -14,7 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 16;
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 16;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
@@ -367,12 +367,11 @@ fn validate_character_manifest(
         ));
     }
     validate_asset_contents(manifest)?;
-    if manifest.schema_version >= 9 && expected_key == "hammerer" {
+    if expected_key == "hammerer" {
         attachment_frame(manifest, WEAPON_SOCKET_ROLE)?;
     }
     for component in &manifest.components {
-        if manifest.schema_version >= 8
-            && expected_key != "barde"
+        if expected_key != "barde"
             && (component.name == "eye_left" || component.name == "eye_right")
             && component.closed_region_mesh.is_none()
         {

@@ -4,6 +4,8 @@ use bevy::{
     asset::RenderAssetUsages, mesh::Indices, prelude::*, render::render_resource::PrimitiveTopology,
 };
 #[cfg(test)]
+use world01_content::RUNTIME_MANIFEST_SCHEMA_VERSION;
+#[cfg(test)]
 use world01_content::RuntimeFrameTransform;
 #[cfg(test)]
 use world01_content::WEAPON_REACH_LIMIT_ROLE;
@@ -1319,7 +1321,7 @@ mod tests {
             .expect("Hammer attack point is valid");
         let reach_limit =
             attachment_frame(hammer, WEAPON_REACH_LIMIT_ROLE).expect("Hammer reach limit is valid");
-        assert!(matches!(hammer.schema_version, 14 | 15));
+        assert_eq!(hammer.schema_version, RUNTIME_MANIFEST_SCHEMA_VERSION);
         assert_eq!(hammer.asset_type, "weapons");
         assert!(Vec2::from_array(grip.asset_transform.position).is_finite());
         assert!(Vec2::from_array(secondary_grip.asset_transform.position).is_finite());

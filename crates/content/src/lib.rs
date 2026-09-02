@@ -12,9 +12,10 @@ pub use derived::{
     RuntimeComponentGeometry, WorldCollisionGeometryCatalog,
 };
 pub use manifest::{
-    AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RuntimeAttachmentFrame, RuntimeComponent,
-    RuntimeContent, RuntimeFrameTransform, RuntimeManifest, RuntimeMesh, RuntimePresentation,
-    RuntimeProjectionDepthCorner, RuntimeRegion, RuntimeRegionMesh, RuntimeStrokeMesh,
-    RuntimeStrokeRun, RuntimeTransform, WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE,
-    WEAPON_REACH_LIMIT_ROLE, WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
+    AuthoredFacing, ContentError, HAMMER_ASSET_KEY, RUNTIME_MANIFEST_SCHEMA_VERSION,
+    RuntimeAttachmentFrame, RuntimeComponent, RuntimeContent, RuntimeFrameTransform,
+    RuntimeManifest, RuntimeMesh, RuntimePresentation, RuntimeProjectionDepthCorner, RuntimeRegion,
+    RuntimeRegionMesh, RuntimeStrokeMesh, RuntimeStrokeRun, RuntimeTransform,
+    WEAPON_ATTACK_POINT_ROLE, WEAPON_GRIP_ROLE, WEAPON_REACH_LIMIT_ROLE,
+    WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE,
 };

@@ -198,8 +198,8 @@ presentation. A future game-owned asset contract must extend this boundary
 rather than parse raw manifests elsewhere. No general asset-contract
 registration API exists yet.
 
-PolyTools schema 15 additionally exposes optional authored Regions with
-`attack`, `hurt`, or `collision` roles. The content boundary validates and
+PolyTools schema 16 exposes authored and Component-bound Regions with `attack`,
+`hurt`, or `collision` roles. The content boundary validates both variants and
 converts them into typed geometry. Current Character Hurt and Hammer attack
 derivation retains its earlier Component-based fallback when the corresponding
 authored Regions are absent. Placed props participate in Mage projectile
