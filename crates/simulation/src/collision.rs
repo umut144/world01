@@ -203,9 +203,9 @@ fn deepest_contact(
         let placement = GeometryTransform::translated(region.position);
         for component in &actor.geometry.components {
             keep(components_contact(
-                component,
+                component.geometry(),
                 actor.transform,
-                &region.component,
+                region.component.geometry(),
                 placement,
             ));
         }
@@ -217,9 +217,9 @@ fn deepest_contact(
         for component in &actor.geometry.components {
             for other in &blocker.geometry.components {
                 keep(components_contact(
-                    component,
+                    component.geometry(),
                     actor.transform,
-                    other,
+                    other.geometry(),
                     blocker.transform,
                 ));
             }
@@ -240,7 +240,12 @@ fn blocked(
         let region = &world.regions[*index as usize];
         let placement = GeometryTransform::translated(region.position);
         for component in &actor.geometry.components {
-            if components_overlap(component, actor.transform, &region.component, placement) {
+            if components_overlap(
+                component.geometry(),
+                actor.transform,
+                region.component.geometry(),
+                placement,
+            ) {
                 return true;
             }
         }
@@ -253,11 +258,14 @@ fn blocked(
 
 fn overlaps(actor: PosedCollider<'_>, blocker: PosedCollider<'_>) -> bool {
     actor.geometry.components.iter().any(|component| {
-        blocker
-            .geometry
-            .components
-            .iter()
-            .any(|other| components_overlap(component, actor.transform, other, blocker.transform))
+        blocker.geometry.components.iter().any(|other| {
+            components_overlap(
+                component.geometry(),
+                actor.transform,
+                other.geometry(),
+                blocker.transform,
+            )
+        })
     })
 }
 

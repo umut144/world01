@@ -2,7 +2,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     error::Error,
     fmt,
-    ops::Deref,
 };
 
 use bevy::prelude::{Resource, Vec2};
@@ -646,14 +645,6 @@ fn position_key(point: Vec2) -> [u32; 2] {
 
 fn coordinate_key(value: f32) -> u32 {
     if value == 0.0 { 0 } else { value.to_bits() }
-}
-
-impl Deref for CollisionComponentGeometry {
-    type Target = RuntimeComponentGeometry;
-
-    fn deref(&self) -> &Self::Target {
-        &self.geometry
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

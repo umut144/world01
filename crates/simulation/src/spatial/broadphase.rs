@@ -83,6 +83,7 @@ impl WorldColliderGrid {
             let bounds = Aabb::around(
                 region
                     .component
+                    .geometry()
                     .vertices
                     .iter()
                     .map(|vertex| placement + *vertex),
@@ -165,6 +166,7 @@ mod tests {
         Aabb::around(
             region
                 .component
+                .geometry()
                 .vertices
                 .iter()
                 .map(|vertex| placement + *vertex),

@@ -285,10 +285,14 @@ pub fn apply_mage_beam_damage(
 
             for region in &world_collision.regions {
                 let transform = GeometryTransform::translated(region.position);
-                if components_overlap(&beam_geometry, beam_transform, &region.component, transform)
-                {
+                if components_overlap(
+                    &beam_geometry,
+                    beam_transform,
+                    region.component.geometry(),
+                    transform,
+                ) {
                     let distance = component_projection_minimum(
-                        &region.component,
+                        region.component.geometry(),
                         transform,
                         origin,
                         direction,
