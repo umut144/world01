@@ -16,6 +16,9 @@ use crate::manifest::{
     WEAPON_REACH_LIMIT_ROLE, WEAPON_SECONDARY_GRIP_ROLE, WEAPON_SOCKET_ROLE, attachment_frame,
 };
 
+/// Shorter collision edges do not define a trustworthy surface axis.
+const MIN_COLLISION_EDGE_LENGTH_METERS: f32 = 0.000_01;
+
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct CharacterHealthCatalog {
     max_hp: HashMap<CharacterId, f32>,
@@ -581,6 +584,16 @@ impl CollisionComponentGeometry {
                 geometry.name
             )));
         }
+        let mut referenced_vertices = vec![false; geometry.vertices.len()];
+        for index in &geometry.indices {
+            referenced_vertices[*index as usize] = true;
+        }
+        if referenced_vertices.iter().any(|referenced| !referenced) {
+            return Err(RegionGeometryError(format!(
+                "collision geometry '{}' contains an unreferenced vertex",
+                geometry.name
+            )));
+        }
         let mut edge_counts = BTreeMap::<[[u32; 2]; 2], (u8, [Vec2; 2])>::new();
         for triangle in geometry.indices.chunks_exact(3) {
             for edge in [
@@ -618,6 +631,15 @@ impl CollisionComponentGeometry {
             .into_iter()
             .filter_map(|(_, (count, points))| (count == 1).then_some(points))
             .collect::<Vec<_>>();
+        if boundary_edges
+            .iter()
+            .any(|edge| edge[0].distance(edge[1]) <= MIN_COLLISION_EDGE_LENGTH_METERS)
+        {
+            return Err(RegionGeometryError(format!(
+                "collision geometry '{}' contains a boundary edge shorter than {MIN_COLLISION_EDGE_LENGTH_METERS} m",
+                geometry.name
+            )));
+        }
         if boundary_edges.is_empty() {
             return Err(RegionGeometryError(format!(
                 "collision geometry '{}' has no boundary edges",
@@ -1161,6 +1183,33 @@ mod tests {
         .expect_err("three triangles cannot share one collision edge");
 
         assert!(error.to_string().contains("non-manifold edge"));
+    }
+
+    #[test]
+    fn an_unreferenced_collision_vertex_is_rejected() {
+        let mut vertices = square_vertices();
+        vertices.push(Vec2::splat(100.0));
+        let error = CollisionComponentGeometry::from_geometry(collision_geometry(
+            vertices,
+            vec![0, 1, 2, 0, 2, 3],
+        ))
+        .expect_err("unreferenced vertices must not enlarge collision bounds");
+
+        assert!(error.to_string().contains("unreferenced vertex"));
+    }
+
+    #[test]
+    fn a_collision_edge_below_the_surface_threshold_is_rejected() {
+        let vertices = vec![
+            Vec2::ZERO,
+            Vec2::new(MIN_COLLISION_EDGE_LENGTH_METERS * 0.5, 0.0),
+            Vec2::Y,
+        ];
+        let error =
+            CollisionComponentGeometry::from_geometry(collision_geometry(vertices, vec![0, 1, 2]))
+                .expect_err("a near-degenerate edge cannot define a surface axis");
+
+        assert!(error.to_string().contains("edge shorter than"));
     }
 
     #[test]
