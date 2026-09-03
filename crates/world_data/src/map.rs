@@ -549,6 +549,19 @@ mod tests {
     }
 
     #[test]
+    fn embedded_export_metadata_is_valid_and_unique() {
+        let mut scene_ids = HashSet::new();
+        for (_, scene_id, scene_kind, _) in EMBEDDED_WORLD_EXPORTS {
+            assert!(!scene_id.is_empty());
+            assert!(matches!(*scene_kind, "instance" | "template"));
+            assert!(
+                scene_ids.insert(*scene_id),
+                "duplicate scene ID: {scene_id}"
+            );
+        }
+    }
+
+    #[test]
     fn obsolete_export_and_scene_versions_are_rejected() {
         assert!(
             WorldMap::from_source(
