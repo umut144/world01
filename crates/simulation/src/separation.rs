@@ -136,24 +136,33 @@ mod tests {
 
     use super::*;
     use bevy::prelude::{App, Update};
-    use world01_content::{AuthoredFacing, CollisionComponentGeometry, RuntimeComponentGeometry};
+    use world01_content::{
+        AuthoredFacing, CollisionComponentGeometry, RuntimeComponentGeometry, RuntimeContent,
+    };
     use world01_world_data::{CharacterLifeState, DashState, RunState};
+
+    use crate::spatial::overlap::component_separation;
 
     const EPSILON: f32 = 0.000_01;
 
-    fn square_at(name: &str, offset: Vec2) -> CollisionComponentGeometry {
+    fn rectangle_at(name: &str, offset: Vec2, size: Vec2) -> CollisionComponentGeometry {
+        let half_size = size / 2.0;
         CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
             component_id: name.to_owned(),
             name: name.to_owned(),
             vertices: vec![
-                offset + Vec2::splat(-0.2),
-                offset + Vec2::new(0.2, -0.2),
-                offset + Vec2::splat(0.2),
-                offset + Vec2::new(-0.2, 0.2),
+                offset - half_size,
+                offset + Vec2::new(half_size.x, -half_size.y),
+                offset + half_size,
+                offset + Vec2::new(-half_size.x, half_size.y),
             ],
             indices: vec![0, 1, 2, 0, 2, 3],
         })
-        .expect("the test square has valid collision topology")
+        .expect("the test rectangle has valid collision topology")
+    }
+
+    fn square_at(name: &str, offset: Vec2) -> CollisionComponentGeometry {
+        rectangle_at(name, offset, Vec2::splat(0.4))
     }
 
     fn geometry(component_count: usize) -> CharacterCollisionGeometry {
@@ -166,12 +175,16 @@ mod tests {
     }
 
     fn app_with_geometry(geometry: CharacterCollisionGeometry) -> App {
-        let mut app = App::new();
-        app.insert_resource(CharacterCollisionGeometryCatalog::from_geometries([(
+        app_with_catalog(CharacterCollisionGeometryCatalog::from_geometries([(
             world01_world_data::CharacterId("walker".into()),
             geometry,
         )]))
-        .add_systems(Update, separate_overlapping_characters);
+    }
+
+    fn app_with_catalog(catalog: CharacterCollisionGeometryCatalog) -> App {
+        let mut app = App::new();
+        app.insert_resource(catalog)
+            .add_systems(Update, separate_overlapping_characters);
         app
     }
 
@@ -184,10 +197,20 @@ mod tests {
     }
 
     fn spawn(app: &mut App, actor_id: u64, position: Vec2, mass: CharacterMass) -> Entity {
+        spawn_as(app, actor_id, "walker", position, mass)
+    }
+
+    fn spawn_as(
+        app: &mut App,
+        actor_id: u64,
+        character: &str,
+        position: Vec2,
+        mass: CharacterMass,
+    ) -> Entity {
         app.world_mut()
             .spawn((
                 ActorId(actor_id),
-                SelectedCharacter(world01_world_data::CharacterId("walker".into())),
+                SelectedCharacter(world01_world_data::CharacterId(character.into())),
                 BodyFacing::Right,
                 Position::new(position.x, position.y),
                 mass,
@@ -208,6 +231,66 @@ mod tests {
             actual.distance(expected) <= EPSILON,
             "{actual:?} != {expected:?}"
         );
+    }
+
+    fn remaining_component_penetration(
+        app: &App,
+        character: &str,
+        first: Entity,
+        second: Entity,
+    ) -> f32 {
+        let geometry = app
+            .world()
+            .resource::<CharacterCollisionGeometryCatalog>()
+            .character(&world01_world_data::CharacterId(character.into()))
+            .expect("the measured Character has collision geometry");
+        let first_transform = facing_transform(
+            geometry.authored_facing,
+            *app.world()
+                .get::<Position>(first)
+                .expect("the first actor keeps its Position"),
+            BodyFacing::Right,
+        );
+        let second_transform = facing_transform(
+            geometry.authored_facing,
+            *app.world()
+                .get::<Position>(second)
+                .expect("the second actor keeps its Position"),
+            BodyFacing::Right,
+        );
+
+        geometry
+            .components
+            .iter()
+            .flat_map(|component| {
+                geometry.components.iter().filter_map(move |other| {
+                    component_separation(component, first_transform, other, second_transform)
+                        .map(|separation| separation.separation_distance)
+                })
+            })
+            .sum()
+    }
+
+    fn assert_converges_within(
+        app: &mut App,
+        character: &str,
+        first: Entity,
+        second: Entity,
+        tick_budget: usize,
+    ) -> usize {
+        let mut remaining = remaining_component_penetration(app, character, first, second);
+        assert!(remaining > 0.0, "the regression starts overlapped");
+
+        for tick in 0..tick_budget {
+            app.update();
+            remaining = remaining_component_penetration(app, character, first, second);
+            assert!(remaining.is_finite(), "remaining penetration is finite");
+            if remaining <= EPSILON {
+                return tick + 1;
+            }
+        }
+
+        panic!("the pair still has {remaining} m of summed penetration after {tick_budget} ticks");
     }
 
     #[test]
@@ -391,6 +474,60 @@ mod tests {
         let half = (0.3 + SEPARATION_CLEARANCE_METERS) / 2.0;
         assert_vec2(position(&app, first), Vec2::new(-half, 0.0));
         assert_vec2(position(&app, second), Vec2::new(0.3 + half, 0.0));
+    }
+
+    fn stacked_character_positions(spawn_order: [u64; 2]) -> BTreeMap<u64, Vec2> {
+        let geometry = CharacterCollisionGeometry {
+            authored_facing: AuthoredFacing::Right,
+            components: vec![
+                rectangle_at("feet", Vec2::new(0.0, 0.1), Vec2::new(1.0, 0.2)),
+                rectangle_at("body", Vec2::new(0.0, 0.7), Vec2::new(1.0, 1.0)),
+            ],
+        };
+        let mut app = app_with_geometry(geometry);
+        let starts = [(1, Vec2::ZERO), (2, Vec2::ZERO)];
+        let mut entities = BTreeMap::new();
+        for actor_id in spawn_order {
+            let start = starts
+                .iter()
+                .find_map(|(id, position)| (*id == actor_id).then_some(*position))
+                .expect("the spawn order names both actors");
+            entities.insert(actor_id, spawn(&mut app, actor_id, start, mass(1.0, 0.6)));
+        }
+
+        let ticks = assert_converges_within(&mut app, "walker", entities[&1], entities[&2], 16);
+        assert!(
+            ticks > 1,
+            "the stacked Regions exercise multi-tick settling"
+        );
+        entities
+            .into_iter()
+            .map(|(actor_id, entity)| (actor_id, position(&app, entity)))
+            .collect()
+    }
+
+    #[test]
+    fn stacked_character_regions_converge_independently_from_spawn_order() {
+        assert_eq!(
+            stacked_character_positions([1, 2]),
+            stacked_character_positions([2, 1])
+        );
+    }
+
+    #[test]
+    fn embedded_hammerers_converge_with_real_collision_geometry() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let catalog = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded Character collision geometry is valid");
+        let mut app = app_with_catalog(catalog);
+        let first = spawn_as(&mut app, 1, "hammerer", Vec2::ZERO, mass(1.0, 0.6));
+        let second = spawn_as(&mut app, 2, "hammerer", Vec2::new(0.0, 0.5), mass(1.0, 0.6));
+
+        // Resolving the deepest body pair first temporarily deepens another
+        // Component pairing, so the contract is bounded eventual clearance,
+        // not a monotonic decrease after every individual tick.
+        let ticks = assert_converges_within(&mut app, "hammerer", first, second, 16);
+        assert!(ticks > 1, "the real Regions exercise multi-tick settling");
     }
 
     #[test]
