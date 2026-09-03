@@ -1,5 +1,7 @@
 .DS_Store
 target/
+/assets/.maps.*/
+/assets/.maps-backup.*/
 /reference_drawings/5 chars/glavier03.JPG
 /reference_drawings/5 chars/hammerer01.JPG
 /reference_drawings/5 chars/mage03.JPG

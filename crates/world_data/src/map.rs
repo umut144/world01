@@ -193,25 +193,11 @@ impl WorldMap {
 }
 
 fn embedded_instance_source(scene_id: &str) -> Result<&'static str, WorldMapError> {
-    let mut matched = None;
-    for (file_name, source) in EMBEDDED_WORLD_EXPORTS {
-        let export: ExportDocument = serde_json::from_str(source).map_err(|error| {
-            WorldMapError::new(format!(
-                "cannot parse embedded SceneMaker export '{file_name}': {error}"
-            ))
-        })?;
-        if export.scene.scene_id != scene_id {
-            continue;
-        }
-        if matched.is_some() {
-            return Err(WorldMapError::new(format!(
-                "embedded SceneMaker scene ID '{scene_id}' is duplicated"
-            )));
-        }
-        matched = Some((export.scene.scene_kind, *source));
-    }
-
-    let Some((scene_kind, source)) = matched else {
+    let Some((_, _, scene_kind, source)) = EMBEDDED_WORLD_EXPORTS
+        .iter()
+        .find(|entry| entry.1 == scene_id)
+        .copied()
+    else {
         return Err(WorldMapError::new(format!(
             "SceneMaker Instance '{scene_id}' is not embedded"
         )));
@@ -366,7 +352,7 @@ struct ExportDocument {
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
     #[serde(rename = "water_raster")]
-    _water_raster: Vec<serde_json::Value>,
+    _water_raster: Vec<serde::de::IgnoredAny>,
     scene: SceneDocument,
 }
 
@@ -397,7 +383,7 @@ struct SceneDocument {
     terrain_cells: Vec<TerrainCellDocument>,
     props: Vec<PropDocument>,
     #[serde(rename = "water_bodies")]
-    _water_bodies: Vec<serde_json::Value>,
+    _water_bodies: Vec<serde::de::IgnoredAny>,
     template_anchors: Vec<TemplateAnchorDocument>,
 }
 
