@@ -1,0 +1,668 @@
+{
+  "format": "scene_maker_scene_export",
+  "version": 9,
+  "workspace_key": "world01",
+  "grid": {
+    "terrain_cell_meters": 1.0,
+    "authoring_pixels_per_meter": 32,
+    "game_pixels_per_meter": 192,
+    "water_cell_meters": 0.5
+  },
+  "asset_profiles": [
+    {
+      "asset_key": "ankh",
+      "surface": null,
+      "footprint_meters": {
+        "width": 1.0625,
+        "height": 1.71875
+      },
+      "anchor_meters": {
+        "x": 0.53125,
+        "y": 0.3125
+      }
+    },
+    {
+      "asset_key": "grass",
+      "surface": "land",
+      "footprint_meters": null,
+      "anchor_meters": null
+    },
+    {
+      "asset_key": "river",
+      "surface": "water",
+      "footprint_meters": null,
+      "anchor_meters": null
+    },
+    {
+      "asset_key": "tree",
+      "surface": null,
+      "footprint_meters": {
+        "width": 6.4375,
+        "height": 8.0625
+      },
+      "anchor_meters": {
+        "x": 3.21875,
+        "y": 0.03125
+      }
+    }
+  ],
+  "water_raster": [],
+  "scene": {
+    "schema": "srt.scene_maker_scene",
+    "version": 10,
+    "scene_id": "test_template",
+    "scene_kind": "template",
+    "coordinate_space": "scene_local_bottom_left_y_up",
+    "size_cells": {
+      "width": 10,
+      "height": 10
+    },
+    "terrain_cells": [
+      {
+        "x": 0,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 0,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 1,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 2,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 3,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 4,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 5,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 6,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 7,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 8,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 0,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 1,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 2,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 3,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 4,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 5,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 6,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 7,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 8,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      },
+      {
+        "x": 9,
+        "y": 9,
+        "asset_key": "grass",
+        "elevation_meters": 1.0
+      }
+    ],
+    "props": [],
+    "water_bodies": [],
+    "template_definition": {
+      "group_number": 1,
+      "insertion_anchor_authoring_px": {
+        "x": 160,
+        "y": 160
+      }
+    },
+    "template_anchors": [],
+    "default_elevation_meters": 1.0
+  }
+}

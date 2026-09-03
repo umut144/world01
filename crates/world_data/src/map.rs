@@ -10,11 +10,13 @@ use serde::Deserialize;
 use crate::Position;
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 5;
+const FORMAT_VERSION: u32 = 9;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 7;
+const SCENE_VERSION: u32 = 10;
 const WORKSPACE_KEY: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
+
+include!(concat!(env!("OUT_DIR"), "/embedded_world_exports.rs"));
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct WorldMap {
@@ -29,15 +31,10 @@ pub struct WorldMap {
 impl WorldMap {
     /// Loads the embedded Instance named `scene_id`.
     ///
-    /// Exactly one Instance is embedded today, so naming another is an error
-    /// rather than a choice. The directory sync that brings the Workspace's
-    /// other Scenes along is a separate change; what already holds here is that
-    /// nothing loads a map the caller did not name.
+    /// Every synchronized SceneMaker export is embedded, including Templates,
+    /// but only an explicitly requested Instance may become a `WorldMap`.
     pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
-        Self::from_source(
-            include_str!("../../../assets/maps/overworld01.scene_export.json"),
-            scene_id,
-        )
+        Self::from_source(embedded_instance_source(scene_id)?, scene_id)
     }
 
     pub fn from_source(source: &str, scene_id: &str) -> Result<Self, WorldMapError> {
@@ -69,6 +66,11 @@ impl WorldMap {
         {
             return Err(WorldMapError::new(
                 "game_pixels_per_meter must be finite and greater than zero",
+            ));
+        }
+        if !export.grid.water_cell_meters.is_finite() || export.grid.water_cell_meters <= 0.0 {
+            return Err(WorldMapError::new(
+                "water_cell_meters must be finite and greater than zero",
             ));
         }
 
@@ -188,6 +190,38 @@ impl WorldMap {
     pub fn template_anchors(&self) -> &[MapTemplateAnchor] {
         &self.template_anchors
     }
+}
+
+fn embedded_instance_source(scene_id: &str) -> Result<&'static str, WorldMapError> {
+    let mut matched = None;
+    for (file_name, source) in EMBEDDED_WORLD_EXPORTS {
+        let export: ExportDocument = serde_json::from_str(source).map_err(|error| {
+            WorldMapError::new(format!(
+                "cannot parse embedded SceneMaker export '{file_name}': {error}"
+            ))
+        })?;
+        if export.scene.scene_id != scene_id {
+            continue;
+        }
+        if matched.is_some() {
+            return Err(WorldMapError::new(format!(
+                "embedded SceneMaker scene ID '{scene_id}' is duplicated"
+            )));
+        }
+        matched = Some((export.scene.scene_kind, *source));
+    }
+
+    let Some((scene_kind, source)) = matched else {
+        return Err(WorldMapError::new(format!(
+            "SceneMaker Instance '{scene_id}' is not embedded"
+        )));
+    };
+    if scene_kind != "instance" {
+        return Err(WorldMapError::new(format!(
+            "SceneMaker scene '{scene_id}' is a '{scene_kind}', not an Instance"
+        )));
+    }
+    Ok(source)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -331,6 +365,8 @@ struct ExportDocument {
     workspace_key: String,
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
+    #[serde(rename = "water_raster")]
+    _water_raster: Vec<serde_json::Value>,
     scene: SceneDocument,
 }
 
@@ -339,6 +375,7 @@ struct GridDocument {
     terrain_cell_meters: f32,
     authoring_pixels_per_meter: f32,
     game_pixels_per_meter: f32,
+    water_cell_meters: f32,
 }
 
 #[derive(Deserialize)]
@@ -359,6 +396,8 @@ struct SceneDocument {
     coordinate_space: String,
     terrain_cells: Vec<TerrainCellDocument>,
     props: Vec<PropDocument>,
+    #[serde(rename = "water_bodies")]
+    _water_bodies: Vec<serde_json::Value>,
     template_anchors: Vec<TemplateAnchorDocument>,
 }
 
@@ -434,13 +473,15 @@ fn export_document(
             "grid": {{
                 "terrain_cell_meters": 1.0,
                 "authoring_pixels_per_meter": 32.0,
-                "game_pixels_per_meter": 192.0
+                "game_pixels_per_meter": 192.0,
+                "water_cell_meters": 0.5
             }},
             "asset_profiles": [
                 {{ "asset_key": "grass", "surface": "land" }},
                 {{ "asset_key": "ankh", "surface": null }},
                 {{ "asset_key": "tree", "surface": null }}
             ],
+            "water_raster": [],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -450,6 +491,7 @@ fn export_document(
                 "coordinate_space": "{COORDINATE_SPACE}",
                 "terrain_cells": [{terrain_cells}],
                 "props": [{props}],
+                "water_bodies": [],
                 "template_anchors": [{anchors}],
                 "default_elevation_meters": 1.0
             }}
@@ -491,12 +533,51 @@ mod tests {
         );
     }
 
-    /// The Workspace holds more than one Instance, so a map is loaded by name
-    /// and a name that is not there fails instead of loading whatever is.
+    /// The embedded directory is a catalog rather than one hard-coded file.
     #[test]
-    fn a_map_that_is_not_embedded_is_refused_rather_than_substituted() {
-        assert!(WorldMap::load_embedded("cave01").is_err());
+    fn embedded_instances_are_selected_by_scene_id() {
+        let overworld = WorldMap::load_embedded("overworld01")
+            .expect("the embedded overworld Instance is valid");
+        let cave = WorldMap::load_embedded("cave01").expect("the embedded cave Instance is valid");
+
+        assert!(overworld.width_tiles() > cave.width_tiles());
+        assert!(overworld.height_tiles() > cave.height_tiles());
+    }
+
+    #[test]
+    fn templates_and_unknown_names_are_not_substituted_for_instances() {
+        let template = WorldMap::load_embedded("test_template")
+            .expect_err("an embedded Template is not a WorldMap");
+        assert!(template.to_string().contains("not an Instance"));
+        assert!(WorldMap::load_embedded("not_a_scene").is_err());
         assert!(WorldMap::from_source(&test_export(TEST_GRASS_CELL, ""), "elsewhere").is_err());
+    }
+
+    #[test]
+    fn embedded_export_files_are_catalogued_in_stable_order() {
+        assert!(
+            EMBEDDED_WORLD_EXPORTS
+                .windows(2)
+                .all(|pair| pair[0].0 < pair[1].0)
+        );
+    }
+
+    #[test]
+    fn obsolete_export_and_scene_versions_are_rejected() {
+        assert!(
+            WorldMap::from_source(
+                &export_document(5, 10, TEST_GRASS_CELL, "", ""),
+                TEST_SCENE_ID
+            )
+            .is_err()
+        );
+        assert!(
+            WorldMap::from_source(
+                &export_document(9, 7, TEST_GRASS_CELL, "", ""),
+                TEST_SCENE_ID
+            )
+            .is_err()
+        );
     }
 
     #[test]
