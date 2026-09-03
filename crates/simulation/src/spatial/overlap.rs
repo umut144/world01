@@ -94,21 +94,8 @@ pub(crate) fn components_overlap(
     false
 }
 
-/// The exact translation that brings the first Component to touching the
-/// second along one authored boundary axis.
-///
-/// This is deliberately independent from triangle winding and from the
-/// triangle-pair contact heuristic used by current movement blocking. It first
-/// asks the existing narrow phase whether the Components overlap, then finds
-/// the smallest translation that makes their complete projections touch on a
-/// boundary axis from either Component. For a non-convex Component that is a
-/// conservative convex-hull separation and may move farther than the locally
-/// shortest way out. Clearance beyond exact touching belongs to the system
-/// that eventually applies this result, not to this geometry calculation.
-/// Equal escape distances are oriented from the posed point sets rather than
-/// triangle winding. Two geometrically indistinguishable Components at the
-/// same pose cannot supply an antisymmetric answer, so they use the canonical
-/// positive axis deterministically.
+/// A direction and distance that bring one Component to exact contact with
+/// another.
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ComponentSeparation {
@@ -125,6 +112,26 @@ struct SeparationCandidate {
     axis: Vec2,
 }
 
+/// Finds the smallest exact-contact translation along an authored surface
+/// normal of either Component.
+///
+/// This is deliberately independent from triangle winding and from the
+/// triangle-pair contact heuristic used by current movement blocking. It first
+/// asks the existing narrow phase whether the Components overlap, then finds
+/// the smallest translation that makes their complete projections touch. Any
+/// axis that separates the complete projections would produce a valid
+/// separation; restricting candidates to boundary edges additionally keeps the
+/// chosen direction tied to a real surface instead of an interior
+/// triangulation seam.
+///
+/// For a non-convex Component this is a conservative convex-hull separation
+/// and may move farther than the locally shortest way out. Clearance beyond
+/// exact touching belongs to the system that eventually applies this result,
+/// not to this geometry calculation. Equal escape distances are oriented from
+/// the posed point sets rather than triangle winding. Two geometrically
+/// indistinguishable Components at the same pose cannot supply an
+/// antisymmetric answer, so they use the canonical positive axis
+/// deterministically.
 #[cfg(test)]
 pub(crate) fn component_separation(
     first: &CollisionComponentGeometry,
@@ -143,8 +150,8 @@ pub(crate) fn component_separation(
 
     let first_points = transformed_points(first.geometry(), first_transform).collect::<Vec<_>>();
     let second_points = transformed_points(second.geometry(), second_transform).collect::<Vec<_>>();
-    let shape_order = compare_point_sets(&first_points, &second_points);
-    let projection_origin = first_points[0];
+    let projection_origin = *first_points.first()?;
+    let mut shape_order = None;
     let mut best: Option<SeparationCandidate> = None;
 
     for (edge, transform) in first
@@ -160,10 +167,19 @@ pub(crate) fn component_separation(
     {
         let start = transform_point(transform, edge[0]);
         let end = transform_point(transform, edge[1]);
-        let axis = canonical_axis((end - start).perp())?;
+        let Some(axis) = canonical_axis((end - start).perp()) else {
+            continue;
+        };
         let first_projection = projection_bounds(&first_points, projection_origin, axis);
         let second_projection = projection_bounds(&second_points, projection_origin, axis);
-        let candidate = separation_on_axis(first_projection, second_projection, axis, shape_order);
+        let candidate = separation_on_axis(
+            first_projection,
+            second_projection,
+            axis,
+            &mut shape_order,
+            &first_points,
+            &second_points,
+        );
         if best.is_none_or(|current| compare_candidates(candidate, current).is_lt()) {
             best = Some(candidate);
         }
@@ -206,13 +222,17 @@ fn separation_on_axis(
     first: (f32, f32),
     second: (f32, f32),
     axis: Vec2,
-    shape_order: Ordering,
+    shape_order: &mut Option<Ordering>,
+    first_points: &[Vec2],
+    second_points: &[Vec2],
 ) -> SeparationCandidate {
     let (negative_distance, positive_distance) = axis_translation_distances(first, second);
     let (normal, separation_distance) = match negative_distance.total_cmp(&positive_distance) {
         Ordering::Less => (-axis, negative_distance),
         Ordering::Greater => (axis, positive_distance),
-        Ordering::Equal => match shape_order {
+        Ordering::Equal => match *shape_order
+            .get_or_insert_with(|| compare_point_sets(first_points, second_points))
+        {
             Ordering::Less => (-axis, negative_distance),
             Ordering::Greater | Ordering::Equal => (axis, positive_distance),
         },
@@ -414,7 +434,12 @@ fn max_value(values: [f32; 3]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use world01_content::RuntimeComponentGeometry;
+    use std::f32::consts::FRAC_1_SQRT_2;
+
+    use world01_content::{
+        CharacterCollisionGeometryCatalog, RuntimeComponentGeometry, RuntimeContent,
+    };
+    use world01_world_data::CharacterId;
 
     const ASSERT_EPSILON: f32 = 0.000_01;
     const TEST_CLEARANCE: f32 = 0.001;
@@ -458,6 +483,14 @@ mod tests {
                 Vec2::new(0.0, 2.0),
             ],
             vec![0, 1, 3, 1, 2, 3, 0, 3, 5, 3, 4, 5],
+        )
+    }
+
+    fn right_triangle(name: &str) -> CollisionComponentGeometry {
+        collision_geometry(
+            name,
+            vec![Vec2::ZERO, Vec2::new(2.0, 0.0), Vec2::new(0.0, 2.0)],
+            vec![0, 1, 2],
         )
     }
 
@@ -653,6 +686,20 @@ mod tests {
             second_from_first.separation_distance,
         );
         assert_vec2(first_from_second.normal, -second_from_first.normal);
+        assert_separates(
+            &first,
+            GeometryTransform::IDENTITY,
+            &second,
+            translated(0.9, 0.0),
+            first_from_second,
+        );
+        assert_separates(
+            &second,
+            translated(0.9, 0.0),
+            &first,
+            GeometryTransform::IDENTITY,
+            second_from_first,
+        );
     }
 
     #[test]
@@ -676,23 +723,59 @@ mod tests {
 
         assert_vec2(shifted.normal, baseline.normal);
         assert_close(shifted.separation_distance, baseline.separation_distance);
+        assert_separates(
+            &first,
+            GeometryTransform::IDENTITY,
+            &second,
+            translated(0.9, 0.0),
+            baseline,
+        );
+        assert_separates(
+            &first,
+            translated(3.0, -2.0),
+            &second,
+            translated(3.9, -2.0),
+            shifted,
+        );
     }
 
     #[test]
-    fn a_mirrored_deep_overlap_keeps_the_same_surface_normal() {
-        let first = rectangle("first", Vec2::ZERO, Vec2::ONE);
-        let second = rectangle("second", Vec2::ZERO, Vec2::ONE);
+    fn a_mirrored_slanted_surface_mirrors_its_separation_normal() {
+        let actor = rectangle("actor", Vec2::splat(-0.1), Vec2::splat(0.1));
+        let triangle = right_triangle("triangle");
         let mirrored = GeometryTransform {
-            origin: Vec2::X,
+            origin: Vec2::ZERO,
             axis_x: Vec2::NEG_X,
             axis_y: Vec2::Y,
         };
-        let separation = component_separation(&first, mirrored, &second, translated(0.2, 0.0))
-            .expect("the mirrored rectangle overlaps deeply");
+        let regular = component_separation(
+            &actor,
+            translated(1.0, 1.0),
+            &triangle,
+            GeometryTransform::IDENTITY,
+        )
+        .expect("the actor straddles the regular triangle's slanted surface");
+        let reflected = component_separation(&actor, translated(-1.0, 1.0), &triangle, mirrored)
+            .expect("the actor straddles the mirrored triangle's slanted surface");
 
-        assert_vec2(separation.normal, Vec2::NEG_X);
-        assert_close(separation.separation_distance, 0.8);
-        assert_separates(&first, mirrored, &second, translated(0.2, 0.0), separation);
+        assert_vec2(regular.normal, Vec2::splat(FRAC_1_SQRT_2));
+        assert_vec2(reflected.normal, Vec2::new(-FRAC_1_SQRT_2, FRAC_1_SQRT_2));
+        assert_close(regular.separation_distance, 0.1 * 2.0_f32.sqrt());
+        assert_close(reflected.separation_distance, regular.separation_distance);
+        assert_separates(
+            &actor,
+            translated(1.0, 1.0),
+            &triangle,
+            GeometryTransform::IDENTITY,
+            regular,
+        );
+        assert_separates(
+            &actor,
+            translated(-1.0, 1.0),
+            &triangle,
+            mirrored,
+            reflected,
+        );
     }
 
     #[test]
@@ -709,7 +792,7 @@ mod tests {
         .expect("the actor overlaps the inner corner of the L");
 
         assert!(separation.normal.is_finite());
-        assert!(separation.separation_distance > 0.0);
+        assert_close(separation.separation_distance, 1.2);
         assert_separates(
             &actor,
             actor_transform,
@@ -733,6 +816,41 @@ mod tests {
 
         assert_vec2(separation.normal, Vec2::NEG_X);
         assert_close(separation.separation_distance, 0.05);
+        assert_separates(
+            &actor,
+            GeometryTransform::IDENTITY,
+            &wall,
+            translated(0.35, 0.0),
+            separation,
+        );
+    }
+
+    #[test]
+    fn embedded_barde_geometry_separates_across_the_full_content_chain() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let catalog = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded collision geometry is valid");
+        let barde = catalog
+            .character(&CharacterId("barde".into()))
+            .expect("Barde has authored collision geometry");
+        let component = barde
+            .components
+            .first()
+            .expect("Barde's collision Region has a Component");
+        let offset = translated(0.01, 0.02);
+        let separation =
+            component_separation(component, GeometryTransform::IDENTITY, component, offset)
+                .expect("the slightly offset copies overlap");
+
+        assert!(separation.normal.is_finite());
+        assert!(separation.separation_distance.is_finite());
+        assert_separates(
+            component,
+            GeometryTransform::IDENTITY,
+            component,
+            offset,
+            separation,
+        );
     }
 
     #[test]
