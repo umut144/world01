@@ -263,8 +263,13 @@ Callers select an Instance by its scene ID. Template exports are imported into a
 typed catalog grouped by `group_number`, but are not yet chosen or composed into
 a map. A pure geometry projection can place one explicitly chosen Template at
 one matching Instance Anchor: it requires identical Terrain-cell sizes, uses a
-signed integer grid offset, rejects a mask outside the Instance, and returns
-translated cells and Props without merging them. Instance positions are
+signed integer grid offset, rejects a mask or Prop origin outside the Instance
+(the boundary itself is valid), and returns translated cells and Props without
+merging them. A Prop's full footprint is not part of this boundary check.
+Template Prop IDs remain local during projection; merging assigns each one the
+deterministic ID
+`template.<anchor_id>.<template_scene_id>.<local_prop_id>` and rejects even a
+collision of those namespaced IDs. Instance positions are
 centered in world space; Template cells, Props, and insertion anchors
 deliberately remain in the Template's own bottom-left coordinate frame until
 that projection. Instance Anchors and Template insertion anchors also retain
