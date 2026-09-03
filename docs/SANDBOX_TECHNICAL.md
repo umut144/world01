@@ -75,8 +75,8 @@ their final schedule and plugin composition.
 The physical boundaries are useful, but their current contents still include
 Labyrinth behavior:
 
-- `configs` contains only technical simulation cadence, network cadence, and
-  camera framing configuration in `runtime.toml`.
+- `configs` contains technical simulation cadence, network cadence, camera
+  framing, and the bounded world-overlap recovery rate in `runtime.toml`.
 - `design` owns `world01.toml` for shared World-01 baseline values alongside
   game design data such as characters, weapons, abilities, and mass
   assignments.
@@ -130,17 +130,26 @@ The existing application uses a server-authoritative model:
 - clients send input and join requests, never authoritative gameplay outcomes;
 - the server validates ownership and joins, owns entity lifecycle, runs the
   authoritative simulation, and publishes replicated state;
-- existing Character overlap is corrected only by the server, from a snapshot
-  enumerated in stable `ActorId` order before movement blocking; each pair
-  shares its correction inversely to movement mass, and the existing predicted
-  `Position` replication reconciles and smooths the result for the owner;
-  positive corrections include `0.001 m` rounding clearance and are not
-  speed-clamped for Character pairs;
-- current overlap correction covers Character pairs only. Until static-world
-  correction is added, separating two Characters beside a wall may move one
-  temporarily into world collision; movement blocking then permits it to leave
-  but not to move deeper. The Character-pair no-clamp decision does not define
-  the later policy for concave world geometry;
+- existing overlap is corrected only by the server before movement blocking,
+  and the existing predicted `Position` replication reconciles and smooths the
+  result for the owner;
+- Character pairs are read from one snapshot enumerated in stable `ActorId`
+  order, share their correction inversely to movement mass, and are not
+  speed-clamped. Positive corrections include `0.001 m` rounding clearance;
+- Character/world correction runs after Character-pair correction. Static
+  geometry never moves, while each Character receives the complete accumulated
+  correction from the world Regions its current bounds overlap, limited by the
+  configured `3.0 m/s` recovery rate (`0.05 m` at the current 60 Hz). It needs no
+  `ActorId` order because Characters are resolved independently. Mass, movement
+  speed, RUN, DASH, and life state do not participate. The Character's multiple
+  Regions form one projected hull against each world Region, preventing a
+  capped correction from alternating between body and feet;
+- separating Characters beside a wall can still leave one temporarily inside
+  world collision when the required recovery exceeds the per-tick limit.
+  Movement blocking permits it to leave but not to move deeper. A non-convex
+  authored Region receives a valid but potentially non-minimal convex-hull
+  escape, with the configured limit bounding each tick rather than promising a
+  shortest route;
 - replicated gameplay components use protocol-neutral types from
   `world_data`; Bevy `Transform` remains derived client presentation;
 - the owning client predicts explicitly registered state and reconciles to
@@ -197,8 +206,8 @@ weapon data, including the mapping from gameplay roles to stable Component
 names. It does not parse PolyTools manifests;
 `content` resolves those names against validated Component geometry before the
 simulation receives the resulting typed data. `configs` remains the boundary
-for technical runtime settings such as simulation and network cadence and
-camera framing.
+for technical runtime settings such as simulation and network cadence, camera
+framing, and bounded recovery from invalid world overlap.
 
 ### Confirmed shared direction
 

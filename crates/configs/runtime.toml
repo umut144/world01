@@ -1,5 +1,6 @@
 [simulation]
 ticks_per_second = 60
+world_separation_meters_per_second = 3.0
 
 [network]
 snapshot_send_hz = 30

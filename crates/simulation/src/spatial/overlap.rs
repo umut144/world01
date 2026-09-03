@@ -136,34 +136,61 @@ pub(crate) fn component_separation(
     second: &CollisionComponentGeometry,
     second_transform: GeometryTransform,
 ) -> Option<ComponentSeparation> {
-    if !components_overlap(
-        first.geometry(),
+    component_set_separation(
+        std::slice::from_ref(first),
         first_transform,
-        second.geometry(),
+        second,
         second_transform,
-    ) {
+    )
+}
+
+/// Finds one conservative correction for Components that move as one rigid
+/// shape against one independently authored Component.
+///
+/// Overlap remains a triangle-level question for every individual Component.
+/// Once any of them overlaps, their combined point set and boundary axes are
+/// used for the escape translation. This treats seams between Character
+/// Regions as part of one projected hull, so a capped world correction cannot
+/// alternate between body and feet instead of leaving the obstacle.
+pub(crate) fn component_set_separation(
+    components: &[CollisionComponentGeometry],
+    transform: GeometryTransform,
+    other: &CollisionComponentGeometry,
+    other_transform: GeometryTransform,
+) -> Option<ComponentSeparation> {
+    if !components.iter().any(|component| {
+        components_overlap(
+            component.geometry(),
+            transform,
+            other.geometry(),
+            other_transform,
+        )
+    }) {
         return None;
     }
 
-    let first_points = transformed_points(first.geometry(), first_transform).collect::<Vec<_>>();
-    let second_points = transformed_points(second.geometry(), second_transform).collect::<Vec<_>>();
+    let first_points = components
+        .iter()
+        .flat_map(|component| transformed_points(component.geometry(), transform))
+        .collect::<Vec<_>>();
+    let second_points = transformed_points(other.geometry(), other_transform).collect::<Vec<_>>();
     let projection_origin = *first_points.first()?;
     let mut shape_order = None;
     let mut best: Option<SeparationCandidate> = None;
 
-    for (edge, transform) in first
-        .boundary_edges()
+    for (edge, edge_transform) in components
         .iter()
-        .map(|edge| (*edge, first_transform))
+        .flat_map(|component| component.boundary_edges())
+        .map(|edge| (*edge, transform))
         .chain(
-            second
+            other
                 .boundary_edges()
                 .iter()
-                .map(|edge| (*edge, second_transform)),
+                .map(|edge| (*edge, other_transform)),
         )
     {
-        let start = transform_point(transform, edge[0]);
-        let end = transform_point(transform, edge[1]);
+        let start = transform_point(edge_transform, edge[0]);
+        let end = transform_point(edge_transform, edge[1]);
         let Some(axis) = canonical_axis((end - start).perp()) else {
             continue;
         };

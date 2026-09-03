@@ -389,10 +389,12 @@ must be documented as an explicit game variant.
   through its mesh. Authored art and gameplay footprint are separate decisions:
   the tree's collider covers part of its trunk, not the crown it draws.
 - A `CollisionRegion` may be drawn freely or may borrow the shape of a
-  Component. Every playable character currently borrows its body, so a collider
-  is the standing silhouette rather than a footprint. Flatter shapes close to
-  the feet are the intended refinement; because the Region is authored either
-  way, that change is content and touches no code.
+  Component. Every playable character currently uses Component-backed Regions;
+  four use separate body and feet Regions while the others borrow one body
+  shape. A collider is therefore still a standing silhouette rather than a
+  footprint. Flatter shapes close to the feet are the intended refinement;
+  because the Region is authored either way, that change is content and touches
+  no code.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Each is declared, neither is defaulted, and where a character
   can be hit says nothing about where it stands.
@@ -416,7 +418,8 @@ must be documented as an explicit game variant.
 - For a non-convex CollisionRegion, that direction is a conservative escape
   from the Region's complete projected hull rather than necessarily the locally
   shortest way past an inner corner. It always offers a way out, but may reject
-  a shorter local route and make the Character take a detour. Freely authored
+  a shorter local route and make the Character take a detour. Existing-overlap
+  correction uses the same conservative hull principle. Freely authored
   concave Regions therefore need deliberate playtesting rather than inheriting
   the behavior of a convex footprint by assumption.
 - A character that already overlaps geometry may leave it but may not move
@@ -445,6 +448,13 @@ must be documented as an explicit game variant.
     direction, so the push still comes from the contact normal, and squaring
     speed leaves mass meaningless - a running Rogue would move a standing
     Hammerer aside.
+- Static world geometry never gives way. A Character already inside it carries
+  the entire correction, limited to `0.05 m` per current 60 Hz tick (`3.0 m/s`
+  configured recovery rate) so a deep invalid placement is pushed out visibly
+  rather than teleported. This recovery rate is the same for every Character
+  and is independent of mass, normal movement speed, RUN, DASH, and life state.
+  A deep overlap can therefore take several ticks to clear; during that time
+  ordinary blocking still permits movement out but not deeper in.
 - The DASH invulnerability window suppresses damage only. A dashing character
   still occupies space and still blocks, which is what lets it intercept a Mage
   beam for someone standing behind it.

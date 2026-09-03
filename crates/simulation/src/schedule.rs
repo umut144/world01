@@ -4,9 +4,9 @@ use crate::{
     advance_dash, advance_hammer_attacks, advance_mage_attacks, apply_damage,
     apply_hammer_strike_damage, apply_mage_beam_damage, block_colliding_movement,
     constrain_embedded_hammer_reach, damage::DamageDealt, expire_mage_beams, finish_mage_cooldowns,
-    integrate_movement, separate_overlapping_characters, tick_status_effects,
-    update_character_life, update_character_orientation, update_exertion, update_gaze_direction,
-    update_weapon_aim,
+    integrate_movement, separate_characters_from_world, separate_overlapping_characters,
+    tick_status_effects, update_character_life, update_character_orientation, update_exertion,
+    update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,8 +15,9 @@ pub enum SimulationSet {
     GameplayStep,
     /// Sits between deciding a velocity and applying it to a position.
     ///
-    /// Where the server separates existing Character overlap and movement that
-    /// would end inside geometry is refused.
+    /// Where the server separates existing Character/Character and
+    /// Character/world overlap, and movement that would end inside geometry is
+    /// refused.
     Collision,
     /// Resolves the consequences of the gameplay step: damage, expiry, and life state.
     Resolution,
@@ -25,7 +26,7 @@ pub enum SimulationSet {
 /// Selects which parts of the simulation step an app is allowed to run.
 ///
 /// Both authorities run the identical intent-driven gameplay step. Only the
-/// server resolves damage and existing Character overlap, so a predicting
+/// server resolves damage and existing overlap, so a predicting
 /// client cannot invent authoritative outcomes the server never saw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimulationAuthority {
@@ -113,7 +114,11 @@ fn add_collision_systems(
     if authority.separates_overlaps() {
         app.add_systems(
             schedule,
-            (separate_overlapping_characters, block_colliding_movement)
+            (
+                separate_overlapping_characters,
+                separate_characters_from_world,
+                block_colliding_movement,
+            )
                 .chain()
                 .in_set(SimulationSet::Collision),
         );
@@ -131,8 +136,8 @@ mod tests {
     use world01_configs::load_embedded;
     use world01_content::{
         AuthoredFacing, CharacterCollisionGeometry, CharacterCollisionGeometryCatalog,
-        CollisionComponentGeometry, HammerCombatGeometry, RuntimeComponentGeometry, RuntimeContent,
-        WorldCollisionGeometryCatalog,
+        CollisionComponentGeometry, HammerCombatGeometry, PlacedCollisionGeometry,
+        RuntimeComponentGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
     };
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
@@ -143,7 +148,7 @@ mod tests {
 
     use crate::{
         CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-        WeaponAimRules, WorldColliderGrid,
+        WeaponAimRules, WorldColliderGrid, WorldSeparationStep,
     };
 
     /// What an actor looks like at the moment the collision phase runs.
@@ -203,14 +208,48 @@ mod tests {
     }
 
     fn collision_only_app(authority: SimulationAuthority) -> App {
+        collision_only_app_with_world(authority, WorldCollisionGeometryCatalog::default())
+    }
+
+    fn collision_only_app_with_world(
+        authority: SimulationAuthority,
+        world: WorldCollisionGeometryCatalog,
+    ) -> App {
         let config = load_embedded().expect("embedded runtime configuration parses");
+        let grid = WorldColliderGrid::from_catalog(&world);
         let mut app = App::new();
         app.insert_resource(collision_catalog())
-            .init_resource::<WorldCollisionGeometryCatalog>()
-            .init_resource::<WorldColliderGrid>()
+            .insert_resource(world)
+            .insert_resource(grid)
+            .insert_resource(
+                WorldSeparationStep::from_runtime(&config)
+                    .expect("embedded world separation configuration is valid"),
+            )
             .insert_resource(MovementStep::from_runtime(&config).expect("runtime is valid"));
         add_collision_systems(&mut app, Update, authority);
         app
+    }
+
+    fn overlapping_world() -> WorldCollisionGeometryCatalog {
+        let component = CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+            component_id: "world".into(),
+            name: "world".into(),
+            vertices: vec![
+                Vec2::splat(-0.2),
+                Vec2::new(0.2, -0.2),
+                Vec2::splat(0.2),
+                Vec2::new(-0.2, 0.2),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        })
+        .expect("the world test square has valid collision topology");
+        WorldCollisionGeometryCatalog {
+            regions: vec![PlacedCollisionGeometry {
+                instance_id: "world".into(),
+                position: Position::new(0.3, 0.0),
+                component,
+            }],
+        }
     }
 
     fn spawn_overlapping_pair(app: &mut App) -> (Entity, Entity) {
@@ -351,12 +390,45 @@ mod tests {
     }
 
     #[test]
+    fn existing_world_overlap_is_separated_only_by_server_authority() {
+        let spawn = |app: &mut App| {
+            app.world_mut()
+                .spawn((
+                    SelectedCharacter(CharacterId("walker".into())),
+                    BodyFacing::Right,
+                    Position::ZERO,
+                    MovementVelocity::ZERO,
+                ))
+                .id()
+        };
+
+        let mut predicted =
+            collision_only_app_with_world(SimulationAuthority::Predicted, overlapping_world());
+        let predicted_actor = spawn(&mut predicted);
+        predicted.update();
+        assert_eq!(
+            predicted.world().get::<Position>(predicted_actor),
+            Some(&Position::ZERO)
+        );
+
+        let mut server =
+            collision_only_app_with_world(SimulationAuthority::Server, overlapping_world());
+        let server_actor = spawn(&mut server);
+        server.update();
+        assert_ne!(
+            server.world().get::<Position>(server_actor),
+            Some(&Position::ZERO)
+        );
+    }
+
+    #[test]
     fn movement_blocking_sees_server_corrected_positions() {
         let mut app = collision_only_app(SimulationAuthority::Server);
         app.init_resource::<SeparationProbe>().add_systems(
             Update,
             record_positions_after_separation
                 .after(separate_overlapping_characters)
+                .after(separate_characters_from_world)
                 .before(block_colliding_movement)
                 .in_set(SimulationSet::Collision),
         );

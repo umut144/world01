@@ -19,7 +19,7 @@ use world01_network::{
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
-    SimulationSet, WeaponAimRules, WorldColliderGrid, add_simulation_step,
+    SimulationSet, WeaponAimRules, WorldColliderGrid, WorldSeparationStep, add_simulation_step,
 };
 use world01_world_data::{AnkhLayout, WorldMap};
 
@@ -49,6 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
     })?;
     let movement_step = MovementStep::from_runtime(&config)?;
+    let world_separation_step = WorldSeparationStep::from_runtime(&config)?;
     let exertion_rules =
         ExertionRules::from_design(config.simulation.ticks_per_second, &world_design.locomotion)?;
     let character_life_rules =
@@ -98,6 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(content)
     .insert_resource(Time::<Fixed>::from_duration(tick_duration))
     .insert_resource(movement_step)
+    .insert_resource(world_separation_step)
     .insert_resource(exertion_rules)
     .insert_resource(character_life_rules)
     .insert_resource(weapon_aim_rules)

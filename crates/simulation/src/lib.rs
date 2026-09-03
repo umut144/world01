@@ -37,7 +37,10 @@ pub use movement::{
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
-pub use separation::separate_overlapping_characters;
+pub use separation::{
+    SeparationConfigError, WorldSeparationStep, separate_characters_from_world,
+    separate_overlapping_characters,
+};
 pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
 

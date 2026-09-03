@@ -34,9 +34,10 @@ impl WorldConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
 pub struct SimulationConfig {
     pub ticks_per_second: u32,
+    pub world_separation_meters_per_second: f32,
 }
 
 impl SimulationConfig {
@@ -116,6 +117,7 @@ mod tests {
     fn embedded_runtime_configuration_is_valid() {
         let runtime = load_embedded().expect("embedded runtime configuration parses");
         assert_eq!(runtime.simulation.ticks_per_second, 60);
+        assert_eq!(runtime.simulation.world_separation_meters_per_second, 3.0);
         assert_eq!(runtime.network.snapshot_send_hz, 30);
         assert_eq!(runtime.network.remote_interpolation_ratio, 2.0);
         assert_eq!(runtime.camera.effective_view_tiles(), Some((16, 10)));

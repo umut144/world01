@@ -1,20 +1,26 @@
 //! Server-authoritative correction of Characters that already occupy the same
 //! space.
 //!
-//! Movement blocking prevents new overlap. This system handles overlap that
-//! already exists because of spawning or an authoritative correction. It reads
-//! every pair from one snapshot, accumulates the pair corrections in stable
-//! `ActorId` order, and applies them simultaneously. A cluster may therefore
-//! take more than one tick to settle, without letting pair iteration order give
-//! one Character priority.
+//! Movement blocking prevents new overlap. These systems handle overlap that
+//! already exists because of spawning or an authoritative correction.
+//! Character pairs are read from one snapshot, accumulated in stable `ActorId`
+//! order, and applied simultaneously. Static world geometry never moves;
+//! Characters leave it at a configured bounded rate. Either kind of overlap
+//! may therefore take more than one tick to settle.
 
-use bevy::prelude::{Entity, Query, Res, Vec2};
-use world01_content::{CharacterCollisionGeometry, CharacterCollisionGeometryCatalog};
+use std::{error::Error, fmt};
+
+use bevy::prelude::{Entity, Query, Res, Resource, Vec2};
+use world01_configs::RuntimeConfig;
+use world01_content::{
+    CharacterCollisionGeometry, CharacterCollisionGeometryCatalog, WorldCollisionGeometryCatalog,
+};
 use world01_world_data::{ActorId, BodyFacing, CharacterMass, Position, SelectedCharacter};
 
-use crate::spatial::broadphase::Aabb;
+use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
-    GeometryTransform, character_separation, facing_transform, transformed_points,
+    GeometryTransform, character_separation, component_set_separation, facing_transform,
+    transformed_points,
 };
 
 /// Keeps the two rounded position writes safely on the non-penetrating side of
@@ -22,6 +28,52 @@ use crate::spatial::overlap::{
 /// may still report contact inside its established epsilon band, but its exact
 /// separation distance is then zero and produces no further correction.
 const SEPARATION_CLEARANCE_METERS: f32 = 0.001;
+
+/// The configured positional recovery available during one simulation tick.
+///
+/// This is independent from Character movement speed: every Character gets the
+/// same bounded correction from static world geometry.
+#[derive(Resource, Debug, Clone, Copy, PartialEq)]
+pub struct WorldSeparationStep {
+    max_distance: f32,
+}
+
+impl WorldSeparationStep {
+    pub fn from_runtime(config: &RuntimeConfig) -> Result<Self, SeparationConfigError> {
+        let rate = config.simulation.world_separation_meters_per_second;
+        if !rate.is_finite() || rate <= 0.0 {
+            return Err(SeparationConfigError::InvalidWorldSeparationRate);
+        }
+        let ticks_per_second = config.simulation.ticks_per_second;
+        if ticks_per_second == 0 {
+            return Err(SeparationConfigError::ZeroTickRate);
+        }
+        Ok(Self {
+            max_distance: rate / ticks_per_second as f32,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeparationConfigError {
+    InvalidWorldSeparationRate,
+    ZeroTickRate,
+}
+
+impl fmt::Display for SeparationConfigError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidWorldSeparationRate => {
+                formatter.write_str("world separation rate must be finite and greater than zero")
+            }
+            Self::ZeroTickRate => {
+                formatter.write_str("simulation tick rate must be greater than zero")
+            }
+        }
+    }
+}
+
+impl Error for SeparationConfigError {}
 
 #[derive(Debug, Clone, Copy)]
 struct ResolvedActor<'a> {
@@ -130,16 +182,86 @@ pub fn separate_overlapping_characters(
     }
 }
 
+/// Moves Characters out of static world geometry without moving the world.
+///
+/// Each authored world Region contributes at most one correction, regardless
+/// of how many Character Components overlap it. Contributions are accumulated
+/// in the grid's stable catalog order, then the complete displacement is
+/// limited to a fixed positional correction per tick. Character mass, movement
+/// speed, input state, and life state deliberately do not participate.
+pub fn separate_characters_from_world(
+    step: Res<WorldSeparationStep>,
+    catalog: Res<CharacterCollisionGeometryCatalog>,
+    world: Res<WorldCollisionGeometryCatalog>,
+    grid: Res<WorldColliderGrid>,
+    mut actors: Query<(&SelectedCharacter, &BodyFacing, &mut Position)>,
+) {
+    if catalog.is_empty() || world.regions.is_empty() {
+        return;
+    }
+
+    let mut candidates = Vec::new();
+    for (character, facing, mut position) in &mut actors {
+        let Some(geometry) = catalog.character(&character.0) else {
+            continue;
+        };
+        let transform = facing_transform(geometry.authored_facing, *position, *facing);
+        let Some(bounds) = Aabb::around(
+            geometry
+                .components
+                .iter()
+                .flat_map(|component| transformed_points(component.geometry(), transform)),
+        ) else {
+            continue;
+        };
+
+        grid.candidates(bounds, &mut candidates);
+        let mut correction = Vec2::ZERO;
+        for index in &candidates {
+            let Some(region) = world.regions.get(*index as usize) else {
+                continue;
+            };
+            let Some(separation) = component_set_separation(
+                &geometry.components,
+                transform,
+                &region.component,
+                GeometryTransform::translated(region.position),
+            ) else {
+                continue;
+            };
+            if separation.separation_distance <= 0.0 {
+                continue;
+            }
+            correction +=
+                separation.normal * (separation.separation_distance + SEPARATION_CLEARANCE_METERS);
+        }
+        if correction == Vec2::ZERO || !correction.is_finite() {
+            continue;
+        }
+
+        let correction_length = correction.length();
+        if correction_length > step.max_distance {
+            correction *= step.max_distance / correction_length;
+        }
+        let corrected = Vec2::new(position.x, position.y) + correction;
+        if corrected.is_finite() {
+            *position = Position::new(corrected.x, corrected.y);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
     use super::*;
     use bevy::prelude::{App, Update};
+    use world01_configs::load_embedded as load_runtime;
     use world01_content::{
-        AuthoredFacing, CollisionComponentGeometry, RuntimeComponentGeometry, RuntimeContent,
+        AuthoredFacing, CollisionComponentGeometry, PlacedCollisionGeometry,
+        RuntimeComponentGeometry, RuntimeContent,
     };
-    use world01_world_data::{CharacterLifeState, DashState, RunState};
+    use world01_world_data::{CharacterLifeState, DashState, MovementVelocity, RunState, WorldMap};
 
     use crate::spatial::overlap::component_separation;
 
@@ -185,6 +307,24 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(catalog)
             .add_systems(Update, separate_overlapping_characters);
+        app
+    }
+
+    fn app_with_world(
+        catalog: CharacterCollisionGeometryCatalog,
+        world: WorldCollisionGeometryCatalog,
+    ) -> App {
+        let runtime = load_runtime().expect("embedded runtime configuration parses");
+        let grid = WorldColliderGrid::from_catalog(&world);
+        let mut app = App::new();
+        app.insert_resource(catalog)
+            .insert_resource(
+                WorldSeparationStep::from_runtime(&runtime)
+                    .expect("embedded world separation configuration is valid"),
+            )
+            .insert_resource(grid)
+            .insert_resource(world)
+            .add_systems(Update, separate_characters_from_world);
         app
     }
 
@@ -291,6 +431,89 @@ mod tests {
         }
 
         panic!("the pair still has {remaining} m of summed penetration after {tick_budget} ticks");
+    }
+
+    fn placed_rectangle(
+        name: &str,
+        position: Vec2,
+        local_center: Vec2,
+        size: Vec2,
+    ) -> PlacedCollisionGeometry {
+        PlacedCollisionGeometry {
+            instance_id: name.to_owned(),
+            position: Position::new(position.x, position.y),
+            component: rectangle_at(name, local_center, size),
+        }
+    }
+
+    fn placed_l_shape(name: &str) -> PlacedCollisionGeometry {
+        PlacedCollisionGeometry {
+            instance_id: name.to_owned(),
+            position: Position::ZERO,
+            component: CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+                component_id: name.to_owned(),
+                name: name.to_owned(),
+                vertices: vec![
+                    Vec2::ZERO,
+                    Vec2::new(2.0, 0.0),
+                    Vec2::new(2.0, 1.0),
+                    Vec2::ONE,
+                    Vec2::new(1.0, 2.0),
+                    Vec2::new(0.0, 2.0),
+                ],
+                indices: vec![0, 1, 3, 1, 2, 3, 0, 3, 5, 3, 4, 5],
+            })
+            .expect("the test L has valid collision topology"),
+        }
+    }
+
+    fn remaining_world_penetration(app: &App, character: &str, actor: Entity) -> f32 {
+        let geometry = app
+            .world()
+            .resource::<CharacterCollisionGeometryCatalog>()
+            .character(&world01_world_data::CharacterId(character.into()))
+            .expect("the measured Character has collision geometry");
+        let position = *app
+            .world()
+            .get::<Position>(actor)
+            .expect("the actor keeps its Position");
+        let transform = facing_transform(geometry.authored_facing, position, BodyFacing::Right);
+
+        app.world()
+            .resource::<WorldCollisionGeometryCatalog>()
+            .regions
+            .iter()
+            .filter_map(|region| {
+                component_set_separation(
+                    &geometry.components,
+                    transform,
+                    &region.component,
+                    GeometryTransform::translated(region.position),
+                )
+                .map(|separation| separation.separation_distance)
+            })
+            .sum()
+    }
+
+    fn assert_leaves_world_within(
+        app: &mut App,
+        character: &str,
+        actor: Entity,
+        tick_budget: usize,
+    ) -> usize {
+        assert!(
+            remaining_world_penetration(app, character, actor) > 0.0,
+            "the regression starts inside world geometry"
+        );
+        for tick in 0..tick_budget {
+            app.update();
+            let remaining = remaining_world_penetration(app, character, actor);
+            assert!(remaining.is_finite(), "remaining penetration is finite");
+            if remaining <= EPSILON {
+                return tick + 1;
+            }
+        }
+        panic!("the Character still overlaps world geometry after {tick_budget} ticks");
     }
 
     #[test]
@@ -528,6 +751,240 @@ mod tests {
         // not a monotonic decrease after every individual tick.
         let ticks = assert_converges_within(&mut app, "hammerer", first, second, 16);
         assert!(ticks > 1, "the real Regions exercise multi-tick settling");
+    }
+
+    fn wall_world() -> WorldCollisionGeometryCatalog {
+        WorldCollisionGeometryCatalog {
+            regions: vec![placed_rectangle(
+                "wall",
+                Vec2::ZERO,
+                Vec2::new(0.5, 0.0),
+                Vec2::new(1.0, 4.0),
+            )],
+        }
+    }
+
+    #[test]
+    fn embedded_world_separation_rate_is_five_centimeters_per_tick() {
+        let runtime = load_runtime().expect("embedded runtime configuration parses");
+        let step = WorldSeparationStep::from_runtime(&runtime)
+            .expect("embedded world separation configuration is valid");
+
+        assert!((step.max_distance - 0.05).abs() <= EPSILON);
+    }
+
+    #[test]
+    fn invalid_world_separation_configuration_is_rejected() {
+        for invalid_rate in [0.0, -1.0, f32::NAN] {
+            let mut runtime = load_runtime().expect("embedded runtime configuration parses");
+            runtime.simulation.world_separation_meters_per_second = invalid_rate;
+            assert_eq!(
+                WorldSeparationStep::from_runtime(&runtime),
+                Err(SeparationConfigError::InvalidWorldSeparationRate)
+            );
+        }
+
+        let mut runtime = load_runtime().expect("embedded runtime configuration parses");
+        runtime.simulation.ticks_per_second = 0;
+        assert_eq!(
+            WorldSeparationStep::from_runtime(&runtime),
+            Err(SeparationConfigError::ZeroTickRate)
+        );
+    }
+
+    #[test]
+    fn shallow_world_overlap_is_cleared_with_rounding_clearance() {
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                geometry(1),
+            )]),
+            wall_world(),
+        );
+        let actor = spawn(&mut app, 1, Vec2::new(-0.16, 0.0), mass(1.0, 0.6));
+
+        app.update();
+
+        assert_vec2(position(&app, actor), Vec2::new(-0.201, 0.0));
+        assert!(remaining_world_penetration(&app, "walker", actor) <= EPSILON);
+    }
+
+    #[test]
+    fn exact_world_contact_does_not_move_the_character() {
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                geometry(1),
+            )]),
+            wall_world(),
+        );
+        let actor = spawn(&mut app, 1, Vec2::new(-0.2, 0.0), mass(1.0, 0.6));
+
+        app.update();
+
+        assert_eq!(position(&app, actor), Vec2::new(-0.2, 0.0));
+    }
+
+    #[test]
+    fn deep_world_overlap_is_limited_each_tick_and_eventually_clears() {
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                geometry(1),
+            )]),
+            wall_world(),
+        );
+        let actor = spawn(&mut app, 1, Vec2::new(0.5, 0.0), mass(1.0, 0.6));
+        let start = position(&app, actor);
+        let max_distance = app.world().resource::<WorldSeparationStep>().max_distance;
+
+        app.update();
+
+        let first_correction = position(&app, actor) - start;
+        assert!((first_correction.length() - max_distance).abs() <= EPSILON);
+        assert_leaves_world_within(&mut app, "walker", actor, 20);
+    }
+
+    #[test]
+    fn corrections_from_overlapping_world_regions_converge_together() {
+        let world = WorldCollisionGeometryCatalog {
+            regions: vec![
+                placed_rectangle(
+                    "vertical",
+                    Vec2::ZERO,
+                    Vec2::new(0.5, 0.0),
+                    Vec2::new(1.0, 4.0),
+                ),
+                placed_rectangle(
+                    "horizontal",
+                    Vec2::ZERO,
+                    Vec2::new(0.0, 0.5),
+                    Vec2::new(4.0, 1.0),
+                ),
+            ],
+        };
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                geometry(1),
+            )]),
+            world,
+        );
+        let actor = spawn(&mut app, 1, Vec2::splat(-0.15), mass(1.0, 0.6));
+
+        assert_leaves_world_within(&mut app, "walker", actor, 8);
+        let corrected = position(&app, actor);
+        assert!(corrected.x < -0.2 && corrected.y < -0.2);
+    }
+
+    #[test]
+    fn concave_world_region_uses_a_bounded_conservative_escape() {
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                geometry(1),
+            )]),
+            WorldCollisionGeometryCatalog {
+                regions: vec![placed_l_shape("concave")],
+            },
+        );
+        let actor = spawn(&mut app, 1, Vec2::ONE, mass(1.0, 0.6));
+        let start = position(&app, actor);
+        let max_distance = app.world().resource::<WorldSeparationStep>().max_distance;
+
+        app.update();
+
+        assert!((position(&app, actor).distance(start) - max_distance).abs() <= EPSILON);
+        assert_leaves_world_within(&mut app, "walker", actor, 30);
+    }
+
+    #[test]
+    fn mass_speed_run_dash_and_life_state_do_not_change_world_separation() {
+        fn corrected(with_unrelated_state: bool) -> Vec2 {
+            let mut app = app_with_world(
+                CharacterCollisionGeometryCatalog::from_geometries([(
+                    world01_world_data::CharacterId("walker".into()),
+                    geometry(1),
+                )]),
+                wall_world(),
+            );
+            let actor = app
+                .world_mut()
+                .spawn((
+                    SelectedCharacter(world01_world_data::CharacterId("walker".into())),
+                    BodyFacing::Right,
+                    Position::new(-0.16, 0.0),
+                ))
+                .id();
+            if with_unrelated_state {
+                app.world_mut().entity_mut(actor).insert((
+                    CharacterMass::new(f32::NAN, 0.0, f32::NAN, 100.0),
+                    MovementVelocity::new(100.0, -100.0),
+                    RunState {
+                        toggled: true,
+                        active: true,
+                        input_pressed: true,
+                    },
+                    DashState {
+                        active: true,
+                        ..DashState::default()
+                    },
+                    CharacterLifeState::Dead,
+                ));
+            }
+
+            app.update();
+            position(&app, actor)
+        }
+
+        assert_eq!(corrected(false), corrected(true));
+    }
+
+    #[test]
+    fn stacked_character_regions_clear_a_wall_as_one_rigid_shape() {
+        let stacked = CharacterCollisionGeometry {
+            authored_facing: AuthoredFacing::Right,
+            components: vec![
+                rectangle_at("feet", Vec2::new(0.0, 0.1), Vec2::new(1.0, 0.2)),
+                rectangle_at("body", Vec2::new(0.0, 0.7), Vec2::new(1.0, 1.0)),
+            ],
+        };
+        let mut app = app_with_world(
+            CharacterCollisionGeometryCatalog::from_geometries([(
+                world01_world_data::CharacterId("walker".into()),
+                stacked,
+            )]),
+            wall_world(),
+        );
+        let actor = spawn(&mut app, 1, Vec2::new(-0.1, 0.0), mass(1.0, 0.6));
+
+        assert_leaves_world_within(&mut app, "walker", actor, 12);
+    }
+
+    #[test]
+    fn embedded_hammerer_clears_the_real_tree_collider() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let characters = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded Character collision geometry is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded world map is valid");
+        let world = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
+            .expect("embedded world collision geometry is valid");
+        let tree_position = world
+            .regions
+            .iter()
+            .find(|region| region.instance_id == "tree_0003")
+            .map(|region| Vec2::new(region.position.x, region.position.y))
+            .expect("the current map places tree_0003");
+        let mut app = app_with_world(characters, world);
+        let actor = spawn_as(
+            &mut app,
+            1,
+            "hammerer",
+            tree_position + Vec2::new(0.0, 0.5),
+            mass(1.0, 0.6),
+        );
+
+        assert_leaves_world_within(&mut app, "hammerer", actor, 40);
     }
 
     #[test]
