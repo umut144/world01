@@ -556,11 +556,14 @@ pub struct RuntimeComponentGeometry {
 /// Fill meshes are triangulated, but a triangulation edge shared by two
 /// triangles is not part of the authored surface. Boundary edges are derived
 /// once when a collision catalog is built so simulation never has to recover
-/// that topology per contact.
+/// that topology per contact. Endpoint positions, rather than vertex indices,
+/// identify an edge because a triangulator may duplicate an exact position at
+/// a seam. No proximity tolerance is applied; only equal exported positions
+/// are welded.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CollisionComponentGeometry {
     geometry: RuntimeComponentGeometry,
-    boundary_edges: Vec<[u32; 2]>,
+    boundary_edges: Vec<[Vec2; 2]>,
 }
 
 impl CollisionComponentGeometry {
@@ -579,25 +582,30 @@ impl CollisionComponentGeometry {
                 geometry.name
             )));
         }
-        let mut edge_counts = BTreeMap::<[u32; 2], u8>::new();
+        let mut edge_counts = BTreeMap::<[[u32; 2]; 2], (u8, [Vec2; 2])>::new();
         for triangle in geometry.indices.chunks_exact(3) {
             for edge in [
                 [triangle[0], triangle[1]],
                 [triangle[1], triangle[2]],
                 [triangle[2], triangle[0]],
             ] {
-                if edge[0] == edge[1] {
+                let points = [
+                    geometry.vertices[edge[0] as usize],
+                    geometry.vertices[edge[1] as usize],
+                ];
+                let keys = [position_key(points[0]), position_key(points[1])];
+                if keys[0] == keys[1] {
                     return Err(RegionGeometryError(format!(
                         "collision geometry '{}' contains a degenerate edge",
                         geometry.name
                     )));
                 }
-                let key = if edge[0] < edge[1] {
-                    edge
+                let (key, points) = if keys[0] < keys[1] {
+                    (keys, points)
                 } else {
-                    [edge[1], edge[0]]
+                    ([keys[1], keys[0]], [points[1], points[0]])
                 };
-                let count = edge_counts.entry(key).or_default();
+                let (count, _) = edge_counts.entry(key).or_insert((0, points));
                 *count = count.saturating_add(1);
                 if *count > 2 {
                     return Err(RegionGeometryError(format!(
@@ -609,7 +617,7 @@ impl CollisionComponentGeometry {
         }
         let boundary_edges = edge_counts
             .into_iter()
-            .filter_map(|(edge, count)| (count == 1).then_some(edge))
+            .filter_map(|(_, (count, points))| (count == 1).then_some(points))
             .collect::<Vec<_>>();
         if boundary_edges.is_empty() {
             return Err(RegionGeometryError(format!(
@@ -627,9 +635,17 @@ impl CollisionComponentGeometry {
         &self.geometry
     }
 
-    pub fn boundary_edges(&self) -> &[[u32; 2]] {
+    pub fn boundary_edges(&self) -> &[[Vec2; 2]] {
         &self.boundary_edges
     }
+}
+
+fn position_key(point: Vec2) -> [u32; 2] {
+    [coordinate_key(point.x), coordinate_key(point.y)]
+}
+
+fn coordinate_key(value: f32) -> u32 {
+    if value == 0.0 { 0 } else { value.to_bits() }
 }
 
 impl Deref for CollisionComponentGeometry {
@@ -1078,34 +1094,78 @@ mod tests {
         assert!(CharacterHurtGeometryCatalog::from_content(&content, &definition).is_err());
     }
 
-    fn collision_geometry(indices: Vec<u32>, vertex_count: usize) -> RuntimeComponentGeometry {
+    fn collision_geometry(vertices: Vec<Vec2>, indices: Vec<u32>) -> RuntimeComponentGeometry {
         RuntimeComponentGeometry {
             component_id: "test_collision".into(),
             name: "test_collision".into(),
-            vertices: (0..vertex_count)
-                .map(|index| Vec2::new(index as f32, 0.0))
-                .collect(),
+            vertices,
             indices,
         }
     }
 
+    fn square_vertices() -> Vec<Vec2> {
+        vec![Vec2::ZERO, Vec2::X, Vec2::ONE, Vec2::Y]
+    }
+
+    fn contains_edge(edges: &[[Vec2; 2]], first: Vec2, second: Vec2) -> bool {
+        edges
+            .iter()
+            .any(|edge| *edge == [first, second] || *edge == [second, first])
+    }
+
     #[test]
     fn collision_boundary_excludes_the_shared_triangulation_edge() {
-        let geometry = CollisionComponentGeometry::from_geometry(collision_geometry(
-            vec![0, 1, 2, 0, 2, 3],
-            4,
-        ))
-        .expect("two triangles form valid collision geometry");
+        let source = collision_geometry(square_vertices(), vec![0, 1, 2, 0, 2, 3]);
+        let geometry = CollisionComponentGeometry::from_geometry(source.clone())
+            .expect("two triangles form valid collision geometry");
+        let repeated = CollisionComponentGeometry::from_geometry(source)
+            .expect("the same geometry remains valid");
 
-        assert_eq!(geometry.boundary_edges(), [[0, 1], [0, 3], [1, 2], [2, 3]]);
-        assert!(!geometry.boundary_edges().contains(&[0, 2]));
+        assert_eq!(geometry.boundary_edges().len(), 4);
+        assert!(!contains_edge(
+            geometry.boundary_edges(),
+            Vec2::ZERO,
+            Vec2::ONE
+        ));
+        assert_eq!(geometry.boundary_edges(), repeated.boundary_edges());
+    }
+
+    #[test]
+    fn collision_boundary_welds_equal_positions_with_different_indices() {
+        let vertices = vec![
+            Vec2::ZERO,
+            Vec2::X,
+            Vec2::ONE,
+            Vec2::ZERO,
+            Vec2::ONE,
+            Vec2::Y,
+        ];
+        let geometry = CollisionComponentGeometry::from_geometry(collision_geometry(
+            vertices,
+            vec![0, 1, 2, 3, 4, 5],
+        ))
+        .expect("an indexed seam still forms valid collision geometry");
+
+        assert_eq!(geometry.boundary_edges().len(), 4);
+        assert!(!contains_edge(
+            geometry.boundary_edges(),
+            Vec2::ZERO,
+            Vec2::ONE
+        ));
     }
 
     #[test]
     fn a_non_manifold_collision_edge_is_rejected() {
+        let vertices = vec![
+            Vec2::ZERO,
+            Vec2::X,
+            Vec2::Y,
+            Vec2::NEG_Y,
+            Vec2::new(0.5, 1.0),
+        ];
         let error = CollisionComponentGeometry::from_geometry(collision_geometry(
+            vertices,
             vec![0, 1, 2, 1, 0, 3, 0, 1, 4],
-            5,
         ))
         .expect_err("three triangles cannot share one collision edge");
 
