@@ -100,6 +100,8 @@ for source_export in "${source_exports[@]}"; do
       and (.group_number | type == "number" and . == floor and . > 0)
       and grid_anchor(.position_authoring_px; $root.scene.size_cells.width;
         $root.scene.size_cells.height; $terrain_step))
+    and (([.scene.template_anchors[].anchor_id] | unique | length)
+      == (.scene.template_anchors | length))
   ' "$source_export" >/dev/null \
     || fail "invalid SceneMaker export: $source_export"
 

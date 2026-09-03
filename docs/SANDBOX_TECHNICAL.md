@@ -261,11 +261,15 @@ Its build script rejects unreadable scene headers, unknown scene kinds, and
 duplicate scene IDs before compiling that catalog.
 Callers select an Instance by its scene ID. Template exports are imported into a
 typed catalog grouped by `group_number`, but are not yet chosen or composed into
-a map. Instance positions are centered in world space; Template cells, Props,
-and insertion anchors deliberately remain in the Template's own bottom-left
-coordinate frame for later translation at an Instance Anchor. Instance Anchors
-and Template insertion anchors also retain their validated integer Terrain-cell
-coordinates, so composition never has to recover grid positions from floats.
+a map. A pure geometry projection can place one explicitly chosen Template at
+one matching Instance Anchor: it requires identical Terrain-cell sizes, uses a
+signed integer grid offset, rejects a mask outside the Instance, and returns
+translated cells and Props without merging them. Instance positions are
+centered in world space; Template cells, Props, and insertion anchors
+deliberately remain in the Template's own bottom-left coordinate frame until
+that projection. Instance Anchors and Template insertion anchors also retain
+their validated integer Terrain-grid coordinates, so projection never has to
+recover grid positions from floats.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

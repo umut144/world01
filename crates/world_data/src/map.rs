@@ -88,10 +88,101 @@ impl WorldMap {
 
     /// Every place a Template may be put, with the group it asks for.
     ///
-    /// Placement itself is not implemented: the map loads with its Anchors
-    /// empty, so it is missing whatever would stand there.
+    /// The base map loads with its Anchors empty. [`Self::project_template`]
+    /// can translate one choice into map coordinates but does not merge it.
     pub fn template_anchors(&self) -> &[MapTemplateAnchor] {
         &self.template_anchors
+    }
+
+    /// Projects one explicitly chosen Template into this Instance's coordinate
+    /// frame without mutating or merging either input.
+    ///
+    /// The returned Terrain is the Template mask. Resolving it against existing
+    /// Terrain and Props remains policy for a later layer.
+    pub fn project_template(
+        &self,
+        anchor_id: &str,
+        template: &WorldTemplate,
+    ) -> Result<WorldTemplatePlacement, WorldMapError> {
+        let anchor = self
+            .template_anchors
+            .iter()
+            .find(|anchor| anchor.anchor_id == anchor_id)
+            .ok_or_else(|| {
+                WorldMapError::new(format!("Template Anchor '{anchor_id}' does not exist"))
+            })?;
+        if anchor.group_number != template.group_number {
+            return Err(WorldMapError::new(format!(
+                "Template '{}' belongs to group {}, but Anchor '{anchor_id}' requires group {}",
+                template.scene_id, template.group_number, anchor.group_number
+            )));
+        }
+        if self.terrain_cell_meters != template.terrain_cell_meters {
+            return Err(WorldMapError::new(format!(
+                "Template '{}' uses terrain cells of {} meters, but this Instance uses {} meters",
+                template.scene_id, template.terrain_cell_meters, self.terrain_cell_meters
+            )));
+        }
+
+        let grid_offset = SceneGridOffset {
+            x: i64::from(anchor.grid_position.x) - i64::from(template.insertion_anchor_grid.x),
+            y: i64::from(anchor.grid_position.y) - i64::from(template.insertion_anchor_grid.y),
+        };
+        let position_offset = Position::new(
+            anchor.position.x - template.insertion_anchor.x,
+            anchor.position.y - template.insertion_anchor.y,
+        );
+        let terrain_cells = template
+            .terrain_cells
+            .iter()
+            .map(|cell| {
+                let target_x = i64::from(cell.x) + grid_offset.x;
+                let target_y = i64::from(cell.y) + grid_offset.y;
+                if target_x < 0
+                    || target_y < 0
+                    || target_x >= i64::from(self.width_tiles)
+                    || target_y >= i64::from(self.height_tiles)
+                {
+                    return Err(WorldMapError::new(format!(
+                        "Template '{}' does not fit at Anchor '{anchor_id}'",
+                        template.scene_id
+                    )));
+                }
+                Ok(MapTerrainCell {
+                    x: target_x as u32,
+                    y: target_y as u32,
+                    asset_key: cell.asset_key.clone(),
+                    surface: cell.surface.clone(),
+                    elevation_meters: cell.elevation_meters,
+                    center: Position::new(
+                        cell.center.x + position_offset.x,
+                        cell.center.y + position_offset.y,
+                    ),
+                })
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        let props = template
+            .props
+            .iter()
+            .map(|prop| MapProp {
+                instance_id: prop.instance_id.clone(),
+                asset_key: prop.asset_key.clone(),
+                position: Position::new(
+                    prop.position.x + position_offset.x,
+                    prop.position.y + position_offset.y,
+                ),
+                elevation_meters: prop.elevation_meters,
+            })
+            .collect();
+
+        Ok(WorldTemplatePlacement {
+            anchor_id: anchor.anchor_id.clone(),
+            template_scene_id: template.scene_id.clone(),
+            grid_offset,
+            position_offset,
+            terrain_cells,
+            props,
+        })
     }
 }
 
@@ -153,8 +244,8 @@ fn import_catalog_template(scene_id: &str, source: &str) -> Result<WorldTemplate
 
 /// A Template in its own bottom-left-local coordinate frame.
 ///
-/// Positions are deliberately not centered like a [`WorldMap`]. Future
-/// composition translates them by an Instance Anchor minus `insertion_anchor`.
+/// Positions are deliberately not centered like a [`WorldMap`]. Projection
+/// translates them by an Instance Anchor minus `insertion_anchor`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldTemplate {
     scene_id: String,
@@ -181,18 +272,17 @@ impl WorldTemplate {
             WorldMapError::new(format!("cannot parse SceneMaker Template: {error}"))
         })?;
         validate_header(&export, scene_id, "template")?;
-        let scene = convert_scene_body(export, SceneCoordinateFrame::TemplateLocal)?;
-        if !scene.template_anchors.is_empty() {
+        if !export.scene.template_anchors.is_empty() {
             return Err(WorldMapError::new(
                 "a SceneMaker Template must not carry Template Anchors",
             ));
         }
-        if !scene.water_is_empty {
+        if !export.water_raster.is_empty() || !export.scene.water_bodies.is_empty() {
             return Err(WorldMapError::new(
                 "a SceneMaker Template must not carry water",
             ));
         }
-        let Some(definition) = scene.template_definition else {
+        let Some(definition) = export.scene.template_definition.as_ref() else {
             return Err(WorldMapError::new(
                 "a SceneMaker Template requires a Template definition",
             ));
@@ -202,6 +292,12 @@ impl WorldTemplate {
                 "a SceneMaker Template group number must be positive",
             ));
         }
+        let scene = convert_scene_body(export, SceneCoordinateFrame::TemplateLocal)?;
+        let Some(definition) = scene.template_definition else {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template requires a Template definition",
+            ));
+        };
         let insertion_anchor = validate_grid_anchor(
             "Template insertion anchor",
             &definition.insertion_anchor_authoring_px,
@@ -330,11 +426,59 @@ pub struct MapTemplateAnchor {
     pub grid_position: SceneGridPosition,
 }
 
-/// A checked position on a Scene's Terrain-cell grid.
+/// A checked intersection on a Scene's Terrain-cell grid.
+///
+/// Each axis ranges from zero through the corresponding Scene dimension,
+/// inclusive. It is not necessarily the index of a Terrain cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SceneGridPosition {
     pub x: u32,
     pub y: u32,
+}
+
+/// A signed translation between two [`SceneGridPosition`] values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SceneGridOffset {
+    pub x: i64,
+    pub y: i64,
+}
+
+/// Template geometry translated into an Instance, but not merged into it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldTemplatePlacement {
+    anchor_id: String,
+    template_scene_id: String,
+    grid_offset: SceneGridOffset,
+    position_offset: Position,
+    terrain_cells: Vec<MapTerrainCell>,
+    props: Vec<MapProp>,
+}
+
+impl WorldTemplatePlacement {
+    pub fn anchor_id(&self) -> &str {
+        &self.anchor_id
+    }
+
+    pub fn template_scene_id(&self) -> &str {
+        &self.template_scene_id
+    }
+
+    pub const fn grid_offset(&self) -> SceneGridOffset {
+        self.grid_offset
+    }
+
+    pub const fn position_offset(&self) -> Position {
+        self.position_offset
+    }
+
+    /// The translated Template Terrain cells, which form its placement mask.
+    pub fn terrain_cells(&self) -> &[MapTerrainCell] {
+        &self.terrain_cells
+    }
+
+    pub fn props(&self) -> &[MapProp] {
+        &self.props
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -352,7 +496,6 @@ struct ConvertedSceneBody {
     props: Vec<MapProp>,
     template_anchors: Vec<MapTemplateAnchor>,
     template_definition: Option<TemplateDefinitionDocument>,
-    water_is_empty: bool,
 }
 
 fn convert_scene_body(
@@ -362,7 +505,6 @@ fn convert_scene_body(
     let ExportDocument {
         grid,
         asset_profiles,
-        water_raster,
         scene,
         ..
     } = export;
@@ -370,7 +512,6 @@ fn convert_scene_body(
         size_cells,
         terrain_cells: source_terrain_cells,
         props: source_props,
-        water_bodies,
         template_anchors: source_template_anchors,
         template_definition,
         ..
@@ -465,9 +606,16 @@ fn convert_scene_body(
         offset_x,
         offset_y,
     )?;
+    let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
         .map(|anchor| {
+            if anchor.anchor_id.is_empty() || !anchor_ids.insert(anchor.anchor_id.clone()) {
+                return Err(WorldMapError::new(format!(
+                    "Template Anchor ID '{}' is empty or duplicated",
+                    anchor.anchor_id
+                )));
+            }
             if anchor.group_number == 0 {
                 return Err(WorldMapError::new(format!(
                     "Template Anchor '{}' group number must be positive",
@@ -503,7 +651,6 @@ fn convert_scene_body(
         props,
         template_anchors,
         template_definition,
-        water_is_empty: water_raster.is_empty() && water_bodies.is_empty(),
     })
 }
 
@@ -955,6 +1102,171 @@ mod tests {
     }
 
     #[test]
+    fn template_projection_translates_geometry_without_merging_it() {
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, ANKH, ANCHOR),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+                }"#,
+                r#"{ "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": 2.5 }"#,
+                ANKH,
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+
+        let placement = map
+            .project_template("template_anchor_001", &template)
+            .expect("the Template fits at the matching Anchor");
+
+        assert_eq!(placement.anchor_id(), "template_anchor_001");
+        assert_eq!(placement.template_scene_id(), "test_template_unit");
+        assert_eq!(placement.grid_offset(), SceneGridOffset { x: 1, y: 2 });
+        assert_eq!(placement.position_offset(), Position::new(-1.0, 0.0));
+        assert_eq!(
+            (
+                placement.terrain_cells()[0].x,
+                placement.terrain_cells()[0].y
+            ),
+            (1, 2)
+        );
+        assert_eq!(
+            placement.terrain_cells()[0].center,
+            Position::new(-0.5, 0.5)
+        );
+        assert_eq!(placement.terrain_cells()[0].elevation_meters, 2.5);
+        assert_eq!(placement.props()[0].position, Position::new(1.0, 3.0));
+        assert_eq!(placement.props()[0].elevation_meters, 1.0);
+        assert_eq!(map.terrain_cells().len(), 1);
+        assert_eq!(map.props().len(), 1);
+    }
+
+    #[test]
+    fn negative_grid_offsets_are_safe_when_the_mask_still_fits() {
+        let anchor = ANCHOR.replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 0, "y": 0 }"#,
+        );
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, "", &anchor),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 32, "y": 0 }
+                }"#,
+                r#"{ "x": 1, "y": 0, "asset_key": "grass", "elevation_meters": 1.0 }"#,
+                "",
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+
+        let placement = map
+            .project_template("template_anchor_001", &template)
+            .expect("the translated mask remains inside the Instance");
+
+        assert_eq!(placement.grid_offset(), SceneGridOffset { x: -1, y: 0 });
+        assert_eq!(
+            (
+                placement.terrain_cells()[0].x,
+                placement.terrain_cells()[0].y
+            ),
+            (0, 0)
+        );
+    }
+
+    #[test]
+    fn template_projection_rejects_a_mask_outside_the_instance() {
+        let anchor = ANCHOR.replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 0, "y": 0 }"#,
+        );
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, "", &anchor),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 32, "y": 0 }
+                }"#,
+                TEST_GRASS_CELL,
+                "",
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+
+        assert!(
+            map.project_template("template_anchor_001", &template)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn template_projection_rejects_unknown_or_incompatible_choices() {
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, "", ANCHOR),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let wrong_group = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 2,
+                    "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+                }"#,
+                TEST_GRASS_CELL,
+                "",
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let wrong_cell_size = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+                }"#,
+                TEST_GRASS_CELL,
+                "",
+            )
+            .replacen(
+                r#""terrain_cell_meters": 1.0"#,
+                r#""terrain_cell_meters": 0.5"#,
+                1,
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is internally valid");
+
+        assert!(
+            map.project_template("missing_anchor", &wrong_group)
+                .is_err()
+        );
+        assert!(
+            map.project_template("template_anchor_001", &wrong_group)
+                .is_err()
+        );
+        assert!(
+            map.project_template("template_anchor_001", &wrong_cell_size)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn an_instance_or_a_template_without_definition_is_rejected_as_a_template() {
         assert!(
             WorldTemplate::from_source(&test_export(TEST_GRASS_CELL, ""), TEST_SCENE_ID).is_err()
@@ -984,8 +1296,14 @@ mod tests {
             ANCHOR,
         );
 
-        assert!(WorldMap::from_source(&instance_with_definition, TEST_SCENE_ID).is_err());
-        assert!(WorldTemplate::from_source(&template_with_anchor, "test_template_unit").is_err());
+        let instance_error = WorldMap::from_source(&instance_with_definition, TEST_SCENE_ID)
+            .expect_err("an Instance cannot carry a Template definition");
+        let template_error =
+            WorldTemplate::from_source(&template_with_anchor, "test_template_unit")
+                .expect_err("a Template cannot carry Template Anchors");
+
+        assert!(instance_error.to_string().contains("must not carry"));
+        assert!(template_error.to_string().contains("must not carry"));
     }
 
     #[test]
@@ -1186,6 +1504,19 @@ mod tests {
         assert_eq!(
             edge_map.template_anchors()[0].grid_position,
             SceneGridPosition { x: 4, y: 4 }
+        );
+    }
+
+    #[test]
+    fn template_anchor_ids_must_be_unique() {
+        let duplicated = format!("{ANCHOR}, {ANCHOR}");
+
+        assert!(
+            WorldMap::from_source(
+                &test_export_with_anchors(TEST_GRASS_CELL, "", &duplicated),
+                TEST_SCENE_ID,
+            )
+            .is_err()
         );
     }
 
