@@ -1,8 +1,6 @@
-#[cfg(test)]
 use std::cmp::Ordering;
 
 use bevy::prelude::Vec2;
-#[cfg(test)]
 use world01_content::CollisionComponentGeometry;
 use world01_content::{AuthoredFacing, CharacterHurtGeometry, RuntimeComponentGeometry};
 use world01_world_data::{BodyFacing, Position};
@@ -96,7 +94,6 @@ pub(crate) fn components_overlap(
 
 /// A direction and distance that bring one Component to exact contact with
 /// another.
-#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ComponentSeparation {
     /// Unit direction in which the first Component moves.
@@ -105,7 +102,6 @@ pub(crate) struct ComponentSeparation {
     pub separation_distance: f32,
 }
 
-#[cfg(test)]
 #[derive(Debug, Clone, Copy)]
 struct SeparationCandidate {
     separation: ComponentSeparation,
@@ -132,7 +128,6 @@ struct SeparationCandidate {
 /// indistinguishable Components at the same pose cannot supply an
 /// antisymmetric answer, so they use the canonical positive axis
 /// deterministically.
-#[cfg(test)]
 pub(crate) fn component_separation(
     first: &CollisionComponentGeometry,
     first_transform: GeometryTransform,
@@ -188,7 +183,6 @@ pub(crate) fn component_separation(
     best.map(|candidate| candidate.separation)
 }
 
-#[cfg(test)]
 fn canonical_axis(axis: Vec2) -> Option<Vec2> {
     let length = axis.length();
     if !length.is_finite() || length == 0.0 {
@@ -207,7 +201,6 @@ fn canonical_axis(axis: Vec2) -> Option<Vec2> {
     Some(axis)
 }
 
-#[cfg(test)]
 fn projection_bounds(points: &[Vec2], origin: Vec2, axis: Vec2) -> (f32, f32) {
     points
         .iter()
@@ -217,7 +210,6 @@ fn projection_bounds(points: &[Vec2], origin: Vec2, axis: Vec2) -> (f32, f32) {
         })
 }
 
-#[cfg(test)]
 fn separation_on_axis(
     first: (f32, f32),
     second: (f32, f32),
@@ -246,12 +238,10 @@ fn separation_on_axis(
     }
 }
 
-#[cfg(test)]
 fn axis_translation_distances(first: (f32, f32), second: (f32, f32)) -> (f32, f32) {
     ((first.1 - second.0).max(0.0), (second.1 - first.0).max(0.0))
 }
 
-#[cfg(test)]
 fn compare_candidates(first: SeparationCandidate, second: SeparationCandidate) -> Ordering {
     first
         .separation
@@ -261,7 +251,6 @@ fn compare_candidates(first: SeparationCandidate, second: SeparationCandidate) -
         .then_with(|| compare_vec2(first.separation.normal, second.separation.normal))
 }
 
-#[cfg(test)]
 fn compare_point_sets(first: &[Vec2], second: &[Vec2]) -> Ordering {
     let mut first = first.to_vec();
     let mut second = second.to_vec();
@@ -275,39 +264,11 @@ fn compare_point_sets(first: &[Vec2], second: &[Vec2]) -> Ordering {
         .unwrap_or_else(|| first.len().cmp(&second.len()))
 }
 
-#[cfg(test)]
 fn compare_vec2(first: Vec2, second: Vec2) -> Ordering {
     first
         .x
         .total_cmp(&second.x)
         .then_with(|| first.y.total_cmp(&second.y))
-}
-
-/// The deepest contact between two posed Components.
-///
-/// Deepest rather than first: a rounded body meets a box across several
-/// triangles at once, and the pair that is furthest in is the one whose surface
-/// the actor is actually running into.
-pub(crate) fn components_contact(
-    first: &RuntimeComponentGeometry,
-    first_transform: GeometryTransform,
-    second: &RuntimeComponentGeometry,
-    second_transform: GeometryTransform,
-) -> Option<Contact> {
-    let mut deepest: Option<Contact> = None;
-    for first_triangle in first.indices.chunks_exact(3) {
-        let first_points = triangle_points(first, first_transform, first_triangle);
-        for second_triangle in second.indices.chunks_exact(3) {
-            let second_points = triangle_points(second, second_transform, second_triangle);
-            let Some(contact) = triangle_contact(first_points, second_points) else {
-                continue;
-            };
-            if deepest.is_none_or(|best| contact.depth > best.depth) {
-                deepest = Some(contact);
-            }
-        }
-    }
-    deepest
 }
 
 fn triangle_points(
@@ -350,59 +311,6 @@ pub(crate) fn component_projection_minimum(
         .map(|point| (transform_point(transform, *point) - origin).dot(direction))
         .fold(f32::INFINITY, f32::min)
         .max(0.0)
-}
-
-/// How two shapes touch, rather than whether they touch.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct Contact {
-    /// Unit vector pointing out of the second shape towards the first.
-    pub normal: Vec2,
-    /// How far they overlap along that normal; near zero when they only touch.
-    pub depth: f32,
-}
-
-/// The shallowest axis that separates two overlapping triangles, which is the
-/// surface one of them ran into.
-///
-/// Deliberately not the same code as [`triangles_overlap`]. That one answers a
-/// combat question - did the Hammer reach this body - with an epsilon in the
-/// units of an unnormalised edge normal, and it has been answering it correctly
-/// for a while. This one measures a distance in meters, so its axes are
-/// normalised and its epsilon means something else. Merging them would have to
-/// change one of the two, and the one that must not change is the one already
-/// deciding damage.
-pub(crate) fn triangle_contact(first: [Vec2; 3], second: [Vec2; 3]) -> Option<Contact> {
-    const EPSILON: f32 = 0.000_01;
-    let mut best: Option<Contact> = None;
-    for triangle in [first, second] {
-        for index in 0..3 {
-            let edge = triangle[(index + 1) % 3] - triangle[index];
-            let axis = edge.perp();
-            let length = axis.length();
-            if length <= EPSILON {
-                continue;
-            }
-            let axis = axis / length;
-            let first_projection = first.map(|point| point.dot(axis));
-            let second_projection = second.map(|point| point.dot(axis));
-            let first_minimum = min_value(first_projection);
-            let first_maximum = max_value(first_projection);
-            let second_minimum = min_value(second_projection);
-            let second_maximum = max_value(second_projection);
-            let depth = first_maximum.min(second_maximum) - first_minimum.max(second_minimum);
-            if depth < 0.0 {
-                return None;
-            }
-            if best.is_none_or(|contact| depth < contact.depth) {
-                let outwards = (first_minimum + first_maximum) >= (second_minimum + second_maximum);
-                best = Some(Contact {
-                    normal: if outwards { axis } else { -axis },
-                    depth,
-                });
-            }
-        }
-    }
-    best
 }
 
 pub(crate) fn triangles_overlap(first: [Vec2; 3], second: [Vec2; 3]) -> bool {

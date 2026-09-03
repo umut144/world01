@@ -409,11 +409,10 @@ must be documented as an explicit game variant.
   against where they stand is order-independent but lets two characters walking
   into each other each take a step that is legal on its own while the pair of
   them ends up overlapping.
-- The direction a character slides is only as good as the contact normal, and
-  the normal a triangulated body offers is not exactly its surface: an interior
-  edge of the triangulation can supply it. This is why a head-on meeting can
-  deflect slightly rather than stop dead. It is tolerable for sliding and it is
-  not tolerable for separation, which pushes characters along that same normal.
+- A sliding direction comes from the authored boundaries of the colliding
+  Components. Interior edges introduced only by triangulation are not candidate
+  surface normals, so a head-on meeting stops instead of being deflected along
+  an invisible seam.
 - A character that already overlaps geometry may leave it but may not move
   deeper in. Being able to leave is what keeps anything spawned inside a prop,
   or put there by a server correction, from being stuck forever. Being able to

@@ -17,8 +17,8 @@ use world01_world_data::{BodyFacing, MovementVelocity, Position, SelectedCharact
 use crate::movement::MovementStep;
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
-    Contact, GeometryTransform, components_contact, components_overlap, facing_transform,
-    transformed_points,
+    ComponentSeparation, GeometryTransform, component_separation, components_overlap,
+    facing_transform, transformed_points,
 };
 
 /// An actor's collision geometry, placed where it stands.
@@ -57,11 +57,8 @@ impl PosedCollider<'_> {
 /// shape it never touched.
 ///
 /// A step straight into a surface has no part along it and is simply stopped.
-/// Between two actors that is less clean than it sounds: the normal comes from
-/// the deepest pair of touching triangles, and a triangulation's interior edges
-/// can supply it, so a head-on meeting may deflect a little instead. Tolerable
-/// while the normal only shortens a step the actor asked for; not tolerable for
-/// separation, which would move an actor along it.
+/// The normal comes from authored Component boundary edges, so interior edges
+/// introduced only by triangulation cannot deflect a head-on meeting.
 ///
 /// An actor is tested against both where the others stand and where their own
 /// steps would take them. Measuring only against where they stand is
@@ -122,14 +119,16 @@ pub fn block_colliding_movement(
         if !blocked(proposed, &blockers, &world, &grid, &mut candidates) {
             continue;
         }
-        if let Some(contact) = deepest_contact(current, &blockers, &world, &grid, &mut candidates) {
-            if displacement.dot(contact.normal) < 0.0 {
+        if let Some(separation) =
+            deepest_separation(current, &blockers, &world, &grid, &mut candidates)
+        {
+            if displacement.dot(separation.normal) < 0.0 {
                 *velocity = MovementVelocity::ZERO;
             }
             continue;
         }
-        let slid = deepest_contact(proposed, &blockers, &world, &grid, &mut candidates)
-            .and_then(|contact| slide_along(displacement, contact))
+        let slid = deepest_separation(proposed, &blockers, &world, &grid, &mut candidates)
+            .and_then(|separation| slide_along(displacement, separation))
             .filter(|slid| {
                 !blocked(
                     current.translated(*slid),
@@ -148,12 +147,12 @@ pub fn block_colliding_movement(
 /// `None` when the step does not point into the surface at all, which means the
 /// contact is not what stopped this step and sliding along it would invent
 /// movement, and when nothing is left to slide with.
-fn slide_along(displacement: Vec2, contact: Contact) -> Option<Vec2> {
-    let into_surface = displacement.dot(contact.normal);
+fn slide_along(displacement: Vec2, separation: ComponentSeparation) -> Option<Vec2> {
+    let into_surface = displacement.dot(separation.normal);
     if into_surface >= 0.0 {
         return None;
     }
-    let slid = displacement - contact.normal * into_surface;
+    let slid = displacement - separation.normal * into_surface;
     (slid.length_squared() > 0.0).then_some(slid)
 }
 
@@ -180,21 +179,26 @@ fn posed<'a>(
     })
 }
 
-/// The contact the actor is furthest into, across world geometry and actors
-/// alike, which is the surface its step actually ran into.
-fn deepest_contact(
+/// The exact-contact translation with the greatest distance across every
+/// overlapping Component pair.
+///
+/// Component separation distances are measured in meters and are comparable,
+/// unlike the old triangle-pair penetration heuristic. Equal distances choose
+/// a normal by value so catalog and query iteration order cannot decide the
+/// slide direction.
+fn deepest_separation(
     actor: PosedCollider<'_>,
     blockers: &[PosedCollider<'_>],
     world: &WorldCollisionGeometryCatalog,
     grid: &WorldColliderGrid,
     candidates: &mut Vec<u32>,
-) -> Option<Contact> {
-    let mut deepest: Option<Contact> = None;
-    let mut keep = |contact: Option<Contact>| {
-        if let Some(contact) = contact
-            && deepest.is_none_or(|best| contact.depth > best.depth)
+) -> Option<ComponentSeparation> {
+    let mut deepest: Option<ComponentSeparation> = None;
+    let mut keep = |separation: Option<ComponentSeparation>| {
+        if let Some(separation) = separation
+            && deepest.is_none_or(|best| separation_is_deeper(separation, best))
         {
-            deepest = Some(contact);
+            deepest = Some(separation);
         }
     };
     grid.candidates(actor.bounds, candidates);
@@ -202,10 +206,10 @@ fn deepest_contact(
         let region = &world.regions[*index as usize];
         let placement = GeometryTransform::translated(region.position);
         for component in &actor.geometry.components {
-            keep(components_contact(
-                component.geometry(),
+            keep(component_separation(
+                component,
                 actor.transform,
-                region.component.geometry(),
+                &region.component,
                 placement,
             ));
         }
@@ -216,16 +220,25 @@ fn deepest_contact(
         }
         for component in &actor.geometry.components {
             for other in &blocker.geometry.components {
-                keep(components_contact(
-                    component.geometry(),
+                keep(component_separation(
+                    component,
                     actor.transform,
-                    other.geometry(),
+                    other,
                     blocker.transform,
                 ));
             }
         }
     }
     deepest
+}
+
+fn separation_is_deeper(candidate: ComponentSeparation, current: ComponentSeparation) -> bool {
+    candidate
+        .separation_distance
+        .total_cmp(&current.separation_distance)
+        .then_with(|| current.normal.x.total_cmp(&candidate.normal.x))
+        .then_with(|| current.normal.y.total_cmp(&candidate.normal.y))
+        .is_gt()
 }
 
 fn blocked(
@@ -289,10 +302,6 @@ mod tests {
     /// A shortened step is divided by the tick length and multiplied by it
     /// again, so it comes back a few bits short of where it started.
     const EPSILON: f32 = 0.000_1;
-
-    /// How far apart two walkers have to be before their colliders are clear
-    /// of one another on that axis.
-    const WALKER_WIDTH: f32 = 0.4;
 
     fn square(name: &str, corner: Vec2, size: f32) -> CollisionComponentGeometry {
         CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
@@ -547,17 +556,11 @@ mod tests {
         assert_eq!(position_of(&app, leaving), Position::new(0.0, 8.0));
     }
 
-    /// The two-moveables hole: measured only against where the other stands,
-    /// each of these steps is legal on its own, and together they end with the
-    /// two actors inside each other - from where they walk through.
-    ///
-    /// What each of them does instead is deliberately not asserted. Whether a
-    /// step is stopped or shortened depends on the contact normal, and the
-    /// normal a triangulated body offers is not exactly its surface. The
-    /// property that has to hold either way is that they do not end up inside
-    /// each other.
+    /// Both proposed poses are considered, and their Component boundaries say
+    /// this is a head-on contact. The diagonal interior seam in each square's
+    /// triangulation must not turn either step into a sideways slide.
     #[test]
-    fn two_actors_walking_into_each_other_do_not_end_up_overlapping() {
+    fn two_actors_walking_head_on_stop_without_diagonal_deflection() {
         let mut app = app(WorldCollisionGeometryCatalog::default());
         let left = spawn(
             &mut app,
@@ -574,12 +577,9 @@ mod tests {
 
         app.update();
 
-        let left = position_of(&app, left);
-        let right = position_of(&app, right);
-        let apart = (left.x - right.x).abs().max((left.y - right.y).abs());
-        assert!(
-            apart >= WALKER_WIDTH - EPSILON,
-            "{left:?} and {right:?} overlap"
-        );
+        assert_eq!(velocity_of(&app, left), MovementVelocity::ZERO);
+        assert_eq!(velocity_of(&app, right), MovementVelocity::ZERO);
+        assert_eq!(position_of(&app, left), Position::ZERO);
+        assert_eq!(position_of(&app, right), Position::new(2.1, 0.0));
     }
 }
