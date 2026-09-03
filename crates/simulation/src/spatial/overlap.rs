@@ -1,9 +1,10 @@
+#[cfg(test)]
 use std::cmp::Ordering;
 
 use bevy::prelude::Vec2;
-use world01_content::{
-    AuthoredFacing, CharacterHurtGeometry, CollisionComponentGeometry, RuntimeComponentGeometry,
-};
+#[cfg(test)]
+use world01_content::CollisionComponentGeometry;
+use world01_content::{AuthoredFacing, CharacterHurtGeometry, RuntimeComponentGeometry};
 use world01_world_data::{BodyFacing, Position};
 
 #[derive(Debug, Clone, Copy)]
@@ -108,6 +109,7 @@ pub(crate) fn components_overlap(
 /// triangle winding. Two geometrically indistinguishable Components at the
 /// same pose cannot supply an antisymmetric answer, so they use the canonical
 /// positive axis deterministically.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ComponentSeparation {
     /// Unit direction in which the first Component moves.
@@ -116,12 +118,14 @@ pub(crate) struct ComponentSeparation {
     pub separation_distance: f32,
 }
 
+#[cfg(test)]
 #[derive(Debug, Clone, Copy)]
 struct SeparationCandidate {
     separation: ComponentSeparation,
     axis: Vec2,
 }
 
+#[cfg(test)]
 pub(crate) fn component_separation(
     first: &CollisionComponentGeometry,
     first_transform: GeometryTransform,
@@ -168,6 +172,7 @@ pub(crate) fn component_separation(
     best.map(|candidate| candidate.separation)
 }
 
+#[cfg(test)]
 fn canonical_axis(axis: Vec2) -> Option<Vec2> {
     let length = axis.length();
     if !length.is_finite() || length == 0.0 {
@@ -186,6 +191,7 @@ fn canonical_axis(axis: Vec2) -> Option<Vec2> {
     Some(axis)
 }
 
+#[cfg(test)]
 fn projection_bounds(points: &[Vec2], origin: Vec2, axis: Vec2) -> (f32, f32) {
     points
         .iter()
@@ -195,6 +201,7 @@ fn projection_bounds(points: &[Vec2], origin: Vec2, axis: Vec2) -> (f32, f32) {
         })
 }
 
+#[cfg(test)]
 fn separation_on_axis(
     first: (f32, f32),
     second: (f32, f32),
@@ -219,10 +226,12 @@ fn separation_on_axis(
     }
 }
 
+#[cfg(test)]
 fn axis_translation_distances(first: (f32, f32), second: (f32, f32)) -> (f32, f32) {
     ((first.1 - second.0).max(0.0), (second.1 - first.0).max(0.0))
 }
 
+#[cfg(test)]
 fn compare_candidates(first: SeparationCandidate, second: SeparationCandidate) -> Ordering {
     first
         .separation
@@ -232,6 +241,7 @@ fn compare_candidates(first: SeparationCandidate, second: SeparationCandidate) -
         .then_with(|| compare_vec2(first.separation.normal, second.separation.normal))
 }
 
+#[cfg(test)]
 fn compare_point_sets(first: &[Vec2], second: &[Vec2]) -> Ordering {
     let mut first = first.to_vec();
     let mut second = second.to_vec();
@@ -245,6 +255,7 @@ fn compare_point_sets(first: &[Vec2], second: &[Vec2]) -> Ordering {
         .unwrap_or_else(|| first.len().cmp(&second.len()))
 }
 
+#[cfg(test)]
 fn compare_vec2(first: Vec2, second: Vec2) -> Ordering {
     first
         .x
