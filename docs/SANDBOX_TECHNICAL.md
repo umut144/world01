@@ -263,12 +263,14 @@ Callers select an Instance by its scene ID. Template exports are imported into a
 typed catalog grouped by `group_number`, but are not yet chosen or composed into
 a map. Instance positions are centered in world space; Template cells, Props,
 and insertion anchors deliberately remain in the Template's own bottom-left
-coordinate frame for later translation at an Instance Anchor. The current
-strict importer accepts export schema 9 and embedded scene schema 10. It
-requires their water fields so an older snapshot cannot masquerade as current,
-but `WorldMap` does not yet model water and Templates carrying water are
-rejected. The headless server and graphical client therefore consume the same
-selected Instance dimensions and gameplay placements. SceneMaker stores only
+coordinate frame for later translation at an Instance Anchor. Instance Anchors
+and Template insertion anchors also retain their validated integer Terrain-cell
+coordinates, so composition never has to recover grid positions from floats.
+The current strict importer accepts export schema 9 and embedded scene schema
+10. It requires their water fields so an older snapshot cannot masquerade as
+current, but `WorldMap` does not yet model water and Templates carrying water
+are rejected. The headless server and graphical client therefore consume the
+same selected Instance dimensions and gameplay placements. SceneMaker stores only
 PolyTools asset keys and authoring geometry; the runtime resolves those keys
 through its synchronized PolyTools content and renders the real runtime
 geometry. These facilities live inside the Labyrinth client application. There

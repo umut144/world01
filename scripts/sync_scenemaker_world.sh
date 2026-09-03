@@ -40,7 +40,14 @@ done < <(find "$source_directory" -maxdepth 1 -type f -name '*.scene_export.json
 staging_directory="$(mktemp -d "$project_root/assets/.maps.XXXXXX")"
 for source_export in "${source_exports[@]}"; do
   jq -e '
+    def grid_anchor($position; $width; $height; $step):
+      ($position.x | type == "number" and . == floor and . >= 0 and . <= ($width * $step)
+        and ((. / $step) == ((. / $step) | floor)))
+      and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step)
+        and ((. / $step) == ((. / $step) | floor)));
+
     . as $root
+    | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | .format == "scene_maker_scene_export"
     and .version == 9
     and .workspace_key == "world01"
@@ -65,8 +72,9 @@ for source_export in "${source_exports[@]}"; do
     else
       (.scene.template_definition | type == "object")
       and (.scene.template_definition.group_number | type == "number" and . == floor and . > 0)
-      and (.scene.template_definition.insertion_anchor_authoring_px.x | type == "number" and . == floor)
-      and (.scene.template_definition.insertion_anchor_authoring_px.y | type == "number" and . == floor)
+      and grid_anchor(.scene.template_definition.insertion_anchor_authoring_px;
+        .scene.size_cells.width; .scene.size_cells.height; $terrain_step)
+      and (.scene.template_anchors | length == 0)
       and (.scene.water_bodies | length == 0)
       and (.water_raster | length == 0)
     end)
@@ -90,8 +98,8 @@ for source_export in "${source_exports[@]}"; do
     and all(.scene.template_anchors[];
       (.anchor_id | type == "string" and length > 0)
       and (.group_number | type == "number" and . == floor and . > 0)
-      and (.position_authoring_px.x | type == "number" and . == floor)
-      and (.position_authoring_px.y | type == "number" and . == floor))
+      and grid_anchor(.position_authoring_px; $root.scene.size_cells.width;
+        $root.scene.size_cells.height; $terrain_step))
   ' "$source_export" >/dev/null \
     || fail "invalid SceneMaker export: $source_export"
 
