@@ -1,8 +1,10 @@
 use std::cmp::Ordering;
 
 use bevy::prelude::Vec2;
-use world01_content::CollisionComponentGeometry;
-use world01_content::{AuthoredFacing, CharacterHurtGeometry, RuntimeComponentGeometry};
+use world01_content::{
+    AuthoredFacing, CharacterCollisionGeometry, CharacterHurtGeometry, CollisionComponentGeometry,
+    RuntimeComponentGeometry,
+};
 use world01_world_data::{BodyFacing, Position};
 
 #[derive(Debug, Clone, Copy)]
@@ -183,6 +185,36 @@ pub(crate) fn component_separation(
     best.map(|candidate| candidate.separation)
 }
 
+/// Chooses one correction for a pair of Characters, regardless of how many
+/// collision Components either Character declares.
+///
+/// The greatest exact-contact distance wins, so adding Components cannot apply
+/// the correction repeatedly. Equal distances use the same value ordering as
+/// movement blocking and therefore cannot inherit Component iteration order.
+/// Separate Components are treated as separate authored shapes; a shared seam
+/// between them is not welded into a Character-wide outline.
+pub(crate) fn character_separation(
+    first: &CharacterCollisionGeometry,
+    first_transform: GeometryTransform,
+    second: &CharacterCollisionGeometry,
+    second_transform: GeometryTransform,
+) -> Option<ComponentSeparation> {
+    let mut deepest = None;
+    for component in &first.components {
+        for other in &second.components {
+            let Some(separation) =
+                component_separation(component, first_transform, other, second_transform)
+            else {
+                continue;
+            };
+            if deepest.is_none_or(|current| separation_is_deeper(separation, current)) {
+                deepest = Some(separation);
+            }
+        }
+    }
+    deepest
+}
+
 fn canonical_axis(axis: Vec2) -> Option<Vec2> {
     let length = axis.length();
     if !length.is_finite() || length == 0.0 {
@@ -269,6 +301,18 @@ fn compare_vec2(first: Vec2, second: Vec2) -> Ordering {
         .x
         .total_cmp(&second.x)
         .then_with(|| first.y.total_cmp(&second.y))
+}
+
+pub(crate) fn separation_is_deeper(
+    candidate: ComponentSeparation,
+    current: ComponentSeparation,
+) -> bool {
+    candidate
+        .separation_distance
+        .total_cmp(&current.separation_distance)
+        .then_with(|| current.normal.x.total_cmp(&candidate.normal.x))
+        .then_with(|| current.normal.y.total_cmp(&candidate.normal.y))
+        .is_gt()
 }
 
 fn triangle_points(

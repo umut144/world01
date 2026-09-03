@@ -427,6 +427,11 @@ must be documented as an explicit game variant.
   share the distance by **inverse mass**: the heavier one gives way less. Mass
   is what a character brings to holding its ground, and nothing else enters -
   RUN and DASH do not shove.
+  - Pair corrections read the same start-of-tick positions and are applied
+    together, so processing order gives no Character priority. An isolated pair
+    separates immediately; a cluster may settle over more than one tick.
+  - Life state does not remove occupied space. A dead Character continues to
+    block and to participate in separation.
   - Speed is deliberately absent. Two characters standing still can overlap
     after a spawn or a server correction, and any rule built on momentum or
     kinetic energy has nothing to say there. Mass always does.

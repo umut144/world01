@@ -130,6 +130,10 @@ The existing application uses a server-authoritative model:
 - clients send input and join requests, never authoritative gameplay outcomes;
 - the server validates ownership and joins, owns entity lifecycle, runs the
   authoritative simulation, and publishes replicated state;
+- existing Character overlap is corrected only by the server, from a snapshot
+  enumerated in stable `ActorId` order before movement blocking; each pair
+  shares its correction inversely to movement mass, and the existing predicted
+  `Position` replication reconciles and smooths the result for the owner;
 - replicated gameplay components use protocol-neutral types from
   `world_data`; Bevy `Transform` remains derived client presentation;
 - the owning client predicts explicitly registered state and reconciles to

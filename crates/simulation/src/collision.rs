@@ -1,8 +1,10 @@
 //! Where an actor is allowed to end this tick.
 //!
 //! Collision runs between deciding a velocity and applying it: it may refuse a
-//! step, never move an actor. That keeps `integrate_movement` the only writer
-//! of `Position` and keeps the refusal itself readable as a zeroed velocity.
+//! step, but never moves an actor by interpreting that velocity. Authoritative
+//! overlap separation may write `Position` earlier in the collision phase;
+//! `integrate_movement` remains the only writer that applies requested motion,
+//! and a refusal stays readable as a zeroed velocity.
 //!
 //! What blocks is authored, not derived. An actor whose character has no
 //! `collision` Region occupies no space: it passes through everything and stops
@@ -17,8 +19,8 @@ use world01_world_data::{BodyFacing, MovementVelocity, Position, SelectedCharact
 use crate::movement::MovementStep;
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
-    ComponentSeparation, GeometryTransform, component_separation, facing_transform,
-    transformed_points,
+    ComponentSeparation, GeometryTransform, character_separation, component_separation,
+    facing_transform, separation_is_deeper, transformed_points,
 };
 
 /// An actor's collision geometry, placed where it stands.
@@ -223,16 +225,12 @@ fn deepest_separation(
         if blocker.entity == actor.entity || !blocker.bounds.overlaps(actor.bounds) {
             continue;
         }
-        for component in &actor.geometry.components {
-            for other in &blocker.geometry.components {
-                keep(component_separation(
-                    component,
-                    actor.transform,
-                    other,
-                    blocker.transform,
-                ));
-            }
-        }
+        keep(character_separation(
+            actor.geometry,
+            actor.transform,
+            blocker.geometry,
+            blocker.transform,
+        ));
     }
     deepest
 }
@@ -248,15 +246,6 @@ fn penetrates(
 ) -> bool {
     deepest_separation(actor, blockers, world, grid, candidates)
         .is_some_and(|separation| separation.separation_distance > 0.0)
-}
-
-fn separation_is_deeper(candidate: ComponentSeparation, current: ComponentSeparation) -> bool {
-    candidate
-        .separation_distance
-        .total_cmp(&current.separation_distance)
-        .then_with(|| current.normal.x.total_cmp(&candidate.normal.x))
-        .then_with(|| current.normal.y.total_cmp(&candidate.normal.y))
-        .is_gt()
 }
 
 #[cfg(test)]

@@ -4,8 +4,9 @@ use crate::{
     advance_dash, advance_hammer_attacks, advance_mage_attacks, apply_damage,
     apply_hammer_strike_damage, apply_mage_beam_damage, block_colliding_movement,
     constrain_embedded_hammer_reach, damage::DamageDealt, expire_mage_beams, finish_mage_cooldowns,
-    integrate_movement, tick_status_effects, update_character_life, update_character_orientation,
-    update_exertion, update_gaze_direction, update_weapon_aim,
+    integrate_movement, separate_overlapping_characters, tick_status_effects,
+    update_character_life, update_character_orientation, update_exertion, update_gaze_direction,
+    update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,7 +15,8 @@ pub enum SimulationSet {
     GameplayStep,
     /// Sits between deciding a velocity and applying it to a position.
     ///
-    /// Where a movement that would end inside geometry is refused.
+    /// Where the server separates existing Character overlap and movement that
+    /// would end inside geometry is refused.
     Collision,
     /// Resolves the consequences of the gameplay step: damage, expiry, and life state.
     Resolution,
@@ -22,8 +24,9 @@ pub enum SimulationSet {
 
 /// Selects which parts of the simulation step an app is allowed to run.
 ///
-/// Both authorities run the identical gameplay step. Only the server resolves
-/// damage, so a predicting client cannot invent hits that the server never saw.
+/// Both authorities run the identical intent-driven gameplay step. Only the
+/// server resolves damage and existing Character overlap, so a predicting
+/// client cannot invent authoritative outcomes the server never saw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimulationAuthority {
     /// The authoritative simulation: resolves damage as well.
@@ -34,6 +37,10 @@ pub enum SimulationAuthority {
 
 impl SimulationAuthority {
     const fn resolves_damage(self) -> bool {
+        matches!(self, Self::Server)
+    }
+
+    const fn separates_overlaps(self) -> bool {
         matches!(self, Self::Server)
     }
 }
@@ -65,10 +72,7 @@ pub fn add_simulation_step(
             .chain()
             .in_set(SimulationSet::GameplayStep),
     );
-    app.add_systems(
-        schedule.clone(),
-        block_colliding_movement.in_set(SimulationSet::Collision),
-    );
+    add_collision_systems(app, schedule.clone(), authority);
     if authority.resolves_damage() {
         app.add_systems(
             schedule.clone(),
@@ -101,18 +105,40 @@ pub fn add_simulation_step(
     );
 }
 
+fn add_collision_systems(
+    app: &mut App,
+    schedule: impl ScheduleLabel + Clone,
+    authority: SimulationAuthority,
+) {
+    if authority.separates_overlaps() {
+        app.add_systems(
+            schedule,
+            (separate_overlapping_characters, block_colliding_movement)
+                .chain()
+                .in_set(SimulationSet::Collision),
+        );
+    } else {
+        app.add_systems(
+            schedule,
+            block_colliding_movement.in_set(SimulationSet::Collision),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use world01_configs::load_embedded;
     use world01_content::{
-        CharacterCollisionGeometryCatalog, HammerCombatGeometry, RuntimeContent,
+        AuthoredFacing, CharacterCollisionGeometry, CharacterCollisionGeometryCatalog,
+        CollisionComponentGeometry, HammerCombatGeometry, RuntimeComponentGeometry, RuntimeContent,
         WorldCollisionGeometryCatalog,
     };
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
-        CharacterHealth, CharacterMass, DashIntent, DashState, MovementIntent, MovementVelocity,
-        Position, RunIntent, RunState, StaminaState, StatusEffectState,
+        ActorId, BodyFacing, CharacterHealth, CharacterId, CharacterMass, DashIntent, DashState,
+        MovementIntent, MovementVelocity, Position, RunIntent, RunState, SelectedCharacter,
+        StaminaState, StatusEffectState,
     };
 
     use crate::{
@@ -128,6 +154,11 @@ mod tests {
         ran: bool,
     }
 
+    #[derive(Resource, Debug, Default)]
+    struct SeparationProbe {
+        positions: Vec<Position>,
+    }
+
     fn record_collision_phase(
         mut probe: ResMut<CollisionProbe>,
         actors: Query<(&MovementVelocity, &Position)>,
@@ -139,11 +170,71 @@ mod tests {
         }
     }
 
-    /// Pins the contract a collision system depends on: by the time the phase
-    /// runs the velocity for this tick is decided, and the position it will
-    /// produce has not been written yet.
+    fn record_positions_after_separation(
+        mut probe: ResMut<SeparationProbe>,
+        actors: Query<&Position, With<ActorId>>,
+    ) {
+        probe.positions = actors.iter().copied().collect();
+        probe
+            .positions
+            .sort_by(|first, second| first.x.total_cmp(&second.x));
+    }
+
+    fn collision_catalog() -> CharacterCollisionGeometryCatalog {
+        let component = CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+            component_id: "body".into(),
+            name: "body".into(),
+            vertices: vec![
+                Vec2::splat(-0.2),
+                Vec2::new(0.2, -0.2),
+                Vec2::splat(0.2),
+                Vec2::new(-0.2, 0.2),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        })
+        .expect("the test square has valid collision topology");
+        CharacterCollisionGeometryCatalog::from_geometries([(
+            CharacterId("walker".into()),
+            CharacterCollisionGeometry {
+                authored_facing: AuthoredFacing::Right,
+                components: vec![component],
+            },
+        )])
+    }
+
+    fn collision_only_app(authority: SimulationAuthority) -> App {
+        let config = load_embedded().expect("embedded runtime configuration parses");
+        let mut app = App::new();
+        app.insert_resource(collision_catalog())
+            .init_resource::<WorldCollisionGeometryCatalog>()
+            .init_resource::<WorldColliderGrid>()
+            .insert_resource(MovementStep::from_runtime(&config).expect("runtime is valid"));
+        add_collision_systems(&mut app, Update, authority);
+        app
+    }
+
+    fn spawn_overlapping_pair(app: &mut App) -> (Entity, Entity) {
+        let spawn = |app: &mut App, actor_id, x| {
+            app.world_mut()
+                .spawn((
+                    ActorId(actor_id),
+                    SelectedCharacter(CharacterId("walker".into())),
+                    BodyFacing::Right,
+                    CharacterMass::new(1.0, 0.0, 1.0, 0.6),
+                    Position::new(x, 0.0),
+                    MovementVelocity::ZERO,
+                ))
+                .id()
+        };
+        (spawn(app, 1, 0.0), spawn(app, 2, 0.3))
+    }
+
+    /// Pins the predicted-client contract: by the time its collision phase
+    /// runs the velocity for this tick is decided, and requested movement has
+    /// not yet been written to Position. Server authority may already have
+    /// corrected pre-existing overlap at this point.
     #[test]
-    fn the_collision_phase_sees_a_decided_velocity_and_an_unmoved_position() {
+    fn the_predicted_collision_phase_sees_velocity_before_requested_movement() {
         let config = load_embedded().expect("embedded runtime configuration parses");
         let world_design = load_world01_embedded().expect("embedded World 01 design parses");
         let game_design = load_game_design().expect("embedded game design parses");
@@ -224,5 +315,58 @@ mod tests {
                 > 0.0,
             "the decided velocity still reaches the position"
         );
+    }
+
+    #[test]
+    fn existing_overlap_is_separated_only_by_server_authority() {
+        let mut predicted = collision_only_app(SimulationAuthority::Predicted);
+        let (predicted_first, predicted_second) = spawn_overlapping_pair(&mut predicted);
+        predicted.update();
+
+        assert_eq!(
+            predicted.world().get::<Position>(predicted_first),
+            Some(&Position::ZERO)
+        );
+        assert_eq!(
+            predicted.world().get::<Position>(predicted_second),
+            Some(&Position::new(0.3, 0.0))
+        );
+
+        let mut server = collision_only_app(SimulationAuthority::Server);
+        let (server_first, server_second) = spawn_overlapping_pair(&mut server);
+        server.update();
+
+        assert!(
+            server
+                .world()
+                .get::<Position>(server_first)
+                .is_some_and(|position| position.x < 0.0)
+        );
+        assert!(
+            server
+                .world()
+                .get::<Position>(server_second)
+                .is_some_and(|position| position.x > 0.3)
+        );
+    }
+
+    #[test]
+    fn movement_blocking_sees_server_corrected_positions() {
+        let mut app = collision_only_app(SimulationAuthority::Server);
+        app.init_resource::<SeparationProbe>().add_systems(
+            Update,
+            record_positions_after_separation
+                .after(separate_overlapping_characters)
+                .before(block_colliding_movement)
+                .in_set(SimulationSet::Collision),
+        );
+        spawn_overlapping_pair(&mut app);
+
+        app.update();
+
+        let positions = &app.world().resource::<SeparationProbe>().positions;
+        assert_eq!(positions.len(), 2);
+        assert!(positions[0].x < 0.0);
+        assert!(positions[1].x > 0.3);
     }
 }

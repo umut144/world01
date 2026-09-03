@@ -12,6 +12,7 @@ pub mod mass;
 pub mod movement;
 pub mod respawn;
 mod schedule;
+mod separation;
 pub mod spatial;
 pub mod status;
 
@@ -36,6 +37,7 @@ pub use movement::{
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
+pub use separation::separate_overlapping_characters;
 pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
 
