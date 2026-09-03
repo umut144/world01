@@ -429,7 +429,10 @@ must be documented as an explicit game variant.
   RUN and DASH do not shove.
   - Pair corrections read the same start-of-tick positions and are applied
     together, so processing order gives no Character priority. An isolated pair
-    separates immediately; a cluster may settle over more than one tick.
+    whose Characters each declare one CollisionRegion separates immediately; a
+    cluster may settle over more than one tick. Multiple Regions still produce
+    only one correction per Character pair, but may require later ticks to clear
+    every Component pairing.
   - Life state does not remove occupied space. A dead Character continues to
     block and to participate in separation.
   - Speed is deliberately absent. Two characters standing still can overlap

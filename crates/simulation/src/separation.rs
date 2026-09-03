@@ -141,15 +141,15 @@ mod tests {
 
     const EPSILON: f32 = 0.000_01;
 
-    fn square(name: &str) -> CollisionComponentGeometry {
+    fn square_at(name: &str, offset: Vec2) -> CollisionComponentGeometry {
         CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
             component_id: name.to_owned(),
             name: name.to_owned(),
             vertices: vec![
-                Vec2::splat(-0.2),
-                Vec2::new(0.2, -0.2),
-                Vec2::splat(0.2),
-                Vec2::new(-0.2, 0.2),
+                offset + Vec2::splat(-0.2),
+                offset + Vec2::new(0.2, -0.2),
+                offset + Vec2::splat(0.2),
+                offset + Vec2::new(-0.2, 0.2),
             ],
             indices: vec![0, 1, 2, 0, 2, 3],
         })
@@ -160,19 +160,23 @@ mod tests {
         CharacterCollisionGeometry {
             authored_facing: AuthoredFacing::Right,
             components: (0..component_count)
-                .map(|index| square(&format!("body_{index}")))
+                .map(|index| square_at(&format!("body_{index}"), Vec2::ZERO))
                 .collect(),
         }
     }
 
-    fn app(component_count: usize) -> App {
+    fn app_with_geometry(geometry: CharacterCollisionGeometry) -> App {
         let mut app = App::new();
         app.insert_resource(CharacterCollisionGeometryCatalog::from_geometries([(
             world01_world_data::CharacterId("walker".into()),
-            geometry(component_count),
+            geometry,
         )]))
         .add_systems(Update, separate_overlapping_characters);
         app
+    }
+
+    fn app(component_count: usize) -> App {
+        app_with_geometry(geometry(component_count))
     }
 
     fn mass(movement: f32, normal_speed: f32) -> CharacterMass {
@@ -326,7 +330,7 @@ mod tests {
         assert_vec2(position(&app, higher), Vec2::new(0.0, -half));
     }
 
-    fn three_actor_positions(spawn_order: [u64; 3]) -> BTreeMap<u64, Vec2> {
+    fn three_actor_positions(spawn_order: [u64; 3], ticks: usize) -> BTreeMap<u64, Vec2> {
         let mut app = app(1);
         let starts = [(1, 0.0), (2, 0.2), (3, 0.4)];
         let mut entities = BTreeMap::new();
@@ -340,7 +344,9 @@ mod tests {
                 spawn(&mut app, actor_id, Vec2::new(x, 0.0), mass(1.0, 0.6)),
             );
         }
-        app.update();
+        for _ in 0..ticks {
+            app.update();
+        }
         entities
             .into_iter()
             .map(|(actor_id, entity)| (actor_id, position(&app, entity)))
@@ -350,22 +356,61 @@ mod tests {
     #[test]
     fn three_actor_result_is_independent_from_spawn_order() {
         assert_eq!(
-            three_actor_positions([1, 2, 3]),
-            three_actor_positions([3, 2, 1])
+            three_actor_positions([1, 2, 3], 1),
+            three_actor_positions([3, 2, 1], 1)
         );
     }
 
     #[test]
-    fn multiple_components_still_apply_only_one_pair_correction() {
-        let mut app = app(2);
+    fn a_three_actor_cluster_converges_across_ticks() {
+        let after_one = three_actor_positions([1, 2, 3], 1);
+        let after_two = three_actor_positions([1, 2, 3], 2);
+        let first_gap = after_one[&2].x - after_one[&1].x;
+        let second_gap = after_two[&2].x - after_two[&1].x;
+
+        assert!(second_gap > first_gap);
+        assert!(second_gap < 0.4 + SEPARATION_CLEARANCE_METERS);
+        assert_vec2(after_one[&2], after_two[&2]);
+    }
+
+    #[test]
+    fn multiple_distinct_components_still_apply_only_the_deepest_pair_correction() {
+        let geometry = CharacterCollisionGeometry {
+            authored_facing: AuthoredFacing::Right,
+            components: vec![
+                square_at("body_left", Vec2::new(-0.1, 0.0)),
+                square_at("body_right", Vec2::new(0.1, 0.0)),
+            ],
+        };
+        let mut app = app_with_geometry(geometry);
         let first = spawn(&mut app, 1, Vec2::ZERO, mass(1.0, 0.6));
         let second = spawn(&mut app, 2, Vec2::new(0.3, 0.0), mass(1.0, 0.6));
 
         app.update();
 
-        let half = (0.1 + SEPARATION_CLEARANCE_METERS) / 2.0;
+        let half = (0.3 + SEPARATION_CLEARANCE_METERS) / 2.0;
         assert_vec2(position(&app, first), Vec2::new(-half, 0.0));
         assert_vec2(position(&app, second), Vec2::new(0.3 + half, 0.0));
+    }
+
+    #[test]
+    fn missing_mass_excludes_the_whole_pair() {
+        let mut app = app(1);
+        let missing = app
+            .world_mut()
+            .spawn((
+                ActorId(1),
+                SelectedCharacter(world01_world_data::CharacterId("walker".into())),
+                BodyFacing::Right,
+                Position::ZERO,
+            ))
+            .id();
+        let valid = spawn(&mut app, 2, Vec2::new(0.3, 0.0), mass(1.0, 0.6));
+
+        app.update();
+
+        assert_eq!(position(&app, missing), Vec2::ZERO);
+        assert_eq!(position(&app, valid), Vec2::new(0.3, 0.0));
     }
 
     #[test]

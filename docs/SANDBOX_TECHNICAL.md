@@ -134,6 +134,13 @@ The existing application uses a server-authoritative model:
   enumerated in stable `ActorId` order before movement blocking; each pair
   shares its correction inversely to movement mass, and the existing predicted
   `Position` replication reconciles and smooths the result for the owner;
+  positive corrections include `0.001 m` rounding clearance and are not
+  speed-clamped for Character pairs;
+- current overlap correction covers Character pairs only. Until static-world
+  correction is added, separating two Characters beside a wall may move one
+  temporarily into world collision; movement blocking then permits it to leave
+  but not to move deeper. The Character-pair no-clamp decision does not define
+  the later policy for concave world geometry;
 - replicated gameplay components use protocol-neutral types from
   `world_data`; Bevy `Transform` remains derived client presentation;
 - the owning client predicts explicitly registered state and reconciles to

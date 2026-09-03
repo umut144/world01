@@ -29,7 +29,7 @@ pub enum SimulationSet {
 /// client cannot invent authoritative outcomes the server never saw.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimulationAuthority {
-    /// The authoritative simulation: resolves damage as well.
+    /// The authoritative simulation: resolves damage and existing overlap.
     Server,
     /// A predicting client: replays the gameplay step without resolving damage.
     Predicted,
