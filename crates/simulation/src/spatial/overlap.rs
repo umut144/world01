@@ -313,6 +313,13 @@ pub(crate) fn component_projection_minimum(
         .max(0.0)
 }
 
+/// Existing narrow-phase overlap predicate shared by collision and combat.
+///
+/// Its axes deliberately remain unnormalised, so the epsilon scales with edge
+/// length. Changing that long-standing contact band would also change whether
+/// attacks reach hurt geometry. Movement interprets a reported overlap with
+/// zero exact-contact separation as touching rather than penetration instead
+/// of changing this predicate's established semantics.
 pub(crate) fn triangles_overlap(first: [Vec2; 3], second: [Vec2; 3]) -> bool {
     const EPSILON: f32 = 0.000_01;
     for triangle in [first, second] {

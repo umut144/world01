@@ -17,8 +17,8 @@ use world01_world_data::{BodyFacing, MovementVelocity, Position, SelectedCharact
 use crate::movement::MovementStep;
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
-    ComponentSeparation, GeometryTransform, component_separation, components_overlap,
-    facing_transform, transformed_points,
+    ComponentSeparation, GeometryTransform, component_separation, facing_transform,
+    transformed_points,
 };
 
 /// An actor's collision geometry, placed where it stands.
@@ -71,7 +71,8 @@ impl PosedCollider<'_> {
 /// Being able to leave is what keeps a character spawned inside a prop, or put
 /// there by a correction from the server, from being stuck forever; not being
 /// able to go deeper is what stops it from continuing straight out the far
-/// side.
+/// side. Exact contact has zero separation distance and is not penetration, so
+/// it still permits a tangential slide.
 pub fn block_colliding_movement(
     step: Res<MovementStep>,
     catalog: Res<CharacterCollisionGeometryCatalog>,
@@ -116,28 +117,32 @@ pub fn block_colliding_movement(
             continue;
         };
         let proposed = current.translated(displacement);
-        if !blocked(proposed, &blockers, &world, &grid, &mut candidates) {
+        let Some(proposed_separation) =
+            deepest_separation(proposed, &blockers, &world, &grid, &mut candidates)
+        else {
+            continue;
+        };
+        if proposed_separation.separation_distance == 0.0 {
             continue;
         }
         if let Some(separation) =
             deepest_separation(current, &blockers, &world, &grid, &mut candidates)
+            && separation.separation_distance > 0.0
         {
             if displacement.dot(separation.normal) < 0.0 {
                 *velocity = MovementVelocity::ZERO;
             }
             continue;
         }
-        let slid = deepest_separation(proposed, &blockers, &world, &grid, &mut candidates)
-            .and_then(|separation| slide_along(displacement, separation))
-            .filter(|slid| {
-                !blocked(
-                    current.translated(*slid),
-                    &blockers,
-                    &world,
-                    &grid,
-                    &mut candidates,
-                )
-            });
+        let slid = slide_along(displacement, proposed_separation).filter(|slid| {
+            !penetrates(
+                current.translated(*slid),
+                &blockers,
+                &world,
+                &grid,
+                &mut candidates,
+            )
+        });
         *velocity = slid.map_or(MovementVelocity::ZERO, |slid| step.velocity_of(slid));
     }
 }
@@ -232,6 +237,19 @@ fn deepest_separation(
     deepest
 }
 
+/// Contact at exactly zero distance is allowed; only positive escape distance
+/// means the posed actor is inside another collider.
+fn penetrates(
+    actor: PosedCollider<'_>,
+    blockers: &[PosedCollider<'_>],
+    world: &WorldCollisionGeometryCatalog,
+    grid: &WorldColliderGrid,
+    candidates: &mut Vec<u32>,
+) -> bool {
+    deepest_separation(actor, blockers, world, grid, candidates)
+        .is_some_and(|separation| separation.separation_distance > 0.0)
+}
+
 fn separation_is_deeper(candidate: ComponentSeparation, current: ComponentSeparation) -> bool {
     candidate
         .separation_distance
@@ -239,47 +257,6 @@ fn separation_is_deeper(candidate: ComponentSeparation, current: ComponentSepara
         .then_with(|| current.normal.x.total_cmp(&candidate.normal.x))
         .then_with(|| current.normal.y.total_cmp(&candidate.normal.y))
         .is_gt()
-}
-
-fn blocked(
-    actor: PosedCollider<'_>,
-    blockers: &[PosedCollider<'_>],
-    world: &WorldCollisionGeometryCatalog,
-    grid: &WorldColliderGrid,
-    candidates: &mut Vec<u32>,
-) -> bool {
-    grid.candidates(actor.bounds, candidates);
-    for index in candidates.iter() {
-        let region = &world.regions[*index as usize];
-        let placement = GeometryTransform::translated(region.position);
-        for component in &actor.geometry.components {
-            if components_overlap(
-                component.geometry(),
-                actor.transform,
-                region.component.geometry(),
-                placement,
-            ) {
-                return true;
-            }
-        }
-    }
-    blockers
-        .iter()
-        .filter(|blocker| blocker.entity != actor.entity && blocker.bounds.overlaps(actor.bounds))
-        .any(|blocker| overlaps(actor, *blocker))
-}
-
-fn overlaps(actor: PosedCollider<'_>, blocker: PosedCollider<'_>) -> bool {
-    actor.geometry.components.iter().any(|component| {
-        blocker.geometry.components.iter().any(|other| {
-            components_overlap(
-                component.geometry(),
-                actor.transform,
-                other.geometry(),
-                blocker.transform,
-            )
-        })
-    })
 }
 
 #[cfg(test)]
@@ -302,6 +279,7 @@ mod tests {
     /// A shortened step is divided by the tick length and multiplied by it
     /// again, so it comes back a few bits short of where it started.
     const EPSILON: f32 = 0.000_1;
+    const WALKER_WIDTH: f32 = 0.4;
 
     fn square(name: &str, corner: Vec2, size: f32) -> CollisionComponentGeometry {
         CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
@@ -346,6 +324,16 @@ mod tests {
             indices: vec![0, 1, 2, 0, 2, 3],
         })
         .expect("the test block has valid collision topology")
+    }
+
+    fn triangle_block(name: &str) -> CollisionComponentGeometry {
+        CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+            component_id: name.to_owned(),
+            name: name.to_owned(),
+            vertices: vec![Vec2::ZERO, Vec2::new(2.0, 0.0), Vec2::new(0.0, 2.0)],
+            indices: vec![0, 1, 2],
+        })
+        .expect("the test triangle has valid collision topology")
     }
 
     /// A wall covering x in [1, 2] and y in [-2, 2].
@@ -429,6 +417,43 @@ mod tests {
             MovementVelocity::new(0.0, ONE_METER_PER_TICK),
         );
         assert_position(position_of(&app, actor), Position::new(0.0, 1.0));
+    }
+
+    /// Exact contact is not penetration. The inward part is removed while the
+    /// tangential part remains, even though the resulting pose still touches.
+    #[test]
+    fn an_actor_touching_a_wall_can_slide_along_it() {
+        let mut app = app(wall());
+        let actor = spawn(&mut app, "walker", Vec2::new(0.8, 0.0), Vec2::splat(12.0));
+
+        app.update();
+
+        assert_velocity(velocity_of(&app, actor), MovementVelocity::new(0.0, 12.0));
+        assert_position(position_of(&app, actor), Position::new(0.8, 0.2));
+    }
+
+    /// The surface normal is genuinely slanted rather than one of the axial
+    /// normals exercised by every rectangular fixture.
+    #[test]
+    fn a_horizontal_step_slides_up_a_slanted_surface() {
+        let mut app = app(WorldCollisionGeometryCatalog {
+            regions: vec![PlacedCollisionGeometry {
+                instance_id: "slope".to_owned(),
+                position: Position::ZERO,
+                component: triangle_block("slope"),
+            }],
+        });
+        let actor = spawn(
+            &mut app,
+            "walker",
+            Vec2::new(2.2, 1.0),
+            Vec2::new(-ONE_METER_PER_TICK, 0.0),
+        );
+
+        app.update();
+
+        assert_velocity(velocity_of(&app, actor), MovementVelocity::new(-30.0, 30.0));
+        assert_position(position_of(&app, actor), Position::new(1.7, 1.5));
     }
 
     /// A step straight into world geometry has no part that runs along it.
@@ -579,7 +604,28 @@ mod tests {
 
         assert_eq!(velocity_of(&app, left), MovementVelocity::ZERO);
         assert_eq!(velocity_of(&app, right), MovementVelocity::ZERO);
-        assert_eq!(position_of(&app, left), Position::ZERO);
-        assert_eq!(position_of(&app, right), Position::new(2.1, 0.0));
+        let left_position = position_of(&app, left);
+        let right_position = position_of(&app, right);
+        assert_eq!(left_position, Position::ZERO);
+        assert_eq!(right_position, Position::new(2.1, 0.0));
+        let apart = (left_position.x - right_position.x)
+            .abs()
+            .max((left_position.y - right_position.y).abs());
+        assert!(apart >= WALKER_WIDTH - EPSILON);
+    }
+
+    #[test]
+    fn equal_separation_distances_choose_the_smaller_normal() {
+        let smaller = ComponentSeparation {
+            normal: Vec2::NEG_X,
+            separation_distance: 0.2,
+        };
+        let larger = ComponentSeparation {
+            normal: Vec2::X,
+            separation_distance: 0.2,
+        };
+
+        assert!(separation_is_deeper(smaller, larger));
+        assert!(!separation_is_deeper(larger, smaller));
     }
 }

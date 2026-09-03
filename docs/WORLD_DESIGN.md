@@ -413,6 +413,12 @@ must be documented as an explicit game variant.
   Components. Interior edges introduced only by triangulation are not candidate
   surface normals, so a head-on meeting stops instead of being deflected along
   an invisible seam.
+- For a non-convex CollisionRegion, that direction is a conservative escape
+  from the Region's complete projected hull rather than necessarily the locally
+  shortest way past an inner corner. It always offers a way out, but may reject
+  a shorter local route and make the Character take a detour. Freely authored
+  concave Regions therefore need deliberate playtesting rather than inheriting
+  the behavior of a convex footprint by assumption.
 - A character that already overlaps geometry may leave it but may not move
   deeper in. Being able to leave is what keeps anything spawned inside a prop,
   or put there by a server correction, from being stuck forever. Being able to
