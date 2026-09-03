@@ -64,7 +64,7 @@ for source_export in "${source_exports[@]}"; do
       .scene.template_definition == null
     else
       (.scene.template_definition | type == "object")
-      and (.scene.template_definition.group_number | type == "number" and . == floor and . >= 0)
+      and (.scene.template_definition.group_number | type == "number" and . == floor and . > 0)
       and (.scene.template_definition.insertion_anchor_authoring_px.x | type == "number" and . == floor)
       and (.scene.template_definition.insertion_anchor_authoring_px.y | type == "number" and . == floor)
       and (.scene.water_bodies | length == 0)
@@ -89,7 +89,7 @@ for source_export in "${source_exports[@]}"; do
     and (([.scene.props[].instance_id] | unique | length) == (.scene.props | length))
     and all(.scene.template_anchors[];
       (.anchor_id | type == "string" and length > 0)
-      and (.group_number | type == "number" and . == floor and . >= 0)
+      and (.group_number | type == "number" and . == floor and . > 0)
       and (.position_authoring_px.x | type == "number" and . == floor)
       and (.position_authoring_px.y | type == "number" and . == floor))
   ' "$source_export" >/dev/null \

@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     error::Error,
     fmt,
 };
@@ -40,118 +40,21 @@ impl WorldMap {
     pub fn from_source(source: &str, scene_id: &str) -> Result<Self, WorldMapError> {
         let export: ExportDocument = serde_json::from_str(source)
             .map_err(|error| WorldMapError::new(format!("cannot parse SceneMaker map: {error}")))?;
-        validate_header(&export, scene_id)?;
-
-        let width_tiles = export.scene.size_cells.width;
-        let height_tiles = export.scene.size_cells.height;
-        if width_tiles == 0 || height_tiles == 0 {
+        validate_header(&export, scene_id, "instance")?;
+        if export.scene.template_definition.is_some() {
             return Err(WorldMapError::new(
-                "map dimensions must be greater than zero",
+                "a SceneMaker Instance must not carry a Template definition",
             ));
         }
-        let terrain_cell_meters = export.grid.terrain_cell_meters;
-        let authoring_pixels_per_meter = export.grid.authoring_pixels_per_meter;
-        if !terrain_cell_meters.is_finite() || terrain_cell_meters <= 0.0 {
-            return Err(WorldMapError::new(
-                "terrain_cell_meters must be finite and greater than zero",
-            ));
-        }
-        if !authoring_pixels_per_meter.is_finite() || authoring_pixels_per_meter <= 0.0 {
-            return Err(WorldMapError::new(
-                "authoring_pixels_per_meter must be finite and greater than zero",
-            ));
-        }
-        if !export.grid.game_pixels_per_meter.is_finite()
-            || export.grid.game_pixels_per_meter <= 0.0
-        {
-            return Err(WorldMapError::new(
-                "game_pixels_per_meter must be finite and greater than zero",
-            ));
-        }
-        if !export.grid.water_cell_meters.is_finite() || export.grid.water_cell_meters <= 0.0 {
-            return Err(WorldMapError::new(
-                "water_cell_meters must be finite and greater than zero",
-            ));
-        }
-
-        let surfaces = export
-            .asset_profiles
-            .into_iter()
-            .map(|profile| (profile.asset_key, profile.surface))
-            .collect::<HashMap<_, _>>();
-        let half_width = width_tiles as f32 * terrain_cell_meters * 0.5;
-        let half_height = height_tiles as f32 * terrain_cell_meters * 0.5;
-        let mut occupied_cells = HashSet::new();
-        let mut terrain_cells = Vec::with_capacity(export.scene.terrain_cells.len());
-        for cell in export.scene.terrain_cells {
-            if cell.x >= width_tiles || cell.y >= height_tiles {
-                return Err(WorldMapError::new(format!(
-                    "terrain cell ({}, {}) lies outside the map",
-                    cell.x, cell.y
-                )));
-            }
-            if !occupied_cells.insert((cell.x, cell.y)) {
-                return Err(WorldMapError::new(format!(
-                    "terrain cell ({}, {}) is duplicated",
-                    cell.x, cell.y
-                )));
-            }
-            let Some(surface) = require_profile(&surfaces, &cell.asset_key)?.clone() else {
-                return Err(WorldMapError::new(format!(
-                    "terrain asset '{}' has no exported surface",
-                    cell.asset_key
-                )));
-            };
-            if !cell.elevation_meters.is_finite() {
-                return Err(WorldMapError::new(format!(
-                    "terrain cell ({}, {}) has a non-finite elevation",
-                    cell.x, cell.y
-                )));
-            }
-            terrain_cells.push(MapTerrainCell {
-                x: cell.x,
-                y: cell.y,
-                asset_key: cell.asset_key,
-                surface,
-                elevation_meters: cell.elevation_meters,
-                center: Position::new(
-                    (cell.x as f32 + 0.5) * terrain_cell_meters - half_width,
-                    (cell.y as f32 + 0.5) * terrain_cell_meters - half_height,
-                ),
-            });
-        }
-
-        let mut instance_ids = HashSet::new();
-        let props = convert_props(
-            export.scene.props,
-            &surfaces,
-            &mut instance_ids,
-            authoring_pixels_per_meter,
-            half_width,
-            half_height,
-        )?;
-        let template_anchors = export
-            .scene
-            .template_anchors
-            .into_iter()
-            .map(|anchor| MapTemplateAnchor {
-                anchor_id: anchor.anchor_id,
-                group_number: anchor.group_number,
-                position: Position::new(
-                    anchor.position_authoring_px.x as f32 / authoring_pixels_per_meter - half_width,
-                    anchor.position_authoring_px.y as f32 / authoring_pixels_per_meter
-                        - half_height,
-                ),
-            })
-            .collect();
+        let scene = convert_scene_body(export, SceneCoordinateFrame::Centered)?;
 
         Ok(Self {
-            width_tiles,
-            height_tiles,
-            terrain_cell_meters,
-            terrain_cells,
-            props,
-            template_anchors,
+            width_tiles: scene.width_tiles,
+            height_tiles: scene.height_tiles,
+            terrain_cell_meters: scene.terrain_cell_meters,
+            terrain_cells: scene.terrain_cells,
+            props: scene.props,
+            template_anchors: scene.template_anchors,
         })
     }
 
@@ -192,19 +95,176 @@ impl WorldMap {
     }
 }
 
+/// SceneMaker Templates grouped by the number requested by Instance Anchors.
+///
+/// This catalog only imports authored data. It does not choose, place, or
+/// compose a Template into a [`WorldMap`].
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct WorldTemplateCatalog {
+    groups: BTreeMap<u32, Vec<WorldTemplate>>,
+}
+
+impl WorldTemplateCatalog {
+    pub fn load_embedded() -> Result<Self, WorldMapError> {
+        let mut groups = BTreeMap::<u32, Vec<WorldTemplate>>::new();
+        for (_, scene_id, scene_kind, source) in EMBEDDED_WORLD_EXPORTS {
+            if *scene_kind != "template" {
+                continue;
+            }
+            let template = WorldTemplate::from_source(source, scene_id)?;
+            groups
+                .entry(template.group_number())
+                .or_default()
+                .push(template);
+        }
+        Ok(Self { groups })
+    }
+
+    /// Templates in deterministic export-file order. An absent group is a
+    /// normal empty result because an Anchor may have no available occupant.
+    pub fn templates_for_group(&self, group_number: u32) -> &[WorldTemplate] {
+        self.groups
+            .get(&group_number)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    pub fn groups(&self) -> impl ExactSizeIterator<Item = (u32, &[WorldTemplate])> {
+        self.groups
+            .iter()
+            .map(|(group_number, templates)| (*group_number, templates.as_slice()))
+    }
+}
+
+/// A Template in its own bottom-left-local coordinate frame.
+///
+/// Positions are deliberately not centered like a [`WorldMap`]. Future
+/// composition translates them by an Instance Anchor minus `insertion_anchor`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldTemplate {
+    scene_id: String,
+    group_number: u32,
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    insertion_anchor: Position,
+    terrain_cells: Vec<MapTerrainCell>,
+    props: Vec<MapProp>,
+}
+
+impl WorldTemplate {
+    pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
+        Self::from_source(
+            embedded_scene_source(scene_id, "template", "Template")?,
+            scene_id,
+        )
+    }
+
+    pub fn from_source(source: &str, scene_id: &str) -> Result<Self, WorldMapError> {
+        let export: ExportDocument = serde_json::from_str(source).map_err(|error| {
+            WorldMapError::new(format!("cannot parse SceneMaker Template: {error}"))
+        })?;
+        validate_header(&export, scene_id, "template")?;
+        let scene = convert_scene_body(export, SceneCoordinateFrame::TemplateLocal)?;
+        if !scene.template_anchors.is_empty() {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template must not carry Template Anchors",
+            ));
+        }
+        if !scene.water_is_empty {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template must not carry water",
+            ));
+        }
+        let Some(definition) = scene.template_definition else {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template requires a Template definition",
+            ));
+        };
+        if definition.group_number == 0 {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template group number must be positive",
+            ));
+        }
+        let insertion_anchor = validate_insertion_anchor(
+            &definition.insertion_anchor_authoring_px,
+            scene.authoring_pixels_per_meter,
+            scene.terrain_cell_meters,
+            scene.width_tiles,
+            scene.height_tiles,
+        )?;
+
+        Ok(Self {
+            scene_id: scene_id.to_owned(),
+            group_number: definition.group_number,
+            width_tiles: scene.width_tiles,
+            height_tiles: scene.height_tiles,
+            terrain_cell_meters: scene.terrain_cell_meters,
+            insertion_anchor,
+            terrain_cells: scene.terrain_cells,
+            props: scene.props,
+        })
+    }
+
+    pub fn scene_id(&self) -> &str {
+        &self.scene_id
+    }
+
+    pub const fn group_number(&self) -> u32 {
+        self.group_number
+    }
+
+    pub const fn width_tiles(&self) -> u32 {
+        self.width_tiles
+    }
+
+    pub const fn height_tiles(&self) -> u32 {
+        self.height_tiles
+    }
+
+    pub const fn terrain_cell_meters(&self) -> f32 {
+        self.terrain_cell_meters
+    }
+
+    pub const fn insertion_anchor(&self) -> Position {
+        self.insertion_anchor
+    }
+
+    pub fn terrain_cells(&self) -> &[MapTerrainCell] {
+        &self.terrain_cells
+    }
+
+    pub fn props(&self) -> &[MapProp] {
+        &self.props
+    }
+}
+
 fn embedded_instance_source(scene_id: &str) -> Result<&'static str, WorldMapError> {
+    embedded_scene_source(scene_id, "instance", "Instance")
+}
+
+fn embedded_scene_source(
+    scene_id: &str,
+    expected_kind: &str,
+    expected_label: &str,
+) -> Result<&'static str, WorldMapError> {
     let Some((_, _, scene_kind, source)) = EMBEDDED_WORLD_EXPORTS
         .iter()
         .find(|entry| entry.1 == scene_id)
         .copied()
     else {
         return Err(WorldMapError::new(format!(
-            "SceneMaker Instance '{scene_id}' is not embedded"
+            "SceneMaker {expected_label} '{scene_id}' is not embedded"
         )));
     };
-    if scene_kind != "instance" {
+    if scene_kind != expected_kind {
+        let article = if expected_kind == "instance" {
+            "an"
+        } else {
+            "a"
+        };
         return Err(WorldMapError::new(format!(
-            "SceneMaker scene '{scene_id}' is a '{scene_kind}', not an Instance"
+            "SceneMaker scene '{scene_id}' is a '{scene_kind}', not {article} {expected_label}"
         )));
     }
     Ok(source)
@@ -247,7 +307,195 @@ pub struct MapTemplateAnchor {
     pub position: Position,
 }
 
-fn validate_header(export: &ExportDocument, scene_id: &str) -> Result<(), WorldMapError> {
+#[derive(Clone, Copy)]
+enum SceneCoordinateFrame {
+    Centered,
+    TemplateLocal,
+}
+
+struct ConvertedSceneBody {
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    authoring_pixels_per_meter: f32,
+    terrain_cells: Vec<MapTerrainCell>,
+    props: Vec<MapProp>,
+    template_anchors: Vec<MapTemplateAnchor>,
+    template_definition: Option<TemplateDefinitionDocument>,
+    water_is_empty: bool,
+}
+
+fn convert_scene_body(
+    export: ExportDocument,
+    coordinate_frame: SceneCoordinateFrame,
+) -> Result<ConvertedSceneBody, WorldMapError> {
+    let ExportDocument {
+        grid,
+        asset_profiles,
+        _water_raster,
+        scene,
+        ..
+    } = export;
+    let SceneDocument {
+        size_cells,
+        terrain_cells: source_terrain_cells,
+        props: source_props,
+        _water_bodies,
+        template_anchors: source_template_anchors,
+        template_definition,
+        ..
+    } = scene;
+
+    let width_tiles = size_cells.width;
+    let height_tiles = size_cells.height;
+    if width_tiles == 0 || height_tiles == 0 {
+        return Err(WorldMapError::new(
+            "scene dimensions must be greater than zero",
+        ));
+    }
+    if !grid.terrain_cell_meters.is_finite() || grid.terrain_cell_meters <= 0.0 {
+        return Err(WorldMapError::new(
+            "terrain_cell_meters must be finite and greater than zero",
+        ));
+    }
+    if !grid.authoring_pixels_per_meter.is_finite() || grid.authoring_pixels_per_meter <= 0.0 {
+        return Err(WorldMapError::new(
+            "authoring_pixels_per_meter must be finite and greater than zero",
+        ));
+    }
+    if !grid.game_pixels_per_meter.is_finite() || grid.game_pixels_per_meter <= 0.0 {
+        return Err(WorldMapError::new(
+            "game_pixels_per_meter must be finite and greater than zero",
+        ));
+    }
+    if !grid.water_cell_meters.is_finite() || grid.water_cell_meters <= 0.0 {
+        return Err(WorldMapError::new(
+            "water_cell_meters must be finite and greater than zero",
+        ));
+    }
+
+    let surfaces = asset_profiles
+        .into_iter()
+        .map(|profile| (profile.asset_key, profile.surface))
+        .collect::<HashMap<_, _>>();
+    let (offset_x, offset_y) = match coordinate_frame {
+        SceneCoordinateFrame::Centered => (
+            -(width_tiles as f32 * grid.terrain_cell_meters * 0.5),
+            -(height_tiles as f32 * grid.terrain_cell_meters * 0.5),
+        ),
+        SceneCoordinateFrame::TemplateLocal => (0.0, 0.0),
+    };
+
+    let mut occupied_cells = HashSet::new();
+    let mut terrain_cells = Vec::with_capacity(source_terrain_cells.len());
+    for cell in source_terrain_cells {
+        if cell.x >= width_tiles || cell.y >= height_tiles {
+            return Err(WorldMapError::new(format!(
+                "terrain cell ({}, {}) lies outside the scene",
+                cell.x, cell.y
+            )));
+        }
+        if !occupied_cells.insert((cell.x, cell.y)) {
+            return Err(WorldMapError::new(format!(
+                "terrain cell ({}, {}) is duplicated",
+                cell.x, cell.y
+            )));
+        }
+        let Some(surface) = require_profile(&surfaces, &cell.asset_key)?.clone() else {
+            return Err(WorldMapError::new(format!(
+                "terrain asset '{}' has no exported surface",
+                cell.asset_key
+            )));
+        };
+        if !cell.elevation_meters.is_finite() {
+            return Err(WorldMapError::new(format!(
+                "terrain cell ({}, {}) has a non-finite elevation",
+                cell.x, cell.y
+            )));
+        }
+        terrain_cells.push(MapTerrainCell {
+            x: cell.x,
+            y: cell.y,
+            asset_key: cell.asset_key,
+            surface,
+            elevation_meters: cell.elevation_meters,
+            center: Position::new(
+                (cell.x as f32 + 0.5) * grid.terrain_cell_meters + offset_x,
+                (cell.y as f32 + 0.5) * grid.terrain_cell_meters + offset_y,
+            ),
+        });
+    }
+
+    let mut instance_ids = HashSet::new();
+    let props = convert_props(
+        source_props,
+        &surfaces,
+        &mut instance_ids,
+        grid.authoring_pixels_per_meter,
+        offset_x,
+        offset_y,
+    )?;
+    let template_anchors = source_template_anchors
+        .into_iter()
+        .map(|anchor| MapTemplateAnchor {
+            anchor_id: anchor.anchor_id,
+            group_number: anchor.group_number,
+            position: Position::new(
+                anchor.position_authoring_px.x as f32 / grid.authoring_pixels_per_meter + offset_x,
+                anchor.position_authoring_px.y as f32 / grid.authoring_pixels_per_meter + offset_y,
+            ),
+        })
+        .collect();
+
+    Ok(ConvertedSceneBody {
+        width_tiles,
+        height_tiles,
+        terrain_cell_meters: grid.terrain_cell_meters,
+        authoring_pixels_per_meter: grid.authoring_pixels_per_meter,
+        terrain_cells,
+        props,
+        template_anchors,
+        template_definition,
+        water_is_empty: _water_raster.is_empty() && _water_bodies.is_empty(),
+    })
+}
+
+fn validate_insertion_anchor(
+    anchor: &PointDocument,
+    authoring_pixels_per_meter: f32,
+    terrain_cell_meters: f32,
+    width_tiles: u32,
+    height_tiles: u32,
+) -> Result<Position, WorldMapError> {
+    let pixels_per_cell = f64::from(authoring_pixels_per_meter) * f64::from(terrain_cell_meters);
+    let x = f64::from(anchor.x);
+    let y = f64::from(anchor.y);
+    let width_pixels = f64::from(width_tiles) * pixels_per_cell;
+    let height_pixels = f64::from(height_tiles) * pixels_per_cell;
+    if x < 0.0 || y < 0.0 || x > width_pixels || y > height_pixels {
+        return Err(WorldMapError::new(
+            "Template insertion anchor must lie inside its scene",
+        ));
+    }
+    let cell_x = x / pixels_per_cell;
+    let cell_y = y / pixels_per_cell;
+    if (cell_x - cell_x.round()).abs() > 1.0e-6 || (cell_y - cell_y.round()).abs() > 1.0e-6 {
+        return Err(WorldMapError::new(
+            "Template insertion anchor must lie on the Terrain cell grid",
+        ));
+    }
+
+    Ok(Position::new(
+        anchor.x as f32 / authoring_pixels_per_meter,
+        anchor.y as f32 / authoring_pixels_per_meter,
+    ))
+}
+
+fn validate_header(
+    export: &ExportDocument,
+    scene_id: &str,
+    expected_scene_kind: &str,
+) -> Result<(), WorldMapError> {
     let scene = &export.scene;
     if scene.scene_id != scene_id {
         return Err(WorldMapError::new(format!(
@@ -260,12 +508,17 @@ fn validate_header(export: &ExportDocument, scene_id: &str) -> Result<(), WorldM
         || export.workspace_key != WORKSPACE_KEY
         || scene.schema != SCENE_SCHEMA
         || scene.version != SCENE_VERSION
-        || scene.scene_kind != "instance"
         || scene.coordinate_space != COORDINATE_SPACE
     {
         return Err(WorldMapError::new(
             "SceneMaker map header does not match the world01 import contract",
         ));
+    }
+    if scene.scene_kind != expected_scene_kind {
+        return Err(WorldMapError::new(format!(
+            "SceneMaker scene '{scene_id}' is a '{}', not a '{expected_scene_kind}'",
+            scene.scene_kind
+        )));
     }
     Ok(())
 }
@@ -289,8 +542,8 @@ fn convert_props(
     surfaces: &HashMap<String, Option<String>>,
     instance_ids: &mut HashSet<String>,
     authoring_pixels_per_meter: f32,
-    half_width: f32,
-    half_height: f32,
+    offset_x: f32,
+    offset_y: f32,
 ) -> Result<Vec<MapProp>, WorldMapError> {
     source
         .into_iter()
@@ -305,8 +558,8 @@ fn convert_props(
                 )));
             }
             let position = Position::new(
-                placement.position_authoring_px.x as f32 / authoring_pixels_per_meter - half_width,
-                placement.position_authoring_px.y as f32 / authoring_pixels_per_meter - half_height,
+                placement.position_authoring_px.x as f32 / authoring_pixels_per_meter + offset_x,
+                placement.position_authoring_px.y as f32 / authoring_pixels_per_meter + offset_y,
             );
             if !position.x.is_finite()
                 || !position.y.is_finite()
@@ -384,7 +637,14 @@ struct SceneDocument {
     props: Vec<PropDocument>,
     #[serde(rename = "water_bodies")]
     _water_bodies: Vec<serde::de::IgnoredAny>,
+    template_definition: Option<TemplateDefinitionDocument>,
     template_anchors: Vec<TemplateAnchorDocument>,
+}
+
+#[derive(Deserialize)]
+struct TemplateDefinitionDocument {
+    group_number: u32,
+    insertion_anchor_authoring_px: PointDocument,
 }
 
 #[derive(Deserialize)]
@@ -478,11 +738,32 @@ fn export_document(
                 "terrain_cells": [{terrain_cells}],
                 "props": [{props}],
                 "water_bodies": [],
+                "template_definition": null,
                 "template_anchors": [{anchors}],
                 "default_elevation_meters": 1.0
             }}
         }}"#
     )
+}
+
+#[cfg(test)]
+fn template_export(template_definition: &str, terrain_cells: &str, props: &str) -> String {
+    export_document(FORMAT_VERSION, SCENE_VERSION, terrain_cells, props, "")
+        .replacen(
+            &format!(r#""scene_id": "{TEST_SCENE_ID}""#),
+            r#""scene_id": "test_template_unit""#,
+            1,
+        )
+        .replacen(
+            r#""scene_kind": "instance""#,
+            r#""scene_kind": "template""#,
+            1,
+        )
+        .replacen(
+            r#""template_definition": null"#,
+            &format!(r#""template_definition": {template_definition}"#),
+            1,
+        )
 }
 
 #[cfg(test)]
@@ -559,6 +840,112 @@ mod tests {
                 "duplicate scene ID: {scene_id}"
             );
         }
+    }
+
+    #[test]
+    fn embedded_templates_are_grouped_in_stable_order() {
+        let catalog = WorldTemplateCatalog::load_embedded()
+            .expect("the embedded SceneMaker Templates are valid");
+        let group_one = catalog.templates_for_group(1);
+
+        assert_eq!(group_one.len(), 2);
+        assert_eq!(group_one[0].scene_id(), "test_template");
+        assert_eq!(group_one[1].scene_id(), "test_template02");
+        assert!(catalog.templates_for_group(99).is_empty());
+        assert_eq!(catalog.groups().count(), 1);
+    }
+
+    #[test]
+    fn template_geometry_keeps_its_bottom_left_local_coordinates_and_gaps() {
+        let source = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            ANKH,
+        );
+        let template = WorldTemplate::from_source(&source, "test_template_unit")
+            .expect("the synthetic Template is valid");
+
+        assert_eq!(template.width_tiles(), 4);
+        assert_eq!(template.height_tiles(), 4);
+        assert_eq!(template.terrain_cells().len(), 1);
+        assert_eq!(template.terrain_cells()[0].center, Position::new(0.5, 0.5));
+        assert_eq!(template.props()[0].position, Position::new(2.0, 3.0));
+        assert_eq!(template.insertion_anchor(), Position::new(1.0, 1.0));
+    }
+
+    #[test]
+    fn an_instance_or_a_template_without_definition_is_rejected_as_a_template() {
+        assert!(
+            WorldTemplate::from_source(&test_export(TEST_GRASS_CELL, ""), TEST_SCENE_ID).is_err()
+        );
+
+        let missing_definition = template_export("null", TEST_GRASS_CELL, "");
+        assert!(WorldTemplate::from_source(&missing_definition, "test_template_unit").is_err());
+    }
+
+    #[test]
+    fn template_insertion_anchor_must_be_inside_and_on_the_cell_grid() {
+        let outside = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 160, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        );
+        let off_grid = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 31, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        );
+
+        assert!(WorldTemplate::from_source(&outside, "test_template_unit").is_err());
+        assert!(WorldTemplate::from_source(&off_grid, "test_template_unit").is_err());
+
+        let on_edge = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 128, "y": 128 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        );
+        assert!(WorldTemplate::from_source(&on_edge, "test_template_unit").is_ok());
+    }
+
+    #[test]
+    fn template_group_number_must_be_positive() {
+        let source = template_export(
+            r#"{
+                "group_number": 0,
+                "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        );
+
+        assert!(WorldTemplate::from_source(&source, "test_template_unit").is_err());
+    }
+
+    #[test]
+    fn templates_with_water_are_rejected() {
+        let source = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        )
+        .replacen(r#""water_raster": []"#, r#""water_raster": [{}]"#, 1);
+
+        assert!(WorldTemplate::from_source(&source, "test_template_unit").is_err());
     }
 
     #[test]

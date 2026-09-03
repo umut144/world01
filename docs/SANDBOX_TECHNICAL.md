@@ -259,14 +259,18 @@ validates and synchronizes the complete export directory, and the
 protocol-neutral `world_data` crate embeds its files as a deterministic catalog.
 Its build script rejects unreadable scene headers, unknown scene kinds, and
 duplicate scene IDs before compiling that catalog.
-Callers select an Instance by its scene ID; Template exports are embedded but
-are not yet imported or composed into a map. The current strict importer accepts
-export schema 9 and embedded scene schema 10. It requires their water fields so
-an older snapshot cannot masquerade as current, but `WorldMap` does not yet
-model water. The headless server and graphical client therefore consume the
-same selected Instance dimensions and gameplay placements. SceneMaker stores
-only PolyTools asset keys and authoring geometry; the runtime resolves those
-keys through its synchronized PolyTools content and renders the real runtime
+Callers select an Instance by its scene ID. Template exports are imported into a
+typed catalog grouped by `group_number`, but are not yet chosen or composed into
+a map. Instance positions are centered in world space; Template cells, Props,
+and insertion anchors deliberately remain in the Template's own bottom-left
+coordinate frame for later translation at an Instance Anchor. The current
+strict importer accepts export schema 9 and embedded scene schema 10. It
+requires their water fields so an older snapshot cannot masquerade as current,
+but `WorldMap` does not yet model water and Templates carrying water are
+rejected. The headless server and graphical client therefore consume the same
+selected Instance dimensions and gameplay placements. SceneMaker stores only
+PolyTools asset keys and authoring geometry; the runtime resolves those keys
+through its synchronized PolyTools content and renders the real runtime
 geometry. These facilities live inside the Labyrinth client application. There
 is no public reusable camera service, room service, map service, or
 camera-target contract today.
