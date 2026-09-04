@@ -15,6 +15,38 @@ impl Position {
     }
 }
 
+/// Authoritative position of an actor in World 01's logical 2.5D space.
+///
+/// `x` and `y` locate the actor on the current support surface. Elevation is a
+/// gameplay coordinate rather than Bevy presentation depth; support and
+/// movement-medium identity are introduced by later SBX-36 slices.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Reflect, Serialize, Deserialize)]
+pub struct WorldPosition {
+    pub x: f32,
+    pub y: f32,
+    pub elevation_meters: f32,
+}
+
+impl WorldPosition {
+    pub const ZERO: Self = Self {
+        x: 0.0,
+        y: 0.0,
+        elevation_meters: 0.0,
+    };
+
+    pub const fn new(x: f32, y: f32, elevation_meters: f32) -> Self {
+        Self {
+            x,
+            y,
+            elevation_meters,
+        }
+    }
+
+    pub const fn horizontal(self) -> Position {
+        Position::new(self.x, self.y)
+    }
+}
+
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct MovementDirection {
     pub x: f32,

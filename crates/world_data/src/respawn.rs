@@ -1,7 +1,7 @@
 use bevy::prelude::{Component, Reflect, Resource};
 use serde::{Deserialize, Serialize};
 
-use crate::{Position, WorldMap};
+use crate::{WorldMap, WorldPosition};
 
 #[derive(
     Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
@@ -18,7 +18,7 @@ impl Ankh {
 
 #[derive(Resource, Debug, Clone, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct AnkhLayout {
-    pub positions: Vec<Position>,
+    pub positions: Vec<WorldPosition>,
 }
 
 impl AnkhLayout {
@@ -28,7 +28,13 @@ impl AnkhLayout {
                 .props()
                 .iter()
                 .filter(|placement| placement.asset_key == "ankh")
-                .map(|placement| placement.position)
+                .map(|placement| {
+                    WorldPosition::new(
+                        placement.position.x,
+                        placement.position.y,
+                        placement.elevation_meters,
+                    )
+                })
                 .collect(),
         }
     }
@@ -68,7 +74,10 @@ mod tests {
 
         assert_eq!(
             layout.positions,
-            [Position::new(0.0, 1.0), Position::new(1.0, 0.0)]
+            [
+                WorldPosition::new(0.0, 1.0, 1.0),
+                WorldPosition::new(1.0, 0.0, 1.0),
+            ]
         );
     }
 }

@@ -3,7 +3,7 @@ use std::{error::Error, fmt};
 use bevy::prelude::{Query, Res, Resource, Vec2};
 use world01_configs::RuntimeConfig;
 use world01_world_data::{
-    BodyFacing, MovementDirection, MovementIntent, MovementVelocity, Position,
+    BodyFacing, MovementDirection, MovementIntent, MovementVelocity, WorldPosition,
 };
 
 #[derive(Resource, Debug, Clone, Copy, PartialEq)]
@@ -73,11 +73,11 @@ impl Error for MovementConfigError {}
 
 /// Applies the velocity decided this tick to the actor's position.
 ///
-/// The only writer of `Position` during the gameplay step, which is what makes
+/// The only writer of `WorldPosition` during the gameplay step, which is what makes
 /// a collision phase possible between deciding a velocity and applying it.
 pub fn integrate_movement(
     step: Res<MovementStep>,
-    mut actors: Query<(&MovementVelocity, &mut Position)>,
+    mut actors: Query<(&MovementVelocity, &mut WorldPosition)>,
 ) {
     for (velocity, mut position) in &mut actors {
         if *velocity == MovementVelocity::ZERO {
@@ -85,7 +85,8 @@ pub fn integrate_movement(
         }
         let current = Vec2::new(position.x, position.y);
         let proposed = current + step.step(*velocity);
-        *position = Position::new(proposed.x, proposed.y);
+        position.x = proposed.x;
+        position.y = proposed.y;
     }
 }
 

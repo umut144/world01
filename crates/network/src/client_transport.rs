@@ -16,7 +16,7 @@ use lightyear::prelude::{
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
     AnchorOccupancy, AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent,
-    MovementIntent, PlayerInput, Position, RunIntent, WorldOccupancyRequest,
+    MovementIntent, PlayerInput, RunIntent, WorldOccupancyRequest, WorldPosition,
 };
 
 use crate::protocol::{
@@ -184,7 +184,7 @@ fn expose_remote_position_extrapolation(
     config: Res<RemoteExtrapolationConfig>,
     mut players: Query<
         (
-            &ConfirmedHistory<Position>,
+            &ConfirmedHistory<WorldPosition>,
             &mut RemotePositionExtrapolation,
         ),
         With<Interpolated>,
@@ -221,9 +221,9 @@ fn expose_remote_position_extrapolation(
 }
 
 fn bounded_position_extrapolation(
-    previous: Position,
+    previous: WorldPosition,
     previous_tick: u32,
-    latest: Position,
+    latest: WorldPosition,
     latest_tick: u32,
     current_tick: u32,
     overstep: f32,
@@ -246,7 +246,7 @@ fn bounded_position_extrapolation(
 }
 
 fn expose_position_corrections(
-    corrected: Query<(Entity, &Position, &PreviousVisual<Position>)>,
+    corrected: Query<(Entity, &WorldPosition, &PreviousVisual<WorldPosition>)>,
     mut commands: Commands,
 ) {
     for (entity, position, previous_visual) in &corrected {
@@ -258,7 +258,7 @@ fn expose_position_corrections(
                     previous_visual.0.y - position.y,
                 ),
             })
-            .remove::<PreviousVisual<Position>>();
+            .remove::<PreviousVisual<WorldPosition>>();
     }
 }
 
@@ -377,9 +377,9 @@ mod tests {
     #[test]
     fn remote_extrapolation_is_bounded_to_two_snapshot_intervals() {
         let offset = bounded_position_extrapolation(
-            Position::new(0.0, 0.0),
+            WorldPosition::new(0.0, 0.0, 1.0),
             10,
-            Position::new(4.0 / 30.0, 0.0),
+            WorldPosition::new(4.0 / 30.0, 0.0, 1.0),
             12,
             30,
             0.0,
@@ -393,9 +393,9 @@ mod tests {
     #[test]
     fn remote_extrapolation_does_not_run_before_latest_sample() {
         let offset = bounded_position_extrapolation(
-            Position::new(0.0, 0.0),
+            WorldPosition::new(0.0, 0.0, 1.0),
             10,
-            Position::new(1.0, 0.0),
+            WorldPosition::new(1.0, 0.0, 1.0),
             12,
             11,
             0.5,
@@ -412,8 +412,8 @@ mod tests {
         let entity = app
             .world_mut()
             .spawn((
-                Position::new(2.0, 3.0),
-                PreviousVisual(Position::new(5.0, 1.0)),
+                WorldPosition::new(2.0, 3.0, 1.0),
+                PreviousVisual(WorldPosition::new(5.0, 1.0, 4.0)),
             ))
             .id();
         app.update();
@@ -425,12 +425,12 @@ mod tests {
         );
         assert!(
             app.world()
-                .get::<PreviousVisual<Position>>(entity)
+                .get::<PreviousVisual<WorldPosition>>(entity)
                 .is_none()
         );
         assert_eq!(
-            app.world().get::<Position>(entity),
-            Some(&Position::new(2.0, 3.0))
+            app.world().get::<WorldPosition>(entity),
+            Some(&WorldPosition::new(2.0, 3.0, 1.0))
         );
     }
 

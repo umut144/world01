@@ -6,8 +6,8 @@ use world01_design::HealthConfig;
 use world01_world_data::{
     ActorId, Ankh, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
     DashState, DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
-    MovementVelocity, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
-    StatusEffectState,
+    MovementVelocity, RespawnState, RevivalState, RunState, SelectedCharacter, StatusEffectState,
+    WorldPosition,
 };
 
 use crate::respawn::{RespawnActor, choose_respawn_position};
@@ -97,7 +97,7 @@ pub fn update_character_life(
             Entity,
             &ActorId,
             Option<&SelectedCharacter>,
-            Option<&Position>,
+            Option<&WorldPosition>,
             Option<&BodyFacing>,
             &CharacterLifeState,
             &DeathConfirmIntent,
@@ -107,7 +107,7 @@ pub fn update_character_life(
             Entity,
             &ActorId,
             Option<&SelectedCharacter>,
-            Option<&mut Position>,
+            Option<&mut WorldPosition>,
             Option<&BodyFacing>,
             &mut CharacterHealth,
             &mut CharacterLifeState,
@@ -314,10 +314,10 @@ fn advance_confirmation(
     life: &mut CharacterLifeState,
     actor_id: ActorId,
     respawn: &mut RespawnState,
-    position: Option<&mut Position>,
+    position: Option<&mut WorldPosition>,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
-    ankhs: &[(Ankh, Position)],
+    ankhs: &[(Ankh, WorldPosition)],
     actors: &[RespawnActor],
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
 ) {
@@ -377,7 +377,7 @@ struct LifeSnapshot {
     entity: Entity,
     actor_id: u64,
     character: Option<CharacterId>,
-    position: Option<Position>,
+    position: Option<WorldPosition>,
     facing: Option<BodyFacing>,
     life: CharacterLifeState,
     death_confirm: DeathConfirmIntent,
@@ -387,7 +387,7 @@ struct LifeSnapshot {
 fn find_reviver(
     target_entity: Entity,
     target_character: Option<&CharacterId>,
-    target_position: Option<&Position>,
+    target_position: Option<&WorldPosition>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
     actors: &[LifeSnapshot],
@@ -420,7 +420,7 @@ fn revival_continues(
     reviver_actor_id: Option<u64>,
     target_entity: Entity,
     target_character: Option<&CharacterId>,
-    target_position: Option<&Position>,
+    target_position: Option<&WorldPosition>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
     actors: &[LifeSnapshot],
@@ -450,7 +450,7 @@ fn revival_continues(
 fn bodies_overlap(
     reviver_entity: Entity,
     target_character: Option<&CharacterId>,
-    target_position: Option<&Position>,
+    target_position: Option<&WorldPosition>,
     target_facing: Option<&BodyFacing>,
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
     actors: &[LifeSnapshot],
@@ -477,10 +477,11 @@ fn bodies_overlap(
     let Some(target_hurt) = hurt_geometry.character(target_character) else {
         return false;
     };
-    let reviver_transform = hurt_transform(reviver_hurt, reviver_position, reviver_facing);
+    let reviver_transform =
+        hurt_transform(reviver_hurt, reviver_position.horizontal(), reviver_facing);
     let target_transform = posed_hurt_transform(
         target_hurt,
-        *target_position,
+        target_position.horizontal(),
         *target_facing,
         DEAD_BODY_SCALE,
         DEAD_BODY_ROTATION_RADIANS,
@@ -535,7 +536,7 @@ mod tests {
             .spawn((
                 ActorId(id),
                 SelectedCharacter(CharacterId("hammerer".into())),
-                Position::ZERO,
+                WorldPosition::ZERO,
                 BodyFacing::Authored,
                 MovementIntent::ZERO,
                 MovementVelocity::ZERO,
@@ -638,15 +639,15 @@ mod tests {
         let first = choose_respawn_position(
             7,
             1,
-            Position::ZERO,
+            WorldPosition::ZERO,
             None,
             None,
             4.0,
-            &[(Ankh::new(0), Position::ZERO)],
+            &[(Ankh::new(0), WorldPosition::ZERO)],
             &[],
             None,
         );
-        assert_eq!(first, Position::ZERO);
+        assert_eq!(first, WorldPosition::ZERO);
     }
 
     #[test]

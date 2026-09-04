@@ -15,7 +15,7 @@ use world01_configs::RuntimeConfig;
 use world01_content::{
     CharacterCollisionGeometry, CharacterCollisionGeometryCatalog, WorldCollisionGeometryCatalog,
 };
-use world01_world_data::{ActorId, BodyFacing, CharacterMass, Position, SelectedCharacter};
+use world01_world_data::{ActorId, BodyFacing, CharacterMass, SelectedCharacter, WorldPosition};
 
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{
@@ -99,7 +99,7 @@ pub fn separate_overlapping_characters(
         &SelectedCharacter,
         &BodyFacing,
         &CharacterMass,
-        &mut Position,
+        &mut WorldPosition,
     )>,
 ) {
     if catalog.is_empty() {
@@ -114,7 +114,7 @@ pub fn separate_overlapping_characters(
         let Some(geometry) = catalog.character(&character.0) else {
             continue;
         };
-        let transform = facing_transform(geometry.authored_facing, *position, *facing);
+        let transform = facing_transform(geometry.authored_facing, position.horizontal(), *facing);
         let Some(bounds) = Aabb::around(
             geometry
                 .components
@@ -177,7 +177,8 @@ pub fn separate_overlapping_characters(
         };
         let corrected = Vec2::new(position.x, position.y) + offset;
         if corrected.is_finite() {
-            *position = Position::new(corrected.x, corrected.y);
+            position.x = corrected.x;
+            position.y = corrected.y;
         }
     }
 }
@@ -194,7 +195,7 @@ pub fn separate_characters_from_world(
     catalog: Res<CharacterCollisionGeometryCatalog>,
     world: Res<WorldCollisionGeometryCatalog>,
     grid: Res<WorldColliderGrid>,
-    mut actors: Query<(&SelectedCharacter, &BodyFacing, &mut Position)>,
+    mut actors: Query<(&SelectedCharacter, &BodyFacing, &mut WorldPosition)>,
 ) {
     if catalog.is_empty() || world.regions.is_empty() {
         return;
@@ -205,7 +206,7 @@ pub fn separate_characters_from_world(
         let Some(geometry) = catalog.character(&character.0) else {
             continue;
         };
-        let transform = facing_transform(geometry.authored_facing, *position, *facing);
+        let transform = facing_transform(geometry.authored_facing, position.horizontal(), *facing);
         let Some(bounds) = Aabb::around(
             geometry
                 .components
@@ -245,7 +246,8 @@ pub fn separate_characters_from_world(
         }
         let corrected = Vec2::new(position.x, position.y) + correction;
         if corrected.is_finite() {
-            *position = Position::new(corrected.x, corrected.y);
+            position.x = corrected.x;
+            position.y = corrected.y;
         }
     }
 }
@@ -261,7 +263,9 @@ mod tests {
         AuthoredFacing, CollisionComponentGeometry, PlacedCollisionGeometry,
         RuntimeComponentGeometry, RuntimeContent,
     };
-    use world01_world_data::{CharacterLifeState, DashState, MovementVelocity, RunState, WorldMap};
+    use world01_world_data::{
+        CharacterLifeState, DashState, MovementVelocity, Position, RunState, WorldMap,
+    };
 
     use crate::spatial::overlap::component_separation;
 
@@ -352,7 +356,7 @@ mod tests {
                 ActorId(actor_id),
                 SelectedCharacter(world01_world_data::CharacterId(character.into())),
                 BodyFacing::Right,
-                Position::new(position.x, position.y),
+                WorldPosition::new(position.x, position.y, 1.0),
                 mass,
             ))
             .id()
@@ -361,8 +365,8 @@ mod tests {
     fn position(app: &App, entity: Entity) -> Vec2 {
         let position = app
             .world()
-            .get::<Position>(entity)
-            .expect("the actor keeps its Position");
+            .get::<WorldPosition>(entity)
+            .expect("the actor keeps its WorldPosition");
         Vec2::new(position.x, position.y)
     }
 
@@ -386,16 +390,18 @@ mod tests {
             .expect("the measured Character has collision geometry");
         let first_transform = facing_transform(
             geometry.authored_facing,
-            *app.world()
-                .get::<Position>(first)
-                .expect("the first actor keeps its Position"),
+            app.world()
+                .get::<WorldPosition>(first)
+                .expect("the first actor keeps its WorldPosition")
+                .horizontal(),
             BodyFacing::Right,
         );
         let second_transform = facing_transform(
             geometry.authored_facing,
-            *app.world()
-                .get::<Position>(second)
-                .expect("the second actor keeps its Position"),
+            app.world()
+                .get::<WorldPosition>(second)
+                .expect("the second actor keeps its WorldPosition")
+                .horizontal(),
             BodyFacing::Right,
         );
 
@@ -475,9 +481,13 @@ mod tests {
             .expect("the measured Character has collision geometry");
         let position = *app
             .world()
-            .get::<Position>(actor)
-            .expect("the actor keeps its Position");
-        let transform = facing_transform(geometry.authored_facing, position, BodyFacing::Right);
+            .get::<WorldPosition>(actor)
+            .expect("the actor keeps its WorldPosition");
+        let transform = facing_transform(
+            geometry.authored_facing,
+            position.horizontal(),
+            BodyFacing::Right,
+        );
 
         app.world()
             .resource::<WorldCollisionGeometryCatalog>()
@@ -913,7 +923,7 @@ mod tests {
                 .spawn((
                     SelectedCharacter(world01_world_data::CharacterId("walker".into())),
                     BodyFacing::Right,
-                    Position::new(-0.16, 0.0),
+                    WorldPosition::new(-0.16, 0.0, 1.0),
                 ))
                 .id();
             if with_unrelated_state {
@@ -996,7 +1006,7 @@ mod tests {
                 ActorId(1),
                 SelectedCharacter(world01_world_data::CharacterId("walker".into())),
                 BodyFacing::Right,
-                Position::ZERO,
+                WorldPosition::ZERO,
             ))
             .id();
         let valid = spawn(&mut app, 2, Vec2::new(0.3, 0.0), mass(1.0, 0.6));

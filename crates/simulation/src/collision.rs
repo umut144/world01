@@ -2,7 +2,7 @@
 //!
 //! Collision runs between deciding a velocity and applying it: it may refuse a
 //! step, but never moves an actor by interpreting that velocity. Authoritative
-//! overlap separation may write `Position` earlier in the collision phase;
+//! overlap separation may write `WorldPosition` earlier in the collision phase;
 //! `integrate_movement` remains the only writer that applies requested motion,
 //! and a refusal stays readable as a zeroed velocity.
 //!
@@ -14,7 +14,9 @@ use bevy::prelude::{Entity, Query, Res, Vec2};
 use world01_content::{
     CharacterCollisionGeometry, CharacterCollisionGeometryCatalog, WorldCollisionGeometryCatalog,
 };
-use world01_world_data::{BodyFacing, MovementVelocity, Position, SelectedCharacter};
+use world01_world_data::{
+    BodyFacing, MovementVelocity, Position, SelectedCharacter, WorldPosition,
+};
 
 use crate::movement::MovementStep;
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
@@ -83,7 +85,7 @@ pub fn block_colliding_movement(
     mut actors: Query<(
         Entity,
         &SelectedCharacter,
-        &Position,
+        &WorldPosition,
         &BodyFacing,
         &mut MovementVelocity,
     )>,
@@ -96,7 +98,7 @@ pub fn block_colliding_movement(
         let Some(geometry) = catalog.character(&character.0) else {
             continue;
         };
-        let Some(standing) = posed(entity, geometry, *position, *facing) else {
+        let Some(standing) = posed(entity, geometry, position.horizontal(), *facing) else {
             continue;
         };
         let displacement = step.step(*velocity);
@@ -115,7 +117,7 @@ pub fn block_colliding_movement(
         if displacement == Vec2::ZERO || !displacement.is_finite() {
             continue;
         }
-        let Some(current) = posed(entity, geometry, *position, *facing) else {
+        let Some(current) = posed(entity, geometry, position.horizontal(), *facing) else {
             continue;
         };
         let proposed = current.translated(displacement);
@@ -354,7 +356,7 @@ mod tests {
         app.world_mut()
             .spawn((
                 SelectedCharacter(CharacterId(character.to_owned())),
-                Position::new(position.x, position.y),
+                WorldPosition::new(position.x, position.y, 1.0),
                 BodyFacing::Right,
                 MovementVelocity::new(velocity.x, velocity.y),
             ))
@@ -376,9 +378,10 @@ mod tests {
     }
 
     fn position_of(app: &App, actor: Entity) -> Position {
-        *app.world()
-            .get::<Position>(actor)
+        app.world()
+            .get::<WorldPosition>(actor)
             .expect("the actor keeps its position")
+            .horizontal()
     }
 
     fn velocity_of(app: &App, actor: Entity) -> MovementVelocity {

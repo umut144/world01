@@ -97,6 +97,28 @@ impl WorldMap {
         &self.terrain_cells
     }
 
+    /// Returns the authored Terrain cell containing a world-space point.
+    ///
+    /// Missing cells remain missing rather than inheriting a default surface
+    /// or elevation. Points on the map's maximum boundary are out of bounds.
+    pub fn terrain_cell_at(&self, position: Position) -> Option<&MapTerrainCell> {
+        if !position.x.is_finite() || !position.y.is_finite() {
+            return None;
+        }
+        let minimum_x = -self.width_meters() / 2.0;
+        let minimum_y = -self.height_meters() / 2.0;
+        let x = ((position.x - minimum_x) / self.terrain_cell_meters).floor();
+        let y = ((position.y - minimum_y) / self.terrain_cell_meters).floor();
+        if x < 0.0 || y < 0.0 || x >= self.width_tiles as f32 || y >= self.height_tiles as f32 {
+            return None;
+        }
+        let x = x as u32;
+        let y = y as u32;
+        self.terrain_cells
+            .iter()
+            .find(|cell| cell.x == x && cell.y == y)
+    }
+
     pub fn props(&self) -> &[MapProp] {
         &self.props
     }
@@ -2865,6 +2887,32 @@ mod tests {
         assert_eq!(map.terrain_cells()[0].surface, "land");
         assert_eq!(map.terrain_cells()[0].elevation_meters, 2.5);
         assert_eq!(map.props()[0].elevation_meters, 1.0);
+    }
+
+    #[test]
+    fn terrain_lookup_returns_the_authored_cell_at_a_world_position() {
+        let source = test_export(
+            r#"
+                { "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": 2.5 },
+                { "x": 1, "y": 0, "asset_key": "grass", "elevation_meters": 4.0 }
+            "#,
+            ANKH,
+        );
+        let map =
+            WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
+
+        assert_eq!(
+            map.terrain_cell_at(Position::new(-1.75, -1.5))
+                .map(|cell| cell.elevation_meters),
+            Some(2.5)
+        );
+        assert_eq!(
+            map.terrain_cell_at(Position::new(-1.0, -1.5))
+                .map(|cell| cell.elevation_meters),
+            Some(4.0)
+        );
+        assert!(map.terrain_cell_at(Position::new(0.0, 0.0)).is_none());
+        assert!(map.terrain_cell_at(Position::new(f32::NAN, 0.0)).is_none());
     }
 
     /// Only Terrain Assets may be painted as Terrain, so a cell whose Asset has

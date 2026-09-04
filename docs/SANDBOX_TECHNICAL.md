@@ -230,13 +230,22 @@ geometry is not silently treated as collision geometry.
 
 ### Current verified baseline
 
-Reusable pieces already exist for numeric player identity, ownership,
-protocol-neutral two-dimensional `Position`, and selected asset identity.
-`Position` currently contains only `x` and `y`; neither Actor simulation nor
-client map presentation consumes authored Terrain or Path elevation yet. Bevy
-`Transform.z` is currently presentation depth, including ordering among
-Terrain, Props, Characters, and projected weapon parts, rather than an
-authoritative physical coordinate. However, there is no generic sandbox
+Reusable pieces already exist for numeric player identity, ownership, selected
+asset identity, and protocol-neutral position data. Two-dimensional `Position`
+remains the planar value type for map geometry, collision placement, and
+current combat geometry. Actors instead carry authoritative `WorldPosition`
+with `x`, `y`, and `elevation_meters`; it is predicted, replicated,
+interpolated, reconciled, and read by client presentation. Current horizontal
+movement and collision preserve its elevation. Server joins derive their
+initial elevation from the authored Terrain cell, while an Ankh respawn takes
+the Ankh placement's exported elevation.
+
+Explicit support and movement-medium state do not exist yet, and neither Actor
+movement nor client map presentation samples authored Terrain or Path elevation
+after spawning. Client presentation currently projects only `x` and `y`; Bevy
+`Transform.z` remains presentation depth, including ordering among Terrain,
+Props, Characters, and projected weapon parts, rather than an authoritative
+physical coordinate. There is no generic sandbox
 entity-instantiation path today. Server session code currently turns a
 character join request into a Labyrinth player with movement, gaze, health, and
 optional Hammer components at one of five fixed spawn positions. The
@@ -252,9 +261,9 @@ components. “Character” does not by itself imply a combatant, class, invento
 or fixed player-avatar model. Visual components never become authoritative
 state. The exact public API is not yet established.
 
-World 01's confirmed 2.5D direction replaces the current XY-only gameplay
-position with one protocol-neutral authoritative world position containing
-`x`, `y`, and `elevation_meters`. It deliberately does not make Bevy
+World 01's confirmed 2.5D direction uses one protocol-neutral authoritative
+world position containing `x`, `y`, and `elevation_meters`. It deliberately
+does not make Bevy
 `Transform` authoritative. Server simulation, prediction, reconciliation,
 remote interpolation, bots, and persistence consume the world position;
 client presentation derives the appropriate Bevy transform for its current

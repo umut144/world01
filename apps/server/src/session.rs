@@ -15,7 +15,8 @@ use world01_world_data::{
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
     MovementDirection, MovementIntent, MovementVelocity, PlacementRanks, PlayerOwner, Position,
     RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WorldComposition, WorldOccupancyRequest, WorldTemplateCatalog,
+    StatusEffectState, WorldComposition, WorldMap, WorldOccupancyRequest, WorldPosition,
+    WorldTemplateCatalog,
 };
 
 const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
@@ -192,6 +193,7 @@ fn accept_join_requests(
     masses: Res<CharacterMassCatalog>,
     abilities: Res<CharacterAbilityCatalog>,
     exertion: Res<ExertionRules>,
+    map: Res<WorldMap>,
     mut commands: Commands,
 ) {
     if requests.is_empty() {
@@ -222,8 +224,17 @@ fn accept_join_requests(
             warn!("actor id space exhausted; ignoring join request");
             continue;
         };
-        next_actor_id.0 = following_id;
         let spawn = spawn_position(actor_id);
+        let Some(spawn_cell) = map.terrain_cell_at(Position::new(spawn.x, spawn.y)) else {
+            warn!(
+                owner = request.owner(),
+                x = spawn.x,
+                y = spawn.y,
+                "ignoring join without authored Terrain at the spawn position"
+            );
+            continue;
+        };
+        next_actor_id.0 = following_id;
         let mut player = commands.spawn((
             (
                 ActorId(actor_id),
@@ -253,7 +264,7 @@ fn accept_join_requests(
             (
                 BodyFacing::Authored,
                 GazeDirection::RIGHT,
-                Position::new(spawn.x, spawn.y),
+                WorldPosition::new(spawn.x, spawn.y, spawn_cell.elevation_meters),
                 CharacterHealth::full(maximum_health),
                 mass,
             ),
@@ -303,6 +314,16 @@ mod tests {
     fn spawn_positions_are_separated_and_repeat_safely() {
         assert_ne!(spawn_position(1), spawn_position(2));
         assert_eq!(spawn_position(1), spawn_position(6));
+
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        for actor_id in 1..=MAX_CLIENTS as u64 {
+            let spawn = spawn_position(actor_id);
+            assert!(
+                map.terrain_cell_at(Position::new(spawn.x, spawn.y))
+                    .is_some(),
+                "spawn {actor_id} must have authored Terrain"
+            );
+        }
     }
 
     #[test]

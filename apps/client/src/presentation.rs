@@ -15,7 +15,7 @@ use world01_network::{
 use world01_simulation::WorldRuntimeState;
 use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
-    MovementIntent, Position, RunState, SelectedCharacter, WorldMap,
+    MovementIntent, RunState, SelectedCharacter, WorldMap, WorldPosition,
 };
 
 use crate::eyes::EyePupil;
@@ -798,7 +798,7 @@ fn repick_character(
 
 fn render_new_players(
     mut commands: Commands,
-    players: Query<(Entity, &SelectedCharacter, &Position), Without<RenderedCharacter>>,
+    players: Query<(Entity, &SelectedCharacter, &WorldPosition), Without<RenderedCharacter>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut projection_materials: ResMut<Assets<ProjectionDepthMaterial>>,
@@ -859,7 +859,7 @@ fn update_health_bars(
 fn initialize_local_render_history(
     mut commands: Commands,
     players: Query<
-        (Entity, &Position),
+        (Entity, &WorldPosition),
         (
             With<RenderedCharacter>,
             With<MovementIntent>,
@@ -877,7 +877,7 @@ fn initialize_local_render_history(
 }
 
 fn capture_local_render_positions(
-    mut players: Query<(&Position, &mut LocalRenderHistory), With<RenderedCharacter>>,
+    mut players: Query<(&WorldPosition, &mut LocalRenderHistory), With<RenderedCharacter>>,
 ) {
     for (position, mut history) in &mut players {
         history.previous = history.current;
@@ -891,7 +891,7 @@ fn sync_rendered_positions(
     mut players: Query<
         (
             Entity,
-            &Position,
+            &WorldPosition,
             Option<&LocalRenderHistory>,
             Option<&RemotePositionExtrapolation>,
             Option<&mut ClientPositionCorrection>,
@@ -1010,7 +1010,7 @@ fn apply_eye_gaze(
 }
 
 fn sampled_render_position(
-    position: Position,
+    position: WorldPosition,
     history: Option<&LocalRenderHistory>,
     alpha: f32,
 ) -> Vec2 {
@@ -1123,7 +1123,7 @@ mod tests {
         let entity = app
             .world_mut()
             .spawn((
-                Position::new(2.5, -1.25),
+                WorldPosition::new(2.5, -1.25, 7.0),
                 Transform::from_xyz(9.0, 8.0, 3.0).with_scale(Vec3::splat(1.5)),
                 RenderedCharacter,
             ))
@@ -1172,7 +1172,7 @@ mod tests {
         };
 
         assert_eq!(
-            sampled_render_position(Position::new(99.0, 99.0), Some(&history), 0.25),
+            sampled_render_position(WorldPosition::new(99.0, 99.0, 7.0), Some(&history), 0.25,),
             Vec2::new(2.0, -1.0)
         );
     }
@@ -1180,7 +1180,7 @@ mod tests {
     #[test]
     fn remote_render_position_uses_snapshot_interpolated_value_directly() {
         assert_eq!(
-            sampled_render_position(Position::new(3.0, -4.0), None, 0.25),
+            sampled_render_position(WorldPosition::new(3.0, -4.0, 7.0), None, 0.25),
             Vec2::new(3.0, -4.0)
         );
     }

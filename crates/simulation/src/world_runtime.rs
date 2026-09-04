@@ -168,7 +168,7 @@ mod tests {
     use world01_configs::load_embedded;
     use world01_content::CharacterCollisionGeometryCatalog;
     use world01_design::load_world01_embedded;
-    use world01_world_data::{BodyFacing, CharacterId, Position, SelectedCharacter};
+    use world01_world_data::{BodyFacing, CharacterId, SelectedCharacter, WorldPosition};
 
     #[derive(Resource, Debug, Default)]
     struct MapChangeCount(u32);
@@ -443,7 +443,7 @@ mod tests {
                 })
             })
             .expect("the Template adds collision geometry");
-        let start = Position::new(new_region.position.x, new_region.position.y + 0.5);
+        let start = WorldPosition::new(new_region.position.x, new_region.position.y + 0.5, 1.0);
 
         let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&world.content)
             .expect("embedded Character collision geometry is valid");
@@ -476,11 +476,11 @@ mod tests {
         }
         let separated = *app
             .world()
-            .get::<Position>(actor)
+            .get::<WorldPosition>(actor)
             .expect("the Character keeps a position");
         assert_ne!(separated, start);
         app.update();
-        assert_eq!(app.world().get::<Position>(actor), Some(&separated));
+        assert_eq!(app.world().get::<WorldPosition>(actor), Some(&separated));
     }
 
     fn single_ankh_instance() -> String {

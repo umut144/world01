@@ -143,7 +143,7 @@ mod tests {
     use world01_world_data::{
         ActorId, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterMass, DashIntent,
         DashState, MovementIntent, MovementVelocity, Position, RunIntent, RunState,
-        SelectedCharacter, StaminaState, StatusEffectState,
+        SelectedCharacter, StaminaState, StatusEffectState, WorldPosition,
     };
 
     use crate::{
@@ -152,21 +152,31 @@ mod tests {
     };
 
     /// What an actor looks like at the moment the collision phase runs.
-    #[derive(Resource, Debug, Default)]
+    #[derive(Resource, Debug)]
     struct CollisionProbe {
         velocity: MovementVelocity,
-        position: Position,
+        position: WorldPosition,
         ran: bool,
+    }
+
+    impl Default for CollisionProbe {
+        fn default() -> Self {
+            Self {
+                velocity: MovementVelocity::ZERO,
+                position: WorldPosition::ZERO,
+                ran: false,
+            }
+        }
     }
 
     #[derive(Resource, Debug, Default)]
     struct SeparationProbe {
-        positions: Vec<Position>,
+        positions: Vec<WorldPosition>,
     }
 
     fn record_collision_phase(
         mut probe: ResMut<CollisionProbe>,
-        actors: Query<(&MovementVelocity, &Position)>,
+        actors: Query<(&MovementVelocity, &WorldPosition)>,
     ) {
         for (velocity, position) in &actors {
             probe.velocity = *velocity;
@@ -177,7 +187,7 @@ mod tests {
 
     fn record_positions_after_separation(
         mut probe: ResMut<SeparationProbe>,
-        actors: Query<&Position, With<ActorId>>,
+        actors: Query<&WorldPosition, With<ActorId>>,
     ) {
         probe.positions = actors.iter().copied().collect();
         probe
@@ -260,7 +270,7 @@ mod tests {
                     SelectedCharacter(CharacterId("walker".into())),
                     BodyFacing::Right,
                     CharacterMass::new(1.0, 0.0, 1.0, 0.6),
-                    Position::new(x, 0.0),
+                    WorldPosition::new(x, 0.0, 1.0),
                     MovementVelocity::ZERO,
                 ))
                 .id()
@@ -270,7 +280,7 @@ mod tests {
 
     /// Pins the predicted-client contract: by the time its collision phase
     /// runs the velocity for this tick is decided, and requested movement has
-    /// not yet been written to Position. Server authority may already have
+    /// not yet been written to WorldPosition. Server authority may already have
     /// corrected pre-existing overlap at this point.
     #[test]
     fn the_predicted_collision_phase_sees_velocity_before_requested_movement() {
@@ -330,7 +340,7 @@ mod tests {
                 DashState::default(),
                 StatusEffectState::default(),
                 CharacterHealth::full(100.0),
-                Position::ZERO,
+                WorldPosition::new(0.0, 0.0, 1.0),
             ))
             .id();
 
@@ -344,12 +354,12 @@ mod tests {
         );
         assert_eq!(
             probe.position,
-            Position::ZERO,
+            WorldPosition::new(0.0, 0.0, 1.0),
             "the position is written only after the collision phase"
         );
         assert!(
             app.world()
-                .get::<Position>(actor)
+                .get::<WorldPosition>(actor)
                 .expect("the actor keeps its position")
                 .x
                 > 0.0,
@@ -364,12 +374,12 @@ mod tests {
         predicted.update();
 
         assert_eq!(
-            predicted.world().get::<Position>(predicted_first),
-            Some(&Position::ZERO)
+            predicted.world().get::<WorldPosition>(predicted_first),
+            Some(&WorldPosition::new(0.0, 0.0, 1.0))
         );
         assert_eq!(
-            predicted.world().get::<Position>(predicted_second),
-            Some(&Position::new(0.3, 0.0))
+            predicted.world().get::<WorldPosition>(predicted_second),
+            Some(&WorldPosition::new(0.3, 0.0, 1.0))
         );
 
         let mut server = collision_only_app(SimulationAuthority::Server);
@@ -379,13 +389,13 @@ mod tests {
         assert!(
             server
                 .world()
-                .get::<Position>(server_first)
+                .get::<WorldPosition>(server_first)
                 .is_some_and(|position| position.x < 0.0)
         );
         assert!(
             server
                 .world()
-                .get::<Position>(server_second)
+                .get::<WorldPosition>(server_second)
                 .is_some_and(|position| position.x > 0.3)
         );
     }
@@ -397,7 +407,7 @@ mod tests {
                 .spawn((
                     SelectedCharacter(CharacterId("walker".into())),
                     BodyFacing::Right,
-                    Position::ZERO,
+                    WorldPosition::new(0.0, 0.0, 1.0),
                     MovementVelocity::ZERO,
                 ))
                 .id()
@@ -408,8 +418,8 @@ mod tests {
         let predicted_actor = spawn(&mut predicted);
         predicted.update();
         assert_eq!(
-            predicted.world().get::<Position>(predicted_actor),
-            Some(&Position::ZERO)
+            predicted.world().get::<WorldPosition>(predicted_actor),
+            Some(&WorldPosition::new(0.0, 0.0, 1.0))
         );
 
         let mut server =
@@ -417,8 +427,8 @@ mod tests {
         let server_actor = spawn(&mut server);
         server.update();
         assert_ne!(
-            server.world().get::<Position>(server_actor),
-            Some(&Position::ZERO)
+            server.world().get::<WorldPosition>(server_actor),
+            Some(&WorldPosition::new(0.0, 0.0, 1.0))
         );
     }
 

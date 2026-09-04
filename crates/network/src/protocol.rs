@@ -14,15 +14,15 @@ use world01_world_data::{
     ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterId,
     CharacterLifeState, CharacterMass, DashIntent, DashState, DeathConfirmIntent,
     DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState, MageAttackState,
-    MovementDirection, MovementIntent, MovementVelocity, PlayerInput, PlayerOwner, Position,
-    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WeaponAimState,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerInput, PlayerOwner, RespawnState,
+    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
+    WeaponAimState, WorldPosition,
 };
 
 pub const MAX_CLIENTS: usize = 5;
 pub(crate) const SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 5000);
 pub const NETWORK_SIMULATION_ENV: &str = "WORLD01_NETWORK_SIMULATION";
-pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
+pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_33;
 
 pub(crate) struct JoinChannel;
 pub(crate) struct WorldTemplateDebugChannel;
@@ -132,7 +132,7 @@ pub(crate) fn register_game_protocol(app: &mut App) {
         .predict();
     app.component::<RevivalState>().replicate().predict();
     app.component::<RespawnState>().replicate().predict();
-    app.component::<Position>()
+    app.component::<WorldPosition>()
         .replicate()
         .predict()
         .enable_correction()
@@ -140,10 +140,11 @@ pub(crate) fn register_game_protocol(app: &mut App) {
         .add_interpolation_with(interpolate_position);
 }
 
-fn interpolate_position(start: Position, end: Position, t: f32) -> Position {
-    Position::new(
+fn interpolate_position(start: WorldPosition, end: WorldPosition, t: f32) -> WorldPosition {
+    WorldPosition::new(
         start.x + (end.x - start.x) * t,
         start.y + (end.y - start.y) * t,
+        start.elevation_meters + (end.elevation_meters - start.elevation_meters) * t,
     )
 }
 
@@ -204,13 +205,13 @@ mod tests {
     }
 
     #[test]
-    fn position_interpolation_is_linear() {
-        let start = Position::new(-2.0, 4.0);
-        let end = Position::new(6.0, -4.0);
+    fn world_position_interpolation_includes_elevation() {
+        let start = WorldPosition::new(-2.0, 4.0, 1.0);
+        let end = WorldPosition::new(6.0, -4.0, 5.0);
         assert_eq!(interpolate_position(start, end, 0.0), start);
         assert_eq!(
             interpolate_position(start, end, 0.25),
-            Position::new(0.0, 2.0)
+            WorldPosition::new(0.0, 2.0, 2.0)
         );
         assert_eq!(interpolate_position(start, end, 1.0), end);
     }

@@ -307,7 +307,7 @@ mod tests {
     use bevy::prelude::{App, Entity, IntoScheduleConfigs, Update};
     use world01_configs::load_embedded;
     use world01_design::load_world01_embedded;
-    use world01_world_data::Position;
+    use world01_world_data::WorldPosition;
 
     fn test_app() -> App {
         let runtime = load_embedded().expect("embedded runtime configuration parses");
@@ -341,7 +341,7 @@ mod tests {
                 CharacterMass::new(1.0, 0.0, 1.0, 0.8),
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
-                Position::ZERO,
+                WorldPosition::ZERO,
                 MovementVelocity::ZERO,
                 StaminaState::full(maximum_stamina),
                 RunState::default(),
@@ -381,7 +381,10 @@ mod tests {
 
         app.update();
 
-        assert_eq!(app.world().get::<Position>(player), Some(&Position::ZERO));
+        assert_eq!(
+            app.world().get::<WorldPosition>(player),
+            Some(&WorldPosition::ZERO)
+        );
         assert_eq!(
             app.world().get::<MovementVelocity>(player),
             Some(&MovementVelocity::ZERO)
@@ -511,8 +514,8 @@ mod tests {
             "a root does not clear the run toggle, which only blocked input does"
         );
         assert_eq!(
-            app.world().get::<Position>(actor),
-            Some(&Position::ZERO),
+            app.world().get::<WorldPosition>(actor),
+            Some(&WorldPosition::ZERO),
             "and the rooted actor does not move"
         );
     }

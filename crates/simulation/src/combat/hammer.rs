@@ -6,6 +6,7 @@ use world01_design::{HammerDesign, HammerStrikeDesign};
 use world01_world_data::{
     AttackIntent, BodyFacing, CharacterLifeState, GazeDirection, HammerAttackPhase,
     HammerAttackState, Position, SelectedCharacter, StatusEffectState, WeaponAimState,
+    WorldPosition,
 };
 
 use crate::condition::ActorCondition;
@@ -168,7 +169,7 @@ impl Error for HammerStrikeConfigError {}
 
 pub fn constrain_embedded_hammer_reach(
     hammer_geometry: Res<HammerCombatGeometry>,
-    mut players: Query<(&HammerAttackState, &mut Position)>,
+    mut players: Query<(&HammerAttackState, &mut WorldPosition)>,
 ) {
     for (attack, mut position) in &mut players {
         if attack.phase != HammerAttackPhase::Embedded {
@@ -180,7 +181,8 @@ pub fn constrain_embedded_hammer_reach(
             hammer_geometry.socket_offset(),
             hammer_geometry.maximum_reach(),
         );
-        *position = Position::new(constrained.x, constrained.y);
+        position.x = constrained.x;
+        position.y = constrained.y;
     }
 }
 
@@ -194,7 +196,7 @@ pub fn apply_hammer_strike_damage(
         Query<(
             Entity,
             &SelectedCharacter,
-            &Position,
+            &WorldPosition,
             &BodyFacing,
             Option<&CharacterLifeState>,
             Option<&mut HammerAttackState>,
@@ -236,7 +238,7 @@ pub fn apply_hammer_strike_damage(
             let Some(hurt) = hurt_geometry.character(&character.0) else {
                 continue;
             };
-            let target_transform = hurt_transform(hurt, *position, *facing);
+            let target_transform = hurt_transform(hurt, position.horizontal(), *facing);
             let mut hit = false;
             let mut stunned = false;
             for attack_component in hammer_geometry.attack_components() {
@@ -312,7 +314,7 @@ pub fn advance_hammer_attacks(
     mut players: Query<(
         &AttackIntent,
         &WeaponAimState,
-        &Position,
+        &WorldPosition,
         Option<&StatusEffectState>,
         Option<&CharacterLifeState>,
         &mut HammerAttackState,
@@ -468,7 +470,7 @@ mod tests {
                 SelectedCharacter(world01_world_data::CharacterId("hammerer".into())),
                 AttackIntent::PRESSED,
                 WeaponAimState::RIGHT,
-                Position::ZERO,
+                WorldPosition::ZERO,
                 StatusEffectState {
                     stunned_ticks: 1,
                     ..Default::default()
@@ -514,7 +516,7 @@ mod tests {
             .spawn((
                 AttackIntent::PRESSED,
                 WeaponAimState::RIGHT,
-                Position::ZERO,
+                WorldPosition::ZERO,
                 HammerAttackState::IDLE,
             ))
             .id();

@@ -62,7 +62,7 @@ mod tests {
     use world01_world_data::{
         AttackIntent, BodyFacing, CharacterId, GazeDirection, GazeIntent, HammerAttackPhase,
         HammerAttackState, MovementDirection, MovementIntent, MovementVelocity, Position,
-        SelectedCharacter, WeaponAimState, WeaponTurnDirection,
+        SelectedCharacter, WeaponAimState, WeaponTurnDirection, WorldPosition,
     };
 
     use crate::combat::hammer::constrain_embedded_position;
@@ -177,17 +177,21 @@ mod tests {
             .add_systems(Update, integrate_movement);
         let actor = app
             .world_mut()
-            .spawn((MovementVelocity::new(-0.6, 0.0), Position::ZERO))
+            .spawn((
+                MovementVelocity::new(-0.6, 0.0),
+                WorldPosition::new(0.0, 0.0, 3.0),
+            ))
             .id();
 
         app.update();
 
         let position = app
             .world()
-            .get::<Position>(actor)
-            .expect("the spawned actor keeps its Position");
+            .get::<WorldPosition>(actor)
+            .expect("the spawned actor keeps its WorldPosition");
         assert!((position.x + 0.6 / 60.0).abs() < EPSILON);
         assert_eq!(position.y, 0.0);
+        assert_eq!(position.elevation_meters, 3.0);
     }
 
     #[test]
@@ -494,7 +498,7 @@ mod tests {
                 GazeDirection::RIGHT,
                 WeaponAimState::RIGHT,
                 HammerAttackState::IDLE,
-                Position::ZERO,
+                WorldPosition::ZERO,
             ))
             .id();
 
@@ -565,7 +569,7 @@ mod tests {
                 GazeDirection::RIGHT,
                 WeaponAimState::RIGHT,
                 HammerAttackState::IDLE,
-                Position::ZERO,
+                WorldPosition::ZERO,
             ))
             .id();
 
@@ -604,7 +608,7 @@ mod tests {
             app.insert_resource(rules)
                 .insert_resource(geometry.clone())
                 .add_systems(Update, advance_hammer_attacks);
-            let player_position = Position::new(2.0, -3.0);
+            let player_position = WorldPosition::new(2.0, -3.0, 1.0);
             let player = app
                 .world_mut()
                 .spawn((
@@ -655,7 +659,7 @@ mod tests {
                     character("hammerer"),
                     AttackIntent::RELEASED,
                     WeaponAimState::RIGHT,
-                    Position::new(-2.5, 1.75),
+                    WorldPosition::new(-2.5, 1.75, 1.0),
                     HammerAttackState {
                         phase: HammerAttackPhase::Swing,
                         direction: GazeDirection::new(0.6, 0.8),
@@ -692,7 +696,7 @@ mod tests {
                 character("hammerer"),
                 AttackIntent::RELEASED,
                 WeaponAimState::RIGHT,
-                Position::ZERO,
+                WorldPosition::ZERO,
                 HammerAttackState {
                     phase: HammerAttackPhase::Embedded,
                     direction: GazeDirection::RIGHT,

@@ -8,7 +8,7 @@ use world01_content::{
 use world01_design::{MageDesign, MageEyeBeamsDesign};
 use world01_world_data::{
     AttackIntent, BodyFacing, CharacterLifeState, EyeBeamState, GazeDirection, MageAttackPhase,
-    MageAttackState, Position, SelectedCharacter, StatusEffectState,
+    MageAttackState, Position, SelectedCharacter, StatusEffectState, WorldPosition,
 };
 
 use crate::condition::ActorCondition;
@@ -118,7 +118,7 @@ pub fn advance_mage_attacks(
     mut players: Query<(
         &AttackIntent,
         &GazeDirection,
-        &Position,
+        &WorldPosition,
         &BodyFacing,
         Option<&StatusEffectState>,
         Option<&CharacterLifeState>,
@@ -149,7 +149,13 @@ pub fn advance_mage_attacks(
                         *state = MageAttackState::IDLE;
                     } else {
                         fire(
-                            &rules, &geometry, *gaze, *position, *facing, false, &mut state,
+                            &rules,
+                            &geometry,
+                            *gaze,
+                            position.horizontal(),
+                            *facing,
+                            false,
+                            &mut state,
                         );
                     }
                     continue;
@@ -159,7 +165,13 @@ pub fn advance_mage_attacks(
                 state.charge_ticks = next.min(rules.maximum_charge_ticks);
                 if next >= rules.forced_release_ticks {
                     fire(
-                        &rules, &geometry, *gaze, *position, *facing, true, &mut state,
+                        &rules,
+                        &geometry,
+                        *gaze,
+                        position.horizontal(),
+                        *facing,
+                        true,
+                        &mut state,
                     );
                 }
             }
@@ -248,7 +260,7 @@ pub fn apply_mage_beam_damage(
         Query<(
             Entity,
             &SelectedCharacter,
-            &Position,
+            &WorldPosition,
             &BodyFacing,
             Option<&CharacterLifeState>,
         )>,
@@ -314,7 +326,7 @@ pub fn apply_mage_beam_damage(
                     let Some(hurt) = hurt_geometry.character(&character.0) else {
                         continue;
                     };
-                    let transform = hurt_transform(hurt, *position, *facing);
+                    let transform = hurt_transform(hurt, position.horizontal(), *facing);
                     let mut distance = f32::INFINITY;
                     let hit = hurt.components.iter().any(|component| {
                         if !components_overlap(&beam_geometry, beam_transform, component, transform)
@@ -474,7 +486,7 @@ mod tests {
                 SelectedCharacter(CharacterId("mage".into())),
                 AttackIntent::PRESSED,
                 GazeDirection::RIGHT,
-                Position::ZERO,
+                WorldPosition::ZERO,
                 BodyFacing::Authored,
                 StatusEffectState::default(),
                 CharacterLifeState::Alive,
@@ -708,7 +720,7 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                Position::new(10.0, -0.3),
+                WorldPosition::new(10.0, -0.3, 0.0),
                 BodyFacing::Authored,
                 DashState::default(),
                 CharacterLifeState::Alive,
@@ -775,7 +787,7 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                Position::new(10.0, -0.3),
+                WorldPosition::new(10.0, -0.3, 0.0),
                 BodyFacing::Authored,
                 DashState::default(),
                 CharacterLifeState::Alive,
@@ -826,7 +838,7 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                Position::new(10.0, -0.3),
+                WorldPosition::new(10.0, -0.3, 0.0),
                 BodyFacing::Authored,
                 DashState {
                     invulnerable: true,
