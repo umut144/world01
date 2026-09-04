@@ -25,6 +25,7 @@ pub const NETWORK_SIMULATION_ENV: &str = "WORLD01_NETWORK_SIMULATION";
 pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
 
 pub(crate) struct JoinChannel;
+pub(crate) struct WorldTemplateDebugChannel;
 
 /// Identifies the one persistent entity carrying replicated world authority.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,6 +34,15 @@ pub(crate) struct ReplicatedWorldState;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct JoinRequest {
     pub character: CharacterId,
+}
+
+/// Temporary manual-acceptance controls for the two authored test Anchors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorldTemplateDebugPreset {
+    Empty,
+    FirstAnchor,
+    SecondAnchor,
+    BothAnchors,
 }
 
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -86,7 +96,14 @@ impl NetworkSimulationProfile {
 pub(crate) fn register_game_protocol(app: &mut App) {
     app.register_message::<JoinRequest>()
         .add_direction(NetworkDirection::ClientToServer);
+    app.register_message::<WorldTemplateDebugPreset>()
+        .add_direction(NetworkDirection::ClientToServer);
     app.add_channel::<JoinChannel>(ChannelSettings {
+        mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
+        ..default()
+    })
+    .add_direction(NetworkDirection::ClientToServer);
+    app.add_channel::<WorldTemplateDebugChannel>(ChannelSettings {
         mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
         ..default()
     })

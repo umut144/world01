@@ -2,7 +2,9 @@ use bevy::{
     prelude::*,
     window::{PrimaryWindow, WindowFocused},
 };
-use world01_network::ClientPlayerInput;
+use world01_network::{
+    ClientPlayerInput, ClientWorldTemplateDebugRequest, WorldTemplateDebugPreset,
+};
 use world01_world_data::{
     AttackIntent, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput,
     RunIntent,
@@ -135,6 +137,36 @@ pub fn collect_death_confirmation_input(
     );
 }
 
+pub fn collect_world_template_debug_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    focus: Res<ClientInputFocus>,
+    local_players: Query<(), With<MovementIntent>>,
+    mut request: ResMut<ClientWorldTemplateDebugRequest>,
+) {
+    if !focus.focused || local_players.is_empty() {
+        return;
+    }
+    if let Some(preset) = world_template_debug_preset(&keyboard) {
+        request.submit(preset);
+    }
+}
+
+fn world_template_debug_preset(
+    keyboard: &ButtonInput<KeyCode>,
+) -> Option<WorldTemplateDebugPreset> {
+    if keyboard.just_pressed(KeyCode::Digit0) {
+        Some(WorldTemplateDebugPreset::Empty)
+    } else if keyboard.just_pressed(KeyCode::Digit1) {
+        Some(WorldTemplateDebugPreset::FirstAnchor)
+    } else if keyboard.just_pressed(KeyCode::Digit2) {
+        Some(WorldTemplateDebugPreset::SecondAnchor)
+    } else if keyboard.just_pressed(KeyCode::Digit3) {
+        Some(WorldTemplateDebugPreset::BothAnchors)
+    } else {
+        None
+    }
+}
+
 fn attack_pressed(space: bool, right_trigger: bool) -> bool {
     space || right_trigger
 }
@@ -223,5 +255,19 @@ mod tests {
         assert!(attack_pressed(true, false));
         assert!(attack_pressed(false, true));
         assert!(!attack_pressed(false, false));
+    }
+
+    #[test]
+    fn digit_keys_select_the_four_world_template_debug_presets() {
+        for (key, expected) in [
+            (KeyCode::Digit0, WorldTemplateDebugPreset::Empty),
+            (KeyCode::Digit1, WorldTemplateDebugPreset::FirstAnchor),
+            (KeyCode::Digit2, WorldTemplateDebugPreset::SecondAnchor),
+            (KeyCode::Digit3, WorldTemplateDebugPreset::BothAnchors),
+        ] {
+            let mut keyboard = ButtonInput::default();
+            keyboard.press(key);
+            assert_eq!(world_template_debug_preset(&keyboard), Some(expected));
+        }
     }
 }

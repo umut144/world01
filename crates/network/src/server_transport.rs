@@ -19,7 +19,7 @@ use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput};
 
 use crate::protocol::{
     JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
-    SERVER_ADDR, apply_tick_player_input, register_game_protocol,
+    SERVER_ADDR, WorldTemplateDebugPreset, apply_tick_player_input, register_game_protocol,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,6 +37,18 @@ pub struct ServerJoinRequest {
 }
 
 impl ServerJoinRequest {
+    pub fn owner(&self) -> u64 {
+        self.owner
+    }
+}
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ServerWorldTemplateDebugRequest {
+    pub preset: WorldTemplateDebugPreset,
+    owner: u64,
+}
+
+impl ServerWorldTemplateDebugRequest {
     pub fn owner(&self) -> u64 {
         self.owner
     }
@@ -105,7 +117,8 @@ pub fn configure_server(
     app.add_systems(Startup, start_server)
         .add_systems(
             Update,
-            receive_join_requests.in_set(ServerNetworkSet::ReceiveRequests),
+            (receive_join_requests, receive_world_template_debug_requests)
+                .in_set(ServerNetworkSet::ReceiveRequests),
         )
         .add_systems(
             FixedUpdate,
@@ -116,6 +129,23 @@ pub fn configure_server(
         .add_observer(track_connected_client)
         .add_observer(track_disconnected_client)
         .add_input_validator(authorize_controlled_targets::<NativeStateSequence<PlayerInput>>);
+}
+
+fn receive_world_template_debug_requests(
+    mut clients: Query<
+        (&RemoteId, &mut MessageReceiver<WorldTemplateDebugPreset>),
+        (With<ClientOf>, With<Connected>),
+    >,
+    mut commands: Commands,
+) {
+    for (remote, mut receiver) in &mut clients {
+        let PeerId::Netcode(owner) = remote.0 else {
+            continue;
+        };
+        for preset in receiver.receive() {
+            commands.spawn(ServerWorldTemplateDebugRequest { preset, owner });
+        }
+    }
 }
 
 fn start_server(mut commands: Commands) {

@@ -608,7 +608,8 @@ values introduced with `for example` are illustrative rather than tuned.
 - Completing `REVIVING` returns the target to `ALIVE` with `80%` maximum HP.
   Completing `DEATH_CONFIRMING` respawns the character at an Ankh with `40%`
   maximum HP. The spawn is selected deterministically within a `4 m` radius
-  around the current world-center Ankh anchor.
+  around the Ankh nearest to the character's death position; authored Ankh
+  order breaks equal-distance ties.
 
 ## The Hammerer and the transforming Hammer
 

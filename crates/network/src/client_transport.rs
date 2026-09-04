@@ -21,13 +21,24 @@ use world01_world_data::{
 
 use crate::protocol::{
     JoinChannel, JoinRequest, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
-    SERVER_ADDR, register_game_protocol,
+    SERVER_ADDR, WorldTemplateDebugChannel, WorldTemplateDebugPreset, register_game_protocol,
 };
 
 const MAX_REMOTE_EXTRAPOLATION_INTERVALS: f32 = 2.0;
 
 #[derive(Resource, Debug, Clone, Copy, Default)]
 pub struct ClientPlayerInput(pub PlayerInput);
+
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ClientWorldTemplateDebugRequest {
+    pending: Option<WorldTemplateDebugPreset>,
+}
+
+impl ClientWorldTemplateDebugRequest {
+    pub fn submit(&mut self, preset: WorldTemplateDebugPreset) {
+        self.pending = Some(preset);
+    }
+}
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct ClientPositionCorrection {
@@ -52,6 +63,7 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
     app.add_plugins(ClientPlugins { tick_duration })
         .add_plugins(NativeInputPlugin::<PlayerInput>::default())
         .init_resource::<ClientPlayerInput>()
+        .init_resource::<ClientWorldTemplateDebugRequest>()
         .insert_resource(RemoteExtrapolationConfig {
             tick_duration,
             maximum_duration: snapshot_interval.mul_f32(MAX_REMOTE_EXTRAPOLATION_INTERVALS),
@@ -67,12 +79,32 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
     )
     .add_systems(
         Update,
-        expose_remote_position_extrapolation.after(InterpolationSystems::Interpolate),
+        (
+            expose_remote_position_extrapolation.after(InterpolationSystems::Interpolate),
+            send_world_template_debug_request,
+        ),
     )
     .add_observer(enable_controlled_input)
     .add_observer(enable_remote_position_extrapolation)
     .add_observer(send_join_when_connected)
     .add_observer(report_client_connected);
+}
+
+fn send_world_template_debug_request(
+    mut request: ResMut<ClientWorldTemplateDebugRequest>,
+    mut clients: Query<
+        &mut MessageSender<WorldTemplateDebugPreset>,
+        (With<Client>, With<Connected>),
+    >,
+) {
+    let Some(preset) = request.pending else {
+        return;
+    };
+    let Ok(mut sender) = clients.single_mut() else {
+        return;
+    };
+    sender.send::<WorldTemplateDebugChannel>(preset);
+    request.pending = None;
 }
 
 /// Stages replicated authority state for the client-local world transaction.
@@ -325,6 +357,15 @@ mod tests {
                 .map(|config| config.send_interval_ratio),
             Some(1.0)
         );
+    }
+
+    #[test]
+    fn newest_unsent_world_template_debug_preset_replaces_the_previous_one() {
+        let mut request = ClientWorldTemplateDebugRequest::default();
+        request.submit(WorldTemplateDebugPreset::FirstAnchor);
+        request.submit(WorldTemplateDebugPreset::BothAnchors);
+
+        assert_eq!(request.pending, Some(WorldTemplateDebugPreset::BothAnchors));
     }
 
     #[test]

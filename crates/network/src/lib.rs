@@ -9,14 +9,16 @@ mod server_transport;
 
 #[cfg(feature = "client")]
 pub use client_transport::{
-    Client, ClientPlayerInput, ClientPositionCorrection, RemotePositionExtrapolation,
-    client_input_timeline_synced, configure_client, configure_client_world_state, connect_client,
+    Client, ClientPlayerInput, ClientPositionCorrection, ClientWorldTemplateDebugRequest,
+    RemotePositionExtrapolation, client_input_timeline_synced, configure_client,
+    configure_client_world_state, connect_client,
 };
 pub use protocol::{
-    MAX_CLIENTS, NETWORK_SIMULATION_ENV, NetworkSimulationProfile, apply_tick_player_input,
+    MAX_CLIENTS, NETWORK_SIMULATION_ENV, NetworkSimulationProfile, WorldTemplateDebugPreset,
+    apply_tick_player_input,
 };
 #[cfg(feature = "server")]
 pub use server_transport::{
-    ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
-    configure_replicated_world_state, configure_server,
+    ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest,
+    configure_replicated_player, configure_replicated_world_state, configure_server,
 };

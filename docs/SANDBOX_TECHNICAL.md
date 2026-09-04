@@ -335,14 +335,20 @@ or Placement Ranks. Deterministic world derivation therefore currently assumes
 that client and server come from the same content build; a compatibility
 fingerprint or handshake is required before heterogeneous builds are allowed to
 connect.
-Navigation is not implemented yet, and spawned client terrain, Prop, and Ankh
-presentation entities still represent the startup base map. Rebuilding those
-entities from the accepted runtime map is the next presentation slice. For the
-first version, a rare occupancy change during a client prediction rollback may
-replay buffered input against the newest world until normal server
-reconciliation; retaining historical worlds for every rollback tick is
-deliberately deferred unless playtesting shows that short discrepancy to be
-material.
+Navigation is not implemented yet. Client terrain, Prop, and Ankh presentation
+entities are rebuilt together exactly once for each applied runtime generation;
+they never render an unaccepted occupancy snapshot. For manual acceptance, the
+temporary in-game digit controls send an ordered reliable request rather than
+mutating the client world: `0` empties both test Anchors, `1` assigns
+`test_template02` only to `template_anchor_001`, `2` assigns it only to
+`template_anchor_002`, and `3` assigns it to both. The server accepts such a
+request only from a client with a joined Character, validates the full
+composition, applies it through the same fixed-tick world transaction, and then
+replicates the accepted occupancy. For the first version, a rare occupancy
+change during a client prediction rollback may replay buffered input against
+the newest world until normal server reconciliation; retaining historical
+worlds for every rollback tick is deliberately deferred unless playtesting
+shows that short discrepancy to be material.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

@@ -23,7 +23,7 @@ use crate::hammer::apply_hammer_pose;
 use crate::input::{
     ClientInputFocus, clear_input_when_unfocused, collect_attack_input,
     collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
-    collect_movement_input, update_client_input_focus,
+    collect_movement_input, collect_world_template_debug_input, update_client_input_focus,
 };
 use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
@@ -110,6 +110,9 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
                     repick_character.run_if(in_state(ClientScreen::InGame)),
+                    collect_world_template_debug_input
+                        .after(update_client_input_focus)
+                        .run_if(in_state(ClientScreen::InGame)),
                     (
                         cleanup_world_visuals,
                         setup_map_visuals,

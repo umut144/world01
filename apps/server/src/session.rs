@@ -3,8 +3,8 @@ use std::collections::HashSet;
 use bevy::{log::warn, prelude::*};
 use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
-    MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
-    configure_replicated_world_state,
+    MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest,
+    WorldTemplateDebugPreset, configure_replicated_player, configure_replicated_world_state,
 };
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
@@ -13,10 +13,14 @@ use world01_simulation::{
 use world01_world_data::{
     ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    MovementDirection, MovementIntent, MovementVelocity, PlayerOwner, Position, RespawnState,
-    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
-    WorldComposition,
+    MovementDirection, MovementIntent, MovementVelocity, PlacementRanks, PlayerOwner, Position,
+    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState, WorldComposition, WorldOccupancyRequest, WorldTemplateCatalog,
 };
+
+const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
+const FIRST_TEST_ANCHOR_ID: &str = "template_anchor_001";
+const SECOND_TEST_ANCHOR_ID: &str = "template_anchor_002";
 
 #[derive(Resource, Debug)]
 struct NextActorId(u64);
@@ -38,7 +42,8 @@ impl Plugin for ServerSessionPlugin {
             .add_systems(Startup, spawn_world_state)
             .add_systems(
                 Update,
-                accept_join_requests.after(ServerNetworkSet::ReceiveRequests),
+                (accept_join_requests, accept_world_template_debug_requests)
+                    .after(ServerNetworkSet::ReceiveRequests),
             )
             .add_systems(
                 FixedUpdate,
@@ -47,6 +52,67 @@ impl Plugin for ServerSessionPlugin {
                     .before(SimulationSet::Collision),
             );
     }
+}
+
+fn accept_world_template_debug_requests(
+    requests: Query<(Entity, &ServerWorldTemplateDebugRequest)>,
+    players: Query<&PlayerOwner>,
+    composition: Res<WorldComposition>,
+    templates: Res<WorldTemplateCatalog>,
+    ranks: Res<PlacementRanks>,
+    mut pending: ResMut<WorldOccupancyRequest>,
+    mut commands: Commands,
+) {
+    for (entity, request) in &requests {
+        commands.entity(entity).despawn();
+        if !players.iter().any(|owner| owner.0 == request.owner()) {
+            warn!(
+                owner = request.owner(),
+                "ignoring world Template debug request from a client without a joined Character"
+            );
+            continue;
+        }
+        let mut candidate = composition.clone();
+        match apply_world_template_debug_preset(&mut candidate, request.preset, &templates, &ranks)
+        {
+            Ok(true) => {
+                if !pending.submit(candidate.occupancy().clone()) {
+                    warn!(
+                        generation = candidate.occupancy().generation(),
+                        "ignoring stale world Template debug request"
+                    );
+                }
+            }
+            Ok(false) => {}
+            Err(error) => warn!(%error, "ignoring invalid world Template debug request"),
+        }
+    }
+}
+
+fn apply_world_template_debug_preset(
+    composition: &mut WorldComposition,
+    preset: WorldTemplateDebugPreset,
+    templates: &WorldTemplateCatalog,
+    ranks: &PlacementRanks,
+) -> Result<bool, world01_world_data::WorldMapError> {
+    let (first_occupied, second_occupied) = match preset {
+        WorldTemplateDebugPreset::Empty => (false, false),
+        WorldTemplateDebugPreset::FirstAnchor => (true, false),
+        WorldTemplateDebugPreset::SecondAnchor => (false, true),
+        WorldTemplateDebugPreset::BothAnchors => (true, true),
+    };
+    let mut changed = false;
+    for (anchor_id, occupied) in [
+        (FIRST_TEST_ANCHOR_ID, first_occupied),
+        (SECOND_TEST_ANCHOR_ID, second_occupied),
+    ] {
+        changed |= if occupied {
+            composition.set_occupant(anchor_id, TEST_TEMPLATE_SCENE_ID, templates, ranks)?
+        } else {
+            composition.clear_occupant(anchor_id, templates, ranks)?
+        };
+    }
+    Ok(changed)
 }
 
 fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands) {
@@ -196,6 +262,64 @@ mod tests {
     fn spawn_positions_are_separated_and_repeat_safely() {
         assert_ne!(spawn_position(1), spawn_position(2));
         assert_eq!(spawn_position(1), spawn_position(6));
+    }
+
+    #[test]
+    fn debug_presets_describe_the_complete_two_anchor_occupancy() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
+            .expect("the current embedded Assets have Placement Ranks");
+        let mut composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the initial composition is valid");
+
+        assert!(
+            apply_world_template_debug_preset(
+                &mut composition,
+                WorldTemplateDebugPreset::BothAnchors,
+                &templates,
+                &ranks,
+            )
+            .expect("both Anchors accept the debug Template")
+        );
+        assert_eq!(
+            composition.occupancy().occupant(FIRST_TEST_ANCHOR_ID),
+            Some(TEST_TEMPLATE_SCENE_ID)
+        );
+        assert_eq!(
+            composition.occupancy().occupant(SECOND_TEST_ANCHOR_ID),
+            Some(TEST_TEMPLATE_SCENE_ID)
+        );
+
+        assert!(
+            apply_world_template_debug_preset(
+                &mut composition,
+                WorldTemplateDebugPreset::FirstAnchor,
+                &templates,
+                &ranks,
+            )
+            .expect("the first-Anchor preset is valid")
+        );
+        assert_eq!(
+            composition.occupancy().occupant(FIRST_TEST_ANCHOR_ID),
+            Some(TEST_TEMPLATE_SCENE_ID)
+        );
+        assert_eq!(
+            composition.occupancy().occupant(SECOND_TEST_ANCHOR_ID),
+            None
+        );
+
+        assert!(
+            apply_world_template_debug_preset(
+                &mut composition,
+                WorldTemplateDebugPreset::Empty,
+                &templates,
+                &ranks,
+            )
+            .expect("the empty preset is valid")
+        );
+        assert!(composition.occupancy().occupants().next().is_none());
     }
 
     #[test]
