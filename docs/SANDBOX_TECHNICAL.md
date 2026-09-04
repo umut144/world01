@@ -247,9 +247,14 @@ Character's configured step height. It then updates elevation from the target
 cell before horizontal integration. Stationary grounded Actors also resample
 Terrain after a world-composition change, and Ankh respawns resolve their final
 height and Terrain support rather than retaining the Ankh's raw export height.
-Respawn commits life, HP, count, position, and support together only after that
-resolution succeeds; failure leaves the complete confirmation state intact for
-a later retry.
+Each deterministic candidate around an Ankh is checked for both Actor overlap
+and Character-compatible Terrain before the search accepts it; an invalid
+candidate therefore advances the search instead of vetoing the complete
+attempt afterward. Respawn commits life, HP, count, position, and support
+together only after that resolution succeeds; failure leaves the complete
+confirmation state intact for a later retry. Actors participating in the life
+system require both `WorldPosition` and `MovementMedium`; neither state is
+invented as a fallback during respawn.
 
 Route-surface support is also active. A stored AABB rejects points outside a
 Route before its baked triangles determine footprint containment. SceneMaker's
@@ -261,7 +266,8 @@ grade remains its exact authored integer rather than a floating-point slope
 reconstructed at runtime. Grades `0` and `±25` preserve the Actor's current
 movement speed; `±50` multiply the final requested speed, including RUN or
 DASH, by `0.5` before planar collision tests its endpoint. The reduced factor
-already applies to the first accepted Terrain-to-Route step.
+already applies to the first accepted Terrain-to-Route step and remains for the
+step that leaves such a Route for Terrain.
 
 An Actor retains its current support while the target point remains on it.
 Terrain changes to a Route only when exactly one overlapping Route is
@@ -274,13 +280,26 @@ nearest height or first ID. A missing referenced Route makes the absent
 support explicit as `Airborne`; only geometric displacement away from an
 existing support may reconnect to another uniquely reachable support.
 
+Airborne falling does not yet have a movement rule. On the server, an Actor
+whose current support disappears or becomes unusable therefore uses the Ankh
+as a last-resort safety exit. The deterministic candidate search selects
+Character-compatible Terrain around the nearest usable Ankh and updates
+position and support together while leaving life state, HP, and the normal
+respawn count unchanged. It also recovers the currently otherwise terminal
+`Airborne` state; `Flying` is not recovered. This server-owned fallback can be
+replaced by an explicit Template outcome or by falling once either rule exists.
+
 Airborne and flying movement rules do not exist yet. Current Character/world
 collision, revival overlap, Hammer impact, and Mage beam evaluation remain
 planar: they do not yet use the Actors' elevations to separate physical layers.
-Client presentation currently projects only `x` and `y`; Bevy
-`Transform.z` remains presentation depth, including ordering among Terrain,
-Props, Characters, and projected weapon parts, rather than an authoritative
-physical coordinate. There is no generic sandbox
+Client render history, remote extrapolation, and prediction-correction offsets
+retain all three World-01 coordinates in a presentation-only intermediate.
+The current top-down projection maps only its horizontal `x` and `y` to the
+visible Character transform; physical elevation remains available to a later
+side-scroller or other projection. Bevy `Transform.z` remains presentation
+depth, including ordering among Terrain, Props, Characters, and projected
+weapon parts, rather than an authoritative physical coordinate. There is no
+generic sandbox
 entity-instantiation path today. Server session code currently turns a
 character join request into a Labyrinth player with movement, gaze, health, and
 optional Hammer components at one of five fixed spawn positions. The

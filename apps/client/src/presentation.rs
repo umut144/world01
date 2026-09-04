@@ -199,9 +199,14 @@ struct PresentationCamera;
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 struct LocalRenderHistory {
-    previous: Vec2,
-    current: Vec2,
+    previous: Vec3,
+    current: Vec3,
 }
+
+/// Smoothed presentation position in World-01 coordinates. Its third value is
+/// physical elevation, never Bevy render depth.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+struct PresentedWorldPosition(Vec3);
 
 fn setup_selection(
     mut commands: Commands,
@@ -805,11 +810,13 @@ fn render_new_players(
     character_assets: Res<CharacterAssetLibrary>,
 ) {
     for (entity, character, position) in &players {
+        let presented = world_position_vector(*position);
         commands.entity(entity).insert((
             RenderedCharacter,
             BodyPivot(character_assets.body_pivot(&character.0)),
+            PresentedWorldPosition(presented),
             Visibility::default(),
-            Transform::from_xyz(position.x, position.y, 0.0),
+            Transform::from_translation(top_down_translation(presented, 0.0)),
         ));
         let bar = commands
             .spawn((
@@ -868,7 +875,7 @@ fn initialize_local_render_history(
     >,
 ) {
     for (entity, position) in &players {
-        let current = Vec2::new(position.x, position.y);
+        let current = world_position_vector(*position);
         commands.entity(entity).insert(LocalRenderHistory {
             previous: current,
             current,
@@ -881,7 +888,7 @@ fn capture_local_render_positions(
 ) {
     for (position, mut history) in &mut players {
         history.previous = history.current;
-        history.current = Vec2::new(position.x, position.y);
+        history.current = world_position_vector(*position);
     }
 }
 
@@ -896,6 +903,7 @@ fn sync_rendered_positions(
             Option<&RemotePositionExtrapolation>,
             Option<&mut ClientPositionCorrection>,
             Option<&CharacterLifeState>,
+            &mut PresentedWorldPosition,
             &mut Transform,
         ),
         With<RenderedCharacter>,
@@ -905,7 +913,16 @@ fn sync_rendered_positions(
     let alpha = fixed_time.overstep_fraction();
     let correction_decay = correction_decay(virtual_time.delta_secs());
 
-    for (entity, position, history, extrapolation, correction, life, mut transform) in &mut players
+    for (
+        entity,
+        position,
+        history,
+        extrapolation,
+        correction,
+        life,
+        mut presented,
+        mut transform,
+    ) in &mut players
     {
         let mut rendered = sampled_render_position(*position, history, alpha);
         if history.is_none()
@@ -917,8 +934,7 @@ fn sync_rendered_positions(
 
         if let Some(mut correction) = correction {
             if correction.is_changed() {
-                correction.offset =
-                    Vec2::new(transform.translation.x, transform.translation.y) - rendered;
+                correction.offset = presented.0 - rendered;
             }
             correction.offset *= correction_decay;
             rendered += correction.offset;
@@ -927,8 +943,8 @@ fn sync_rendered_positions(
             }
         }
 
-        transform.translation.x = rendered.x;
-        transform.translation.y = rendered.y;
+        presented.0 = rendered;
+        transform.translation = top_down_translation(rendered, transform.translation.z);
     }
 }
 
@@ -1013,11 +1029,21 @@ fn sampled_render_position(
     position: WorldPosition,
     history: Option<&LocalRenderHistory>,
     alpha: f32,
-) -> Vec2 {
+) -> Vec3 {
     history.map_or_else(
-        || Vec2::new(position.x, position.y),
+        || world_position_vector(position),
         |history| history.previous.lerp(history.current, alpha),
     )
+}
+
+fn world_position_vector(position: WorldPosition) -> Vec3 {
+    Vec3::new(position.x, position.y, position.elevation_meters)
+}
+
+fn top_down_translation(position: Vec3, render_depth: f32) -> Vec3 {
+    // The current top-down camera projects the horizontal plane. Physical
+    // elevation stays in `PresentedWorldPosition`; Transform.z remains depth.
+    Vec3::new(position.x, position.y, render_depth)
 }
 
 fn correction_decay(delta_seconds: f32) -> f32 {
@@ -1124,6 +1150,7 @@ mod tests {
             .world_mut()
             .spawn((
                 WorldPosition::new(2.5, -1.25, 7.0),
+                PresentedWorldPosition(Vec3::new(9.0, 8.0, 6.0)),
                 Transform::from_xyz(9.0, 8.0, 3.0).with_scale(Vec3::splat(1.5)),
                 RenderedCharacter,
             ))
@@ -1137,6 +1164,10 @@ mod tests {
             .expect("rendered entity retains its presentation Transform");
         assert_eq!(transform.translation, Vec3::new(2.5, -1.25, 3.0));
         assert_eq!(transform.scale, Vec3::splat(1.5));
+        assert_eq!(
+            app.world().get::<PresentedWorldPosition>(entity),
+            Some(&PresentedWorldPosition(Vec3::new(2.5, -1.25, 7.0)))
+        );
     }
 
     #[test]
@@ -1167,13 +1198,13 @@ mod tests {
     #[test]
     fn local_render_position_samples_fixed_tick_history() {
         let history = LocalRenderHistory {
-            previous: Vec2::new(1.0, -2.0),
-            current: Vec2::new(5.0, 2.0),
+            previous: Vec3::new(1.0, -2.0, 4.0),
+            current: Vec3::new(5.0, 2.0, 8.0),
         };
 
         assert_eq!(
             sampled_render_position(WorldPosition::new(99.0, 99.0, 7.0), Some(&history), 0.25,),
-            Vec2::new(2.0, -1.0)
+            Vec3::new(2.0, -1.0, 5.0)
         );
     }
 
@@ -1181,7 +1212,7 @@ mod tests {
     fn remote_render_position_uses_snapshot_interpolated_value_directly() {
         assert_eq!(
             sampled_render_position(WorldPosition::new(3.0, -4.0, 7.0), None, 0.25),
-            Vec2::new(3.0, -4.0)
+            Vec3::new(3.0, -4.0, 7.0)
         );
     }
 

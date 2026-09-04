@@ -46,12 +46,16 @@ impl ClientWorldTemplateDebugRequest {
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct ClientPositionCorrection {
-    pub offset: Vec2,
+    /// Presentation-space world offset: x, y, and physical elevation.
+    /// The third value is not Bevy render depth.
+    pub offset: Vec3,
 }
 
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct RemotePositionExtrapolation {
-    pub offset: Vec2,
+    /// Presentation-space world offset: x, y, and physical elevation.
+    /// The third value is not Bevy render depth.
+    pub offset: Vec3,
 }
 
 #[derive(Resource, Debug, Clone, Copy)]
@@ -215,7 +219,7 @@ fn expose_remote_position_extrapolation(
                     config.maximum_duration,
                 )
             }
-            _ => Vec2::ZERO,
+            _ => Vec3::ZERO,
         };
     }
 }
@@ -229,16 +233,20 @@ fn bounded_position_extrapolation(
     overstep: f32,
     tick_duration: Duration,
     maximum_duration: Duration,
-) -> Vec2 {
+) -> Vec3 {
     let sample_ticks = latest_tick.saturating_sub(previous_tick);
     if sample_ticks == 0 || current_tick < latest_tick {
-        return Vec2::ZERO;
+        return Vec3::ZERO;
     }
     let sample_seconds = tick_duration.as_secs_f32() * sample_ticks as f32;
     if sample_seconds <= 0.0 {
-        return Vec2::ZERO;
+        return Vec3::ZERO;
     }
-    let velocity = Vec2::new(latest.x - previous.x, latest.y - previous.y) / sample_seconds;
+    let velocity = Vec3::new(
+        latest.x - previous.x,
+        latest.y - previous.y,
+        latest.elevation_meters - previous.elevation_meters,
+    ) / sample_seconds;
     let missing_ticks = current_tick.saturating_sub(latest_tick) as f32 + overstep;
     let extrapolation_seconds =
         (missing_ticks * tick_duration.as_secs_f32()).min(maximum_duration.as_secs_f32());
@@ -253,9 +261,10 @@ fn expose_position_corrections(
         commands
             .entity(entity)
             .insert(ClientPositionCorrection {
-                offset: Vec2::new(
+                offset: Vec3::new(
                     previous_visual.0.x - position.x,
                     previous_visual.0.y - position.y,
+                    previous_visual.0.elevation_meters - position.elevation_meters,
                 ),
             })
             .remove::<PreviousVisual<WorldPosition>>();
@@ -379,7 +388,7 @@ mod tests {
         let offset = bounded_position_extrapolation(
             WorldPosition::new(0.0, 0.0, 1.0),
             10,
-            WorldPosition::new(4.0 / 30.0, 0.0, 1.0),
+            WorldPosition::new(4.0 / 30.0, 0.0, 2.0),
             12,
             30,
             0.0,
@@ -388,6 +397,7 @@ mod tests {
         );
         assert!((offset.x - 4.0 * 2.0 / 30.0).abs() < 0.000_001);
         assert_eq!(offset.y, 0.0);
+        assert!((offset.z - 2.0).abs() < 0.000_001);
     }
 
     #[test]
@@ -402,7 +412,7 @@ mod tests {
             Duration::from_secs_f64(1.0 / 60.0),
             Duration::from_secs_f64(2.0 / 30.0),
         );
-        assert_eq!(offset, Vec2::ZERO);
+        assert_eq!(offset, Vec3::ZERO);
     }
 
     #[test]
@@ -420,7 +430,7 @@ mod tests {
         assert_eq!(
             app.world().get::<ClientPositionCorrection>(entity),
             Some(&ClientPositionCorrection {
-                offset: Vec2::new(3.0, -2.0)
+                offset: Vec3::new(3.0, -2.0, 3.0)
             })
         );
         assert!(

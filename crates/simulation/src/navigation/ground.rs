@@ -1,12 +1,124 @@
-use bevy::prelude::{Query, Res};
+use bevy::prelude::{ParamSet, Query, Res};
+use world01_content::CharacterHurtGeometryCatalog;
 use world01_world_data::{
-    GroundSupport, MapRouteSurface, MovementMedium, MovementVelocity, Position, SelectedCharacter,
-    WorldMap, WorldPosition,
+    ActorId, Ankh, AnkhLayout, BodyFacing, CharacterLifeState, GroundSupport, MapRouteSurface,
+    MovementMedium, MovementVelocity, Position, SelectedCharacter, WorldMap, WorldPosition,
 };
 
-use crate::MovementStep;
+use crate::respawn::{RespawnActor, choose_respawn_position};
+use crate::{CharacterLifeRules, MovementStep};
 
 use super::{CharacterTraversalProfile, TraversalCatalog};
+
+/// Recovers Actors whose support disappeared or became unusable after a world
+/// change. This is the server-owned safety rule until airborne falling exists.
+pub fn recover_invalid_ground_support(
+    rules: Option<Res<CharacterLifeRules>>,
+    map: Option<Res<WorldMap>>,
+    traversal: Option<Res<TraversalCatalog>>,
+    ankhs: Option<Res<AnkhLayout>>,
+    hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
+    mut actors: ParamSet<(
+        Query<(
+            &ActorId,
+            &SelectedCharacter,
+            &WorldPosition,
+            &BodyFacing,
+            &CharacterLifeState,
+        )>,
+        Query<(
+            &ActorId,
+            &SelectedCharacter,
+            &mut WorldPosition,
+            &mut MovementMedium,
+            &BodyFacing,
+            Option<&mut MovementVelocity>,
+        )>,
+    )>,
+) {
+    let (Some(rules), Some(map), Some(traversal), Some(ankhs), Some(hurt_geometry)) =
+        (rules, map, traversal, ankhs, hurt_geometry)
+    else {
+        return;
+    };
+    let snapshots = actors
+        .p0()
+        .iter()
+        .map(
+            |(actor_id, character, position, facing, life)| RespawnActor {
+                actor_id: actor_id.0,
+                character: Some(character.0.clone()),
+                position: Some(*position),
+                facing: Some(*facing),
+                life: *life,
+            },
+        )
+        .collect::<Vec<_>>();
+    let ankhs = ankhs
+        .positions
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, position)| (Ankh::new(index as u32), position))
+        .collect::<Vec<_>>();
+
+    for (actor_id, character, mut position, mut medium, facing, velocity) in &mut actors.p1() {
+        let Some(profile) = traversal.character(&character.0) else {
+            continue;
+        };
+        let needs_recovery = match &*medium {
+            MovementMedium::Grounded(support) => {
+                match resolve_current_support(&map, profile, support, *position) {
+                    CurrentSupport::Resolved(sample) if sample_is_usable(profile, sample) => {
+                        position.elevation_meters = sample.elevation_meters;
+                        if sample.support != SampleSupport::from(support) {
+                            *medium = MovementMedium::Grounded(sample.support.to_owned());
+                        }
+                        false
+                    }
+                    CurrentSupport::Resolved(_)
+                    | CurrentSupport::MissingIdentity
+                    | CurrentSupport::Unsupported => true,
+                }
+            }
+            MovementMedium::Airborne => true,
+            MovementMedium::Flying => false,
+        };
+        if !needs_recovery {
+            continue;
+        }
+
+        let Some(candidate) = choose_respawn_position(
+            actor_id.0,
+            0,
+            *position,
+            Some(&character.0),
+            Some(*facing),
+            rules.ankh_respawn_radius_meters(),
+            &ankhs,
+            &snapshots,
+            Some(&hurt_geometry),
+            |candidate| {
+                resolve_terrain_position(&map, &traversal, &character.0, candidate).is_some()
+            },
+        ) else {
+            if let Some(mut velocity) = velocity {
+                *velocity = MovementVelocity::ZERO;
+            }
+            continue;
+        };
+        let Some(resolved) = resolve_terrain_position(&map, &traversal, &character.0, candidate)
+        else {
+            continue;
+        };
+
+        *position = resolved;
+        *medium = MovementMedium::GROUNDED_TERRAIN;
+        if let Some(mut velocity) = velocity {
+            *velocity = MovementVelocity::ZERO;
+        }
+    }
+}
 
 /// Applies the grade multiplier of the Path supporting an Actor before planar
 /// collision evaluates this tick's movement endpoint.
@@ -142,6 +254,19 @@ pub fn constrain_grounded_movement(
             *medium = MovementMedium::Grounded(target.support.to_owned());
         }
     }
+}
+
+pub(crate) fn resolve_terrain_position(
+    map: &WorldMap,
+    traversal: &TraversalCatalog,
+    character: &world01_world_data::CharacterId,
+    candidate: WorldPosition,
+) -> Option<WorldPosition> {
+    let profile = traversal.character(character)?;
+    let cell = map.terrain_cell_at(candidate.horizontal())?;
+    profile
+        .permits_surface(&cell.surface)
+        .then(|| WorldPosition::new(candidate.x, candidate.y, cell.elevation_meters))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -341,20 +466,29 @@ fn sample_is_reachable(
     current_elevation_meters: f32,
     sample: GroundSample<'_>,
 ) -> bool {
+    sample_is_usable(profile, sample)
+        && profile.permits_step(current_elevation_meters, sample.elevation_meters)
+}
+
+fn sample_is_usable(profile: &CharacterTraversalProfile, sample: GroundSample<'_>) -> bool {
     profile.permits_surface(sample.surface)
         && sample
             .grade_percent
             .is_none_or(|grade| profile.speed_for_grade(grade).is_some())
-        && profile.permits_step(current_elevation_meters, sample.elevation_meters)
 }
 
 #[cfg(test)]
 mod tests {
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
     use world01_configs::load_embedded as load_runtime;
-    use world01_content::{CharacterCollisionGeometryCatalog, RuntimeContent};
-    use world01_design::load_embedded as load_game_design;
-    use world01_world_data::{CharacterId, GroundSupport, MovementMedium};
+    use world01_content::{
+        CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, RuntimeContent,
+    };
+    use world01_design::{load_embedded as load_game_design, load_world01_embedded};
+    use world01_world_data::{
+        ActorId, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
+        GroundSupport, MovementMedium, RespawnState,
+    };
 
     use super::*;
 
@@ -384,6 +518,128 @@ mod tests {
                 .chain(),
         );
         app
+    }
+
+    fn recovery_app() -> App {
+        let runtime = load_runtime().expect("embedded runtime configuration is valid");
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let geometry = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded collision geometry is valid");
+        let game_design = load_game_design().expect("embedded game design is valid");
+        let world_design = load_world01_embedded().expect("embedded World 01 design is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let ankhs = AnkhLayout::from_map(&map);
+        let mut app = App::new();
+        app.insert_resource(
+            CharacterLifeRules::from_design(
+                runtime.simulation.ticks_per_second,
+                &world_design.health,
+            )
+            .expect("embedded life rules are valid"),
+        )
+        .insert_resource(map)
+        .insert_resource(ankhs)
+        .insert_resource(
+            TraversalCatalog::from_design_and_geometry(&game_design.traversal, &geometry)
+                .expect("embedded traversal profiles are valid"),
+        )
+        .insert_resource(
+            CharacterHurtGeometryCatalog::from_content(&content, &game_design.hurt)
+                .expect("embedded hurt geometry is valid"),
+        )
+        .add_systems(Update, recover_invalid_ground_support);
+        app
+    }
+
+    #[test]
+    fn invalid_ground_support_is_safely_relocated_without_life_side_effects() {
+        let mut app = recovery_app();
+        let actor = app
+            .world_mut()
+            .spawn((
+                ActorId(7),
+                SelectedCharacter(CharacterId("hammerer".into())),
+                WorldPosition::new(10_000.0, 10_000.0, -100.0),
+                MovementMedium::GROUNDED_TERRAIN,
+                MovementVelocity::new(1.0, 0.0),
+                BodyFacing::Authored,
+                CharacterLifeState::Alive,
+                CharacterHealth {
+                    current: 73.0,
+                    maximum: 100.0,
+                },
+                RespawnState { count: 9 },
+            ))
+            .id();
+
+        app.update();
+
+        let position = *app
+            .world()
+            .get::<WorldPosition>(actor)
+            .expect("actor keeps a world position");
+        let terrain = app
+            .world()
+            .resource::<WorldMap>()
+            .terrain_cell_at(position.horizontal())
+            .expect("safety destination has valid Terrain");
+        assert_eq!(position.elevation_meters, terrain.elevation_meters);
+        assert_eq!(
+            app.world().get::<MovementMedium>(actor),
+            Some(&MovementMedium::GROUNDED_TERRAIN)
+        );
+        assert_eq!(
+            app.world().get::<MovementVelocity>(actor),
+            Some(&MovementVelocity::ZERO)
+        );
+        assert_eq!(
+            app.world().get::<CharacterHealth>(actor),
+            Some(&CharacterHealth {
+                current: 73.0,
+                maximum: 100.0,
+            })
+        );
+        assert_eq!(
+            app.world().get::<CharacterLifeState>(actor),
+            Some(&CharacterLifeState::Alive)
+        );
+        assert_eq!(
+            app.world().get::<RespawnState>(actor),
+            Some(&RespawnState { count: 9 })
+        );
+    }
+
+    #[test]
+    fn airborne_actor_uses_the_same_safety_recovery() {
+        let mut app = recovery_app();
+        let actor = app
+            .world_mut()
+            .spawn((
+                ActorId(8),
+                SelectedCharacter(CharacterId("hammerer".into())),
+                WorldPosition::new(10_000.0, 10_000.0, -100.0),
+                MovementMedium::Airborne,
+                BodyFacing::Authored,
+                CharacterLifeState::Alive,
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<MovementMedium>(actor),
+            Some(&MovementMedium::GROUNDED_TERRAIN)
+        );
+        let position = *app
+            .world()
+            .get::<WorldPosition>(actor)
+            .expect("actor keeps a world position");
+        assert!(
+            app.world()
+                .resource::<WorldMap>()
+                .terrain_cell_at(position.horizontal())
+                .is_some()
+        );
     }
 
     #[test]

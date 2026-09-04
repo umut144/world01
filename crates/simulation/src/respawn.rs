@@ -15,35 +15,38 @@ pub struct RespawnActor {
     pub life: CharacterLifeState,
 }
 
+/// Chooses the first unblocked, caller-approved candidate around the nearest
+/// Ankh. Returns `None` rather than inventing a non-Ankh fallback.
 pub fn choose_respawn_position(
     actor_id: u64,
     respawn_count: u32,
-    fallback: WorldPosition,
+    origin: WorldPosition,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
     radius: f32,
     ankhs: &[(Ankh, WorldPosition)],
     actors: &[RespawnActor],
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
-) -> WorldPosition {
+    candidate_is_usable: impl Fn(WorldPosition) -> bool,
+) -> Option<WorldPosition> {
     let Some(character) = character else {
-        return fallback;
+        return None;
     };
     let Some(facing) = facing else {
-        return fallback;
+        return None;
     };
     let Some(hurt_geometry) = hurt_geometry else {
-        return fallback;
+        return None;
     };
     let Some(target_geometry) = hurt_geometry.character(character) else {
-        return fallback;
+        return None;
     };
 
     let mut ordered_ankhs = ankhs.to_vec();
     ordered_ankhs.sort_by(
         |(first_ankh, first_position), (second_ankh, second_position)| {
-            distance_squared(*first_position, fallback)
-                .total_cmp(&distance_squared(*second_position, fallback))
+            distance_squared(*first_position, origin)
+                .total_cmp(&distance_squared(*second_position, origin))
                 .then_with(|| first_ankh.index.cmp(&second_ankh.index))
         },
     );
@@ -58,20 +61,22 @@ pub fn choose_respawn_position(
                 attempt,
                 radius,
             );
-            if !candidate_is_blocked(
-                candidate,
-                actor_id,
-                facing,
-                target_geometry,
-                actors,
-                hurt_geometry,
-            ) {
-                return candidate;
+            if candidate_is_usable(candidate)
+                && !candidate_is_blocked(
+                    candidate,
+                    actor_id,
+                    facing,
+                    target_geometry,
+                    actors,
+                    hurt_geometry,
+                )
+            {
+                return Some(candidate);
             }
         }
     }
 
-    fallback
+    None
 }
 
 fn candidate_is_blocked(
@@ -182,6 +187,7 @@ mod tests {
             &ankhs,
             &[],
             Some(&geometry),
+            |_| true,
         );
         let repeated = choose_respawn_position(
             7,
@@ -193,9 +199,11 @@ mod tests {
             &ankhs,
             &[],
             Some(&geometry),
+            |_| true,
         );
 
         assert_eq!(result, repeated);
+        let result = result.expect("one Ankh candidate is usable");
         assert_eq!(result.elevation_meters, 2.0);
         assert!(Vec2::new(result.x - 2.0, result.y).length() <= 4.0);
         assert!(Vec2::new(result.x - 10.0, result.y).length() > 4.0);
@@ -233,14 +241,16 @@ mod tests {
             &[nearest, next],
             &blockers,
             Some(&geometry),
+            |_| true,
         );
 
+        let result = result.expect("the second Ankh has a usable candidate");
         assert!(Vec2::new(result.x - 10.0, result.y).length() <= 4.0);
         assert_eq!(result.elevation_meters, 3.0);
     }
 
     #[test]
-    fn no_ankh_falls_back_to_the_actors_current_position() {
+    fn no_ankh_has_no_respawn_position() {
         let result = choose_respawn_position(
             7,
             1,
@@ -251,8 +261,32 @@ mod tests {
             &[],
             &[],
             None,
+            |_| true,
         );
 
-        assert_eq!(result, WorldPosition::new(3.0, -2.0, 7.0));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn unusable_candidates_are_skipped() {
+        let geometry = hurt_geometry();
+        let ankh = (Ankh::new(0), WorldPosition::new(2.0, 0.0, 1.0));
+        let first = candidate_position(ankh.1, 7, 1, ankh.0.index, 0, 4.0);
+        let second = candidate_position(ankh.1, 7, 1, ankh.0.index, 1, 4.0);
+
+        let result = choose_respawn_position(
+            7,
+            1,
+            WorldPosition::ZERO,
+            Some(&CharacterId("hammerer".into())),
+            Some(BodyFacing::Authored),
+            4.0,
+            &[ankh],
+            &[],
+            Some(&geometry),
+            |candidate| candidate != first,
+        );
+
+        assert_eq!(result, Some(second));
     }
 }

@@ -241,6 +241,15 @@ Every accepted composition retains at least one Ankh. An event selection that
 would remove the final Ankh is invalid because the shared respawn contract must
 remain available throughout the session.
 
+A Template may later declare what happens to a Character whose supporting
+surface it removes or makes unusable. Without such an explicit Template rule,
+the Ankh is the universal safety exit: the server relocates the affected
+Character to a valid point at the nearest usable Ankh. This safety relocation
+is not a death or ordinary respawn; it changes neither HP nor the Character's
+respawn count. Once falling has an implemented movement rule, losing support
+may enter that rule instead, but an Ankh remains the last-resort recovery when
+no more specific outcome can safely resolve the Character.
+
 Two consequences the implementation has to carry rather than assume away:
 
 - The world is not constant for the length of a session. Anything derived from

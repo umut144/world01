@@ -11,6 +11,7 @@ use world01_world_data::{
 };
 
 use crate::TraversalCatalog;
+use crate::navigation::resolve_terrain_position;
 use crate::respawn::{RespawnActor, choose_respawn_position};
 use crate::spatial::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
 
@@ -67,6 +68,10 @@ impl CharacterLifeRules {
         self.revival_duration_ticks
     }
 
+    pub const fn ankh_respawn_radius_meters(self) -> f32 {
+        self.ankh_respawn_radius_meters
+    }
+
     pub fn confirmation_progress(self, held_ticks: f32) -> f32 {
         (held_ticks / self.confirmation_duration_ticks as f32).clamp(0.0, 1.0)
     }
@@ -110,8 +115,8 @@ pub fn update_character_life(
             Entity,
             &ActorId,
             Option<&SelectedCharacter>,
-            Option<&mut WorldPosition>,
-            Option<&mut MovementMedium>,
+            &mut WorldPosition,
+            &mut MovementMedium,
             Option<&BodyFacing>,
             &mut CharacterHealth,
             &mut CharacterLifeState,
@@ -209,8 +214,8 @@ pub fn update_character_life(
                         &mut life,
                         *actor_id,
                         &mut respawn,
-                        position.as_deref_mut(),
-                        medium.as_deref_mut(),
+                        &mut position,
+                        &mut medium,
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
@@ -224,7 +229,7 @@ pub fn update_character_life(
                     if let Some(reviver_actor_id) = find_reviver(
                         entity,
                         character.map(|character| &character.0),
-                        position.as_deref(),
+                        Some(&position),
                         facing,
                         hurt_geometry.as_deref(),
                         &snapshots,
@@ -248,8 +253,8 @@ pub fn update_character_life(
                         &mut life,
                         *actor_id,
                         &mut respawn,
-                        position.as_deref_mut(),
-                        medium.as_deref_mut(),
+                        &mut position,
+                        &mut medium,
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
@@ -275,8 +280,8 @@ pub fn update_character_life(
                         &mut life,
                         *actor_id,
                         &mut respawn,
-                        position.as_deref_mut(),
-                        medium.as_deref_mut(),
+                        &mut position,
+                        &mut medium,
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
@@ -289,7 +294,7 @@ pub fn update_character_life(
                     revival.reviver_actor_id,
                     entity,
                     character.map(|character| &character.0),
-                    position.as_deref(),
+                    Some(&position),
                     facing,
                     hurt_geometry.as_deref(),
                     &snapshots,
@@ -328,8 +333,8 @@ fn advance_confirmation(
     life: &mut CharacterLifeState,
     actor_id: ActorId,
     respawn: &mut RespawnState,
-    position: Option<&mut WorldPosition>,
-    medium: Option<&mut MovementMedium>,
+    position: &mut WorldPosition,
+    medium: &mut MovementMedium,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
     ankhs: &[(Ankh, WorldPosition)],
@@ -347,22 +352,25 @@ fn advance_confirmation(
         return;
     }
 
-    let (Some(position), Some(medium)) = (position, medium) else {
+    let (Some(character), Some(map), Some(traversal)) = (character, map, traversal) else {
         return;
     };
     let next_respawn_count = respawn.count.saturating_add(1);
-    let candidate = choose_respawn_position(
+    let Some(candidate) = choose_respawn_position(
         actor_id.0,
         next_respawn_count,
         *position,
-        character,
+        Some(character),
         facing,
         rules.ankh_respawn_radius_meters,
         ankhs,
         actors,
         hurt_geometry,
-    );
-    let Some(resolved) = terrain_respawn_position(candidate, character, map, traversal) else {
+        |candidate| resolve_terrain_position(map, traversal, character, candidate).is_some(),
+    ) else {
+        return;
+    };
+    let Some(resolved) = resolve_terrain_position(map, traversal, character, candidate) else {
         return;
     };
 
@@ -372,19 +380,6 @@ fn advance_confirmation(
     respawn.count = next_respawn_count;
     *position = resolved;
     *medium = MovementMedium::Grounded(GroundSupport::Terrain);
-}
-
-fn terrain_respawn_position(
-    candidate: WorldPosition,
-    character: Option<&CharacterId>,
-    map: Option<&WorldMap>,
-    traversal: Option<&TraversalCatalog>,
-) -> Option<WorldPosition> {
-    let profile = traversal?.character(character?)?;
-    let cell = map?.terrain_cell_at(candidate.horizontal())?;
-    profile
-        .permits_surface(&cell.surface)
-        .then(|| WorldPosition::new(candidate.x, candidate.y, cell.elevation_meters))
 }
 
 fn clear_incapacitated_actions(
@@ -558,15 +553,15 @@ mod tests {
         let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
         let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)
             .expect("embedded collision geometry is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let ankhs = AnkhLayout::from_map(&map);
         let mut app = App::new();
         app.insert_resource(
             CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
                 .expect("embedded character life design is valid"),
         )
-        .insert_resource(AnkhLayout { positions: vec![] })
-        .insert_resource(
-            WorldMap::load_embedded("overworld01").expect("embedded Instance is valid"),
-        )
+        .insert_resource(ankhs)
+        .insert_resource(map)
         .insert_resource(
             TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)
                 .expect("embedded traversal profiles are valid"),
@@ -757,22 +752,6 @@ mod tests {
         assert!((rules.confirmation_angle_radians(240.0).to_degrees() - 3168.0).abs() < 0.01);
         assert!((rules.confirmation_progress(120.0) - 0.5).abs() < 0.0001);
         assert_eq!(rules.revival_duration_ticks(), 480);
-    }
-
-    #[test]
-    fn deterministic_respawns_stay_inside_the_ankh_radius() {
-        let first = choose_respawn_position(
-            7,
-            1,
-            WorldPosition::ZERO,
-            None,
-            None,
-            4.0,
-            &[(Ankh::new(0), WorldPosition::ZERO)],
-            &[],
-            None,
-        );
-        assert_eq!(first, WorldPosition::ZERO);
     }
 
     #[test]
