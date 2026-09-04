@@ -16,6 +16,7 @@ const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
 const MAGE_DESIGN: &str = include_str!("../characters/mage.json");
 const MAGE_EYE_BEAMS_DESIGN: &str = include_str!("../abilities/mage_eye_beams.json");
 const MASS_DESIGN: &str = include_str!("../mass.json");
+const TRAVERSAL_DESIGN: &str = include_str!("../traversal.json");
 const WORLD01_TOML: &str = include_str!("../world01.toml");
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -208,12 +209,70 @@ pub struct GameDesign {
     pub mage: MageDesign,
     pub mage_eye_beams: MageEyeBeamsDesign,
     pub mass: MassModelDefinition,
+    /// How every Character may traverse authored world surfaces.
+    pub traversal: TraversalDesign,
     /// What each playable character brings into the world, keyed by character.
     ///
     /// Derived while loading so that callers look a character up instead of
     /// matching on its name.
     #[serde(skip)]
     pub characters: HashMap<CharacterId, CharacterProfile>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct TraversalDesign {
+    pub schema_version: u32,
+    pub characters: Vec<CharacterTraversalDesign>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct CharacterTraversalDesign {
+    pub asset_key: String,
+    pub surfaces: Vec<String>,
+    pub max_step_height_meters: f32,
+    pub normal_speed_max_abs_grade_percent: u32,
+    pub passable_max_abs_grade_percent: u32,
+    pub reduced_speed_multiplier: f32,
+}
+
+impl TraversalDesign {
+    fn is_valid_for(&self, mass: &MassModelDefinition) -> bool {
+        if self.schema_version != 1 || self.characters.len() != mass.characters.len() {
+            return false;
+        }
+        let expected = mass
+            .characters
+            .iter()
+            .map(|assignment| assignment.asset_key.as_str())
+            .collect::<HashSet<_>>();
+        let actual = self
+            .characters
+            .iter()
+            .map(|profile| profile.asset_key.as_str())
+            .collect::<HashSet<_>>();
+        expected == actual
+            && actual.len() == self.characters.len()
+            && self
+                .characters
+                .iter()
+                .all(CharacterTraversalDesign::is_valid)
+    }
+}
+
+impl CharacterTraversalDesign {
+    fn is_valid(&self) -> bool {
+        !self.asset_key.is_empty()
+            && !self.surfaces.is_empty()
+            && self.surfaces.iter().all(|surface| !surface.is_empty())
+            && self.surfaces.iter().collect::<HashSet<_>>().len() == self.surfaces.len()
+            && self.max_step_height_meters.is_finite()
+            && self.max_step_height_meters >= 0.0
+            && self.normal_speed_max_abs_grade_percent <= self.passable_max_abs_grade_percent
+            && self.passable_max_abs_grade_percent <= 100
+            && self.reduced_speed_multiplier.is_finite()
+            && self.reduced_speed_multiplier > 0.0
+            && self.reduced_speed_multiplier < 1.0
+    }
 }
 
 /// The abilities and equipment a playable character brings into the world.
@@ -516,6 +575,8 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         .map_err(|error| DesignError(format!("cannot parse MageEyeBeams design: {error}")))?;
     let mass: MassModelDefinition = serde_json::from_str(MASS_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse mass design: {error}")))?;
+    let traversal: TraversalDesign = serde_json::from_str(TRAVERSAL_DESIGN)
+        .map_err(|error| DesignError(format!("cannot parse traversal design: {error}")))?;
     let hurt: HurtGeometryDefinition = serde_json::from_str(HURT_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse hurt geometry design: {error}")))?;
     if !hammer.is_valid() {
@@ -549,6 +610,9 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     if !mass.is_valid() {
         return Err(DesignError("mass design is invalid".into()));
     }
+    if !traversal.is_valid_for(&mass) {
+        return Err(DesignError("traversal design is invalid".into()));
+    }
     if !hurt.is_valid() {
         return Err(DesignError("hurt geometry design is invalid".into()));
     }
@@ -581,6 +645,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         mage,
         mage_eye_beams,
         mass,
+        traversal,
         characters,
     })
 }
@@ -626,6 +691,7 @@ mod tests {
             10.0
         );
         assert_eq!(design.mass.characters.len(), 11);
+        assert_eq!(design.traversal.characters.len(), 11);
         assert_eq!(design.hurt.characters.len(), 11);
         assert_eq!(design.mass.weapons.len(), 1);
         assert!(
@@ -635,6 +701,23 @@ mod tests {
                 .iter()
                 .any(|assignment| assignment.asset_key == "hammerer")
         );
+    }
+
+    #[test]
+    fn embedded_traversal_covers_every_character_without_a_default() {
+        let design = load_embedded().expect("embedded game design parses");
+        let hammerer = design
+            .traversal
+            .characters
+            .iter()
+            .find(|profile| profile.asset_key == "hammerer")
+            .expect("Hammerer has an explicit traversal profile");
+
+        assert_eq!(hammerer.surfaces, ["land"]);
+        assert_eq!(hammerer.max_step_height_meters, 0.5);
+        assert_eq!(hammerer.normal_speed_max_abs_grade_percent, 25);
+        assert_eq!(hammerer.passable_max_abs_grade_percent, 50);
+        assert_eq!(hammerer.reduced_speed_multiplier, 0.5);
     }
 
     #[test]

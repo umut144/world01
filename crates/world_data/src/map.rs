@@ -757,14 +757,6 @@ pub struct MapRouteSegment {
     pub end_sample_index: u32,
 }
 
-impl MapRouteSegment {
-    /// World 01 initially treats ±50% as passable but slower. The exact speed
-    /// reduction is game tuning and is deliberately not invented here.
-    pub const fn requires_reduced_speed(&self) -> bool {
-        self.grade_percent == -50 || self.grade_percent == 50
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapProp {
     pub instance_id: String,
@@ -1898,8 +1890,6 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![25, 50, -50]
         );
-        assert!(!map.route_surfaces()[0].segments[0].requires_reduced_speed());
-        assert!(map.route_surfaces()[1].segments[0].requires_reduced_speed());
         assert!(!map.route_surfaces()[0].vertices.is_empty());
         assert!(!map.route_surfaces()[0].boundary_edges.is_empty());
     }

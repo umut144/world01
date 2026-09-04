@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "characters": [
+    { "asset_key": "archerf", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "barde", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "chantres", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "glavier", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "hammerer", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "mage", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "monk", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "rogue", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "sorcerer", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "warrior", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 },
+    { "asset_key": "wizard", "surfaces": ["land"], "max_step_height_meters": 0.5, "normal_speed_max_abs_grade_percent": 25, "passable_max_abs_grade_percent": 50, "reduced_speed_multiplier": 0.5 }
+  ]
+}
