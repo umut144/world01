@@ -21,7 +21,7 @@ use world01_simulation::{
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
     SimulationSet, WeaponAimRules, WorldColliderGrid, WorldSeparationStep, add_simulation_step,
 };
-use world01_world_data::{AnkhLayout, WorldMap};
+use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
 use crate::session::ServerSessionPlugin;
 
@@ -33,6 +33,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
     let world_map = WorldMap::load_embedded(&config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded()?;
+    let placement_ranks = world_design.placement_ranks()?;
+    let world_composition =
+        WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
     if ankh_layout.positions.is_empty() {
         return Err(io::Error::new(
@@ -115,6 +119,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(character_health)
     .insert_resource(character_mass)
     .insert_resource(character_abilities)
+    .insert_resource(world_composition)
+    .insert_resource(world_templates)
+    .insert_resource(placement_ranks)
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);

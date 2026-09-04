@@ -296,8 +296,26 @@ unchanged base map, compact serializable Anchor occupancy with a generation,
 and its current derived map. Every accepted occupancy change rebuilds from the
 base and folds occupied Anchors in authored SceneMaker order; assignment order
 cannot affect the result, an empty Anchor is normal, and invalid changes leave
-the composition untouched. Runtime replication and rebuilding collision,
-navigation, respawn, and presentation resources are not wired yet.
+the composition untouched.
+`AnchorOccupancy` is now a normally replicated Lightyear component on one
+persistent server-owned world-state entity. It has no owner, prediction target,
+or interpolation target, and the persistent entity gives a late joiner the
+current complete occupancy through ordinary state replication. Both
+applications load the same embedded base map, Template catalog, and Placement
+Ranks. The client applies the received occupancy after replication only when
+its generation is strictly newer, then deterministically rebuilds its local
+`WorldComposition`; repeated or older generations are ignored, and an invalid
+newer value leaves the accepted composition unchanged. The server composition
+is authoritative and its occupancy is mirrored to the replicated component
+before collision.
+Collision, navigation, respawn, and presentation resources are not rebuilt
+from the composition yet and still use the startup base map. Their next runtime
+slice must replace every derived resource from one accepted composition in a
+single tick-bound operation. For the first version, a rare occupancy change
+during a client prediction rollback may replay buffered input against the
+newest world until normal server reconciliation; retaining historical worlds
+for every rollback tick is deliberately deferred unless playtesting shows that
+short discrepancy to be material.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

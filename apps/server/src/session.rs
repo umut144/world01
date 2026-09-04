@@ -4,13 +4,17 @@ use bevy::{log::warn, prelude::*};
 use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     MAX_CLIENTS, ServerJoinRequest, ServerNetworkSet, configure_replicated_player,
+    configure_replicated_world_state,
 };
-use world01_simulation::{CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules};
+use world01_simulation::{
+    CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet,
+};
 use world01_world_data::{
-    ActorId, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
-    DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    MovementDirection, MovementIntent, MovementVelocity, PlayerOwner, Position, RespawnState,
-    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
+    ActorId, AnchorOccupancy, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth,
+    CharacterLifeState, DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState,
+    GazeDirection, GazeIntent, MovementDirection, MovementIntent, MovementVelocity, PlayerOwner,
+    Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState, WorldComposition,
 };
 
 #[derive(Resource, Debug)]
@@ -24,13 +28,20 @@ impl Default for NextActorId {
 
 pub struct ServerSessionPlugin;
 
+#[derive(Component)]
+struct AuthoritativeWorldState;
+
 impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NextActorId>()
-            .add_systems(Startup, spawn_room_ankhs)
+            .add_systems(Startup, (spawn_room_ankhs, spawn_world_state))
             .add_systems(
                 Update,
                 accept_join_requests.after(ServerNetworkSet::ReceiveRequests),
+            )
+            .add_systems(
+                FixedUpdate,
+                publish_world_occupancy.before(SimulationSet::Collision),
             );
     }
 }
@@ -38,6 +49,29 @@ impl Plugin for ServerSessionPlugin {
 fn spawn_room_ankhs(layout: Res<AnkhLayout>, mut commands: Commands) {
     for (index, position) in layout.positions.iter().copied().enumerate() {
         commands.spawn((Ankh::new(index as u32), position));
+    }
+}
+
+fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands) {
+    let mut world_state = commands.spawn(AuthoritativeWorldState);
+    configure_replicated_world_state(&mut world_state, composition.occupancy().clone());
+}
+
+fn publish_world_occupancy(
+    composition: Res<WorldComposition>,
+    mut world_state: Query<&mut AnchorOccupancy, With<AuthoritativeWorldState>>,
+) {
+    if !composition.is_changed() {
+        return;
+    }
+    let Ok(mut replicated) = world_state.single_mut() else {
+        warn!(
+            "cannot publish world occupancy: expected exactly one authoritative world-state entity"
+        );
+        return;
+    };
+    if *replicated != *composition.occupancy() {
+        *replicated = composition.occupancy().clone();
     }
 }
 

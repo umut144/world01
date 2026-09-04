@@ -15,7 +15,7 @@ use lightyear::prelude::{
     server::*,
 };
 use lightyear::{netcode::Key, prelude::*};
-use world01_world_data::{CharacterId, PlayerInput};
+use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput};
 
 use crate::protocol::{
     JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,
@@ -220,9 +220,22 @@ pub fn configure_replicated_player(player: &mut EntityCommands<'_>, request: &Se
     ));
 }
 
+/// Marks the persistent authoritative world-state singleton for all clients.
+///
+/// Unlike player state, occupancy has no owner, prediction target, or
+/// interpolation target. Keeping the entity alive lets normal replication
+/// deliver its current component value to late joiners.
+pub fn configure_replicated_world_state(
+    world_state: &mut EntityCommands<'_>,
+    occupancy: AnchorOccupancy,
+) {
+    world_state.insert((occupancy, Replicate::to_clients(NetworkTarget::All)));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::ecs::world::CommandQueue;
 
     #[test]
     fn registry_accepts_five_unique_clients_and_rejects_sixth() {
@@ -274,5 +287,24 @@ mod tests {
         assert_eq!(registry.register(peer, original), Admission::Accepted);
         assert!(!registry.unregister(peer, duplicate));
         assert_eq!(registry.entity(peer), Some(original));
+    }
+
+    #[test]
+    fn world_occupancy_is_persistent_replicated_state_for_late_join() {
+        let mut world = World::new();
+        let mut queue = CommandQueue::default();
+        let entity = {
+            let mut commands = Commands::new(&mut queue, &world);
+            let mut entity = commands.spawn_empty();
+            let id = entity.id();
+            configure_replicated_world_state(&mut entity, AnchorOccupancy::default());
+            id
+        };
+        queue.apply(&mut world);
+
+        assert!(world.entity(entity).contains::<AnchorOccupancy>());
+        assert!(world.entity(entity).contains::<Replicate>());
+        assert!(!world.entity(entity).contains::<PredictionTarget>());
+        assert!(!world.entity(entity).contains::<InterpolationTarget>());
     }
 }

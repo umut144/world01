@@ -11,12 +11,12 @@ use lightyear::prelude::{
 };
 use serde::{Deserialize, Serialize};
 use world01_world_data::{
-    ActorId, AttackIntent, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
-    CharacterMass, DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState,
-    GazeDirection, GazeIntent, HammerAttackState, MageAttackState, MovementDirection,
-    MovementIntent, MovementVelocity, PlayerInput, PlayerOwner, Position, RespawnState,
-    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
-    WeaponAimState,
+    ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterId,
+    CharacterLifeState, CharacterMass, DashIntent, DashState, DeathConfirmIntent,
+    DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState, MageAttackState,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerInput, PlayerOwner, Position,
+    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
+    StatusEffectState, WeaponAimState,
 };
 
 pub const MAX_CLIENTS: usize = 5;
@@ -88,6 +88,7 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     })
     .add_direction(NetworkDirection::ClientToServer);
     app.component::<ActorId>().replicate_once();
+    app.component::<AnchorOccupancy>().replicate();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
     app.component::<CharacterMass>().replicate_once().predict();

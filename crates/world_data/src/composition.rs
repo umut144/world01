@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bevy::prelude::Resource;
+use bevy::prelude::{Component, Resource};
 use serde::{Deserialize, Serialize};
 
 use crate::{PlacementRanks, WorldMap, WorldMapError, WorldTemplateCatalog};
@@ -9,7 +9,7 @@ use crate::{PlacementRanks, WorldMap, WorldMapError, WorldTemplateCatalog};
 ///
 /// Absence is the normal empty-Anchor state. The generation changes only when
 /// an occupant actually changes and gives replication a compact version key.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnchorOccupancy {
     generation: u64,
     occupants: BTreeMap<String, String>,
@@ -128,6 +128,25 @@ impl WorldComposition {
         let mut occupancy = self.occupancy.clone();
         occupancy.occupants.remove(anchor_id);
         occupancy.advance_generation()?;
+        self.replace_occupancy(occupancy, templates, ranks)?;
+        Ok(true)
+    }
+
+    /// Applies a replicated authority snapshot only when its generation is
+    /// newer than the one already derived locally.
+    ///
+    /// Equal and older snapshots are harmless no-ops. Invalid newer snapshots
+    /// leave both the accepted occupancy and current map unchanged.
+    pub fn apply_newer_occupancy(
+        &mut self,
+        occupancy: AnchorOccupancy,
+        templates: &WorldTemplateCatalog,
+        ranks: &PlacementRanks,
+    ) -> Result<bool, WorldMapError> {
+        if occupancy.generation <= self.occupancy.generation {
+            return Ok(false);
+        }
+
         self.replace_occupancy(occupancy, templates, ranks)?;
         Ok(true)
     }
@@ -305,6 +324,60 @@ mod tests {
                 .expect("clearing an empty Anchor is a no-op")
         );
         assert_eq!(composition.occupancy().generation(), 2);
+    }
+
+    #[test]
+    fn replicated_occupancy_only_applies_newer_generations() {
+        let (map, templates, ranks) = fixture();
+        let mut authority = WorldComposition::new(map.clone(), &templates, &ranks)
+            .expect("the authority starts empty");
+        authority
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
+            .expect("the first authority change is valid");
+        let first_snapshot = authority.occupancy().clone();
+        let first_map = authority.current_map().clone();
+        authority
+            .set_occupant("alpha_anchor", "template_second", &templates, &ranks)
+            .expect("the second authority change is valid");
+        let second_snapshot = authority.occupancy().clone();
+
+        let mut replica =
+            WorldComposition::new(map, &templates, &ranks).expect("the replica starts empty");
+        assert!(
+            replica
+                .apply_newer_occupancy(first_snapshot.clone(), &templates, &ranks)
+                .expect("the first snapshot is valid")
+        );
+        assert_eq!(replica.current_map(), &first_map);
+        assert!(
+            !replica
+                .apply_newer_occupancy(first_snapshot, &templates, &ranks)
+                .expect("a repeated snapshot is a no-op")
+        );
+        assert!(
+            !replica
+                .apply_newer_occupancy(AnchorOccupancy::default(), &templates, &ranks)
+                .expect("an older snapshot is a no-op")
+        );
+        assert!(
+            replica
+                .apply_newer_occupancy(second_snapshot, &templates, &ranks)
+                .expect("the newer snapshot is valid")
+        );
+        assert_eq!(replica.current_map(), authority.current_map());
+        assert_eq!(replica.occupancy(), authority.occupancy());
+
+        let accepted = replica.clone();
+        let invalid_snapshot = AnchorOccupancy {
+            generation: 3,
+            occupants: BTreeMap::from([("missing_anchor".to_owned(), "template_first".to_owned())]),
+        };
+        assert!(
+            replica
+                .apply_newer_occupancy(invalid_snapshot, &templates, &ranks)
+                .is_err()
+        );
+        assert_eq!(replica, accepted);
     }
 
     #[test]

@@ -14,7 +14,7 @@ use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
     WeaponAimRules, WorldColliderGrid,
 };
-use world01_world_data::{AnkhLayout, WorldMap};
+use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationRules;
@@ -47,6 +47,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
     let world_map = WorldMap::load_embedded(&config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded()?;
+    let placement_ranks = world_design.placement_ranks()?;
+    let world_composition =
+        WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
     if ankh_layout.positions.is_empty() {
         return Err(io::Error::new(
@@ -155,6 +159,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(world_collider_grid);
     app.insert_resource(collision_geometry);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
+    app.insert_resource(world_composition);
+    app.insert_resource(world_templates);
+    app.insert_resource(placement_ranks);
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
     app.insert_non_send(controller_input);

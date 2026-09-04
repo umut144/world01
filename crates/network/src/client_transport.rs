@@ -1,19 +1,23 @@
 use std::{net::Ipv4Addr, time::Duration};
 
-use bevy::{log::info, prelude::*};
+use bevy::{
+    log::{error, info},
+    prelude::*,
+};
 use lightyear::interpolation::timeline::InterpolationConfig;
 use lightyear::prediction::correction::PreviousVisual;
 pub use lightyear::prelude::Client;
 use lightyear::prelude::{
-    Controlled,
+    Controlled, ReplicationSystems,
     client::*,
     input::client::InputSystems as ClientInputSystems,
     input::native::{ActionState, InputMarker, InputPlugin as NativeInputPlugin},
 };
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
-    AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent,
-    PlayerInput, Position, RunIntent,
+    AnchorOccupancy, AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent,
+    MovementIntent, PlacementRanks, PlayerInput, Position, RunIntent, WorldComposition,
+    WorldTemplateCatalog,
 };
 
 use crate::protocol::{
@@ -70,6 +74,45 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
     .add_observer(enable_remote_position_extrapolation)
     .add_observer(send_join_when_connected)
     .add_observer(report_client_connected);
+}
+
+/// Derives the client-local world composition from replicated authority state.
+///
+/// This is separate from transport setup because callers must first provide
+/// the matching embedded base map, Template catalog, and Placement Ranks.
+pub fn configure_client_world_state(app: &mut App) {
+    app.add_systems(
+        PreUpdate,
+        apply_replicated_world_occupancy.after(ReplicationSystems::Receive),
+    );
+}
+
+fn apply_replicated_world_occupancy(
+    replicated: Query<&AnchorOccupancy, Changed<AnchorOccupancy>>,
+    templates: Res<WorldTemplateCatalog>,
+    ranks: Res<PlacementRanks>,
+    mut composition: ResMut<WorldComposition>,
+) {
+    if replicated.is_empty() {
+        return;
+    }
+    let Ok(occupancy) = replicated.single() else {
+        error!(
+            "cannot apply replicated world occupancy: expected exactly one changed world-state entity"
+        );
+        return;
+    };
+    match composition.bypass_change_detection().apply_newer_occupancy(
+        occupancy.clone(),
+        &templates,
+        &ranks,
+    ) {
+        Ok(true) => composition.set_changed(),
+        Ok(false) => {}
+        Err(error) => {
+            error!(%error, generation = occupancy.generation(), "cannot apply replicated world occupancy");
+        }
+    }
 }
 
 pub fn connect_client(
@@ -247,6 +290,19 @@ fn report_client_connected(trigger: On<Add, Connected>, clients: Query<(), With<
 mod tests {
     use super::*;
     use bevy::ecs::world::CommandQueue;
+    use world01_world_data::{WorldMap, WorldTemplateCatalog};
+
+    #[derive(Resource, Default)]
+    struct CompositionChangeCount(u32);
+
+    fn count_composition_changes(
+        composition: Res<WorldComposition>,
+        mut count: ResMut<CompositionChangeCount>,
+    ) {
+        if composition.is_changed() {
+            count.0 += 1;
+        }
+    }
 
     #[test]
     fn connected_client_initializes_prediction_context() {
@@ -339,5 +395,80 @@ mod tests {
             app.world().get::<Position>(entity),
             Some(&Position::new(2.0, 3.0))
         );
+    }
+
+    #[test]
+    fn client_accepts_late_join_snapshot_and_ignores_stale_generation() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Template catalog is valid");
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
+            .expect("the current embedded Assets have Placement Ranks");
+        let mut authority = WorldComposition::new(map.clone(), &templates, &ranks)
+            .expect("the authority composition is valid");
+        authority
+            .set_occupant("template_anchor_001", "test_template", &templates, &ranks)
+            .expect("the authority assignment is valid");
+
+        let mut app = App::new();
+        app.insert_resource(templates.clone())
+            .insert_resource(ranks.clone())
+            .insert_resource(
+                WorldComposition::new(map, &templates, &ranks)
+                    .expect("the replica composition is valid"),
+            )
+            .init_resource::<CompositionChangeCount>()
+            .add_systems(
+                Update,
+                (
+                    apply_replicated_world_occupancy,
+                    count_composition_changes.after(apply_replicated_world_occupancy),
+                ),
+            );
+        let replicated = app.world_mut().spawn(authority.occupancy().clone()).id();
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<WorldComposition>().current_map(),
+            authority.current_map()
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldComposition>()
+                .occupancy()
+                .generation(),
+            1
+        );
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 1);
+
+        app.world_mut()
+            .entity_mut(replicated)
+            .insert(AnchorOccupancy::default());
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WorldComposition>()
+                .occupancy()
+                .generation(),
+            1
+        );
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 1);
+
+        authority
+            .set_occupant("template_anchor_002", "test_template02", &templates, &ranks)
+            .expect("the newer authority assignment is valid");
+        app.world_mut()
+            .entity_mut(replicated)
+            .insert(authority.occupancy().clone());
+        app.update();
+        assert_eq!(
+            app.world().resource::<WorldComposition>().current_map(),
+            authority.current_map()
+        );
+        assert_eq!(
+            app.world().resource::<WorldComposition>().occupancy(),
+            authority.occupancy()
+        );
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
     }
 }

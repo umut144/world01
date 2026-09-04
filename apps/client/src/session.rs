@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use world01_network::{NetworkSimulationProfile, configure_client};
+use world01_network::{NetworkSimulationProfile, configure_client, configure_client_world_state};
 use world01_world_data::CharacterId;
 
 pub struct ClientSessionPlugin {
@@ -15,6 +15,7 @@ pub struct ClientSessionPlugin {
 impl Plugin for ClientSessionPlugin {
     fn build(&self, app: &mut App) {
         configure_client(app, self.tick_duration, self.snapshot_interval);
+        configure_client_world_state(app);
         app.insert_resource(Time::<Fixed>::from_duration(self.tick_duration))
             .init_state::<ClientScreen>()
             .insert_resource(ClientSession {
