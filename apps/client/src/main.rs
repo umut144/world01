@@ -162,6 +162,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(world_composition);
     app.insert_resource(world_templates);
     app.insert_resource(placement_ranks);
+    // Transitional source for startup-derived resources until the next slice
+    // rebuilds them atomically from `WorldComposition::current_map()`.
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
     app.insert_non_send(controller_input);

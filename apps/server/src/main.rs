@@ -122,6 +122,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_composition)
     .insert_resource(world_templates)
     .insert_resource(placement_ranks)
+    // Transitional source for startup-derived resources until the next slice
+    // rebuilds them atomically from `WorldComposition::current_map()`.
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);

@@ -26,6 +26,10 @@ pub(crate) const PROTOCOL_ID: u64 = 0x47_41_4d_45_30_32;
 
 pub(crate) struct JoinChannel;
 
+/// Identifies the one persistent entity carrying replicated world authority.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ReplicatedWorldState;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct JoinRequest {
     pub character: CharacterId,
@@ -88,6 +92,7 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     })
     .add_direction(NetworkDirection::ClientToServer);
     app.component::<ActorId>().replicate_once();
+    app.component::<ReplicatedWorldState>().replicate_once();
     app.component::<AnchorOccupancy>().replicate();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();

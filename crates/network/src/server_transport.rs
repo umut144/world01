@@ -18,8 +18,8 @@ use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput};
 
 use crate::protocol::{
-    JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,
-    apply_tick_player_input, register_game_protocol,
+    JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
+    SERVER_ADDR, apply_tick_player_input, register_game_protocol,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -230,6 +230,7 @@ pub fn configure_replicated_world_state(
     occupancy: AnchorOccupancy,
 ) {
     world_state.insert((occupancy, Replicate::to_clients(NetworkTarget::All)));
+    world_state.insert(ReplicatedWorldState);
 }
 
 #[cfg(test)]
@@ -303,6 +304,7 @@ mod tests {
         queue.apply(&mut world);
 
         assert!(world.entity(entity).contains::<AnchorOccupancy>());
+        assert!(world.entity(entity).contains::<ReplicatedWorldState>());
         assert!(world.entity(entity).contains::<Replicate>());
         assert!(!world.entity(entity).contains::<PredictionTarget>());
         assert!(!world.entity(entity).contains::<InterpolationTarget>());

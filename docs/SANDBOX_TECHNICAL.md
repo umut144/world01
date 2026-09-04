@@ -299,15 +299,22 @@ cannot affect the result, an empty Anchor is normal, and invalid changes leave
 the composition untouched.
 `AnchorOccupancy` is now a normally replicated Lightyear component on one
 persistent server-owned world-state entity. It has no owner, prediction target,
-or interpolation target, and the persistent entity gives a late joiner the
-current complete occupancy through ordinary state replication. Both
-applications load the same embedded base map, Template catalog, and Placement
-Ranks. The client applies the received occupancy after replication only when
-its generation is strictly newer, then deterministically rebuilds its local
-`WorldComposition`; repeated or older generations are ignored, and an invalid
-newer value leaves the accepted composition unchanged. The server composition
-is authoritative and its occupancy is mirrored to the replicated component
-before collision.
+or interpolation target. A separately replicated marker makes this singleton
+identity explicit to the client. Delivery of its current complete occupancy to
+a late joiner relies on Lightyear's normal semantics for a persistent
+`Replicate` entity; the project structurally verifies that configuration but
+does not yet carry a transport-level late-join test. Both applications load the
+same embedded base map, Template catalog, and Placement Ranks. The client
+applies the received occupancy after replication only when its generation is
+strictly newer, then deterministically rebuilds its local `WorldComposition`;
+repeated or older generations are ignored, and an invalid newer value leaves
+the accepted composition unchanged. The server composition is authoritative
+and its occupancy is mirrored to the replicated component before collision.
+The current fixed protocol ID does not fingerprint embedded maps, Templates,
+or Placement Ranks. Deterministic world derivation therefore currently assumes
+that client and server come from the same content build; a compatibility
+fingerprint or handshake is required before heterogeneous builds are allowed to
+connect.
 Collision, navigation, respawn, and presentation resources are not rebuilt
 from the composition yet and still use the startup base map. Their next runtime
 slice must replace every derived resource from one accepted composition in a

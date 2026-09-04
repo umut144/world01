@@ -21,8 +21,8 @@ use world01_world_data::{
 };
 
 use crate::protocol::{
-    JoinChannel, JoinRequest, NetworkSimulationProfile, PROTOCOL_ID, SERVER_ADDR,
-    register_game_protocol,
+    JoinChannel, JoinRequest, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
+    SERVER_ADDR, register_game_protocol,
 };
 
 const MAX_REMOTE_EXTRAPOLATION_INTERVALS: f32 = 2.0;
@@ -88,7 +88,7 @@ pub fn configure_client_world_state(app: &mut App) {
 }
 
 fn apply_replicated_world_occupancy(
-    replicated: Query<&AnchorOccupancy, Changed<AnchorOccupancy>>,
+    replicated: Query<&AnchorOccupancy, (With<ReplicatedWorldState>, Changed<AnchorOccupancy>)>,
     templates: Res<WorldTemplateCatalog>,
     ranks: Res<PlacementRanks>,
     mut composition: ResMut<WorldComposition>,
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn client_accepts_late_join_snapshot_and_ignores_stale_generation() {
+    fn client_filters_world_state_and_ignores_stale_generation() {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Template catalog is valid");
@@ -425,7 +425,21 @@ mod tests {
                     count_composition_changes.after(apply_replicated_world_occupancy),
                 ),
             );
-        let replicated = app.world_mut().spawn(authority.occupancy().clone()).id();
+        let unrelated = app.world_mut().spawn(authority.occupancy().clone()).id();
+        app.update();
+        assert_eq!(
+            app.world()
+                .resource::<WorldComposition>()
+                .occupancy()
+                .generation(),
+            0
+        );
+        app.world_mut().entity_mut(unrelated).despawn();
+
+        let replicated = app
+            .world_mut()
+            .spawn((ReplicatedWorldState, authority.occupancy().clone()))
+            .id();
 
         app.update();
         assert_eq!(
@@ -439,7 +453,7 @@ mod tests {
                 .generation(),
             1
         );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 1);
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
 
         app.world_mut()
             .entity_mut(replicated)
@@ -452,7 +466,7 @@ mod tests {
                 .generation(),
             1
         );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 1);
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
 
         authority
             .set_occupant("template_anchor_002", "test_template02", &templates, &ranks)
@@ -469,6 +483,6 @@ mod tests {
             app.world().resource::<WorldComposition>().occupancy(),
             authority.occupancy()
         );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
+        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 3);
     }
 }

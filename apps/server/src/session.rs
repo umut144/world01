@@ -170,10 +170,82 @@ fn spawn_position(actor_id: u64) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use world01_world_data::{PlacementRanks, WorldMap, WorldTemplateCatalog};
+
+    #[derive(Resource, Default)]
+    struct PublishedOccupancyChanges(u32);
+
+    fn count_published_occupancy_changes(
+        published: Query<Ref<AnchorOccupancy>, With<AuthoritativeWorldState>>,
+        mut count: ResMut<PublishedOccupancyChanges>,
+    ) {
+        if published
+            .single()
+            .is_ok_and(|occupancy| occupancy.is_changed())
+        {
+            count.0 += 1;
+        }
+    }
 
     #[test]
     fn spawn_positions_are_separated_and_repeat_safely() {
         assert_ne!(spawn_position(1), spawn_position(2));
         assert_eq!(spawn_position(1), spawn_position(6));
+    }
+
+    #[test]
+    fn world_state_spawns_current_occupancy_and_publishes_only_real_changes() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
+            .expect("the current embedded Assets have Placement Ranks");
+        let composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the initial composition is valid");
+        let initial_occupancy = composition.occupancy().clone();
+
+        let mut app = App::new();
+        app.insert_resource(composition)
+            .init_resource::<PublishedOccupancyChanges>()
+            .add_systems(Startup, spawn_world_state)
+            .add_systems(
+                FixedUpdate,
+                (
+                    publish_world_occupancy,
+                    count_published_occupancy_changes.after(publish_world_occupancy),
+                ),
+            );
+
+        app.world_mut().run_schedule(Startup);
+        let published = app
+            .world_mut()
+            .query_filtered::<&AnchorOccupancy, With<AuthoritativeWorldState>>()
+            .single(app.world())
+            .expect("exactly one authoritative world-state entity exists");
+        assert_eq!(published, &initial_occupancy);
+
+        app.world_mut().run_schedule(FixedUpdate);
+        assert_eq!(app.world().resource::<PublishedOccupancyChanges>().0, 1);
+        app.world_mut().run_schedule(FixedUpdate);
+        assert_eq!(app.world().resource::<PublishedOccupancyChanges>().0, 1);
+
+        app.world_mut()
+            .resource_mut::<WorldComposition>()
+            .set_occupant("template_anchor_001", "test_template", &templates, &ranks)
+            .expect("the server-owned assignment is valid");
+        let expected = app
+            .world()
+            .resource::<WorldComposition>()
+            .occupancy()
+            .clone();
+        app.world_mut().run_schedule(FixedUpdate);
+
+        let published = app
+            .world_mut()
+            .query_filtered::<&AnchorOccupancy, With<AuthoritativeWorldState>>()
+            .single(app.world())
+            .expect("the authoritative world-state entity remains unique");
+        assert_eq!(published, &expected);
+        assert_eq!(app.world().resource::<PublishedOccupancyChanges>().0, 2);
     }
 }
