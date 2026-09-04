@@ -15,6 +15,35 @@ pub struct AnchorOccupancy {
     occupants: BTreeMap<String, String>,
 }
 
+/// The newest authority snapshot offered to the local world runtime.
+///
+/// Transport and event-selection code submit snapshots here. The simulation
+/// validates the complete derived world before committing a newer generation,
+/// so receiving a snapshot alone never creates a partially updated world.
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorldOccupancyRequest {
+    latest: Option<AnchorOccupancy>,
+}
+
+impl WorldOccupancyRequest {
+    pub fn latest(&self) -> Option<&AnchorOccupancy> {
+        self.latest.as_ref()
+    }
+
+    /// Retains only the newest submitted generation.
+    pub fn submit(&mut self, occupancy: AnchorOccupancy) -> bool {
+        if self
+            .latest
+            .as_ref()
+            .is_some_and(|latest| latest.generation() >= occupancy.generation())
+        {
+            return false;
+        }
+        self.latest = Some(occupancy);
+        true
+    }
+}
+
 impl AnchorOccupancy {
     pub const fn generation(&self) -> u64 {
         self.generation

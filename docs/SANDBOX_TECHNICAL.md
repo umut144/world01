@@ -304,25 +304,33 @@ identity explicit to the client. Delivery of its current complete occupancy to
 a late joiner relies on Lightyear's normal semantics for a persistent
 `Replicate` entity; the project structurally verifies that configuration but
 does not yet carry a transport-level late-join test. Both applications load the
-same embedded base map, Template catalog, and Placement Ranks. The client
-applies the received occupancy after replication only when its generation is
-strictly newer, then deterministically rebuilds its local `WorldComposition`;
-repeated or older generations are ignored, and an invalid newer value leaves
-the accepted composition unchanged. The server composition is authoritative
-and its occupancy is mirrored to the replicated component before collision.
+same embedded base map, Template catalog, and Placement Ranks. After
+replication, the client stages only the newest received occupancy. The shared
+fixed-tick world transaction composes that candidate and builds its `WorldMap`,
+world collision catalog, collision broad-phase grid, and `AnkhLayout` before
+committing any of them. It runs before `SimulationSet::Collision`, so server
+separation reads the new catalog and grid in the accepting tick. A candidate
+without an Ankh, with invalid composition data, or with invalid collision
+geometry leaves the accepted composition and all derived resources unchanged.
+Repeated and older generations are ignored. The applied generation is stored
+beside the runtime resources, making repeated fixed ticks and rollback replays
+idempotent rather than dependent on Bevy change detection. Respawn derives its
+indexed Ankh candidates from the current `AnkhLayout`. The server composition
+is authoritative, and its occupancy is mirrored to the replicated component
+only after that generation has become the applied runtime world.
 The current fixed protocol ID does not fingerprint embedded maps, Templates,
 or Placement Ranks. Deterministic world derivation therefore currently assumes
 that client and server come from the same content build; a compatibility
 fingerprint or handshake is required before heterogeneous builds are allowed to
 connect.
-Collision, navigation, respawn, and presentation resources are not rebuilt
-from the composition yet and still use the startup base map. Their next runtime
-slice must replace every derived resource from one accepted composition in a
-single tick-bound operation. For the first version, a rare occupancy change
-during a client prediction rollback may replay buffered input against the
-newest world until normal server reconciliation; retaining historical worlds
-for every rollback tick is deliberately deferred unless playtesting shows that
-short discrepancy to be material.
+Navigation is not implemented yet, and spawned client terrain, Prop, and Ankh
+presentation entities still represent the startup base map. Rebuilding those
+entities from the accepted runtime map is the next presentation slice. For the
+first version, a rare occupancy change during a client prediction rollback may
+replay buffered input against the newest world until normal server
+reconciliation; retaining historical worlds for every rollback tick is
+deliberately deferred unless playtesting shows that short discrepancy to be
+material.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

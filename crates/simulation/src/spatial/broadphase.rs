@@ -67,7 +67,7 @@ impl Aabb {
 ///
 /// Indices refer to `WorldCollisionGeometryCatalog::regions`, so the catalog
 /// stays the single owner of the geometry.
-#[derive(Resource, Debug, Clone, Default)]
+#[derive(Resource, Debug, Clone, Default, PartialEq)]
 pub struct WorldColliderGrid {
     cells: HashMap<(i32, i32), Vec<u32>>,
     /// One entry per catalog region, so an index into the catalog indexes

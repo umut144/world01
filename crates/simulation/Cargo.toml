@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-bevy = { workspace = true, features = ["std"] }
+bevy = { workspace = true, features = ["std", "bevy_log"] }
 world01-configs = { path = "../configs" }
 world01-design = { path = "../design" }
 world01-content = { path = "../content" }

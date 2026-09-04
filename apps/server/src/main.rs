@@ -20,6 +20,7 @@ use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
     SimulationSet, WeaponAimRules, WorldColliderGrid, WorldSeparationStep, add_simulation_step,
+    add_world_runtime_rebuild,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -122,11 +123,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_composition)
     .insert_resource(world_templates)
     .insert_resource(placement_ranks)
-    // Transitional source for startup-derived resources until the next slice
-    // rebuilds them atomically from `WorldComposition::current_map()`.
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
+    add_world_runtime_rebuild(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,
         SimulationSet::GameplayStep.after(ServerNetworkSet::PrepareSimulation),

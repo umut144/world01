@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
     let character_assets = CharacterAssetLibrary::from_content(
-        content,
+        content.clone(),
         world_design.eyes.pupil_area_ratio,
         world_design.eyes.hammerer_collision_radius_ratio,
         game_design.mage.pupil_size_ratio,
@@ -155,6 +155,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(hammer_geometry);
     app.insert_resource(hurt_geometry);
     app.insert_resource(mage_eye_geometry);
+    app.insert_resource(content);
     app.insert_resource(world_collision);
     app.insert_resource(world_collider_grid);
     app.insert_resource(collision_geometry);
@@ -162,8 +163,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(world_composition);
     app.insert_resource(world_templates);
     app.insert_resource(placement_ranks);
-    // Transitional source for startup-derived resources until the next slice
-    // rebuilds them atomically from `WorldComposition::current_map()`.
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
     app.insert_non_send(controller_input);

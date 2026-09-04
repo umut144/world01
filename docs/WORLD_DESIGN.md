@@ -192,6 +192,10 @@ clients deterministically derive the resulting world from that decision and
 the same embedded content and ranks. A client never selects an occupant, so it
 cannot predict movement through a different world.
 
+Every accepted composition retains at least one Ankh. An event selection that
+would remove the final Ankh is invalid because the shared respawn contract must
+remain available throughout the session.
+
 Two consequences the implementation has to carry rather than assume away:
 
 - The world is not constant for the length of a session. Anything derived from

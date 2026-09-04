@@ -7,14 +7,15 @@ use world01_network::{
     configure_replicated_world_state,
 };
 use world01_simulation::{
-    CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet,
+    CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
+    WorldRuntimeState,
 };
 use world01_world_data::{
-    ActorId, AnchorOccupancy, Ankh, AnkhLayout, AttackIntent, BodyFacing, CharacterHealth,
-    CharacterLifeState, DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState,
-    GazeDirection, GazeIntent, MovementDirection, MovementIntent, MovementVelocity, PlayerOwner,
-    Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WorldComposition,
+    ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
+    DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
+    MovementDirection, MovementIntent, MovementVelocity, PlayerOwner, Position, RespawnState,
+    RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState, StatusEffectState,
+    WorldComposition,
 };
 
 #[derive(Resource, Debug)]
@@ -34,21 +35,17 @@ struct AuthoritativeWorldState;
 impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NextActorId>()
-            .add_systems(Startup, (spawn_room_ankhs, spawn_world_state))
+            .add_systems(Startup, spawn_world_state)
             .add_systems(
                 Update,
                 accept_join_requests.after(ServerNetworkSet::ReceiveRequests),
             )
             .add_systems(
                 FixedUpdate,
-                publish_world_occupancy.before(SimulationSet::Collision),
+                publish_world_occupancy
+                    .after(WorldRuntimeSet::Rebuild)
+                    .before(SimulationSet::Collision),
             );
-    }
-}
-
-fn spawn_room_ankhs(layout: Res<AnkhLayout>, mut commands: Commands) {
-    for (index, position) in layout.positions.iter().copied().enumerate() {
-        commands.spawn((Ankh::new(index as u32), position));
     }
 }
 
@@ -59,9 +56,15 @@ fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands)
 
 fn publish_world_occupancy(
     composition: Res<WorldComposition>,
+    runtime: Option<Res<WorldRuntimeState>>,
     mut world_state: Query<&mut AnchorOccupancy, With<AuthoritativeWorldState>>,
 ) {
     if !composition.is_changed() {
+        return;
+    }
+    if runtime.is_some_and(|runtime| {
+        runtime.applied_generation() != Some(composition.occupancy().generation())
+    }) {
         return;
     }
     let Ok(mut replicated) = world_state.single_mut() else {

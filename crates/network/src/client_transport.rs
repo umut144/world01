@@ -16,8 +16,7 @@ use lightyear::prelude::{
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
     AnchorOccupancy, AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent,
-    MovementIntent, PlacementRanks, PlayerInput, Position, RunIntent, WorldComposition,
-    WorldTemplateCatalog,
+    MovementIntent, PlayerInput, Position, RunIntent, WorldOccupancyRequest,
 };
 
 use crate::protocol::{
@@ -76,22 +75,21 @@ pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interva
     .add_observer(report_client_connected);
 }
 
-/// Derives the client-local world composition from replicated authority state.
+/// Stages replicated authority state for the client-local world transaction.
 ///
-/// This is separate from transport setup because callers must first provide
-/// the matching embedded base map, Template catalog, and Placement Ranks.
+/// Receiving a snapshot does not mutate the composition. The shared simulation
+/// system validates and commits the composition and all derived resources in a
+/// single fixed-tick transaction.
 pub fn configure_client_world_state(app: &mut App) {
-    app.add_systems(
+    app.init_resource::<WorldOccupancyRequest>().add_systems(
         PreUpdate,
-        apply_replicated_world_occupancy.after(ReplicationSystems::Receive),
+        stage_replicated_world_occupancy.after(ReplicationSystems::Receive),
     );
 }
 
-fn apply_replicated_world_occupancy(
+fn stage_replicated_world_occupancy(
     replicated: Query<&AnchorOccupancy, (With<ReplicatedWorldState>, Changed<AnchorOccupancy>)>,
-    templates: Res<WorldTemplateCatalog>,
-    ranks: Res<PlacementRanks>,
-    mut composition: ResMut<WorldComposition>,
+    mut request: ResMut<WorldOccupancyRequest>,
 ) {
     if replicated.is_empty() {
         return;
@@ -102,16 +100,8 @@ fn apply_replicated_world_occupancy(
         );
         return;
     };
-    match composition.bypass_change_detection().apply_newer_occupancy(
-        occupancy.clone(),
-        &templates,
-        &ranks,
-    ) {
-        Ok(true) => composition.set_changed(),
-        Ok(false) => {}
-        Err(error) => {
-            error!(%error, generation = occupancy.generation(), "cannot apply replicated world occupancy");
-        }
+    if request.bypass_change_detection().submit(occupancy.clone()) {
+        request.set_changed();
     }
 }
 
@@ -290,16 +280,16 @@ fn report_client_connected(trigger: On<Add, Connected>, clients: Query<(), With<
 mod tests {
     use super::*;
     use bevy::ecs::world::CommandQueue;
-    use world01_world_data::{WorldMap, WorldTemplateCatalog};
+    use world01_world_data::{PlacementRanks, WorldComposition, WorldMap, WorldTemplateCatalog};
 
     #[derive(Resource, Default)]
-    struct CompositionChangeCount(u32);
+    struct RequestChangeCount(u32);
 
-    fn count_composition_changes(
-        composition: Res<WorldComposition>,
-        mut count: ResMut<CompositionChangeCount>,
+    fn count_request_changes(
+        request: Res<WorldOccupancyRequest>,
+        mut count: ResMut<RequestChangeCount>,
     ) {
-        if composition.is_changed() {
+        if request.is_changed() {
             count.0 += 1;
         }
     }
@@ -398,7 +388,7 @@ mod tests {
     }
 
     #[test]
-    fn client_filters_world_state_and_ignores_stale_generation() {
+    fn client_stages_marked_world_state_and_ignores_stale_generation() {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Template catalog is valid");
@@ -411,28 +401,22 @@ mod tests {
             .expect("the authority assignment is valid");
 
         let mut app = App::new();
-        app.insert_resource(templates.clone())
-            .insert_resource(ranks.clone())
-            .insert_resource(
-                WorldComposition::new(map, &templates, &ranks)
-                    .expect("the replica composition is valid"),
-            )
-            .init_resource::<CompositionChangeCount>()
+        app.init_resource::<WorldOccupancyRequest>()
+            .init_resource::<RequestChangeCount>()
             .add_systems(
                 Update,
                 (
-                    apply_replicated_world_occupancy,
-                    count_composition_changes.after(apply_replicated_world_occupancy),
+                    stage_replicated_world_occupancy,
+                    count_request_changes.after(stage_replicated_world_occupancy),
                 ),
             );
         let unrelated = app.world_mut().spawn(authority.occupancy().clone()).id();
         app.update();
-        assert_eq!(
+        assert!(
             app.world()
-                .resource::<WorldComposition>()
-                .occupancy()
-                .generation(),
-            0
+                .resource::<WorldOccupancyRequest>()
+                .latest()
+                .is_none()
         );
         app.world_mut().entity_mut(unrelated).despawn();
 
@@ -443,17 +427,10 @@ mod tests {
 
         app.update();
         assert_eq!(
-            app.world().resource::<WorldComposition>().current_map(),
-            authority.current_map()
+            app.world().resource::<WorldOccupancyRequest>().latest(),
+            Some(authority.occupancy())
         );
-        assert_eq!(
-            app.world()
-                .resource::<WorldComposition>()
-                .occupancy()
-                .generation(),
-            1
-        );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
+        assert_eq!(app.world().resource::<RequestChangeCount>().0, 2);
 
         app.world_mut()
             .entity_mut(replicated)
@@ -461,12 +438,12 @@ mod tests {
         app.update();
         assert_eq!(
             app.world()
-                .resource::<WorldComposition>()
-                .occupancy()
-                .generation(),
-            1
+                .resource::<WorldOccupancyRequest>()
+                .latest()
+                .map(AnchorOccupancy::generation),
+            Some(1)
         );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 2);
+        assert_eq!(app.world().resource::<RequestChangeCount>().0, 2);
 
         authority
             .set_occupant("template_anchor_002", "test_template02", &templates, &ranks)
@@ -476,13 +453,9 @@ mod tests {
             .insert(authority.occupancy().clone());
         app.update();
         assert_eq!(
-            app.world().resource::<WorldComposition>().current_map(),
-            authority.current_map()
+            app.world().resource::<WorldOccupancyRequest>().latest(),
+            Some(authority.occupancy())
         );
-        assert_eq!(
-            app.world().resource::<WorldComposition>().occupancy(),
-            authority.occupancy()
-        );
-        assert_eq!(app.world().resource::<CompositionChangeCount>().0, 3);
+        assert_eq!(app.world().resource::<RequestChangeCount>().0, 3);
     }
 }

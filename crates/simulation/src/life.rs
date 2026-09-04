@@ -4,8 +4,8 @@ use bevy::prelude::{Entity, Mut, ParamSet, Query, Res, Resource};
 use world01_content::CharacterHurtGeometryCatalog;
 use world01_design::HealthConfig;
 use world01_world_data::{
-    ActorId, Ankh, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState, DashState,
-    DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
+    ActorId, Ankh, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
+    DashState, DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
     MovementVelocity, Position, RespawnState, RevivalState, RunState, SelectedCharacter,
     StatusEffectState,
 };
@@ -91,7 +91,7 @@ impl Error for CharacterLifeConfigError {}
 pub fn update_character_life(
     rules: Res<CharacterLifeRules>,
     hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
-    ankhs: Query<(&Ankh, &Position), bevy::prelude::Without<ActorId>>,
+    ankh_layout: Option<Res<AnkhLayout>>,
     mut actors: ParamSet<(
         Query<(
             Entity,
@@ -155,10 +155,18 @@ pub fn update_character_life(
             life: snapshot.life,
         })
         .collect::<Vec<_>>();
-    let ankhs = ankhs
-        .iter()
-        .map(|(ankh, position)| (*ankh, *position))
-        .collect::<Vec<_>>();
+    let ankhs = ankh_layout
+        .as_deref()
+        .map(|layout| {
+            layout
+                .positions
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(index, position)| (Ankh::new(index as u32), position))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     for (
         entity,
         actor_id,
