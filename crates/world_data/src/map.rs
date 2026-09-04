@@ -20,6 +20,7 @@ include!(concat!(env!("OUT_DIR"), "/embedded_world_exports.rs"));
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct WorldMap {
+    scene_id: String,
     width_tiles: u32,
     height_tiles: u32,
     terrain_cell_meters: f32,
@@ -56,6 +57,7 @@ impl WorldMap {
         )?;
 
         Ok(Self {
+            scene_id: scene_id.to_owned(),
             width_tiles: scene.width_tiles,
             height_tiles: scene.height_tiles,
             terrain_cell_meters: scene.terrain_cell_meters,
@@ -63,6 +65,10 @@ impl WorldMap {
             props: scene.props,
             template_anchors: scene.template_anchors,
         })
+    }
+
+    pub fn scene_id(&self) -> &str {
+        &self.scene_id
     }
 
     pub const fn width_tiles(&self) -> u32 {
@@ -104,8 +110,8 @@ impl WorldMap {
     /// Projects one explicitly chosen Template into this Instance's coordinate
     /// frame without mutating or merging either input.
     ///
-    /// The returned Terrain is the Template mask. Resolving it against existing
-    /// Terrain and Props remains policy for a later layer.
+    /// The returned Terrain is the Template mask. [`Self::merged_with`]
+    /// resolves it against existing Terrain and Props.
     pub fn project_template(
         &self,
         anchor_id: &str,
@@ -202,6 +208,7 @@ impl WorldMap {
             .collect::<Result<Vec<_>, WorldMapError>>()?;
 
         Ok(WorldTemplatePlacement {
+            instance_scene_id: self.scene_id.clone(),
             anchor_id: anchor.anchor_id.clone(),
             template_scene_id: template.scene_id.clone(),
             grid_offset,
@@ -224,6 +231,22 @@ impl WorldMap {
         placement: &WorldTemplatePlacement,
         ranks: &PlacementRanks,
     ) -> Result<Self, WorldMapError> {
+        if placement.instance_scene_id != self.scene_id {
+            return Err(WorldMapError::new(format!(
+                "Template placement belongs to Instance '{}', not '{}'",
+                placement.instance_scene_id, self.scene_id
+            )));
+        }
+        if !self
+            .template_anchors
+            .iter()
+            .any(|anchor| anchor.anchor_id == placement.anchor_id)
+        {
+            return Err(WorldMapError::new(format!(
+                "Template Anchor '{}' does not exist in Instance '{}'",
+                placement.anchor_id, self.scene_id
+            )));
+        }
         ranks.validate_map_and_placement(self, placement)?;
 
         let mut placement_by_cell = HashMap::with_capacity(placement.terrain_cells.len());
@@ -313,6 +336,7 @@ impl WorldMap {
         }
 
         Ok(Self {
+            scene_id: self.scene_id.clone(),
             width_tiles: self.width_tiles,
             height_tiles: self.height_tiles,
             terrain_cell_meters: self.terrain_cell_meters,
@@ -477,6 +501,18 @@ impl WorldTemplateCatalog {
         self.groups
             .iter()
             .map(|(group_number, templates)| (*group_number, templates.as_slice()))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_templates(templates: impl IntoIterator<Item = WorldTemplate>) -> Self {
+        let mut groups = BTreeMap::<u32, Vec<WorldTemplate>>::new();
+        for template in templates {
+            groups
+                .entry(template.group_number)
+                .or_default()
+                .push(template);
+        }
+        Self { groups }
     }
 }
 
@@ -684,9 +720,11 @@ pub struct SceneGridOffset {
     pub y: i64,
 }
 
-/// Template geometry translated into an Instance, but not merged into it.
+/// Template geometry translated into, and identity-bound to, one Instance.
+/// It has not yet been merged into that Instance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldTemplatePlacement {
+    instance_scene_id: String,
     anchor_id: String,
     template_scene_id: String,
     grid_offset: SceneGridOffset,
@@ -696,6 +734,10 @@ pub struct WorldTemplatePlacement {
 }
 
 impl WorldTemplatePlacement {
+    pub fn instance_scene_id(&self) -> &str {
+        &self.instance_scene_id
+    }
+
     pub fn anchor_id(&self) -> &str {
         &self.anchor_id
     }
@@ -1054,7 +1096,7 @@ fn validate_prop_origins(
 pub struct WorldMapError(String);
 
 impl WorldMapError {
-    fn new(message: impl Into<String>) -> Self {
+    pub(crate) fn new(message: impl Into<String>) -> Self {
         Self(message.into())
     }
 }
@@ -1167,7 +1209,7 @@ pub(crate) fn test_export(terrain_cells: &str, props: &str) -> String {
 }
 
 #[cfg(test)]
-fn test_export_with_anchors(terrain_cells: &str, props: &str, anchors: &str) -> String {
+pub(crate) fn test_export_with_anchors(terrain_cells: &str, props: &str, anchors: &str) -> String {
     export_document(FORMAT_VERSION, SCENE_VERSION, terrain_cells, props, anchors)
 }
 
@@ -1215,7 +1257,11 @@ fn export_document(
 }
 
 #[cfg(test)]
-fn template_export(template_definition: &str, terrain_cells: &str, props: &str) -> String {
+pub(crate) fn template_export(
+    template_definition: &str,
+    terrain_cells: &str,
+    props: &str,
+) -> String {
     template_export_with_anchors(template_definition, terrain_cells, props, "")
 }
 
@@ -1833,6 +1879,43 @@ mod tests {
 
         assert!(missing.to_string().contains("ankh"));
         assert!(collision.to_string().contains(colliding_id));
+    }
+
+    #[test]
+    fn template_merge_rejects_a_placement_from_another_instance() {
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, "", ANCHOR),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let other_source = test_export_with_anchors(TEST_GRASS_CELL, "", ANCHOR)
+            .replace(r#""scene_id": "overworld01""#, r#""scene_id": "cave01""#);
+        let other = WorldMap::from_source(&other_source, "cave01")
+            .expect("the other synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                TEST_GRASS_CELL,
+                "",
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let foreign_placement = other
+            .project_template("template_anchor_001", &template)
+            .expect("the Template fits the other Instance");
+
+        let error = map
+            .merged_with(&foreign_placement, &merge_ranks())
+            .expect_err("a placement is bound to its source Instance");
+
+        assert_eq!(map.scene_id(), "overworld01");
+        assert_eq!(foreign_placement.instance_scene_id(), "cave01");
+        assert!(error.to_string().contains("cave01"));
+        assert!(error.to_string().contains("overworld01"));
     }
 
     #[test]

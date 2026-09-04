@@ -149,6 +149,9 @@ authors the Anchor; a Template is the content that occupies it.
 - Which Template occupies which Anchor is a deliberate decision the game makes,
   driven by what is happening in the world. SceneMaker's own seeded selection is
   look development for the editor and describes nothing about a session.
+- When occupied Templates overlap, Anchors are resolved in their authored
+  SceneMaker order. Later Anchors therefore win equal-rank conflicts. Reordering
+  Anchors is a visible world-design change, not neutral file organization.
 
 ### What a Template replaces
 
@@ -184,8 +187,10 @@ The first World-01 rank ordering leaves room between values for later Assets:
 
 Rank lives in the design data next to the other tuning the game owns, and it
 grows one entry at a time as Assets are added. It is resolved on the server
-only: a client is told what a place ended up as and never derives it, or it
-would predict movement through a world the server does not have.
+only. The server decides and replicates which Template occupies each Anchor;
+clients deterministically derive the resulting world from that decision and
+the same embedded content and ranks. A client never selects an occupant, so it
+cannot predict movement through a different world.
 
 Two consequences the implementation has to carry rather than assume away:
 
@@ -193,9 +198,8 @@ Two consequences the implementation has to carry rather than assume away:
   it - collision, walkability, a bot's navigation representation - is derived
   again when an Anchor's occupant changes, not once at startup.
 - The occupant of an Anchor is authoritative game state, like a character's
-  health. The server decides it and the client is told; a client may not pick
-  its own, or it would predict movement through a world the server does not
-  have.
+  health. The replicated decision, not a separately encoded map delta, is the
+  compact source from which both sides derive the same composed world.
 
 ## Character archetypes
 

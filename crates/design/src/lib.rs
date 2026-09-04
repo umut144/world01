@@ -491,12 +491,12 @@ pub fn load_world01_file(path: &Path) -> Result<World01Design, Box<dyn Error + S
 fn parse_world01_design(contents: &str) -> Result<World01Design, DesignError> {
     let world01: World01Design = toml::from_str(contents)
         .map_err(|error| DesignError(format!("cannot parse World 01 design: {error}")))?;
+    world01.placement_ranks()?;
     if !world01.mass.is_valid()
         || !world01.locomotion.is_valid()
         || !world01.health.is_valid()
         || !world01.weapon_aim.is_valid()
         || !world01.eyes.is_valid()
-        || world01.placement_ranks().is_err()
     {
         return Err(DesignError("World 01 design is invalid".into()));
     }
@@ -717,6 +717,17 @@ mod tests {
         assert_eq!(ranks.rank("grass"), Some(10));
         assert_eq!(ranks.rank("tree"), Some(20));
         assert_eq!(ranks.rank("ankh"), Some(100));
+    }
+
+    #[test]
+    fn invalid_placement_ranks_report_their_specific_cause() {
+        let duplicated = WORLD01_TOML.replace("asset_key = \"tree\"", "asset_key = \"grass\"");
+
+        let error = parse_world01_design(&duplicated)
+            .expect_err("duplicate Placement Rank Asset keys are invalid");
+
+        assert!(error.to_string().contains("empty or duplicated"));
+        assert!(error.to_string().contains("grass"));
     }
 
     #[test]

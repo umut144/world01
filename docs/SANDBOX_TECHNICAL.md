@@ -289,6 +289,15 @@ the right while the top and right outer boundaries clamp into the final cells.
 Collision, navigation, presentation, and other derived state are not rebuilt by
 this pure operation and must be rebuilt by the authoritative runtime after an
 occupant changes.
+Each `WorldMap` retains its Instance scene ID, and each projection is bound to
+that ID so it cannot be merged into another Instance merely because dimensions
+or Anchor names happen to match. A protocol-neutral composition owns an
+unchanged base map, compact serializable Anchor occupancy with a generation,
+and its current derived map. Every accepted occupancy change rebuilds from the
+base and folds occupied Anchors in authored SceneMaker order; assignment order
+cannot affect the result, an empty Anchor is normal, and invalid changes leave
+the composition untouched. Runtime replication and rebuilding collision,
+navigation, respawn, and presentation resources are not wired yet.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

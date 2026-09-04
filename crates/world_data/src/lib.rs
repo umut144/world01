@@ -1,6 +1,7 @@
 //! Shared protocol-neutral domain data.
 
 mod combat;
+mod composition;
 mod hurt;
 mod identity;
 mod input;
@@ -12,6 +13,7 @@ mod respawn;
 mod status;
 
 pub use combat::*;
+pub use composition::*;
 pub use hurt::*;
 pub use identity::*;
 pub use input::*;

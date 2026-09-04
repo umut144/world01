@@ -45,6 +45,9 @@ for source_export in "${source_exports[@]}"; do
         and ((. / $step) == ((. / $step) | floor)))
       and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step)
         and ((. / $step) == ((. / $step) | floor)));
+    def scene_position($position; $width; $height; $step):
+      ($position.x | type == "number" and . == floor and . >= 0 and . <= ($width * $step))
+      and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step));
 
     . as $root
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
@@ -93,6 +96,10 @@ for source_export in "${source_exports[@]}"; do
       and (.asset_key | type == "string" and length > 0)
       and (.position_authoring_px.x | type == "number" and . == floor)
       and (.position_authoring_px.y | type == "number" and . == floor)
+      and (if $root.scene.scene_kind == "instance" then
+        scene_position(.position_authoring_px; $root.scene.size_cells.width;
+          $root.scene.size_cells.height; $terrain_step)
+      else true end)
       and (.elevation_meters | type == "number" and isfinite))
     and (([.scene.props[].instance_id] | unique | length) == (.scene.props | length))
     and all(.scene.template_anchors[];
