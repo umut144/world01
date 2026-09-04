@@ -375,10 +375,11 @@ must be documented as an explicit game variant.
 
 - SceneMaker-authored Paths retain their signed grade as semantic integer data.
 - `0%` and `±25%` use normal movement speed in World 01.
-- `±50%` remain passable but use a reduced movement speed. The exact reduction
-  is still open balancing rather than an invented default.
+- `±50%` remain passable at half movement speed.
 - A grade whose absolute value exceeds `50%` is not passable under this initial
   World-01 rule. The current authoring presets deliberately stop at `±50%`.
+- A discontinuous height step of at most `0.5 m` is passable in either
+  direction. A larger discontinuity needs a connecting surface such as a Path.
 
 ### RUN
 

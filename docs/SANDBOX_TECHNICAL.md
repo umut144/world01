@@ -359,9 +359,10 @@ carrying water are rejected. Instances retain SceneMaker's independently
 elevated Path surfaces as validated, runtime-ready vertices, triangle indices,
 primitive boundary edges, centerline samples and stable authored segments.
 The signed `grade_percent` remains the exact authored integer rather than a
-value reconstructed from floating-point elevations. Grades 0 and ±25 are the
-normal traversal class; ±50 remain passable but require reduced speed, whose
-exact multiplier is still game tuning. Template route surfaces are parsed by
+value reconstructed from floating-point elevations. World-01 traversal design,
+rather than the protocol-neutral map import, classifies that authored value;
+its current baseline keeps grades 0 and ±25 at normal speed and ±50 passable
+at half speed. Template route surfaces are parsed by
 the format but explicitly rejected until Template composition defines their
 translation and replacement behavior. The headless server and graphical client
 therefore consume the same selected Instance dimensions and gameplay
