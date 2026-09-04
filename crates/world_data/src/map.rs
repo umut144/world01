@@ -341,23 +341,29 @@ impl WorldMap {
         for (instance_id, incoming) in incoming_props {
             let incoming_rank = ranks.required(&incoming.asset_key)?;
             let incoming_bounds = incoming.footprint.bounds_at(incoming.position);
-            let blocked = props.iter().any(|existing| {
-                existing
-                    .footprint
-                    .bounds_at(existing.position)
-                    .overlaps(incoming_bounds)
-                    && ranks
-                        .rank(&existing.asset_key)
-                        .is_some_and(|existing_rank| existing_rank > incoming_rank)
-            });
-            if blocked {
+            let existing_relations = props
+                .iter()
+                .map(|existing| {
+                    Ok((
+                        existing
+                            .footprint
+                            .bounds_at(existing.position)
+                            .overlaps(incoming_bounds),
+                        ranks.required(&existing.asset_key)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, WorldMapError>>()?;
+            if existing_relations
+                .iter()
+                .any(|(overlaps, existing_rank)| *overlaps && *existing_rank > incoming_rank)
+            {
                 continue;
             }
-            props.retain(|existing| {
-                !existing
-                    .footprint
-                    .bounds_at(existing.position)
-                    .overlaps(incoming_bounds)
+            let mut relation_index = 0;
+            props.retain(|_| {
+                let (overlaps, existing_rank) = existing_relations[relation_index];
+                relation_index += 1;
+                !overlaps || existing_rank > incoming_rank
             });
             props.push(MapProp {
                 instance_id,
@@ -965,6 +971,7 @@ fn convert_scene_body(
         offset_x,
         offset_y,
     )?;
+    validate_authored_prop_footprints(&props)?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
@@ -1175,6 +1182,21 @@ fn convert_prop_footprint(
         height_meters: size.height,
         anchor: Position::new(anchor.x, anchor.y),
     })
+}
+
+fn validate_authored_prop_footprints(props: &[MapProp]) -> Result<(), WorldMapError> {
+    for (index, prop) in props.iter().enumerate() {
+        let bounds = prop.footprint.bounds_at(prop.position);
+        for other in &props[index + 1..] {
+            if bounds.overlaps(other.footprint.bounds_at(other.position)) {
+                return Err(WorldMapError::new(format!(
+                    "map instances '{}' and '{}' have overlapping placement footprints",
+                    prop.instance_id, other.instance_id
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_prop_origins(
@@ -1838,31 +1860,19 @@ mod tests {
             {
                 "instance_id": "ankh_kept",
                 "asset_key": "ankh",
-                "position_authoring_px": { "x": 16, "y": 16 },
+                "position_authoring_px": { "x": 48, "y": 16 },
                 "elevation_meters": 1.0
             },
             {
                 "instance_id": "tree_kept",
                 "asset_key": "tree",
-                "position_authoring_px": { "x": 48, "y": 16 },
+                "position_authoring_px": { "x": 80, "y": 16 },
                 "elevation_meters": 1.0
             },
             {
                 "instance_id": "outside_mask",
                 "asset_key": "tree",
                 "position_authoring_px": { "x": 16, "y": 48 },
-                "elevation_meters": 1.0
-            },
-            {
-                "instance_id": "internal_boundary",
-                "asset_key": "tree",
-                "position_authoring_px": { "x": 32, "y": 16 },
-                "elevation_meters": 1.0
-            },
-            {
-                "instance_id": "outer_boundary",
-                "asset_key": "tree",
-                "position_authoring_px": { "x": 128, "y": 16 },
                 "elevation_meters": 1.0
             }
         "#;
@@ -1880,7 +1890,7 @@ mod tests {
         let template_props = r#"{
             "instance_id": "tree_new",
             "asset_key": "tree",
-            "position_authoring_px": { "x": 80, "y": 16 },
+            "position_authoring_px": { "x": 112, "y": 16 },
             "elevation_meters": 3.0
         }"#;
         let template = WorldTemplate::from_source(
@@ -1941,12 +1951,11 @@ mod tests {
                 "ankh_kept",
                 "tree_kept",
                 "outside_mask",
-                "outer_boundary",
                 "template.template_anchor_001.test_template_unit.tree_new",
             ]
         );
-        assert_eq!(merged.props()[4].position, Position::new(0.5, -1.5));
-        assert_eq!(merged.props()[4].elevation_meters, 3.0);
+        assert_eq!(merged.props()[3].position, Position::new(1.5, -1.5));
+        assert_eq!(merged.props()[3].elevation_meters, 3.0);
     }
 
     #[test]
@@ -1961,7 +1970,7 @@ mod tests {
             {
                 "instance_id": "touches_mask_edge",
                 "asset_key": "tree",
-                "position_authoring_px": { "x": 16, "y": 16 },
+                "position_authoring_px": { "x": 80, "y": 16 },
                 "elevation_meters": 1.0
             }
         "#;
@@ -2324,15 +2333,26 @@ mod tests {
 
     #[test]
     fn authoring_pixels_become_positions_around_the_map_centre() {
-        let source = test_export(TEST_GRASS_CELL, ANKH);
+        let source = test_export(TEST_GRASS_CELL, ANKH)
+            .replacen(
+                r#""width": 1.0, "height": 1.0"#,
+                r#""width": 2.0, "height": 1.0"#,
+                1,
+            )
+            .replacen(r#""x": 0.5, "y": 0.5"#, r#""x": 0.25, "y": 0.75"#, 1);
         let map =
             WorldMap::from_source(&source, TEST_SCENE_ID).expect("the synthetic export is valid");
 
         assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
         assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
-        assert_eq!(map.props()[0].footprint.width_meters(), 1.0);
+        assert_eq!(map.props()[0].footprint.width_meters(), 2.0);
         assert_eq!(map.props()[0].footprint.height_meters(), 1.0);
-        assert_eq!(map.props()[0].footprint.anchor(), Position::new(0.5, 0.5));
+        assert_eq!(map.props()[0].footprint.anchor(), Position::new(0.25, 0.75));
+        let bounds = map.props()[0].footprint.bounds_at(map.props()[0].position);
+        assert_eq!(bounds.left, -0.25);
+        assert_eq!(bounds.right, 1.75);
+        assert_eq!(bounds.bottom, 0.25);
+        assert_eq!(bounds.top, 1.25);
     }
 
     #[test]
@@ -2512,5 +2532,33 @@ mod tests {
 
         assert!(WorldMap::from_source(&duplicated_cell, TEST_SCENE_ID).is_err());
         assert!(WorldMap::from_source(&duplicated_id, TEST_SCENE_ID).is_err());
+    }
+
+    #[test]
+    fn authored_props_may_touch_but_must_not_overlap() {
+        let first = ANKH.replace("ankh_0001", "ankh_first");
+        let touching = ANKH.replace("ankh_0001", "ankh_touching").replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 96, "y": 96 }"#,
+        );
+        let overlapping = ANKH.replace("ankh_0001", "ankh_overlapping").replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 80, "y": 96 }"#,
+        );
+
+        assert!(
+            WorldMap::from_source(
+                &test_export(TEST_GRASS_CELL, &format!("{first}, {touching}")),
+                TEST_SCENE_ID,
+            )
+            .is_ok()
+        );
+        let error = WorldMap::from_source(
+            &test_export(TEST_GRASS_CELL, &format!("{first}, {overlapping}")),
+            TEST_SCENE_ID,
+        )
+        .expect_err("SceneMaker-authored Prop footprints must not overlap");
+        assert!(error.to_string().contains("ankh_first"));
+        assert!(error.to_string().contains("ankh_overlapping"));
     }
 }

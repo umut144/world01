@@ -100,7 +100,19 @@ for source_export in "${source_exports[@]}"; do
         scene_position(.position_authoring_px; $root.scene.size_cells.width;
           $root.scene.size_cells.height; $terrain_step)
       else true end)
-      and (.elevation_meters | type == "number" and isfinite))
+      and (.elevation_meters | type == "number" and isfinite)
+      and (. as $prop
+        | [$root.asset_profiles[] | select(.asset_key == $prop.asset_key)] as $profiles
+        | ($profiles | length) == 1
+        and ($profiles[0] as $profile
+          | ($profile.footprint_meters | type == "object")
+          and ($profile.footprint_meters.width | type == "number" and isfinite and . > 0)
+          and ($profile.footprint_meters.height | type == "number" and isfinite and . > 0)
+          and ($profile.anchor_meters | type == "object")
+          and ($profile.anchor_meters.x | type == "number" and isfinite and . >= 0
+            and . <= $profile.footprint_meters.width)
+          and ($profile.anchor_meters.y | type == "number" and isfinite and . >= 0
+            and . <= $profile.footprint_meters.height))))
     and (([.scene.props[].instance_id] | unique | length) == (.scene.props | length))
     and all(.scene.template_anchors[];
       (.anchor_id | type == "string" and length > 0)

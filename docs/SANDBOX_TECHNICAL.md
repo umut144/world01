@@ -260,12 +260,13 @@ protocol-neutral `world_data` crate embeds its files as a deterministic catalog.
 Its build script rejects unreadable scene headers, unknown scene kinds, and
 duplicate scene IDs before compiling that catalog.
 Callers select an Instance by its scene ID. Template exports are imported into a
-typed catalog grouped by `group_number`, but are not yet chosen or composed into
-a map. A pure geometry projection can place one explicitly chosen Template at
-one matching Instance Anchor: it requires identical Terrain-cell sizes, uses a
-signed integer grid offset, rejects a mask or Prop origin outside the Instance
-(the boundary itself is valid), and returns translated cells and Props without
-merging them. A Prop's full footprint is not part of this boundary check.
+typed catalog grouped by `group_number`; authoritative occupancy can choose and
+compose them into a map while the game runs. A pure geometry projection can
+place one explicitly chosen Template at one matching Instance Anchor: it
+requires identical Terrain-cell sizes, uses a signed integer grid offset,
+rejects a mask or Prop origin outside the Instance (the boundary itself is
+valid), and returns translated cells and Props without merging them. A Prop's
+full footprint is not part of this boundary check.
 Template Prop IDs remain local during projection; merging assigns each one the
 deterministic ID
 `template.<anchor_id>.<template_scene_id>.<local_prop_id>` and rejects even a
@@ -288,8 +289,13 @@ a whole if any overlapping existing Prop has a higher rank; otherwise it removes
 all overlapping equal- or lower-ranked Props and is appended in source order.
 Existing ordering is otherwise retained, new cells follow in Template order,
 and generated Prop IDs use the namespace above. Missing ranks, missing or
-invalid Prop footprints, and identity collisions are errors. These placement
-footprints are authoring geometry, not gameplay collision regions.
+invalid Prop footprints, overlapping Props within one authored scene, and
+identity collisions are errors. A valid Prop profile has `footprint_meters`
+with finite positive dimensions and `anchor_meters` with finite coordinates in
+the inclusive range from zero through that footprint's size. The export sync
+gate enforces the same profile requirements before replacing embedded maps.
+These placement footprints are authoring geometry, not gameplay collision
+regions.
 Maps and projected Templates require Prop origins inside or on the world
 boundary; their full placement footprints may extend beyond it.
 Collision, navigation, presentation, and other derived state are not rebuilt by
