@@ -179,18 +179,27 @@ mod tests {
     use crate::{WorldTemplate, map::template_export, map::test_export_with_anchors};
 
     const FIRST_ANCHOR: &str = r#"{
-        "anchor_id": "anchor_first",
+        "anchor_id": "zeta_anchor",
         "group_number": 1,
         "position_authoring_px": { "x": 64, "y": 96 }
     }"#;
     const SECOND_ANCHOR: &str = r#"{
-        "anchor_id": "anchor_second",
+        "anchor_id": "alpha_anchor",
         "group_number": 1,
         "position_authoring_px": { "x": 64, "y": 96 }
     }"#;
     const BASE_CELL: &str = r#"{ "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": 1.0 }"#;
 
     fn template(scene_id: &str, group_number: u32, elevation_meters: f32) -> WorldTemplate {
+        template_with_props(scene_id, group_number, elevation_meters, "")
+    }
+
+    fn template_with_props(
+        scene_id: &str,
+        group_number: u32,
+        elevation_meters: f32,
+        props: &str,
+    ) -> WorldTemplate {
         let definition = format!(
             r#"{{
                 "group_number": {group_number},
@@ -200,7 +209,7 @@ mod tests {
         let cell = format!(
             r#"{{ "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": {elevation_meters} }}"#
         );
-        let source = template_export(&definition, &cell, "").replace(
+        let source = template_export(&definition, &cell, props).replace(
             r#""scene_id": "test_template_unit""#,
             &format!(r#""scene_id": "{scene_id}""#),
         );
@@ -245,16 +254,16 @@ mod tests {
             WorldComposition::new(map, &templates, &ranks).expect("the empty composition is valid");
 
         forward
-            .set_occupant("anchor_first", "template_first", &templates, &ranks)
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
             .expect("the first assignment is valid");
         forward
-            .set_occupant("anchor_second", "template_second", &templates, &ranks)
+            .set_occupant("alpha_anchor", "template_second", &templates, &ranks)
             .expect("the second assignment is valid");
         reverse
-            .set_occupant("anchor_second", "template_second", &templates, &ranks)
+            .set_occupant("alpha_anchor", "template_second", &templates, &ranks)
             .expect("the second assignment is valid");
         reverse
-            .set_occupant("anchor_first", "template_first", &templates, &ranks)
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
             .expect("the first assignment is valid");
 
         assert_eq!(forward.current_map(), reverse.current_map());
@@ -274,25 +283,25 @@ mod tests {
 
         assert!(
             composition
-                .set_occupant("anchor_first", "template_first", &templates, &ranks)
+                .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
                 .expect("the assignment is valid")
         );
         assert!(
             !composition
-                .set_occupant("anchor_first", "template_first", &templates, &ranks)
+                .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
                 .expect("the identical assignment is a no-op")
         );
         assert_eq!(composition.occupancy().generation(), 1);
         assert!(
             composition
-                .clear_occupant("anchor_first", &templates, &ranks)
+                .clear_occupant("zeta_anchor", &templates, &ranks)
                 .expect("clearing the assignment is valid")
         );
         assert_eq!(composition.current_map(), &map);
         assert_eq!(composition.occupancy().generation(), 2);
         assert!(
             !composition
-                .clear_occupant("anchor_first", &templates, &ranks)
+                .clear_occupant("zeta_anchor", &templates, &ranks)
                 .expect("clearing an empty Anchor is a no-op")
         );
         assert_eq!(composition.occupancy().generation(), 2);
@@ -312,12 +321,12 @@ mod tests {
         );
         assert!(
             composition
-                .set_occupant("anchor_first", "missing", &templates, &ranks)
+                .set_occupant("zeta_anchor", "missing", &templates, &ranks)
                 .is_err()
         );
         assert!(
             composition
-                .set_occupant("anchor_first", "template_wrong_group", &templates, &ranks,)
+                .set_occupant("zeta_anchor", "template_wrong_group", &templates, &ranks,)
                 .is_err()
         );
         assert!(
@@ -331,13 +340,13 @@ mod tests {
     #[test]
     fn occupancy_has_a_stable_serialized_form() {
         let (map, templates, ranks) = fixture();
-        let mut composition =
-            WorldComposition::new(map, &templates, &ranks).expect("the empty composition is valid");
+        let mut composition = WorldComposition::new(map.clone(), &templates, &ranks)
+            .expect("the empty composition is valid");
         composition
-            .set_occupant("anchor_second", "template_second", &templates, &ranks)
+            .set_occupant("alpha_anchor", "template_second", &templates, &ranks)
             .expect("the assignment is valid");
         composition
-            .set_occupant("anchor_first", "template_first", &templates, &ranks)
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
             .expect("the assignment is valid");
 
         let encoded = serde_json::to_string(composition.occupancy())
@@ -347,8 +356,45 @@ mod tests {
 
         assert_eq!(
             encoded,
-            r#"{"generation":2,"occupants":{"anchor_first":"template_first","anchor_second":"template_second"}}"#
+            r#"{"generation":2,"occupants":{"alpha_anchor":"template_second","zeta_anchor":"template_first"}}"#
         );
         assert_eq!(decoded, *composition.occupancy());
+        let reconstructed = WorldComposition::from_occupancy(map, decoded, &templates, &ranks)
+            .expect("the replicated occupancy reconstructs the composition");
+        assert_eq!(reconstructed.current_map(), composition.current_map());
+    }
+
+    #[test]
+    fn later_anchor_terrain_can_remove_an_earlier_template_prop() {
+        let anchors = format!("{FIRST_ANCHOR}, {SECOND_ANCHOR}");
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(BASE_CELL, "", &anchors),
+            "overworld01",
+        )
+        .expect("the synthetic Instance is valid");
+        let earlier_prop = r#"{
+            "instance_id": "temporary_grass_prop",
+            "asset_key": "grass",
+            "position_authoring_px": { "x": 16, "y": 16 },
+            "elevation_meters": 1.0
+        }"#;
+        let templates = WorldTemplateCatalog::from_templates([
+            template_with_props("template_first", 1, 2.0, earlier_prop),
+            template("template_second", 1, 3.0),
+        ]);
+        let ranks = PlacementRanks::from_entries([("grass", 10)])
+            .expect("the synthetic Placement Ranks are valid");
+        let mut composition =
+            WorldComposition::new(map, &templates, &ranks).expect("the empty composition is valid");
+
+        composition
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
+            .expect("the earlier assignment is valid");
+        assert_eq!(composition.current_map().props().len(), 1);
+
+        composition
+            .set_occupant("alpha_anchor", "template_second", &templates, &ranks)
+            .expect("the later assignment is valid");
+        assert!(composition.current_map().props().is_empty());
     }
 }
