@@ -7,7 +7,7 @@
 > [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md). Game-specific decisions live
 > in the corresponding document below [`games/`](games/).
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 
 ## Purpose and authority
 
@@ -125,6 +125,51 @@ this document instead of copying a shared mechanic as if it were game-owned.
   authored-Corner contour model is not an automatic default for the Hammer or
   for other projected-depth Assets; each such presentation is decided
   separately.
+
+## 2.5D world space and elevation
+
+World 01 is a 2.5D world. Its authored polygon presentation may be two-
+dimensional, but elevation is an active physical coordinate measured in meters,
+not merely a drawing-order value. A Character, bot, flying creature, cloud,
+tree crown, tower floor, bridge, or other world object may occupy a meaningful
+height above the ground plane.
+
+- A world position consists of horizontal `x` and `y` plus
+  `elevation_meters`. Camera presentation does not redefine those world
+  coordinates.
+- A top-down view projects the horizontal plane. A side-scroller view may
+  instead present one horizontal axis together with elevation. Switching view
+  changes camera and control presentation, not the identity of the place or
+  the Character's physical position.
+- Bevy/render depth, PolyTools Component `z_index`, and other draw-order values
+  do not represent physical elevation.
+- A grounded Actor follows the height of its supporting Terrain, Path, or other
+  surface. Airborne and flying Actors may change elevation independently of a
+  support surface.
+- Tree crowns, upper tower floors, cloud worlds, flight, bridges, and similar
+  spaces may therefore participate in the same world instead of being modeled
+  only as unrelated visual layers.
+
+Physical proximity or equal elevation does not by itself connect two places.
+Traversal requires a continuous surface, an allowed step, a SceneMaker Path,
+or another deliberately authored connection such as a door, ladder, lift, or
+portal. This keeps topology a design decision: two platforms at the same height
+may remain separate, while two visually different spaces may be explicitly
+connected.
+
+A tower expresses the intended relationship clearly. A Character can enter it
+from the top-down exterior, traverse a side-scroller interior through authored
+stairs, ladders, or platforms, and leave at a physically higher exit before the
+camera returns to top-down. The camera transition does not teleport between
+unrelated coordinate systems; the interior traversal and its exits connect
+real elevations in the same World-01 space.
+
+Bots reason about this world space rather than about the current camera. Ground
+bots use navigation connections between elevated supporting surfaces. A later
+flying bot may use a three-dimensional airspace graph, and authored traversal
+links may connect ground navigation, tower interiors, flight space, and other
+movement modes. The exact flight model and airspace representation remain open
+until a concrete flying Actor requires them.
 
 ## Template Anchors and events
 

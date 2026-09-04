@@ -1,6 +1,6 @@
 # World 01 Multiplayer Sandbox — Vision
 
-Last updated: 2026-08-29
+Last updated: 2026-09-05
 
 ## Purpose and audience
 
@@ -26,10 +26,11 @@ defines how a game extends those contracts.
 
 ## Scope
 
-The sandbox supports multiple 2D multiplayer games that can share World 01's
-theme, authored assets, recurring characters and abilities, networking
-conventions, and presentation infrastructure. A game may use rooms, larger
-spaces, characters, or other entities without those
+The sandbox supports multiple 2D-presented and 2.5D multiplayer games that can
+share World 01's theme, authored assets, recurring characters and abilities,
+networking conventions, and presentation infrastructure. World 01 may use
+physical elevation even when a particular camera presents only two axes. A
+game may use rooms, larger spaces, characters, or other entities without those
 concepts implying a particular genre or gameplay loop.
 
 The sandbox owns stable boundaries rather than genre behavior:
