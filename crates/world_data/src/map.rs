@@ -816,26 +816,36 @@ pub struct MapRouteSurface {
     pub boundary_edges: Vec<MapRouteBoundaryEdge>,
     pub centerline_samples: Vec<MapRouteCenterlineSample>,
     pub segments: Vec<MapRouteSegment>,
+    bounds: MapRouteBounds,
 }
 
 impl MapRouteSurface {
     /// Samples the baked walking height and authored grade at a point inside
     /// this Path's horizontal footprint.
     ///
-    /// Height follows the exported triangle plane. Grade remains the exact
-    /// authored integer assigned to the nearest baked centerline interval;
-    /// triangle geometry is never used to reconstruct that gameplay token.
+    /// Triangles define only footprint containment because SceneMaker's curved
+    /// join patches may overlap. Height and grade both follow the nearest
+    /// baked centerline interval, with authored order breaking exact ties.
     pub fn sample_at(&self, position: Position) -> Option<MapRouteSurfaceSample> {
-        if !position.x.is_finite() || !position.y.is_finite() {
+        if !position.x.is_finite()
+            || !position.y.is_finite()
+            || !self.bounds.contains(position)
+            || !self.triangle_indices.chunks_exact(3).any(|triangle| {
+                let Some(first) = self.vertices.get(triangle[0] as usize) else {
+                    return false;
+                };
+                let Some(second) = self.vertices.get(triangle[1] as usize) else {
+                    return false;
+                };
+                let Some(third) = self.vertices.get(triangle[2] as usize) else {
+                    return false;
+                };
+                triangle_contains(position, first.position, second.position, third.position)
+            })
+        {
             return None;
         }
-        let elevation_meters = self.triangle_indices.chunks_exact(3).find_map(|triangle| {
-            let first = self.vertices.get(triangle[0] as usize)?;
-            let second = self.vertices.get(triangle[1] as usize)?;
-            let third = self.vertices.get(triangle[2] as usize)?;
-            interpolate_triangle_height(position, *first, *second, *third)
-        })?;
-        let grade_percent = self
+        let (_, _, _, factor, first, second, grade_percent) = self
             .segments
             .iter()
             .enumerate()
@@ -846,17 +856,25 @@ impl MapRouteSurface {
                     .get(start..=end)
                     .into_iter()
                     .flat_map(move |samples| {
-                        samples.windows(2).map(move |samples| {
-                            (
-                                point_segment_distance_squared(
+                        samples
+                            .windows(2)
+                            .enumerate()
+                            .map(move |(interval_index, samples)| {
+                                let (distance_squared, factor) = point_segment_projection(
                                     position,
                                     samples[0].position,
                                     samples[1].position,
-                                ),
-                                segment_index,
-                                segment.grade_percent,
-                            )
-                        })
+                                );
+                                (
+                                    distance_squared,
+                                    segment_index,
+                                    interval_index,
+                                    factor,
+                                    samples[0],
+                                    samples[1],
+                                    segment.grade_percent,
+                                )
+                            })
                     })
             })
             .min_by(|first, second| {
@@ -864,12 +882,44 @@ impl MapRouteSurface {
                     .0
                     .total_cmp(&second.0)
                     .then_with(|| first.1.cmp(&second.1))
-            })?
-            .2;
+                    .then_with(|| first.2.cmp(&second.2))
+            })?;
+        let elevation_meters =
+            first.elevation_meters + factor * (second.elevation_meters - first.elevation_meters);
         Some(MapRouteSurfaceSample {
             elevation_meters,
             grade_percent,
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct MapRouteBounds {
+    minimum: Position,
+    maximum: Position,
+}
+
+impl MapRouteBounds {
+    fn from_vertices(vertices: &[MapRouteVertex]) -> Option<Self> {
+        let first = vertices.first()?.position;
+        let mut minimum = first;
+        let mut maximum = first;
+        for vertex in &vertices[1..] {
+            minimum.x = minimum.x.min(vertex.position.x);
+            minimum.y = minimum.y.min(vertex.position.y);
+            maximum.x = maximum.x.max(vertex.position.x);
+            maximum.y = maximum.y.max(vertex.position.y);
+        }
+        Some(Self { minimum, maximum })
+    }
+
+    fn contains(self, position: Position) -> bool {
+        const BOUNDS_EPSILON_METERS: f32 = 1.0e-5;
+
+        position.x >= self.minimum.x - BOUNDS_EPSILON_METERS
+            && position.y >= self.minimum.y - BOUNDS_EPSILON_METERS
+            && position.x <= self.maximum.x + BOUNDS_EPSILON_METERS
+            && position.y <= self.maximum.y + BOUNDS_EPSILON_METERS
     }
 }
 
@@ -879,51 +929,43 @@ pub struct MapRouteSurfaceSample {
     pub grade_percent: i32,
 }
 
-fn interpolate_triangle_height(
-    point: Position,
-    first: MapRouteVertex,
-    second: MapRouteVertex,
-    third: MapRouteVertex,
-) -> Option<f32> {
-    const EDGE_EPSILON: f32 = 1.0e-5;
+fn triangle_contains(point: Position, first: Position, second: Position, third: Position) -> bool {
+    // Dimensionless barycentric tolerance: it closes round-off cracks between
+    // adjacent bake triangles, and is not gameplay collision clearance.
+    const EDGE_WEIGHT_EPSILON: f32 = 1.0e-5;
 
     let denominator = cross(
-        second.position.x - first.position.x,
-        second.position.y - first.position.y,
-        third.position.x - first.position.x,
-        third.position.y - first.position.y,
+        second.x - first.x,
+        second.y - first.y,
+        third.x - first.x,
+        third.y - first.y,
     );
     if !denominator.is_finite() || denominator == 0.0 {
-        return None;
+        return false;
     }
     let second_weight = cross(
-        point.x - first.position.x,
-        point.y - first.position.y,
-        third.position.x - first.position.x,
-        third.position.y - first.position.y,
+        point.x - first.x,
+        point.y - first.y,
+        third.x - first.x,
+        third.y - first.y,
     ) / denominator;
     let third_weight = cross(
-        second.position.x - first.position.x,
-        second.position.y - first.position.y,
-        point.x - first.position.x,
-        point.y - first.position.y,
+        second.x - first.x,
+        second.y - first.y,
+        point.x - first.x,
+        point.y - first.y,
     ) / denominator;
     let first_weight = 1.0 - second_weight - third_weight;
-    if first_weight < -EDGE_EPSILON || second_weight < -EDGE_EPSILON || third_weight < -EDGE_EPSILON
-    {
-        return None;
-    }
-    let elevation = first_weight * first.elevation_meters
-        + second_weight * second.elevation_meters
-        + third_weight * third.elevation_meters;
-    elevation.is_finite().then_some(elevation)
+    first_weight >= -EDGE_WEIGHT_EPSILON
+        && second_weight >= -EDGE_WEIGHT_EPSILON
+        && third_weight >= -EDGE_WEIGHT_EPSILON
 }
 
 const fn cross(first_x: f32, first_y: f32, second_x: f32, second_y: f32) -> f32 {
     first_x * second_y - first_y * second_x
 }
 
-fn point_segment_distance_squared(point: Position, start: Position, end: Position) -> f32 {
+fn point_segment_projection(point: Position, start: Position, end: Position) -> (f32, f32) {
     let segment_x = end.x - start.x;
     let segment_y = end.y - start.y;
     let length_squared = segment_x * segment_x + segment_y * segment_y;
@@ -935,7 +977,10 @@ fn point_segment_distance_squared(point: Position, start: Position, end: Positio
     };
     let difference_x = point.x - (start.x + factor * segment_x);
     let difference_y = point.y - (start.y + factor * segment_y);
-    difference_x * difference_x + difference_y * difference_y
+    (
+        difference_x * difference_x + difference_y * difference_y,
+        factor,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1465,6 +1510,12 @@ fn convert_route_surfaces(
         }
         let segments =
             validate_route_bake_segments(&source, bake.segments, centerline_samples.len())?;
+        let bounds = MapRouteBounds::from_vertices(&vertices).ok_or_else(|| {
+            WorldMapError::new(format!(
+                "route surface '{}' needs baked vertices",
+                source.route_surface_id
+            ))
+        })?;
         converted.push(MapRouteSurface {
             route_surface_id: source.route_surface_id,
             asset_key: source.asset_key,
@@ -1474,6 +1525,7 @@ fn convert_route_surfaces(
             boundary_edges,
             centerline_samples,
             segments,
+            bounds,
         });
     }
     Ok(converted)
@@ -2161,6 +2213,34 @@ mod tests {
                     .grade_percent,
                 segment.grade_percent
             );
+        }
+    }
+
+    #[test]
+    fn route_sampling_is_independent_of_overlapping_triangle_order() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        for route in &map.route_surfaces()[..2] {
+            let mut reordered = route.clone();
+            reordered.triangle_indices = route
+                .triangle_indices
+                .chunks_exact(3)
+                .rev()
+                .flatten()
+                .copied()
+                .collect();
+            for triangle in route.triangle_indices.chunks_exact(3) {
+                let vertices = [
+                    route.vertices[triangle[0] as usize].position,
+                    route.vertices[triangle[1] as usize].position,
+                    route.vertices[triangle[2] as usize].position,
+                ];
+                let center = Position::new(
+                    (vertices[0].x + vertices[1].x + vertices[2].x) / 3.0,
+                    (vertices[0].y + vertices[1].y + vertices[2].y) / 3.0,
+                );
+                assert_eq!(route.sample_at(center), reordered.sample_at(center));
+            }
         }
     }
 

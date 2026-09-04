@@ -247,20 +247,32 @@ Character's configured step height. It then updates elevation from the target
 cell before horizontal integration. Stationary grounded Actors also resample
 Terrain after a world-composition change, and Ankh respawns resolve their final
 height and Terrain support rather than retaining the Ankh's raw export height.
+Respawn commits life, HP, count, position, and support together only after that
+resolution succeeds; failure leaves the complete confirmation state intact for
+a later retry.
 
-Route-surface support is also active. Its height is barycentrically sampled
-from SceneMaker's baked triangles, while its speed class comes from the exact
-authored grade of the nearest baked centerline interval rather than from a
-floating-point slope reconstructed at runtime. Grades `0` and `±25` preserve
-the Actor's current movement speed; `±50` multiply the final requested speed,
-including RUN or DASH, by `0.5` before planar collision tests its endpoint.
+Route-surface support is also active. A stored AABB rejects points outside a
+Route before its baked triangles determine footprint containment. SceneMaker's
+curved join patches may overlap, so triangle emission order deliberately has
+no height meaning: both elevation and speed class come from projection onto
+the nearest baked centerline interval, with authored interval order breaking
+an exact tie. Elevation interpolates between that interval's two samples;
+grade remains its exact authored integer rather than a floating-point slope
+reconstructed at runtime. Grades `0` and `±25` preserve the Actor's current
+movement speed; `±50` multiply the final requested speed, including RUN or
+DASH, by `0.5` before planar collision tests its endpoint. The reduced factor
+already applies to the first accepted Terrain-to-Route step.
+
 An Actor retains its current support while the target point remains on it.
 Terrain changes to a Route only when exactly one overlapping Route is
 surface-compatible, grade-passable, and within the Actor's allowed step
 height. A Route may change to Terrain or one uniquely reachable other Route by
-the same rule. An elevated bridge therefore does not pull up an Actor walking
-on Terrain below it, and multiple reachable overlapping Routes are not
-resolved by guessing the nearest height or first ID.
+the same rule. A Route more than the allowed step height above Terrain does not
+pull up an Actor walking below it. Multiple reachable overlapping Routes block
+the transition instead of falling through to Terrain or being resolved by the
+nearest height or first ID. A missing referenced Route makes the absent
+support explicit as `Airborne`; only geometric displacement away from an
+existing support may reconnect to another uniquely reachable support.
 
 Airborne and flying movement rules do not exist yet. Current Character/world
 collision, revival overlap, Hammer impact, and Mage beam evaluation remain

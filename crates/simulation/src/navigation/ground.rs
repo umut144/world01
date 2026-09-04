@@ -11,12 +11,13 @@ use super::{CharacterTraversalProfile, TraversalCatalog};
 /// Applies the grade multiplier of the Path supporting an Actor before planar
 /// collision evaluates this tick's movement endpoint.
 pub fn apply_grounded_route_speed(
+    step: Res<MovementStep>,
     map: Option<Res<WorldMap>>,
     traversal: Option<Res<TraversalCatalog>>,
     mut actors: Query<(
         &SelectedCharacter,
-        &WorldPosition,
-        &MovementMedium,
+        &mut WorldPosition,
+        &mut MovementMedium,
         &mut MovementVelocity,
     )>,
 ) {
@@ -27,11 +28,11 @@ pub fn apply_grounded_route_speed(
         return;
     };
 
-    for (character, position, medium, mut velocity) in &mut actors {
+    for (character, mut position, mut medium, mut velocity) in &mut actors {
         if *velocity == MovementVelocity::ZERO {
             continue;
         }
-        let MovementMedium::Grounded(support) = medium else {
+        let MovementMedium::Grounded(support) = &*medium else {
             *velocity = MovementVelocity::ZERO;
             continue;
         };
@@ -39,27 +40,34 @@ pub fn apply_grounded_route_speed(
             *velocity = MovementVelocity::ZERO;
             continue;
         };
-        match support {
-            GroundSupport::Terrain => {}
-            GroundSupport::RouteSurface { route_surface_id } => {
-                let Some(route) = map.route_surface(route_surface_id) else {
-                    *velocity = MovementVelocity::ZERO;
-                    continue;
-                };
-                let Some(sample) = route.sample_at(position.horizontal()) else {
-                    *velocity = MovementVelocity::ZERO;
-                    continue;
-                };
-                if !profile.permits_surface(&route.surface) {
-                    *velocity = MovementVelocity::ZERO;
-                    continue;
-                }
-                let Some(speed) = profile.speed_for_grade(sample.grade_percent) else {
-                    *velocity = MovementVelocity::ZERO;
-                    continue;
-                };
-                *velocity = velocity.scaled(speed.multiplier());
+        let current = match resolve_current_support(&map, profile, support, *position) {
+            CurrentSupport::Resolved(sample) => sample,
+            CurrentSupport::MissingIdentity | CurrentSupport::Unsupported => {
+                *velocity = MovementVelocity::ZERO;
+                *medium = MovementMedium::Airborne;
+                continue;
             }
+        };
+        position.elevation_meters = current.elevation_meters;
+        if current.support != SampleSupport::from(support) {
+            *medium = MovementMedium::Grounded(current.support.to_owned());
+        }
+        if !profile.permits_surface(current.surface) {
+            *velocity = MovementVelocity::ZERO;
+            continue;
+        }
+
+        let displacement = step.step(*velocity);
+        let proposed = Position::new(position.x + displacement.x, position.y + displacement.y);
+        let target_grade = resolve_target(&map, profile, current, proposed)
+            .and_then(|target| target.grade_percent);
+        let grade = target_grade.or(current.grade_percent);
+        if let Some(grade) = grade {
+            let Some(speed) = profile.speed_for_grade(grade) else {
+                *velocity = MovementVelocity::ZERO;
+                continue;
+            };
+            *velocity = velocity.scaled(speed.multiplier());
         }
     }
 }
@@ -100,30 +108,24 @@ pub fn constrain_grounded_movement(
             *velocity = MovementVelocity::ZERO;
             continue;
         };
-        let current = sample_support(&map, support, position.horizontal()).or_else(|| {
-            resolve_detached_support(
-                &map,
-                profile,
-                position.elevation_meters,
-                position.horizontal(),
-            )
-        });
-        let Some(current) = current else {
-            *velocity = MovementVelocity::ZERO;
-            *medium = MovementMedium::Airborne;
-            continue;
+        let current = match resolve_current_support(&map, profile, support, *position) {
+            CurrentSupport::Resolved(sample) => sample,
+            CurrentSupport::MissingIdentity | CurrentSupport::Unsupported => {
+                *velocity = MovementVelocity::ZERO;
+                *medium = MovementMedium::Airborne;
+                continue;
+            }
         };
-        if !profile.permits_surface(current.surface) {
-            *velocity = MovementVelocity::ZERO;
-            *medium = MovementMedium::Airborne;
-            continue;
-        }
 
         // A stationary Actor follows an edited support as well. Template
         // changes therefore cannot leave Grounded state at a stale elevation.
         position.elevation_meters = current.elevation_meters;
-        if !current.support.matches(support) {
+        if current.support != SampleSupport::from(support) {
             *medium = MovementMedium::Grounded(current.support.to_owned());
+        }
+        if !profile.permits_surface(current.surface) {
+            *velocity = MovementVelocity::ZERO;
+            continue;
         }
         if *velocity == MovementVelocity::ZERO {
             continue;
@@ -149,25 +151,23 @@ enum SampleSupport<'a> {
 }
 
 impl SampleSupport<'_> {
-    fn matches(self, support: &GroundSupport) -> bool {
-        match (self, support) {
-            (Self::Terrain, GroundSupport::Terrain) => true,
-            (
-                Self::RouteSurface(first),
-                GroundSupport::RouteSurface {
-                    route_surface_id: second,
-                },
-            ) => first == second,
-            _ => false,
-        }
-    }
-
     fn to_owned(self) -> GroundSupport {
         match self {
             Self::Terrain => GroundSupport::Terrain,
             Self::RouteSurface(route_surface_id) => GroundSupport::RouteSurface {
                 route_surface_id: route_surface_id.to_owned(),
             },
+        }
+    }
+}
+
+impl<'a> From<&'a GroundSupport> for SampleSupport<'a> {
+    fn from(support: &'a GroundSupport) -> Self {
+        match support {
+            GroundSupport::Terrain => Self::Terrain,
+            GroundSupport::RouteSurface { route_surface_id } => {
+                Self::RouteSurface(route_surface_id)
+            }
         }
     }
 }
@@ -180,16 +180,43 @@ struct GroundSample<'a> {
     grade_percent: Option<i32>,
 }
 
-fn sample_support<'a>(
+enum CurrentSupport<'a> {
+    Resolved(GroundSample<'a>),
+    MissingIdentity,
+    Unsupported,
+}
+
+fn resolve_current_support<'a>(
     map: &'a WorldMap,
+    profile: &CharacterTraversalProfile,
     support: &GroundSupport,
-    position: Position,
-) -> Option<GroundSample<'a>> {
-    match support {
-        GroundSupport::Terrain => sample_terrain(map, position),
-        GroundSupport::RouteSurface { route_surface_id } => map
-            .route_surface(route_surface_id)
-            .and_then(|route| sample_route(route, position)),
+    position: WorldPosition,
+) -> CurrentSupport<'a> {
+    let horizontal = position.horizontal();
+    let (sample, excluded_route) = match support {
+        GroundSupport::Terrain => (sample_terrain(map, horizontal), None),
+        GroundSupport::RouteSurface { route_surface_id } => {
+            let Some(route) = map.route_surface(route_surface_id) else {
+                return CurrentSupport::MissingIdentity;
+            };
+            (
+                sample_route(route, horizontal),
+                Some(route_surface_id.as_str()),
+            )
+        }
+    };
+    if let Some(sample) = sample {
+        return CurrentSupport::Resolved(sample);
+    }
+    match resolve_detached_support(
+        map,
+        profile,
+        position.elevation_meters,
+        horizontal,
+        excluded_route,
+    ) {
+        Some(sample) => CurrentSupport::Resolved(sample),
+        None => CurrentSupport::Unsupported,
     }
 }
 
@@ -231,14 +258,16 @@ fn resolve_target<'a>(
         SampleSupport::Terrain => None,
         SampleSupport::RouteSurface(route_surface_id) => Some(route_surface_id),
     };
-    if let Ok(Some(route)) = unique_reachable_route(
+    match unique_reachable_route(
         map,
         profile,
         current.elevation_meters,
         position,
         excluded_route,
     ) {
-        return Some(route);
+        ReachableRoute::One(route) => return Some(route),
+        ReachableRoute::Ambiguous => return None,
+        ReachableRoute::None => {}
     }
 
     let terrain = sample_terrain(map, position)?;
@@ -250,14 +279,28 @@ fn resolve_detached_support<'a>(
     profile: &CharacterTraversalProfile,
     current_elevation_meters: f32,
     position: Position,
+    excluded_route: Option<&str>,
 ) -> Option<GroundSample<'a>> {
-    if let Ok(Some(route)) =
-        unique_reachable_route(map, profile, current_elevation_meters, position, None)
-    {
-        return Some(route);
+    match unique_reachable_route(
+        map,
+        profile,
+        current_elevation_meters,
+        position,
+        excluded_route,
+    ) {
+        ReachableRoute::One(route) => return Some(route),
+        ReachableRoute::Ambiguous => return None,
+        ReachableRoute::None => {}
     }
     let terrain = sample_terrain(map, position)?;
     sample_is_reachable(profile, current_elevation_meters, terrain).then_some(terrain)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ReachableRoute<'a> {
+    None,
+    One(GroundSample<'a>),
+    Ambiguous,
 }
 
 fn unique_reachable_route<'a>(
@@ -266,24 +309,31 @@ fn unique_reachable_route<'a>(
     current_elevation_meters: f32,
     position: Position,
     excluded_route: Option<&str>,
-) -> Result<Option<GroundSample<'a>>, ()> {
-    let mut candidate = None;
-    for route in map.route_surfaces() {
+) -> ReachableRoute<'a> {
+    select_unique_route(map.route_surfaces().iter().filter_map(|route| {
         if excluded_route == Some(route.route_surface_id.as_str()) {
-            continue;
+            return None;
         }
-        let Some(sample) = sample_route(route, position) else {
-            continue;
-        };
+        let sample = sample_route(route, position)?;
         if !sample_is_reachable(profile, current_elevation_meters, sample) {
-            continue;
+            return None;
         }
-        if candidate.is_some() {
-            return Err(());
-        }
-        candidate = Some(sample);
+        Some(sample)
+    }))
+}
+
+fn select_unique_route<'a>(
+    candidates: impl IntoIterator<Item = GroundSample<'a>>,
+) -> ReachableRoute<'a> {
+    let mut candidates = candidates.into_iter();
+    let Some(first) = candidates.next() else {
+        return ReachableRoute::None;
+    };
+    if candidates.next().is_some() {
+        ReachableRoute::Ambiguous
+    } else {
+        ReachableRoute::One(first)
     }
-    Ok(candidate)
 }
 
 fn sample_is_reachable(
@@ -508,6 +558,10 @@ mod tests {
                 .expect("actor keeps its velocity"),
             &MovementVelocity::ZERO
         );
+        assert_eq!(
+            app.world().get::<MovementMedium>(actor),
+            Some(&MovementMedium::Airborne)
+        );
     }
 
     #[test]
@@ -619,6 +673,54 @@ mod tests {
     }
 
     #[test]
+    fn first_step_onto_a_half_speed_route_is_already_reduced() {
+        let mut app = app();
+        let (start, requested, terrain_elevation) = {
+            let map = app.world().resource::<WorldMap>();
+            let route = &map.route_surfaces()[1];
+            let start = route.centerline_samples[0].position;
+            let next = route.centerline_samples[1].position;
+            (
+                start,
+                Vec2::new(next.x - start.x, next.y - start.y).normalize() * 0.05,
+                map.terrain_cell_at(start)
+                    .expect("the authored Path start meets Terrain")
+                    .elevation_meters,
+            )
+        };
+        let velocity = app
+            .world()
+            .resource::<MovementStep>()
+            .velocity_of(requested);
+        let actor = app
+            .world_mut()
+            .spawn((
+                SelectedCharacter(CharacterId("hammerer".into())),
+                velocity,
+                WorldPosition::new(start.x, start.y, terrain_elevation),
+                MovementMedium::GROUNDED_TERRAIN,
+            ))
+            .id();
+
+        app.update();
+
+        let position = *app
+            .world()
+            .get::<WorldPosition>(actor)
+            .expect("actor keeps its position");
+        assert!(
+            (Vec2::new(position.x - start.x, position.y - start.y).length()
+                - requested.length() * 0.5)
+                .abs()
+                < 0.000_1
+        );
+        assert!(matches!(
+            app.world().get::<MovementMedium>(actor),
+            Some(MovementMedium::Grounded(GroundSupport::RouteSurface { .. }))
+        ));
+    }
+
+    #[test]
     fn elevated_route_does_not_pull_a_terrain_actor_up_from_below() {
         let mut app = app();
         let (start, requested, terrain_elevation) = {
@@ -666,5 +768,28 @@ mod tests {
             .get::<WorldPosition>(actor)
             .expect("actor keeps its position");
         assert_eq!(position.elevation_meters, terrain_elevation);
+    }
+
+    #[test]
+    fn multiple_reachable_routes_are_explicitly_ambiguous() {
+        let samples = [
+            GroundSample {
+                support: SampleSupport::RouteSurface("first"),
+                surface: "land",
+                elevation_meters: 1.0,
+                grade_percent: Some(0),
+            },
+            GroundSample {
+                support: SampleSupport::RouteSurface("second"),
+                surface: "land",
+                elevation_meters: 1.0,
+                grade_percent: Some(0),
+            },
+        ];
+
+        assert!(matches!(
+            select_unique_route(samples),
+            ReachableRoute::Ambiguous
+        ));
     }
 }

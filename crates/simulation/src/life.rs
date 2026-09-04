@@ -343,36 +343,35 @@ fn advance_confirmation(
         .saturating_add(1)
         .min(rules.confirmation_duration_ticks());
     *revival = RevivalState::IDLE;
-    if confirmation.held_ticks >= rules.confirmation_duration_ticks() {
-        health.current = health.maximum * rules.respawn_health_ratio;
-        *life = CharacterLifeState::Alive;
-        confirmation.held_ticks = 0;
-        respawn.count = respawn.count.saturating_add(1);
-        if let Some(position) = position {
-            let fallback = *position;
-            let candidate = choose_respawn_position(
-                actor_id.0,
-                respawn.count,
-                fallback,
-                character,
-                facing,
-                rules.ankh_respawn_radius_meters,
-                ankhs,
-                actors,
-                hurt_geometry,
-            );
-            if let Some(medium) = medium {
-                if let Some(resolved) =
-                    terrain_respawn_position(candidate, character, map, traversal)
-                {
-                    *position = resolved;
-                    *medium = MovementMedium::Grounded(GroundSupport::Terrain);
-                }
-            } else {
-                *position = candidate;
-            }
-        }
+    if confirmation.held_ticks < rules.confirmation_duration_ticks() {
+        return;
     }
+
+    let (Some(position), Some(medium)) = (position, medium) else {
+        return;
+    };
+    let next_respawn_count = respawn.count.saturating_add(1);
+    let candidate = choose_respawn_position(
+        actor_id.0,
+        next_respawn_count,
+        *position,
+        character,
+        facing,
+        rules.ankh_respawn_radius_meters,
+        ankhs,
+        actors,
+        hurt_geometry,
+    );
+    let Some(resolved) = terrain_respawn_position(candidate, character, map, traversal) else {
+        return;
+    };
+
+    health.current = health.maximum * rules.respawn_health_ratio;
+    *life = CharacterLifeState::Alive;
+    confirmation.held_ticks = 0;
+    respawn.count = next_respawn_count;
+    *position = resolved;
+    *medium = MovementMedium::Grounded(GroundSupport::Terrain);
 }
 
 fn terrain_respawn_position(
@@ -698,6 +697,50 @@ mod tests {
             .expect("respawn candidate has Terrain")
             .elevation_meters;
         assert_eq!(position.elevation_meters, terrain_elevation);
+        assert_eq!(
+            app.world().get::<MovementMedium>(actor),
+            Some(&MovementMedium::GROUNDED_TERRAIN)
+        );
+    }
+
+    #[test]
+    fn unresolved_respawn_does_not_commit_partial_life_state() {
+        let mut app = test_app();
+        let actor = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Dead);
+        app.world_mut()
+            .entity_mut(actor)
+            .insert(SelectedCharacter(CharacterId("unknown".into())));
+        app.world_mut()
+            .get_mut::<DeathConfirmIntent>(actor)
+            .expect("actor has death confirmation input")
+            .pressed = true;
+
+        for _ in 0..240 {
+            app.update();
+        }
+
+        assert_eq!(
+            app.world().get::<CharacterLifeState>(actor),
+            Some(&CharacterLifeState::DeathConfirming)
+        );
+        assert_eq!(
+            app.world()
+                .get::<CharacterHealth>(actor)
+                .expect("actor keeps health")
+                .current,
+            0.0
+        );
+        assert_eq!(
+            app.world()
+                .get::<RespawnState>(actor)
+                .expect("actor keeps respawn state")
+                .count,
+            0
+        );
+        assert_eq!(
+            app.world().get::<WorldPosition>(actor),
+            Some(&WorldPosition::ZERO)
+        );
         assert_eq!(
             app.world().get::<MovementMedium>(actor),
             Some(&MovementMedium::GROUNDED_TERRAIN)
