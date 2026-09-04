@@ -21,9 +21,10 @@ use world01_world_data::{
 use crate::eyes::EyePupil;
 use crate::hammer::apply_hammer_pose;
 use crate::input::{
-    ClientInputFocus, clear_input_when_unfocused, collect_attack_input,
-    collect_death_confirmation_input, collect_gaze_input, collect_locomotion_input,
-    collect_movement_input, collect_world_template_debug_input, update_client_input_focus,
+    ClientInputFocus, clear_input_when_unfocused, clear_world_template_debug_input,
+    collect_attack_input, collect_death_confirmation_input, collect_gaze_input,
+    collect_locomotion_input, collect_movement_input, collect_world_template_debug_input,
+    update_client_input_focus,
 };
 use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
@@ -85,7 +86,12 @@ impl Plugin for ClientPresentationPlugin {
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
             .add_systems(
                 OnExit(ClientScreen::InGame),
-                (cleanup_world_visuals, reset_rendered_world_generation).chain(),
+                (
+                    cleanup_world_visuals,
+                    reset_rendered_world_generation,
+                    clear_world_template_debug_input,
+                )
+                    .chain(),
             )
             .add_systems(
                 Update,

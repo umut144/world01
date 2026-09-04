@@ -151,6 +151,10 @@ pub fn collect_world_template_debug_input(
     }
 }
 
+pub fn clear_world_template_debug_input(mut request: ResMut<ClientWorldTemplateDebugRequest>) {
+    request.clear();
+}
+
 fn world_template_debug_preset(
     keyboard: &ButtonInput<KeyCode>,
 ) -> Option<WorldTemplateDebugPreset> {

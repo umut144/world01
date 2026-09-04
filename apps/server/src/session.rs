@@ -31,6 +31,26 @@ impl Default for NextActorId {
     }
 }
 
+#[derive(Resource, Debug, Default)]
+struct PendingWorldTemplateDebugPreset {
+    latest: Option<(u64, WorldTemplateDebugPreset)>,
+}
+
+impl PendingWorldTemplateDebugPreset {
+    fn submit(&mut self, received_order: u64, preset: WorldTemplateDebugPreset) {
+        if self
+            .latest
+            .is_none_or(|(current_order, _)| received_order > current_order)
+        {
+            self.latest = Some((received_order, preset));
+        }
+    }
+
+    fn take(&mut self) -> Option<WorldTemplateDebugPreset> {
+        self.latest.take().map(|(_, preset)| preset)
+    }
+}
+
 pub struct ServerSessionPlugin;
 
 #[derive(Component)]
@@ -39,6 +59,7 @@ struct AuthoritativeWorldState;
 impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NextActorId>()
+            .init_resource::<PendingWorldTemplateDebugPreset>()
             .add_systems(Startup, spawn_world_state)
             .add_systems(
                 Update,
@@ -47,9 +68,12 @@ impl Plugin for ServerSessionPlugin {
             )
             .add_systems(
                 FixedUpdate,
-                publish_world_occupancy
-                    .after(WorldRuntimeSet::Rebuild)
-                    .before(SimulationSet::Collision),
+                (
+                    submit_pending_world_template_debug_preset.before(WorldRuntimeSet::Rebuild),
+                    publish_world_occupancy
+                        .after(WorldRuntimeSet::Rebuild)
+                        .before(SimulationSet::Collision),
+                ),
             );
     }
 }
@@ -57,10 +81,7 @@ impl Plugin for ServerSessionPlugin {
 fn accept_world_template_debug_requests(
     requests: Query<(Entity, &ServerWorldTemplateDebugRequest)>,
     players: Query<&PlayerOwner>,
-    composition: Res<WorldComposition>,
-    templates: Res<WorldTemplateCatalog>,
-    ranks: Res<PlacementRanks>,
-    mut pending: ResMut<WorldOccupancyRequest>,
+    mut pending: ResMut<PendingWorldTemplateDebugPreset>,
     mut commands: Commands,
 ) {
     for (entity, request) in &requests {
@@ -72,20 +93,40 @@ fn accept_world_template_debug_requests(
             );
             continue;
         }
-        let mut candidate = composition.clone();
-        match apply_world_template_debug_preset(&mut candidate, request.preset, &templates, &ranks)
-        {
-            Ok(true) => {
-                if !pending.submit(candidate.occupancy().clone()) {
-                    warn!(
-                        generation = candidate.occupancy().generation(),
-                        "ignoring stale world Template debug request"
-                    );
-                }
-            }
-            Ok(false) => {}
-            Err(error) => warn!(%error, "ignoring invalid world Template debug request"),
-        }
+        pending.submit(request.received_order(), request.preset);
+    }
+}
+
+fn submit_pending_world_template_debug_preset(
+    mut requested_preset: ResMut<PendingWorldTemplateDebugPreset>,
+    composition: Res<WorldComposition>,
+    templates: Res<WorldTemplateCatalog>,
+    ranks: Res<PlacementRanks>,
+    mut pending_occupancy: ResMut<WorldOccupancyRequest>,
+) {
+    let Some(preset) = requested_preset.take() else {
+        return;
+    };
+    let mut candidate = composition.clone();
+    if let Err(error) =
+        apply_world_template_debug_preset(&mut candidate, preset, &templates, &ranks)
+    {
+        warn!(%error, "ignoring invalid world Template debug request");
+        return;
+    }
+    let offered_generation = pending_occupancy.latest().map_or(
+        composition.occupancy().generation(),
+        AnchorOccupancy::generation,
+    );
+    if let Err(error) = candidate.ensure_generation_newer_than(offered_generation) {
+        warn!(%error, "cannot advance world Template debug request generation");
+        return;
+    }
+    if !pending_occupancy.submit(candidate.occupancy().clone()) {
+        warn!(
+            generation = candidate.occupancy().generation(),
+            "ignoring stale world Template debug request"
+        );
     }
 }
 
@@ -320,6 +361,91 @@ mod tests {
             .expect("the empty preset is valid")
         );
         assert!(composition.occupancy().occupants().next().is_none());
+    }
+
+    #[test]
+    fn debug_requests_require_a_joined_owner_and_latest_request_wins() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
+            .expect("the current embedded Assets have Placement Ranks");
+        let composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the initial composition is valid");
+        let mut app = App::new();
+        app.insert_resource(composition)
+            .insert_resource(templates)
+            .insert_resource(ranks)
+            .init_resource::<PendingWorldTemplateDebugPreset>()
+            .init_resource::<WorldOccupancyRequest>()
+            .add_systems(Update, accept_world_template_debug_requests)
+            .add_systems(FixedUpdate, submit_pending_world_template_debug_preset);
+
+        let unauthorized = app
+            .world_mut()
+            .spawn(ServerWorldTemplateDebugRequest::new(
+                WorldTemplateDebugPreset::BothAnchors,
+                7,
+                0,
+            ))
+            .id();
+        app.world_mut().run_schedule(Update);
+        assert!(app.world().get_entity(unauthorized).is_err());
+        assert_eq!(
+            app.world()
+                .resource::<PendingWorldTemplateDebugPreset>()
+                .latest,
+            None
+        );
+
+        app.world_mut().spawn(PlayerOwner(7));
+        app.world_mut().spawn(ServerWorldTemplateDebugRequest::new(
+            WorldTemplateDebugPreset::FirstAnchor,
+            7,
+            1,
+        ));
+        app.world_mut().spawn(ServerWorldTemplateDebugRequest::new(
+            WorldTemplateDebugPreset::SecondAnchor,
+            7,
+            2,
+        ));
+        app.world_mut().run_schedule(Update);
+        assert_eq!(
+            app.world()
+                .resource::<PendingWorldTemplateDebugPreset>()
+                .latest,
+            Some((2, WorldTemplateDebugPreset::SecondAnchor))
+        );
+        app.world_mut().run_schedule(FixedUpdate);
+        let second = app
+            .world()
+            .resource::<WorldOccupancyRequest>()
+            .latest()
+            .expect("the latest authorized request is submitted");
+        assert_eq!(second.occupant(FIRST_TEST_ANCHOR_ID), None);
+        assert_eq!(
+            second.occupant(SECOND_TEST_ANCHOR_ID),
+            Some(TEST_TEMPLATE_SCENE_ID)
+        );
+
+        app.world_mut().spawn(ServerWorldTemplateDebugRequest::new(
+            WorldTemplateDebugPreset::FirstAnchor,
+            7,
+            3,
+        ));
+        app.world_mut().run_schedule(Update);
+        app.world_mut().run_schedule(FixedUpdate);
+        let first = app
+            .world()
+            .resource::<WorldOccupancyRequest>()
+            .latest()
+            .expect("a later request supersedes the unaccepted generation");
+        assert_eq!(first.generation(), 2);
+        assert_eq!(
+            first.occupant(FIRST_TEST_ANCHOR_ID),
+            Some(TEST_TEMPLATE_SCENE_ID)
+        );
+        assert_eq!(first.occupant(SECOND_TEST_ANCHOR_ID), None);
     }
 
     #[test]

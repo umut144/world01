@@ -343,12 +343,15 @@ mutating the client world: `0` empties both test Anchors, `1` assigns
 `test_template02` only to `template_anchor_001`, `2` assigns it only to
 `template_anchor_002`, and `3` assigns it to both. The server accepts such a
 request only from a client with a joined Character, validates the full
-composition, applies it through the same fixed-tick world transaction, and then
-replicates the accepted occupancy. For the first version, a rare occupancy
-change during a client prediction rollback may replay buffered input against
-the newest world until normal server reconciliation; retaining historical
-worlds for every rollback tick is deliberately deferred unless playtesting
-shows that short discrepancy to be material.
+composition, and retains the latest received authorized preset until the next
+fixed tick. That preset receives a generation newer than every snapshot already
+offered to the runtime, including a rejected generation, then enters the same
+fixed-tick world transaction. Only its accepted occupancy is replicated. A
+client clears an unsent preset when it leaves the in-game state. For the first
+version, a rare occupancy change during a client prediction rollback may replay
+buffered input against the newest world until normal server reconciliation;
+retaining historical worlds for every rollback tick is deliberately deferred
+unless playtesting shows that short discrepancy to be material.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

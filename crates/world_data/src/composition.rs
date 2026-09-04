@@ -113,6 +113,17 @@ impl WorldComposition {
         &self.current_map
     }
 
+    /// Ensures an authority-created snapshot supersedes every generation that
+    /// has already been offered to the runtime, including a rejected one.
+    pub fn ensure_generation_newer_than(&mut self, generation: u64) -> Result<(), WorldMapError> {
+        if self.occupancy.generation <= generation {
+            self.occupancy.generation = generation.checked_add(1).ok_or_else(|| {
+                WorldMapError::new("Anchor occupancy generation cannot advance beyond u64::MAX")
+            })?;
+        }
+        Ok(())
+    }
+
     /// Mutates this protocol-neutral value directly.
     ///
     /// Runtime code must clone the installed composition, mutate the clone,
@@ -365,6 +376,26 @@ mod tests {
                 .expect("clearing an empty Anchor is a no-op")
         );
         assert_eq!(composition.occupancy().generation(), 2);
+    }
+
+    #[test]
+    fn authority_can_supersede_an_already_offered_generation() {
+        let (map, templates, ranks) = fixture();
+        let mut composition =
+            WorldComposition::new(map, &templates, &ranks).expect("the composition is valid");
+        composition
+            .set_occupant("zeta_anchor", "template_first", &templates, &ranks)
+            .expect("the assignment is valid");
+
+        composition
+            .ensure_generation_newer_than(5)
+            .expect("the generation can advance past the offered snapshot");
+
+        assert_eq!(composition.occupancy().generation(), 6);
+        assert_eq!(
+            composition.occupancy().occupant("zeta_anchor"),
+            Some("template_first")
+        );
     }
 
     #[test]

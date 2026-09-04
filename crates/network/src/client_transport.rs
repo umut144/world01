@@ -38,6 +38,10 @@ impl ClientWorldTemplateDebugRequest {
     pub fn submit(&mut self, preset: WorldTemplateDebugPreset) {
         self.pending = Some(preset);
     }
+
+    pub fn clear(&mut self) {
+        self.pending = None;
+    }
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -366,6 +370,8 @@ mod tests {
         request.submit(WorldTemplateDebugPreset::BothAnchors);
 
         assert_eq!(request.pending, Some(WorldTemplateDebugPreset::BothAnchors));
+        request.clear();
+        assert_eq!(request.pending, None);
     }
 
     #[test]

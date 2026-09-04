@@ -46,13 +46,29 @@ impl ServerJoinRequest {
 pub struct ServerWorldTemplateDebugRequest {
     pub preset: WorldTemplateDebugPreset,
     owner: u64,
+    received_order: u64,
 }
 
 impl ServerWorldTemplateDebugRequest {
+    pub fn new(preset: WorldTemplateDebugPreset, owner: u64, received_order: u64) -> Self {
+        Self {
+            preset,
+            owner,
+            received_order,
+        }
+    }
+
     pub fn owner(&self) -> u64 {
         self.owner
     }
+
+    pub fn received_order(&self) -> u64 {
+        self.received_order
+    }
 }
+
+#[derive(Resource, Debug, Default)]
+struct NextWorldTemplateDebugRequestOrder(u64);
 
 #[derive(Resource, Debug, Default)]
 struct ConnectionRegistry {
@@ -112,7 +128,8 @@ pub fn configure_server(
         .add_plugins(NativeInputPlugin::<PlayerInput>::default())
         .insert_resource(ReplicationMetadata::new(snapshot_interval))
         .insert_resource(network_simulation)
-        .init_resource::<ConnectionRegistry>();
+        .init_resource::<ConnectionRegistry>()
+        .init_resource::<NextWorldTemplateDebugRequestOrder>();
     register_game_protocol(app);
     app.add_systems(Startup, start_server)
         .add_systems(
@@ -136,6 +153,7 @@ fn receive_world_template_debug_requests(
         (&RemoteId, &mut MessageReceiver<WorldTemplateDebugPreset>),
         (With<ClientOf>, With<Connected>),
     >,
+    mut next_order: ResMut<NextWorldTemplateDebugRequestOrder>,
     mut commands: Commands,
 ) {
     for (remote, mut receiver) in &mut clients {
@@ -143,7 +161,17 @@ fn receive_world_template_debug_requests(
             continue;
         };
         for preset in receiver.receive() {
-            commands.spawn(ServerWorldTemplateDebugRequest { preset, owner });
+            let received_order = next_order.0;
+            let Some(following_order) = received_order.checked_add(1) else {
+                warn!("world Template debug request order is exhausted");
+                return;
+            };
+            next_order.0 = following_order;
+            commands.spawn(ServerWorldTemplateDebugRequest::new(
+                preset,
+                owner,
+                received_order,
+            ));
         }
     }
 }
