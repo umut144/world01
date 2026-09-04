@@ -12,6 +12,7 @@ use world01_configs::load_file;
 use world01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
+use world01_simulation::WorldRuntimeState;
 use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
     MovementIntent, Position, RunState, SelectedCharacter, WorldMap,
@@ -78,17 +79,14 @@ impl Plugin for ClientPresentationPlugin {
         app.insert_resource(self.character_assets.clone())
             .init_resource::<ClientInputFocus>()
             .init_resource::<PoseSettings>()
+            .init_resource::<RenderedWorldGeneration>()
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
-            .add_systems(
-                OnEnter(ClientScreen::InGame),
-                (
-                    configure_ingame_camera,
-                    setup_map_visuals,
-                    setup_ankh_visuals,
-                ),
-            )
+            .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
             .add_systems(OnExit(ClientScreen::CharacterSelection), cleanup_selection)
-            .add_systems(OnExit(ClientScreen::InGame), cleanup_room_floor)
+            .add_systems(
+                OnExit(ClientScreen::InGame),
+                (cleanup_world_visuals, reset_rendered_world_generation).chain(),
+            )
             .add_systems(
                 Update,
                 (
@@ -112,6 +110,15 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
                     repick_character.run_if(in_state(ClientScreen::InGame)),
+                    (
+                        cleanup_world_visuals,
+                        setup_map_visuals,
+                        setup_ankh_visuals,
+                        record_rendered_world_generation,
+                    )
+                        .chain()
+                        .run_if(in_state(ClientScreen::InGame))
+                        .run_if(world_visuals_need_rebuild),
                 ),
             )
             .add_systems(
@@ -150,6 +157,9 @@ struct RenderedMap;
 
 #[derive(Component)]
 struct RenderedAnkh;
+
+#[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct RenderedWorldGeneration(Option<u64>);
 
 #[derive(Component)]
 struct SelectionVisual;
@@ -724,7 +734,29 @@ fn ankh_projection_rotation() -> Quat {
         * Quat::from_rotation_y(ANKH_TILT_DEGREES.to_radians())
 }
 
-fn cleanup_room_floor(
+fn world_visuals_need_rebuild(
+    runtime: Res<WorldRuntimeState>,
+    rendered: Res<RenderedWorldGeneration>,
+) -> bool {
+    should_rebuild_world_visuals(runtime.applied_generation(), rendered.0)
+}
+
+fn should_rebuild_world_visuals(applied: Option<u64>, rendered: Option<u64>) -> bool {
+    applied.is_some() && applied != rendered
+}
+
+fn record_rendered_world_generation(
+    runtime: Res<WorldRuntimeState>,
+    mut rendered: ResMut<RenderedWorldGeneration>,
+) {
+    rendered.0 = runtime.applied_generation();
+}
+
+fn reset_rendered_world_generation(mut rendered: ResMut<RenderedWorldGeneration>) {
+    rendered.0 = None;
+}
+
+fn cleanup_world_visuals(
     map_visuals: Query<Entity, With<RenderedMap>>,
     ankhs: Query<Entity, With<RenderedAnkh>>,
     mut commands: Commands,
@@ -1032,6 +1064,14 @@ mod tests {
         ];
         assert_eq!(adjacent_character(None, 1, &ids), Some(ids[0].clone()));
         assert_eq!(adjacent_character(None, -1, &ids), Some(ids[1].clone()));
+    }
+
+    #[test]
+    fn world_visuals_rebuild_once_for_each_applied_generation() {
+        assert!(!should_rebuild_world_visuals(None, None));
+        assert!(should_rebuild_world_visuals(Some(0), None));
+        assert!(!should_rebuild_world_visuals(Some(0), Some(0)));
+        assert!(should_rebuild_world_visuals(Some(1), Some(0)));
     }
 
     #[test]
