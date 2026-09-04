@@ -7,7 +7,7 @@
 > [`SANDBOX_TECHNICAL.md`](SANDBOX_TECHNICAL.md). Game-specific decisions live
 > in the corresponding document below [`games/`](games/).
 
-Last updated: 2026-08-31
+Last updated: 2026-09-04
 
 ## Purpose and authority
 
@@ -156,11 +156,31 @@ A Template covers the cells it authors, placed at its Anchor, and within that
 footprint it may replace everything: Terrain surface, height, and Props. A
 dragon attack that leaves lava behind is the case this exists for.
 
-But a Template does not win by default. Resolution is by **rank**: every placed
-thing carries one, and the higher rank stays. A Template's tree does not replace
+But a Template does not win by default. Resolution uses one shared **rank**
+scale for Terrain and Props: every placed thing carries one, and the higher rank
+stays. Equal ranks are resolved in favor of the Template, so an event may still
+change the height of otherwise equal Terrain. A Template's tree does not replace
 a dungeon entrance, and Template terrain does not erase a river. Rank is design
 data that grows one entry at a time as Assets are added, never a list of pairs
 of things that beat each other.
+
+For the current replacement model, each incoming Template Terrain cell competes
+with existing Terrain and with existing Props whose origins belong to that
+cell. A lower- or equal-ranked existing Prop is removed; a higher-ranked one
+survives. Template Props are then added and do not directly compete with other
+Props. They may coexist with survivors, because Props are not raster geometry
+and no arbitrary distance is treated as a collision. Their rank matters when a
+later Template Terrain cell covers them. A Prop on an internal grid line belongs
+to the cell above or to the right; one on the valid top or right world boundary
+belongs to the final row or column.
+
+The first World-01 rank ordering leaves room between values for later Assets:
+
+| Asset | Rank |
+|---|---:|
+| Grass | `10` |
+| Tree | `20` |
+| Ankh | `100` |
 
 Rank lives in the design data next to the other tuning the game owns, and it
 grows one entry at a time as Assets are added. It is resolved on the server
@@ -882,9 +902,6 @@ questions and close them progressively.
   canonical World-01 defaults, or should some become game-owned tuning data?
 - Which additional characters, weapons, status effects, and progression rules
   belong in World Design as they are introduced?
-- Are Terrain rank and Prop rank one scale or two? A river outranking Template
-  terrain and a dungeon entrance outranking a Template tree are decisions about
-  different layers, and one number may not serve both.
 - What decides which Template a place receives, now that it is a deliberate
   choice rather than a draw? Event state, player progress and season are the
   candidates, and the answer belongs with the event system rather than here.

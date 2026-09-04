@@ -1,6 +1,6 @@
 # World 01 Multiplayer Sandbox — Technical Specification
 
-Last updated: 2026-08-31
+Last updated: 2026-09-04
 
 ## Purpose and interpretation
 
@@ -275,6 +275,20 @@ deliberately remain in the Template's own bottom-left coordinate frame until
 that projection. Instance Anchors and Template insertion anchors also retain
 their validated integer Terrain-grid coordinates, so projection never has to
 recover grid positions from floats.
+A second pure operation merges one projection into a new `WorldMap` without
+mutating either input. Placement ranks enter `world_data` as an explicit typed
+parameter loaded by `design`, preserving the dependency boundary. Template
+Terrain replaces equal- or lower-ranked Terrain and removes equal- or
+lower-ranked existing Props whose origins fall in its mask; Template Props are
+appended in source order and may coexist with survivors. Existing ordering is
+otherwise retained, new cells follow in Template order, and generated Prop IDs
+use the namespace above. Missing ranks and identity collisions are errors.
+Maps and projected Templates require Prop origins inside or on the world
+boundary. For rank resolution, internal grid intersections belong above or to
+the right while the top and right outer boundaries clamp into the final cells.
+Collision, navigation, presentation, and other derived state are not rebuilt by
+this pure operation and must be rebuilt by the authoritative runtime after an
+occupant changes.
 The current strict importer accepts export schema 9 and embedded scene schema
 10. It requires their water fields so an older snapshot cannot masquerade as
 current, but `WorldMap` does not yet model water and Templates carrying water

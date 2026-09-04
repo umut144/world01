@@ -36,3 +36,15 @@ default_degrees_per_second = 60.0
 [eyes]
 pupil_area_ratio = 0.26
 hammerer_collision_radius_ratio = 0.35
+
+[[placement_ranks]]
+asset_key = "grass"
+rank = 10
+
+[[placement_ranks]]
+asset_key = "tree"
+rank = 20
+
+[[placement_ranks]]
+asset_key = "ankh"
+rank = 100

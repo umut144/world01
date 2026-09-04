@@ -47,6 +47,13 @@ impl WorldMap {
             ));
         }
         let scene = convert_scene_body(export, SceneCoordinateFrame::Centered)?;
+        validate_prop_origins(
+            &scene.props,
+            scene.width_tiles,
+            scene.height_tiles,
+            scene.terrain_cell_meters,
+            "Instance",
+        )?;
 
         Ok(Self {
             width_tiles: scene.width_tiles,
@@ -201,6 +208,226 @@ impl WorldMap {
             position_offset,
             terrain_cells,
             props,
+        })
+    }
+
+    /// Returns a new map with one projected Template resolved against this
+    /// Instance. Neither input is changed.
+    ///
+    /// Template Terrain wins equal ranks. Its Terrain mask may remove a
+    /// lower- or equal-ranked existing Prop whose origin belongs to that cell.
+    /// Template Props do not compete directly with existing Props and may
+    /// coexist with survivors. Callers must rebuild collision, navigation, and
+    /// other state derived from the returned world.
+    pub fn merged_with(
+        &self,
+        placement: &WorldTemplatePlacement,
+        ranks: &PlacementRanks,
+    ) -> Result<Self, WorldMapError> {
+        ranks.validate_map_and_placement(self, placement)?;
+
+        let mut placement_by_cell = HashMap::with_capacity(placement.terrain_cells.len());
+        for cell in &placement.terrain_cells {
+            if cell.x >= self.width_tiles || cell.y >= self.height_tiles {
+                return Err(WorldMapError::new(format!(
+                    "Template placement cell ({}, {}) lies outside the Instance",
+                    cell.x, cell.y
+                )));
+            }
+            if placement_by_cell.insert((cell.x, cell.y), cell).is_some() {
+                return Err(WorldMapError::new(format!(
+                    "Template placement cell ({}, {}) is duplicated",
+                    cell.x, cell.y
+                )));
+            }
+        }
+
+        let mut occupied_cells =
+            HashSet::with_capacity(self.terrain_cells.len() + placement.terrain_cells.len());
+        let mut terrain_cells =
+            Vec::with_capacity(self.terrain_cells.len() + placement.terrain_cells.len());
+        for existing in &self.terrain_cells {
+            occupied_cells.insert((existing.x, existing.y));
+            let Some(incoming) = placement_by_cell.get(&(existing.x, existing.y)) else {
+                terrain_cells.push(existing.clone());
+                continue;
+            };
+            if ranks.required(&incoming.asset_key)? >= ranks.required(&existing.asset_key)? {
+                terrain_cells.push((*incoming).clone());
+            } else {
+                terrain_cells.push(existing.clone());
+            }
+        }
+        for incoming in &placement.terrain_cells {
+            if occupied_cells.insert((incoming.x, incoming.y)) {
+                terrain_cells.push(incoming.clone());
+            }
+        }
+
+        let original_prop_ids = self
+            .props
+            .iter()
+            .map(|prop| prop.instance_id.as_str())
+            .collect::<HashSet<_>>();
+        let mut props = Vec::with_capacity(self.props.len() + placement.props.len());
+        for existing in &self.props {
+            let Some(cell_position) = self.cell_at_position(existing.position) else {
+                return Err(WorldMapError::new(format!(
+                    "Instance Prop '{}' lies outside the Instance",
+                    existing.instance_id
+                )));
+            };
+            let keep = match placement_by_cell.get(&cell_position) {
+                Some(incoming) => {
+                    ranks.required(&existing.asset_key)? > ranks.required(&incoming.asset_key)?
+                }
+                None => true,
+            };
+            if keep {
+                props.push(existing.clone());
+            }
+        }
+
+        let mut merged_prop_ids = props
+            .iter()
+            .map(|prop| prop.instance_id.clone())
+            .collect::<HashSet<_>>();
+        for incoming in &placement.props {
+            let instance_id = format!(
+                "template.{}.{}.{}",
+                placement.anchor_id, placement.template_scene_id, incoming.instance_id
+            );
+            if original_prop_ids.contains(instance_id.as_str())
+                || !merged_prop_ids.insert(instance_id.clone())
+            {
+                return Err(WorldMapError::new(format!(
+                    "merged Template Prop ID '{instance_id}' is duplicated"
+                )));
+            }
+            props.push(MapProp {
+                instance_id,
+                asset_key: incoming.asset_key.clone(),
+                position: incoming.position,
+                elevation_meters: incoming.elevation_meters,
+            });
+        }
+
+        Ok(Self {
+            width_tiles: self.width_tiles,
+            height_tiles: self.height_tiles,
+            terrain_cell_meters: self.terrain_cell_meters,
+            terrain_cells,
+            props,
+            template_anchors: self.template_anchors.clone(),
+        })
+    }
+
+    fn cell_at_position(&self, position: Position) -> Option<(u32, u32)> {
+        let half_width = self.width_meters() * 0.5;
+        let half_height = self.height_meters() * 0.5;
+        if position.x < -half_width
+            || position.x > half_width
+            || position.y < -half_height
+            || position.y > half_height
+        {
+            return None;
+        }
+
+        // The top and right boundaries are valid positions. Clamp those exact
+        // outer intersections into the final row/column; internal grid lines
+        // belong to the row/column above or to the right through `floor`.
+        let x = (((position.x + half_width) / self.terrain_cell_meters).floor() as u32)
+            .min(self.width_tiles - 1);
+        let y = (((position.y + half_height) / self.terrain_cell_meters).floor() as u32)
+            .min(self.height_tiles - 1);
+        Some((x, y))
+    }
+}
+
+/// One shared precedence scale for authored Terrain and Props.
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct PlacementRanks {
+    ranks: HashMap<String, u32>,
+}
+
+impl PlacementRanks {
+    pub fn from_entries<I, S>(entries: I) -> Result<Self, WorldMapError>
+    where
+        I: IntoIterator<Item = (S, u32)>,
+        S: Into<String>,
+    {
+        let mut ranks = HashMap::new();
+        for (asset_key, rank) in entries {
+            let asset_key = asset_key.into();
+            if asset_key.is_empty() || ranks.insert(asset_key.clone(), rank).is_some() {
+                return Err(WorldMapError::new(format!(
+                    "Placement Rank Asset key '{asset_key}' is empty or duplicated"
+                )));
+            }
+        }
+        if ranks.is_empty() {
+            return Err(WorldMapError::new(
+                "Placement Ranks require at least one Asset",
+            ));
+        }
+        Ok(Self { ranks })
+    }
+
+    pub fn rank(&self, asset_key: &str) -> Option<u32> {
+        self.ranks.get(asset_key).copied()
+    }
+
+    /// Ensures design ranks cover one Instance and every Template currently
+    /// available to it. Extra future-facing rank entries remain valid.
+    pub fn validate_for(
+        &self,
+        map: &WorldMap,
+        templates: &WorldTemplateCatalog,
+    ) -> Result<(), WorldMapError> {
+        for asset_key in map
+            .terrain_cells
+            .iter()
+            .map(|cell| cell.asset_key.as_str())
+            .chain(map.props.iter().map(|prop| prop.asset_key.as_str()))
+            .chain(templates.groups.values().flatten().flat_map(|template| {
+                template
+                    .terrain_cells
+                    .iter()
+                    .map(|cell| cell.asset_key.as_str())
+                    .chain(template.props.iter().map(|prop| prop.asset_key.as_str()))
+            }))
+        {
+            self.required(asset_key)?;
+        }
+        Ok(())
+    }
+
+    fn validate_map_and_placement(
+        &self,
+        map: &WorldMap,
+        placement: &WorldTemplatePlacement,
+    ) -> Result<(), WorldMapError> {
+        for asset_key in map
+            .terrain_cells
+            .iter()
+            .map(|cell| cell.asset_key.as_str())
+            .chain(map.props.iter().map(|prop| prop.asset_key.as_str()))
+            .chain(
+                placement
+                    .terrain_cells
+                    .iter()
+                    .map(|cell| cell.asset_key.as_str()),
+            )
+            .chain(placement.props.iter().map(|prop| prop.asset_key.as_str()))
+        {
+            self.required(asset_key)?;
+        }
+        Ok(())
+    }
+
+    fn required(&self, asset_key: &str) -> Result<u32, WorldMapError> {
+        self.rank(asset_key).ok_or_else(|| {
+            WorldMapError::new(format!("Placement Rank is missing for Asset '{asset_key}'"))
         })
     }
 }
@@ -490,6 +717,8 @@ impl WorldTemplatePlacement {
         &self.terrain_cells
     }
 
+    /// Translated Template Props. Their IDs remain Template-local until
+    /// [`WorldMap::merged_with`] applies the documented namespace.
     pub fn props(&self) -> &[MapProp] {
         &self.props
     }
@@ -797,6 +1026,30 @@ fn convert_props(
         .collect()
 }
 
+fn validate_prop_origins(
+    props: &[MapProp],
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    scene_label: &str,
+) -> Result<(), WorldMapError> {
+    let half_width = width_tiles as f32 * terrain_cell_meters * 0.5;
+    let half_height = height_tiles as f32 * terrain_cell_meters * 0.5;
+    for prop in props {
+        if prop.position.x < -half_width
+            || prop.position.x > half_width
+            || prop.position.y < -half_height
+            || prop.position.y > half_height
+        {
+            return Err(WorldMapError::new(format!(
+                "{scene_label} Prop '{}' lies outside the scene",
+                prop.instance_id
+            )));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct WorldMapError(String);
 
@@ -1007,6 +1260,20 @@ mod tests {
         "group_number": 1,
         "position_authoring_px": { "x": 64, "y": 96 }
     }"#;
+
+    fn with_merge_profiles(source: String) -> String {
+        source.replacen(
+            r#"{ "asset_key": "grass", "surface": "land" }"#,
+            r#"{ "asset_key": "grass", "surface": "land" },
+                { "asset_key": "stone", "surface": "stone" }"#,
+            1,
+        )
+    }
+
+    fn merge_ranks() -> PlacementRanks {
+        PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("stone", 30), ("ankh", 100)])
+            .expect("the synthetic Placement Ranks are valid")
+    }
 
     /// The server refuses to start without an Ankh, so that much must hold for
     /// whatever scene is currently authored.
@@ -1386,6 +1653,202 @@ mod tests {
     }
 
     #[test]
+    fn template_merge_resolves_ranks_and_preserves_stable_order() {
+        let map_cells = r#"
+            { "x": 0, "y": 0, "asset_key": "grass", "elevation_meters": 1.0 },
+            { "x": 1, "y": 0, "asset_key": "stone", "elevation_meters": 4.0 },
+            { "x": 2, "y": 0, "asset_key": "grass", "elevation_meters": 1.0 }
+        "#;
+        let map_props = r#"
+            {
+                "instance_id": "tree_removed",
+                "asset_key": "tree",
+                "position_authoring_px": { "x": 16, "y": 16 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "ankh_kept",
+                "asset_key": "ankh",
+                "position_authoring_px": { "x": 16, "y": 16 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "tree_kept",
+                "asset_key": "tree",
+                "position_authoring_px": { "x": 48, "y": 16 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "outside_mask",
+                "asset_key": "grass",
+                "position_authoring_px": { "x": 16, "y": 48 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "internal_boundary",
+                "asset_key": "grass",
+                "position_authoring_px": { "x": 32, "y": 16 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "outer_boundary",
+                "asset_key": "grass",
+                "position_authoring_px": { "x": 128, "y": 16 },
+                "elevation_meters": 1.0
+            }
+        "#;
+        let map = WorldMap::from_source(
+            &with_merge_profiles(test_export_with_anchors(map_cells, map_props, ANCHOR)),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template_cells = r#"
+            { "x": 0, "y": 0, "asset_key": "stone", "elevation_meters": 2.0 },
+            { "x": 1, "y": 0, "asset_key": "grass", "elevation_meters": 2.0 },
+            { "x": 2, "y": 0, "asset_key": "grass", "elevation_meters": 3.0 },
+            { "x": 3, "y": 0, "asset_key": "grass", "elevation_meters": 4.0 }
+        "#;
+        let template_props = r#"{
+            "instance_id": "tree_new",
+            "asset_key": "tree",
+            "position_authoring_px": { "x": 48, "y": 16 },
+            "elevation_meters": 3.0
+        }"#;
+        let template = WorldTemplate::from_source(
+            &with_merge_profiles(template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                template_cells,
+                template_props,
+            )),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let placement = map
+            .project_template("template_anchor_001", &template)
+            .expect("the synthetic Template fits");
+        let original_map = map.clone();
+        let original_placement = placement.clone();
+
+        assert_eq!(
+            map.cell_at_position(Position::new(-1.0, -1.5)),
+            Some((1, 0))
+        );
+        assert_eq!(map.cell_at_position(Position::new(2.0, 2.0)), Some((3, 3)));
+
+        let merged = map
+            .merged_with(&placement, &merge_ranks())
+            .expect("the ranks resolve the synthetic placement");
+        let merged_again = map
+            .merged_with(&placement, &merge_ranks())
+            .expect("the same inputs resolve deterministically");
+
+        assert_eq!(merged, merged_again);
+        assert_eq!(map, original_map);
+        assert_eq!(placement, original_placement);
+        assert_eq!(
+            merged
+                .terrain_cells()
+                .iter()
+                .map(|cell| {
+                    (
+                        cell.x,
+                        cell.asset_key.as_str(),
+                        cell.surface.as_str(),
+                        cell.elevation_meters,
+                    )
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                (0, "stone", "stone", 2.0),
+                (1, "stone", "stone", 4.0),
+                (2, "grass", "land", 3.0),
+                (3, "grass", "land", 4.0),
+            ]
+        );
+        assert_eq!(
+            merged
+                .props()
+                .iter()
+                .map(|prop| prop.instance_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "ankh_kept",
+                "tree_kept",
+                "outside_mask",
+                "template.template_anchor_001.test_template_unit.tree_new",
+            ]
+        );
+        assert_eq!(merged.props()[3].position, Position::new(-0.5, -1.5));
+        assert_eq!(merged.props()[3].elevation_meters, 3.0);
+    }
+
+    #[test]
+    fn template_merge_rejects_missing_ranks_and_namespaced_id_collisions() {
+        let colliding_id = "template.template_anchor_001.test_template_unit.tree_new";
+        let map_prop = format!(
+            r#"{{
+                "instance_id": "{colliding_id}",
+                "asset_key": "ankh",
+                "position_authoring_px": {{ "x": 16, "y": 48 }},
+                "elevation_meters": 1.0
+            }}"#
+        );
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, &map_prop, ANCHOR),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                TEST_GRASS_CELL,
+                r#"{
+                    "instance_id": "tree_new",
+                    "asset_key": "tree",
+                    "position_authoring_px": { "x": 16, "y": 16 },
+                    "elevation_meters": 1.0
+                }"#,
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let placement = map
+            .project_template("template_anchor_001", &template)
+            .expect("the synthetic Template fits");
+        let incomplete = PlacementRanks::from_entries([("grass", 10), ("tree", 20)])
+            .expect("the partial catalog itself is well formed");
+
+        let missing = map
+            .merged_with(&placement, &incomplete)
+            .expect_err("the Instance Ankh has no rank");
+        let collision = map
+            .merged_with(&placement, &merge_ranks())
+            .expect_err("the generated ID collides with an Instance Prop");
+
+        assert!(missing.to_string().contains("ankh"));
+        assert!(collision.to_string().contains(colliding_id));
+    }
+
+    #[test]
+    fn placement_rank_entries_must_have_unique_nonempty_asset_keys() {
+        assert!(PlacementRanks::from_entries(std::iter::empty::<(&str, u32)>()).is_err());
+        assert!(PlacementRanks::from_entries([("", 1)]).is_err());
+        assert!(PlacementRanks::from_entries([("grass", 1), ("grass", 2)]).is_err());
+        assert_eq!(
+            PlacementRanks::from_entries([("grass", 10)])
+                .expect("the catalog is valid")
+                .rank("grass"),
+            Some(10)
+        );
+    }
+
+    #[test]
     fn an_instance_or_a_template_without_definition_is_rejected_as_a_template() {
         assert!(
             WorldTemplate::from_source(&test_export(TEST_GRASS_CELL, ""), TEST_SCENE_ID).is_err()
@@ -1644,6 +2107,23 @@ mod tests {
                 TEST_SCENE_ID,
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn instance_prop_origins_must_stay_within_the_scene_boundary() {
+        let edge = ANKH.replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 128, "y": 128 }"#,
+        );
+        let outside = ANKH.replace(
+            r#""position_authoring_px": { "x": 64, "y": 96 }"#,
+            r#""position_authoring_px": { "x": 160, "y": 128 }"#,
+        );
+
+        assert!(WorldMap::from_source(&test_export(TEST_GRASS_CELL, &edge), TEST_SCENE_ID).is_ok());
+        assert!(
+            WorldMap::from_source(&test_export(TEST_GRASS_CELL, &outside), TEST_SCENE_ID).is_err()
         );
     }
 

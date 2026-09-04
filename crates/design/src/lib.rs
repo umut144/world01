@@ -5,7 +5,9 @@ use std::{
     fmt,
     path::Path,
 };
-use world01_world_data::{CharacterId, DensityClass, HurtGeometryDefinition, MassModelDefinition};
+use world01_world_data::{
+    CharacterId, DensityClass, HurtGeometryDefinition, MassModelDefinition, PlacementRanks,
+};
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
@@ -23,6 +25,24 @@ pub struct World01Design {
     pub health: HealthConfig,
     pub weapon_aim: WeaponAimConfig,
     pub eyes: EyesConfig,
+    pub placement_ranks: Vec<PlacementRankDesign>,
+}
+
+impl World01Design {
+    pub fn placement_ranks(&self) -> Result<PlacementRanks, DesignError> {
+        PlacementRanks::from_entries(
+            self.placement_ranks
+                .iter()
+                .map(|entry| (entry.asset_key.as_str(), entry.rank)),
+        )
+        .map_err(|error| DesignError(format!("invalid placement ranks: {error}")))
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct PlacementRankDesign {
+    pub asset_key: String,
+    pub rank: u32,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -476,6 +496,7 @@ fn parse_world01_design(contents: &str) -> Result<World01Design, DesignError> {
         || !world01.health.is_valid()
         || !world01.weapon_aim.is_valid()
         || !world01.eyes.is_valid()
+        || world01.placement_ranks().is_err()
     {
         return Err(DesignError("World 01 design is invalid".into()));
     }
@@ -567,6 +588,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use world01_world_data::{WorldMap, WorldTemplateCatalog};
 
     #[test]
     fn embedded_design_contains_the_component_based_hammer_attack() {
@@ -689,5 +711,48 @@ mod tests {
         assert_eq!(design.locomotion.default_max_stamina, 100.0);
         assert_eq!(design.health.revival_seconds, 8.0);
         assert_eq!(design.weapon_aim.default_degrees_per_second, 60.0);
+        let ranks = design
+            .placement_ranks()
+            .expect("embedded Placement Ranks are valid");
+        assert_eq!(ranks.rank("grass"), Some(10));
+        assert_eq!(ranks.rank("tree"), Some(20));
+        assert_eq!(ranks.rank("ankh"), Some(100));
+    }
+
+    #[test]
+    fn embedded_placement_ranks_cover_and_merge_the_world_catalog() {
+        let design = load_world01_embedded().expect("embedded World 01 design parses");
+        let ranks = design
+            .placement_ranks()
+            .expect("embedded Placement Ranks are valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("embedded SceneMaker Templates are valid");
+        let overworld =
+            WorldMap::load_embedded("overworld01").expect("embedded overworld is valid");
+        let cave = WorldMap::load_embedded("cave01").expect("embedded cave is valid");
+
+        ranks
+            .validate_for(&overworld, &templates)
+            .expect("ranks cover the overworld and Template catalog");
+        ranks
+            .validate_for(&cave, &templates)
+            .expect("ranks cover the cave and Template catalog");
+
+        let template = templates
+            .template("test_template02")
+            .expect("the embedded integration Template exists");
+        let placement = overworld
+            .project_template("template_anchor_001", template)
+            .expect("the embedded Template fits the real Anchor");
+        let merged = overworld
+            .merged_with(&placement, &ranks)
+            .expect("the embedded ranks resolve the real placement");
+
+        assert!(merged.props().iter().any(|prop| {
+            prop.instance_id == "template.template_anchor_001.test_template02.ankh_0001"
+        }));
+        assert!(merged.props().iter().any(|prop| {
+            prop.instance_id == "template.template_anchor_001.test_template02.tree_0001"
+        }));
     }
 }
