@@ -224,12 +224,12 @@ fn accept_join_requests(
             warn!("actor id space exhausted; ignoring join request");
             continue;
         };
-        let spawn = spawn_position(actor_id);
-        let Some(spawn_cell) = map.terrain_cell_at(Position::new(spawn.x, spawn.y)) else {
+        let horizontal_spawn = spawn_position(actor_id);
+        let Some(spawn) = spawn_world_position(&map, actor_id) else {
             warn!(
                 owner = request.owner(),
-                x = spawn.x,
-                y = spawn.y,
+                x = horizontal_spawn.x,
+                y = horizontal_spawn.y,
                 "ignoring join without authored Terrain at the spawn position"
             );
             continue;
@@ -264,7 +264,7 @@ fn accept_join_requests(
             (
                 BodyFacing::Authored,
                 GazeDirection::RIGHT,
-                WorldPosition::new(spawn.x, spawn.y, spawn_cell.elevation_meters),
+                spawn,
                 CharacterHealth::full(maximum_health),
                 mass,
             ),
@@ -284,6 +284,11 @@ fn spawn_position(actor_id: u64) -> Vec2 {
     ];
     let index = (actor_id.saturating_sub(1) % POSITIONS.len() as u64) as usize;
     POSITIONS[index]
+}
+
+fn spawn_world_position(map: &WorldMap, actor_id: u64) -> Option<WorldPosition> {
+    let position = spawn_position(actor_id);
+    map.terrain_world_position_at(Position::new(position.x, position.y))
 }
 
 #[cfg(test)]
@@ -317,11 +322,17 @@ mod tests {
 
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         for actor_id in 1..=MAX_CLIENTS as u64 {
-            let spawn = spawn_position(actor_id);
-            assert!(
-                map.terrain_cell_at(Position::new(spawn.x, spawn.y))
-                    .is_some(),
-                "spawn {actor_id} must have authored Terrain"
+            let horizontal = spawn_position(actor_id);
+            let cell = map
+                .terrain_cell_at(Position::new(horizontal.x, horizontal.y))
+                .expect("each spawn must have authored Terrain");
+            assert_eq!(
+                spawn_world_position(&map, actor_id),
+                Some(WorldPosition::new(
+                    horizontal.x,
+                    horizontal.y,
+                    cell.elevation_meters,
+                ))
             );
         }
     }

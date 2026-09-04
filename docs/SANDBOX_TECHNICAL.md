@@ -242,7 +242,10 @@ the Ankh placement's exported elevation.
 
 Explicit support and movement-medium state do not exist yet, and neither Actor
 movement nor client map presentation samples authored Terrain or Path elevation
-after spawning. Client presentation currently projects only `x` and `y`; Bevy
+after spawning. Current Character/world collision, revival overlap, Hammer
+impact, and Mage beam evaluation also remain planar: they do not yet use the
+Actors' elevations to separate physical layers. Client presentation currently
+projects only `x` and `y`; Bevy
 `Transform.z` remains presentation depth, including ordering among Terrain,
 Props, Characters, and projected weapon parts, rather than an authoritative
 physical coordinate. There is no generic sandbox

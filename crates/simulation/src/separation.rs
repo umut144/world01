@@ -370,6 +370,13 @@ mod tests {
         Vec2::new(position.x, position.y)
     }
 
+    fn elevation(app: &App, entity: Entity) -> f32 {
+        app.world()
+            .get::<WorldPosition>(entity)
+            .expect("the actor keeps its WorldPosition")
+            .elevation_meters
+    }
+
     fn assert_vec2(actual: Vec2, expected: Vec2) {
         assert!(
             actual.distance(expected) <= EPSILON,
@@ -531,12 +538,22 @@ mod tests {
         let mut app = app(1);
         let first = spawn(&mut app, 1, Vec2::ZERO, mass(1.0, 0.6));
         let second = spawn(&mut app, 2, Vec2::new(0.3, 0.0), mass(1.0, 0.6));
+        app.world_mut()
+            .get_mut::<WorldPosition>(first)
+            .expect("the first actor keeps its WorldPosition")
+            .elevation_meters = 7.0;
+        app.world_mut()
+            .get_mut::<WorldPosition>(second)
+            .expect("the second actor keeps its WorldPosition")
+            .elevation_meters = -2.0;
 
         app.update();
 
         let half = (0.1 + SEPARATION_CLEARANCE_METERS) / 2.0;
         assert_vec2(position(&app, first), Vec2::new(-half, 0.0));
         assert_vec2(position(&app, second), Vec2::new(0.3 + half, 0.0));
+        assert_eq!(elevation(&app, first), 7.0);
+        assert_eq!(elevation(&app, second), -2.0);
         let geometry = app
             .world()
             .resource::<CharacterCollisionGeometryCatalog>()
@@ -923,7 +940,7 @@ mod tests {
                 .spawn((
                     SelectedCharacter(world01_world_data::CharacterId("walker".into())),
                     BodyFacing::Right,
-                    WorldPosition::new(-0.16, 0.0, 1.0),
+                    WorldPosition::new(-0.16, 0.0, 7.0),
                 ))
                 .id();
             if with_unrelated_state {
@@ -944,6 +961,7 @@ mod tests {
             }
 
             app.update();
+            assert_eq!(elevation(&app, actor), 7.0);
             position(&app, actor)
         }
 

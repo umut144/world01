@@ -7,7 +7,7 @@ use std::{
 use bevy::prelude::Resource;
 use serde::Deserialize;
 
-use crate::Position;
+use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
 const FORMAT_VERSION: u32 = 10;
@@ -117,6 +117,12 @@ impl WorldMap {
         self.terrain_cells
             .iter()
             .find(|cell| cell.x == x && cell.y == y)
+    }
+
+    /// Places a point at the authored elevation of its containing Terrain cell.
+    pub fn terrain_world_position_at(&self, position: Position) -> Option<WorldPosition> {
+        self.terrain_cell_at(position)
+            .map(|cell| WorldPosition::new(position.x, position.y, cell.elevation_meters))
     }
 
     pub fn props(&self) -> &[MapProp] {
@@ -2905,6 +2911,10 @@ mod tests {
             map.terrain_cell_at(Position::new(-1.75, -1.5))
                 .map(|cell| cell.elevation_meters),
             Some(2.5)
+        );
+        assert_eq!(
+            map.terrain_world_position_at(Position::new(-1.75, -1.5)),
+            Some(WorldPosition::new(-1.75, -1.5, 2.5))
         );
         assert_eq!(
             map.terrain_cell_at(Position::new(-1.0, -1.5))

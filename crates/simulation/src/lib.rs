@@ -760,4 +760,31 @@ mod tests {
             Vec2::new(3.0, 4.0).normalize(),
         );
     }
+
+    #[test]
+    fn embedded_reach_correction_preserves_actor_elevation() {
+        let mut app = App::new();
+        app.insert_resource(hammer_geometry())
+            .add_systems(Update, constrain_embedded_hammer_reach);
+        let actor = app
+            .world_mut()
+            .spawn((
+                HammerAttackState {
+                    phase: HammerAttackPhase::Embedded,
+                    impact_point: Position::ZERO,
+                    ..HammerAttackState::IDLE
+                },
+                WorldPosition::new(100.0, 0.0, 7.0),
+            ))
+            .id();
+
+        app.update();
+
+        let corrected = app
+            .world()
+            .get::<WorldPosition>(actor)
+            .expect("the actor keeps its WorldPosition");
+        assert!(corrected.x < 100.0);
+        assert_eq!(corrected.elevation_meters, 7.0);
+    }
 }
