@@ -203,6 +203,7 @@ impl WorldMap {
                     asset_key: prop.asset_key.clone(),
                     position,
                     elevation_meters: prop.elevation_meters,
+                    footprint: prop.footprint,
                 })
             })
             .collect::<Result<Vec<_>, WorldMapError>>()?;
@@ -221,11 +222,13 @@ impl WorldMap {
     /// Returns a new map with one projected Template resolved against this
     /// Instance. Neither input is changed.
     ///
-    /// Template Terrain wins equal ranks. Its Terrain mask may remove a
-    /// lower- or equal-ranked existing Prop whose origin belongs to that cell.
-    /// Template Props do not compete directly with existing Props and may
-    /// coexist with survivors. Callers must rebuild collision, navigation, and
-    /// other state derived from the returned world.
+    /// Template Terrain and Props win equal ranks. Existing Props compete by
+    /// their SceneMaker placement footprints: Terrain mask cells and incoming
+    /// Props remove overlapping lower- or equal-ranked Props, while any
+    /// overlapping higher-ranked Prop blocks an incoming Prop completely.
+    /// Touching footprint edges do not overlap, matching SceneMaker placement.
+    /// Callers must rebuild collision, navigation, and other state derived from
+    /// the returned world.
     pub fn merged_with(
         &self,
         placement: &WorldTemplatePlacement,
@@ -292,46 +295,76 @@ impl WorldMap {
             .iter()
             .map(|prop| prop.instance_id.as_str())
             .collect::<HashSet<_>>();
+        let placement_cell_bounds = placement
+            .terrain_cells
+            .iter()
+            .map(|cell| {
+                Ok((
+                    PropBounds::around_cell(cell.center, self.terrain_cell_meters),
+                    ranks.required(&cell.asset_key)?,
+                ))
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
         let mut props = Vec::with_capacity(self.props.len() + placement.props.len());
         for existing in &self.props {
-            let Some(cell_position) = self.cell_at_position(existing.position) else {
-                return Err(WorldMapError::new(format!(
-                    "Instance Prop '{}' lies outside the Instance",
-                    existing.instance_id
-                )));
-            };
-            let keep = match placement_by_cell.get(&cell_position) {
-                Some(incoming) => {
-                    ranks.required(&existing.asset_key)? > ranks.required(&incoming.asset_key)?
-                }
-                None => true,
-            };
+            let existing_rank = ranks.required(&existing.asset_key)?;
+            let existing_bounds = existing.footprint.bounds_at(existing.position);
+            let keep = placement_cell_bounds
+                .iter()
+                .all(|(cell_bounds, incoming_rank)| {
+                    !existing_bounds.overlaps(*cell_bounds) || existing_rank > *incoming_rank
+                });
             if keep {
                 props.push(existing.clone());
             }
         }
 
-        let mut merged_prop_ids = props
+        let mut generated_prop_ids = HashSet::with_capacity(placement.props.len());
+        let incoming_props = placement
+            .props
             .iter()
-            .map(|prop| prop.instance_id.clone())
-            .collect::<HashSet<_>>();
-        for incoming in &placement.props {
-            let instance_id = format!(
-                "template.{}.{}.{}",
-                placement.anchor_id, placement.template_scene_id, incoming.instance_id
-            );
-            if original_prop_ids.contains(instance_id.as_str())
-                || !merged_prop_ids.insert(instance_id.clone())
-            {
-                return Err(WorldMapError::new(format!(
-                    "merged Template Prop ID '{instance_id}' is duplicated"
-                )));
+            .map(|incoming| {
+                let instance_id = format!(
+                    "template.{}.{}.{}",
+                    placement.anchor_id, placement.template_scene_id, incoming.instance_id
+                );
+                if original_prop_ids.contains(instance_id.as_str())
+                    || !generated_prop_ids.insert(instance_id.clone())
+                {
+                    return Err(WorldMapError::new(format!(
+                        "merged Template Prop ID '{instance_id}' is duplicated"
+                    )));
+                }
+                Ok((instance_id, incoming))
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        for (instance_id, incoming) in incoming_props {
+            let incoming_rank = ranks.required(&incoming.asset_key)?;
+            let incoming_bounds = incoming.footprint.bounds_at(incoming.position);
+            let blocked = props.iter().any(|existing| {
+                existing
+                    .footprint
+                    .bounds_at(existing.position)
+                    .overlaps(incoming_bounds)
+                    && ranks
+                        .rank(&existing.asset_key)
+                        .is_some_and(|existing_rank| existing_rank > incoming_rank)
+            });
+            if blocked {
+                continue;
             }
+            props.retain(|existing| {
+                !existing
+                    .footprint
+                    .bounds_at(existing.position)
+                    .overlaps(incoming_bounds)
+            });
             props.push(MapProp {
                 instance_id,
                 asset_key: incoming.asset_key.clone(),
                 position: incoming.position,
                 elevation_meters: incoming.elevation_meters,
+                footprint: incoming.footprint,
             });
         }
 
@@ -344,27 +377,6 @@ impl WorldMap {
             props,
             template_anchors: self.template_anchors.clone(),
         })
-    }
-
-    fn cell_at_position(&self, position: Position) -> Option<(u32, u32)> {
-        let half_width = self.width_meters() * 0.5;
-        let half_height = self.height_meters() * 0.5;
-        if position.x < -half_width
-            || position.x > half_width
-            || position.y < -half_height
-            || position.y > half_height
-        {
-            return None;
-        }
-
-        // The top and right boundaries are valid positions. Clamp those exact
-        // outer intersections into the final row/column; internal grid lines
-        // belong to the row/column above or to the right through `floor`.
-        let x = (((position.x + half_width) / self.terrain_cell_meters).floor() as u32)
-            .min(self.width_tiles - 1);
-        let y = (((position.y + half_height) / self.terrain_cell_meters).floor() as u32)
-            .min(self.height_tiles - 1);
-        Some((x, y))
     }
 }
 
@@ -692,6 +704,70 @@ pub struct MapProp {
     /// the water it crosses: over a river there are two surfaces, and which one
     /// an Actor uses is its domain's decision, not the map's.
     pub elevation_meters: f32,
+    /// SceneMaker's visible placement bounds, used only for authoring-style
+    /// replacement overlap. Gameplay collision remains separate geometry.
+    pub footprint: MapPropFootprint,
+}
+
+/// One Asset's axis-aligned SceneMaker placement footprint in meters.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapPropFootprint {
+    width_meters: f32,
+    height_meters: f32,
+    anchor: Position,
+}
+
+impl MapPropFootprint {
+    pub const fn width_meters(self) -> f32 {
+        self.width_meters
+    }
+
+    pub const fn height_meters(self) -> f32 {
+        self.height_meters
+    }
+
+    /// Offset from the footprint's lower-left corner to the Prop pivot.
+    pub const fn anchor(self) -> Position {
+        self.anchor
+    }
+
+    fn bounds_at(self, position: Position) -> PropBounds {
+        let left = position.x - self.anchor.x;
+        let bottom = position.y - self.anchor.y;
+        PropBounds {
+            left,
+            right: left + self.width_meters,
+            bottom,
+            top: bottom + self.height_meters,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PropBounds {
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+}
+
+impl PropBounds {
+    fn around_cell(center: Position, cell_size: f32) -> Self {
+        let half = cell_size * 0.5;
+        Self {
+            left: center.x - half,
+            right: center.x + half,
+            bottom: center.y - half,
+            top: center.y + half,
+        }
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        self.left < other.right
+            && self.right > other.left
+            && self.bottom < other.top
+            && self.top > other.bottom
+    }
 }
 
 /// A place where a Template of `group_number` belongs.
@@ -828,9 +904,9 @@ fn convert_scene_body(
         ));
     }
 
-    let surfaces = asset_profiles
+    let profiles = asset_profiles
         .into_iter()
-        .map(|profile| (profile.asset_key, profile.surface))
+        .map(|profile| (profile.asset_key.clone(), profile))
         .collect::<HashMap<_, _>>();
     let (offset_x, offset_y) = match coordinate_frame {
         SceneCoordinateFrame::Centered => (
@@ -855,7 +931,7 @@ fn convert_scene_body(
                 cell.x, cell.y
             )));
         }
-        let Some(surface) = require_profile(&surfaces, &cell.asset_key)?.clone() else {
+        let Some(surface) = require_profile(&profiles, &cell.asset_key)?.surface.clone() else {
             return Err(WorldMapError::new(format!(
                 "terrain asset '{}' has no exported surface",
                 cell.asset_key
@@ -883,7 +959,7 @@ fn convert_scene_body(
     let mut instance_ids = HashSet::new();
     let props = convert_props(
         source_props,
-        &surfaces,
+        &profiles,
         &mut instance_ids,
         grid.authoring_pixels_per_meter,
         offset_x,
@@ -1012,13 +1088,13 @@ fn validate_header(
 }
 
 fn require_profile<'a>(
-    surfaces: &'a HashMap<String, Option<String>>,
+    profiles: &'a HashMap<String, AssetProfileDocument>,
     asset_key: &str,
-) -> Result<&'a Option<String>, WorldMapError> {
+) -> Result<&'a AssetProfileDocument, WorldMapError> {
     if asset_key.is_empty() {
         return Err(WorldMapError::new("map asset key must not be empty"));
     }
-    surfaces.get(asset_key).ok_or_else(|| {
+    profiles.get(asset_key).ok_or_else(|| {
         WorldMapError::new(format!(
             "map asset '{asset_key}' has no exported asset profile"
         ))
@@ -1027,7 +1103,7 @@ fn require_profile<'a>(
 
 fn convert_props(
     source: Vec<PropDocument>,
-    surfaces: &HashMap<String, Option<String>>,
+    profiles: &HashMap<String, AssetProfileDocument>,
     instance_ids: &mut HashSet<String>,
     authoring_pixels_per_meter: f32,
     offset_x: f32,
@@ -1036,7 +1112,8 @@ fn convert_props(
     source
         .into_iter()
         .map(|placement| {
-            require_profile(surfaces, &placement.asset_key)?;
+            let profile = require_profile(profiles, &placement.asset_key)?;
+            let footprint = convert_prop_footprint(profile, &placement.asset_key)?;
             if placement.instance_id.is_empty()
                 || !instance_ids.insert(placement.instance_id.clone())
             {
@@ -1063,9 +1140,41 @@ fn convert_props(
                 asset_key: placement.asset_key,
                 position,
                 elevation_meters: placement.elevation_meters,
+                footprint,
             })
         })
         .collect()
+}
+
+fn convert_prop_footprint(
+    profile: &AssetProfileDocument,
+    asset_key: &str,
+) -> Result<MapPropFootprint, WorldMapError> {
+    let (Some(size), Some(anchor)) = (&profile.footprint_meters, &profile.anchor_meters) else {
+        return Err(WorldMapError::new(format!(
+            "Prop asset '{asset_key}' has no exported placement footprint"
+        )));
+    };
+    if !size.width.is_finite()
+        || size.width <= 0.0
+        || !size.height.is_finite()
+        || size.height <= 0.0
+        || !anchor.x.is_finite()
+        || !anchor.y.is_finite()
+        || anchor.x < 0.0
+        || anchor.x > size.width
+        || anchor.y < 0.0
+        || anchor.y > size.height
+    {
+        return Err(WorldMapError::new(format!(
+            "Prop asset '{asset_key}' has an invalid placement footprint"
+        )));
+    }
+    Ok(MapPropFootprint {
+        width_meters: size.width,
+        height_meters: size.height,
+        anchor: Position::new(anchor.x, anchor.y),
+    })
 }
 
 fn validate_prop_origins(
@@ -1134,6 +1243,20 @@ struct AssetProfileDocument {
     /// Set for Terrain Assets and null for every other kind, which is why a
     /// cell painted with an Asset that has none is a corrupt export.
     surface: Option<String>,
+    footprint_meters: Option<SizeMetersDocument>,
+    anchor_meters: Option<PointMetersDocument>,
+}
+
+#[derive(Deserialize)]
+struct SizeMetersDocument {
+    width: f32,
+    height: f32,
+}
+
+#[derive(Deserialize)]
+struct PointMetersDocument {
+    x: f32,
+    y: f32,
 }
 
 #[derive(Deserialize)]
@@ -1233,9 +1356,9 @@ fn export_document(
                 "water_cell_meters": 0.5
             }},
             "asset_profiles": [
-                {{ "asset_key": "grass", "surface": "land" }},
-                {{ "asset_key": "ankh", "surface": null }},
-                {{ "asset_key": "tree", "surface": null }}
+                {{ "asset_key": "grass", "surface": "land", "footprint_meters": null, "anchor_meters": null }},
+                {{ "asset_key": "ankh", "surface": null, "footprint_meters": {{ "width": 1.0, "height": 1.0 }}, "anchor_meters": {{ "x": 0.5, "y": 0.5 }} }},
+                {{ "asset_key": "tree", "surface": null, "footprint_meters": {{ "width": 1.0, "height": 1.0 }}, "anchor_meters": {{ "x": 0.5, "y": 0.5 }} }}
             ],
             "water_raster": [],
             "scene": {{
@@ -1309,9 +1432,9 @@ mod tests {
 
     fn with_merge_profiles(source: String) -> String {
         source.replacen(
-            r#"{ "asset_key": "grass", "surface": "land" }"#,
-            r#"{ "asset_key": "grass", "surface": "land" },
-                { "asset_key": "stone", "surface": "stone" }"#,
+            r#"{ "asset_key": "grass", "surface": "land", "footprint_meters": null, "anchor_meters": null }"#,
+            r#"{ "asset_key": "grass", "surface": "land", "footprint_meters": null, "anchor_meters": null },
+                { "asset_key": "stone", "surface": "stone", "footprint_meters": null, "anchor_meters": null }"#,
             1,
         )
     }
@@ -1726,19 +1849,19 @@ mod tests {
             },
             {
                 "instance_id": "outside_mask",
-                "asset_key": "grass",
+                "asset_key": "tree",
                 "position_authoring_px": { "x": 16, "y": 48 },
                 "elevation_meters": 1.0
             },
             {
                 "instance_id": "internal_boundary",
-                "asset_key": "grass",
+                "asset_key": "tree",
                 "position_authoring_px": { "x": 32, "y": 16 },
                 "elevation_meters": 1.0
             },
             {
                 "instance_id": "outer_boundary",
-                "asset_key": "grass",
+                "asset_key": "tree",
                 "position_authoring_px": { "x": 128, "y": 16 },
                 "elevation_meters": 1.0
             }
@@ -1757,7 +1880,7 @@ mod tests {
         let template_props = r#"{
             "instance_id": "tree_new",
             "asset_key": "tree",
-            "position_authoring_px": { "x": 48, "y": 16 },
+            "position_authoring_px": { "x": 80, "y": 16 },
             "elevation_meters": 3.0
         }"#;
         let template = WorldTemplate::from_source(
@@ -1777,12 +1900,6 @@ mod tests {
             .expect("the synthetic Template fits");
         let original_map = map.clone();
         let original_placement = placement.clone();
-
-        assert_eq!(
-            map.cell_at_position(Position::new(-1.0, -1.5)),
-            Some((1, 0))
-        );
-        assert_eq!(map.cell_at_position(Position::new(2.0, 2.0)), Some((3, 3)));
 
         let merged = map
             .merged_with(&placement, &merge_ranks())
@@ -1824,11 +1941,147 @@ mod tests {
                 "ankh_kept",
                 "tree_kept",
                 "outside_mask",
+                "outer_boundary",
                 "template.template_anchor_001.test_template_unit.tree_new",
             ]
         );
-        assert_eq!(merged.props()[3].position, Position::new(-0.5, -1.5));
-        assert_eq!(merged.props()[3].elevation_meters, 3.0);
+        assert_eq!(merged.props()[4].position, Position::new(0.5, -1.5));
+        assert_eq!(merged.props()[4].elevation_meters, 3.0);
+    }
+
+    #[test]
+    fn terrain_mask_uses_full_prop_footprints_but_allows_touching_edges() {
+        let map_props = r#"
+            {
+                "instance_id": "crosses_into_mask",
+                "asset_key": "tree",
+                "position_authoring_px": { "x": 24, "y": 16 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "touches_mask_edge",
+                "asset_key": "tree",
+                "position_authoring_px": { "x": 16, "y": 16 },
+                "elevation_meters": 1.0
+            }
+        "#;
+        let map = WorldMap::from_source(
+            &with_merge_profiles(test_export_with_anchors(TEST_GRASS_CELL, map_props, ANCHOR)),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let template = WorldTemplate::from_source(
+            &with_merge_profiles(template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                r#"{ "x": 1, "y": 0, "asset_key": "stone", "elevation_meters": 2.0 }"#,
+                "",
+            )),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let placement = map
+            .project_template("template_anchor_001", &template)
+            .expect("the synthetic Template fits");
+
+        let merged = map
+            .merged_with(&placement, &merge_ranks())
+            .expect("footprints resolve against the Terrain mask");
+
+        assert_eq!(
+            merged
+                .props()
+                .iter()
+                .map(|prop| prop.instance_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["touches_mask_edge"]
+        );
+    }
+
+    #[test]
+    fn template_props_replace_overlaps_by_rank_and_a_higher_blocker_wins_whole() {
+        let map_props = r#"
+            {
+                "instance_id": "tree_existing",
+                "asset_key": "tree",
+                "position_authoring_px": { "x": 64, "y": 64 },
+                "elevation_meters": 1.0
+            },
+            {
+                "instance_id": "ankh_existing",
+                "asset_key": "ankh",
+                "position_authoring_px": { "x": 96, "y": 64 },
+                "elevation_meters": 1.0
+            }
+        "#;
+        let map = WorldMap::from_source(
+            &test_export_with_anchors(TEST_GRASS_CELL, map_props, ANCHOR),
+            TEST_SCENE_ID,
+        )
+        .expect("the synthetic Instance is valid");
+        let blocked_template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                "",
+                r#"{
+                    "instance_id": "tree_blocked",
+                    "asset_key": "tree",
+                    "position_authoring_px": { "x": 80, "y": 64 },
+                    "elevation_meters": 2.0
+                }"#,
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let blocked_placement = map
+            .project_template("template_anchor_001", &blocked_template)
+            .expect("the synthetic Template fits");
+        let blocked = map
+            .merged_with(&blocked_placement, &merge_ranks())
+            .expect("the higher-ranked Ankh blocks the incoming Tree");
+
+        assert_eq!(blocked.props(), map.props());
+
+        let winning_template = WorldTemplate::from_source(
+            &template_export(
+                r#"{
+                    "group_number": 1,
+                    "insertion_anchor_authoring_px": { "x": 64, "y": 96 }
+                }"#,
+                "",
+                r#"{
+                    "instance_id": "ankh_wins",
+                    "asset_key": "ankh",
+                    "position_authoring_px": { "x": 64, "y": 64 },
+                    "elevation_meters": 2.0
+                }"#,
+            ),
+            "test_template_unit",
+        )
+        .expect("the synthetic Template is valid");
+        let winning_placement = map
+            .project_template("template_anchor_001", &winning_template)
+            .expect("the synthetic Template fits");
+        let winning = map
+            .merged_with(&winning_placement, &merge_ranks())
+            .expect("the incoming Ankh replaces the lower-ranked Tree");
+
+        assert_eq!(
+            winning
+                .props()
+                .iter()
+                .map(|prop| prop.instance_id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "ankh_existing",
+                "template.template_anchor_001.test_template_unit.ankh_wins",
+            ]
+        );
     }
 
     #[test]
@@ -2077,6 +2330,32 @@ mod tests {
 
         assert_eq!(map.terrain_cells()[0].center, Position::new(-1.5, -1.5));
         assert_eq!(map.props()[0].position, Position::new(0.0, 1.0));
+        assert_eq!(map.props()[0].footprint.width_meters(), 1.0);
+        assert_eq!(map.props()[0].footprint.height_meters(), 1.0);
+        assert_eq!(map.props()[0].footprint.anchor(), Position::new(0.5, 0.5));
+    }
+
+    #[test]
+    fn props_require_a_finite_positive_footprint_and_an_anchor_inside_it() {
+        let missing = test_export(TEST_GRASS_CELL, ANKH).replacen(
+            r#""footprint_meters": { "width": 1.0, "height": 1.0 }"#,
+            r#""footprint_meters": null"#,
+            1,
+        );
+        let zero_width = test_export(TEST_GRASS_CELL, ANKH).replacen(
+            r#""width": 1.0, "height": 1.0"#,
+            r#""width": 0.0, "height": 1.0"#,
+            1,
+        );
+        let outside_anchor = test_export(TEST_GRASS_CELL, ANKH).replacen(
+            r#""x": 0.5, "y": 0.5"#,
+            r#""x": 1.5, "y": 0.5"#,
+            1,
+        );
+
+        assert!(WorldMap::from_source(&missing, TEST_SCENE_ID).is_err());
+        assert!(WorldMap::from_source(&zero_width, TEST_SCENE_ID).is_err());
+        assert!(WorldMap::from_source(&outside_anchor, TEST_SCENE_ID).is_err());
     }
 
     /// Surface sits on the Asset and height sits on the cell, so the importer

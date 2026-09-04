@@ -278,14 +278,20 @@ recover grid positions from floats.
 A second pure operation merges one projection into a new `WorldMap` without
 mutating either input. Placement ranks enter `world_data` as an explicit typed
 parameter loaded by `design`, preserving the dependency boundary. Template
-Terrain replaces equal- or lower-ranked Terrain and removes equal- or
-lower-ranked existing Props whose origins fall in its mask; Template Props are
-appended in source order and may coexist with survivors. Existing ordering is
-otherwise retained, new cells follow in Template order, and generated Prop IDs
-use the namespace above. Missing ranks and identity collisions are errors.
+Terrain replaces equal- or lower-ranked Terrain. Prop replacement uses the same
+axis-aligned placement footprints that SceneMaker exports and shows with its red
+placement highlight: a footprint's lower-left corner is the Prop position minus
+its exported Asset anchor, height is ignored, and strict interval overlap means
+touching edges are allowed. A Template Terrain cell removes every overlapping
+existing Prop of equal or lower rank. Each incoming Template Prop is dropped as
+a whole if any overlapping existing Prop has a higher rank; otherwise it removes
+all overlapping equal- or lower-ranked Props and is appended in source order.
+Existing ordering is otherwise retained, new cells follow in Template order,
+and generated Prop IDs use the namespace above. Missing ranks, missing or
+invalid Prop footprints, and identity collisions are errors. These placement
+footprints are authoring geometry, not gameplay collision regions.
 Maps and projected Templates require Prop origins inside or on the world
-boundary. For rank resolution, internal grid intersections belong above or to
-the right while the top and right outer boundaries clamp into the final cells.
+boundary; their full placement footprints may extend beyond it.
 Collision, navigation, presentation, and other derived state are not rebuilt by
 this pure operation and must be rebuilt by the authoritative runtime after an
 occupant changes.

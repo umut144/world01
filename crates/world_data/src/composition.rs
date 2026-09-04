@@ -487,8 +487,8 @@ mod tests {
         )
         .expect("the synthetic Instance is valid");
         let earlier_prop = r#"{
-            "instance_id": "temporary_grass_prop",
-            "asset_key": "grass",
+            "instance_id": "temporary_tree_prop",
+            "asset_key": "tree",
             "position_authoring_px": { "x": 16, "y": 16 },
             "elevation_meters": 1.0
         }"#;
@@ -496,7 +496,7 @@ mod tests {
             template_with_props("template_first", 1, 2.0, earlier_prop),
             template("template_second", 1, 3.0),
         ]);
-        let ranks = PlacementRanks::from_entries([("grass", 10)])
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 10)])
             .expect("the synthetic Placement Ranks are valid");
         let mut composition =
             WorldComposition::new(map, &templates, &ranks).expect("the empty composition is valid");

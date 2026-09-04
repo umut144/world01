@@ -168,14 +168,14 @@ data that grows one entry at a time as Assets are added, never a list of pairs
 of things that beat each other.
 
 For the current replacement model, each incoming Template Terrain cell competes
-with existing Terrain and with existing Props whose origins belong to that
-cell. A lower- or equal-ranked existing Prop is removed; a higher-ranked one
-survives. Template Props are then added and do not directly compete with other
-Props. They may coexist with survivors, because Props are not raster geometry
-and no arbitrary distance is treated as a collision. Their rank matters when a
-later Template Terrain cell covers them. A Prop on an internal grid line belongs
-to the cell above or to the right; one on the valid top or right world boundary
-belongs to the final row or column.
+with existing Terrain and with existing Props whose SceneMaker placement
+footprints overlap that cell. Template Props compete with existing Props through
+the same footprints. This is the axis-aligned visible-footprint rule SceneMaker
+uses for its red placement highlight, not gameplay collision geometry; height
+does not participate and touching edges are allowed. Lower or equal rank is
+replaced. A higher-ranked existing Prop survives Template Terrain and blocks an
+overlapping incoming Template Prop as a whole, so a blocked newcomer cannot
+partially erase lower-ranked neighbours.
 
 The first World-01 rank ordering leaves room between values for later Assets:
 

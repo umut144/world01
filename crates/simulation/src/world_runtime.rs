@@ -495,9 +495,9 @@ mod tests {
                 "water_cell_meters": 0.5
             },
             "asset_profiles": [
-                { "asset_key": "grass", "surface": "land" },
-                { "asset_key": "ankh", "surface": null },
-                { "asset_key": "tree", "surface": null }
+                { "asset_key": "grass", "surface": "land", "footprint_meters": null, "anchor_meters": null },
+                { "asset_key": "ankh", "surface": null, "footprint_meters": { "width": 1.0625, "height": 1.71875 }, "anchor_meters": { "x": 0.53125, "y": 0.3125 } },
+                { "asset_key": "tree", "surface": null, "footprint_meters": { "width": 6.4375, "height": 8.0625 }, "anchor_meters": { "x": 3.21875, "y": 0.03125 } }
             ],
             "water_raster": [],
             "scene": {
