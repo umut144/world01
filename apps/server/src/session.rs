@@ -13,10 +13,10 @@ use world01_simulation::{
 use world01_world_data::{
     ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    MovementDirection, MovementIntent, MovementVelocity, PlacementRanks, PlayerOwner, Position,
-    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WorldComposition, WorldMap, WorldOccupancyRequest, WorldPosition,
-    WorldTemplateCatalog,
+    MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlacementRanks,
+    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
+    StaminaState, StatusEffectState, WorldComposition, WorldMap, WorldOccupancyRequest,
+    WorldPosition, WorldTemplateCatalog,
 };
 
 const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
@@ -265,6 +265,7 @@ fn accept_join_requests(
                 BodyFacing::Authored,
                 GazeDirection::RIGHT,
                 spawn,
+                MovementMedium::GROUNDED_TERRAIN,
                 CharacterHealth::full(maximum_health),
                 mass,
             ),

@@ -12,7 +12,7 @@ use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-    WeaponAimRules, WorldColliderGrid,
+    TraversalCatalog, WeaponAimRules, WorldColliderGrid,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -67,6 +67,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map)?;
     let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
+    let traversal_catalog =
+        TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)?;
     let character_assets = CharacterAssetLibrary::from_content(
         content.clone(),
         world_design.eyes.pupil_area_ratio,
@@ -159,6 +161,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(world_collision);
     app.insert_resource(world_collider_grid);
     app.insert_resource(collision_geometry);
+    app.insert_resource(traversal_catalog);
     app.insert_resource(CameraView::new(camera_view.0, camera_view.1));
     app.insert_resource(world_composition);
     app.insert_resource(world_templates);

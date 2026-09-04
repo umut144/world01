@@ -3,10 +3,10 @@ use bevy::{ecs::schedule::ScheduleLabel, prelude::*};
 use crate::{
     advance_dash, advance_hammer_attacks, advance_mage_attacks, apply_damage,
     apply_hammer_strike_damage, apply_mage_beam_damage, block_colliding_movement,
-    constrain_embedded_hammer_reach, damage::DamageDealt, expire_mage_beams, finish_mage_cooldowns,
-    integrate_movement, separate_characters_from_world, separate_overlapping_characters,
-    tick_status_effects, update_character_life, update_character_orientation, update_exertion,
-    update_gaze_direction, update_weapon_aim,
+    constrain_embedded_hammer_reach, constrain_grounded_movement, damage::DamageDealt,
+    expire_mage_beams, finish_mage_cooldowns, integrate_movement, separate_characters_from_world,
+    separate_overlapping_characters, tick_status_effects, update_character_life,
+    update_character_orientation, update_exertion, update_gaze_direction, update_weapon_aim,
 };
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -118,6 +118,7 @@ fn add_collision_systems(
                 separate_overlapping_characters,
                 separate_characters_from_world,
                 block_colliding_movement,
+                constrain_grounded_movement,
             )
                 .chain()
                 .in_set(SimulationSet::Collision),
@@ -125,7 +126,9 @@ fn add_collision_systems(
     } else {
         app.add_systems(
             schedule,
-            block_colliding_movement.in_set(SimulationSet::Collision),
+            (block_colliding_movement, constrain_grounded_movement)
+                .chain()
+                .in_set(SimulationSet::Collision),
         );
     }
 }

@@ -237,15 +237,24 @@ current combat geometry. Actors instead carry authoritative `WorldPosition`
 with `x`, `y`, and `elevation_meters`; it is predicted, replicated,
 interpolated, reconciled, and read by client presentation. Current horizontal
 movement and collision preserve its elevation. Server joins derive their
-initial elevation from the authored Terrain cell, while an Ankh respawn takes
-the Ankh placement's exported elevation.
+initial elevation from the authored Terrain cell. Actors also carry predicted
+and replicated `MovementMedium`: grounded state names its support, while
+airborne and flying state deliberately carry none. The first implemented
+support is Terrain. After planar collision has shortened a movement step, the
+shared server/prediction simulation accepts it only when both Terrain cells
+permit the Character's surface and their height difference is at most that
+Character's configured step height. It then updates elevation from the target
+cell before horizontal integration. Stationary grounded Actors also resample
+Terrain after a world-composition change, and Ankh respawns resolve their final
+height and Terrain support rather than retaining the Ankh's raw export height.
 
-Explicit support and movement-medium state do not exist yet, and neither Actor
-movement nor client map presentation samples authored Terrain or Path elevation
-after spawning. Current Character/world collision, revival overlap, Hammer
-impact, and Mage beam evaluation also remain planar: they do not yet use the
-Actors' elevations to separate physical layers. Client presentation currently
-projects only `x` and `y`; Bevy
+Route-surface support has protocol identity but does not move yet; its height
+sampling, transitions to and from Terrain, and grade-dependent speed are the
+next elevation slice. Airborne and flying movement rules likewise do not exist
+yet. Current Character/world collision, revival overlap, Hammer impact, and
+Mage beam evaluation remain planar: they do not yet use the Actors' elevations
+to separate physical layers. Client presentation currently projects only `x`
+and `y`; Bevy
 `Transform.z` remains presentation depth, including ordering among Terrain,
 Props, Characters, and projected weapon parts, rather than an authoritative
 physical coordinate. There is no generic sandbox
@@ -280,9 +289,11 @@ support and changes elevation through its vertical movement rules. While
 grounded, the Actor's elevation must agree with the sampled support height at
 its horizontal position within the simulation's declared tolerance. Support
 identity resolves multiple surfaces at the same horizontal coordinates and is
-not replaced by guessing the nearest height. Exact Rust representation and
-network encoding are implementation decisions for the first elevation slice,
-but any support state that affects movement must participate in the same
+not replaced by guessing the nearest height. The protocol-neutral
+representation is `MovementMedium`, with `Grounded` carrying a
+`GroundSupport`. Terrain is one support layer rather than one replicated
+identity per grid cell; independent Route surfaces carry their stable authored
+IDs. Any support state that affects movement participates in the same
 authority, prediction, rollback, and reconciliation policy as world position.
 
 Ground navigation consequently consists of nodes and connections carrying

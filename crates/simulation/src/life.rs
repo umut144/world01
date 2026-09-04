@@ -5,11 +5,12 @@ use world01_content::CharacterHurtGeometryCatalog;
 use world01_design::HealthConfig;
 use world01_world_data::{
     ActorId, Ankh, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
-    DashState, DeathConfirmIntent, DeathConfirmationState, HammerAttackState, MovementDirection,
-    MovementVelocity, RespawnState, RevivalState, RunState, SelectedCharacter, StatusEffectState,
-    WorldPosition,
+    DashState, DeathConfirmIntent, DeathConfirmationState, GroundSupport, HammerAttackState,
+    MovementDirection, MovementMedium, MovementVelocity, RespawnState, RevivalState, RunState,
+    SelectedCharacter, StatusEffectState, WorldMap, WorldPosition,
 };
 
+use crate::TraversalCatalog;
 use crate::respawn::{RespawnActor, choose_respawn_position};
 use crate::spatial::overlap::{components_overlap, hurt_transform, posed_hurt_transform};
 
@@ -92,6 +93,8 @@ pub fn update_character_life(
     rules: Res<CharacterLifeRules>,
     hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
     ankh_layout: Res<AnkhLayout>,
+    map: Option<Res<WorldMap>>,
+    traversal: Option<Res<TraversalCatalog>>,
     mut actors: ParamSet<(
         Query<(
             Entity,
@@ -108,6 +111,7 @@ pub fn update_character_life(
             &ActorId,
             Option<&SelectedCharacter>,
             Option<&mut WorldPosition>,
+            Option<&mut MovementMedium>,
             Option<&BodyFacing>,
             &mut CharacterHealth,
             &mut CharacterLifeState,
@@ -167,6 +171,7 @@ pub fn update_character_life(
         actor_id,
         character,
         mut position,
+        mut medium,
         facing,
         mut health,
         mut life,
@@ -205,11 +210,14 @@ pub fn update_character_life(
                         *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        medium.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
                         &respawn_actors,
                         hurt_geometry.as_deref(),
+                        map.as_deref(),
+                        traversal.as_deref(),
                     );
                 } else {
                     confirmation.held_ticks = confirmation.held_ticks.saturating_sub(1);
@@ -241,11 +249,14 @@ pub fn update_character_life(
                         *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        medium.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
                         &respawn_actors,
                         hurt_geometry.as_deref(),
+                        map.as_deref(),
+                        traversal.as_deref(),
                     );
                 } else {
                     *life = CharacterLifeState::Dead;
@@ -265,11 +276,14 @@ pub fn update_character_life(
                         *actor_id,
                         &mut respawn,
                         position.as_deref_mut(),
+                        medium.as_deref_mut(),
                         character.map(|character| &character.0),
                         facing.copied(),
                         &ankhs,
                         &respawn_actors,
                         hurt_geometry.as_deref(),
+                        map.as_deref(),
+                        traversal.as_deref(),
                     );
                 } else if revival_continues(
                     revival.reviver_actor_id,
@@ -315,11 +329,14 @@ fn advance_confirmation(
     actor_id: ActorId,
     respawn: &mut RespawnState,
     position: Option<&mut WorldPosition>,
+    medium: Option<&mut MovementMedium>,
     character: Option<&CharacterId>,
     facing: Option<BodyFacing>,
     ankhs: &[(Ankh, WorldPosition)],
     actors: &[RespawnActor],
     hurt_geometry: Option<&CharacterHurtGeometryCatalog>,
+    map: Option<&WorldMap>,
+    traversal: Option<&TraversalCatalog>,
 ) {
     confirmation.held_ticks = confirmation
         .held_ticks
@@ -333,7 +350,7 @@ fn advance_confirmation(
         respawn.count = respawn.count.saturating_add(1);
         if let Some(position) = position {
             let fallback = *position;
-            *position = choose_respawn_position(
+            let candidate = choose_respawn_position(
                 actor_id.0,
                 respawn.count,
                 fallback,
@@ -344,8 +361,31 @@ fn advance_confirmation(
                 actors,
                 hurt_geometry,
             );
+            if let Some(medium) = medium {
+                if let Some(resolved) =
+                    terrain_respawn_position(candidate, character, map, traversal)
+                {
+                    *position = resolved;
+                    *medium = MovementMedium::Grounded(GroundSupport::Terrain);
+                }
+            } else {
+                *position = candidate;
+            }
         }
     }
+}
+
+fn terrain_respawn_position(
+    candidate: WorldPosition,
+    character: Option<&CharacterId>,
+    map: Option<&WorldMap>,
+    traversal: Option<&TraversalCatalog>,
+) -> Option<WorldPosition> {
+    let profile = traversal?.character(character?)?;
+    let cell = map?.terrain_cell_at(candidate.horizontal())?;
+    profile
+        .permits_surface(&cell.surface)
+        .then(|| WorldPosition::new(candidate.x, candidate.y, cell.elevation_meters))
 }
 
 fn clear_incapacitated_actions(
@@ -503,15 +543,22 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
     use world01_configs::load_embedded;
-    use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
+    use world01_content::{
+        CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, RuntimeContent,
+    };
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
-        AnkhLayout, BodyFacing, CharacterId, MovementIntent, SelectedCharacter,
+        AnkhLayout, BodyFacing, CharacterId, MovementIntent, MovementMedium, SelectedCharacter,
+        WorldMap,
     };
 
     fn test_app() -> App {
         let runtime = load_embedded().expect("embedded runtime parses");
         let design = load_world01_embedded().expect("embedded World 01 design parses");
+        let game_design = load_game_design().expect("embedded game design parses");
+        let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
+        let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)
+            .expect("embedded collision geometry is valid");
         let mut app = App::new();
         app.insert_resource(
             CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
@@ -519,13 +566,15 @@ mod tests {
         )
         .insert_resource(AnkhLayout { positions: vec![] })
         .insert_resource(
-            CharacterHurtGeometryCatalog::from_content(
-                &RuntimeContent::load_embedded().expect("embedded runtime content is valid"),
-                &load_game_design()
-                    .expect("embedded game design parses")
-                    .hurt,
-            )
-            .expect("embedded hurt geometry is valid"),
+            WorldMap::load_embedded("overworld01").expect("embedded Instance is valid"),
+        )
+        .insert_resource(
+            TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)
+                .expect("embedded traversal profiles are valid"),
+        )
+        .insert_resource(
+            CharacterHurtGeometryCatalog::from_content(&content, &game_design.hurt)
+                .expect("embedded hurt geometry is valid"),
         )
         .add_systems(Update, update_character_life);
         app
@@ -537,6 +586,7 @@ mod tests {
                 ActorId(id),
                 SelectedCharacter(CharacterId("hammerer".into())),
                 WorldPosition::ZERO,
+                MovementMedium::GROUNDED_TERRAIN,
                 BodyFacing::Authored,
                 MovementIntent::ZERO,
                 MovementVelocity::ZERO,
@@ -620,6 +670,38 @@ mod tests {
                 < f32::EPSILON
         );
         assert_eq!(app.world().get::<RespawnState>(actor).unwrap().count, 1);
+    }
+
+    #[test]
+    fn respawn_resolves_terrain_elevation_and_support() {
+        let mut app = test_app();
+        app.world_mut().resource_mut::<AnkhLayout>().positions =
+            vec![WorldPosition::new(0.0, 0.0, -100.0)];
+        let actor = spawn_actor(&mut app, 1, 0.0, CharacterLifeState::Dead);
+        app.world_mut()
+            .get_mut::<DeathConfirmIntent>(actor)
+            .expect("actor has death confirmation input")
+            .pressed = true;
+
+        for _ in 0..240 {
+            app.update();
+        }
+
+        let position = *app
+            .world()
+            .get::<WorldPosition>(actor)
+            .expect("actor has a respawn position");
+        let terrain_elevation = app
+            .world()
+            .resource::<WorldMap>()
+            .terrain_cell_at(position.horizontal())
+            .expect("respawn candidate has Terrain")
+            .elevation_meters;
+        assert_eq!(position.elevation_meters, terrain_elevation);
+        assert_eq!(
+            app.world().get::<MovementMedium>(actor),
+            Some(&MovementMedium::GROUNDED_TERRAIN)
+        );
     }
 
     #[test]

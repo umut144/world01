@@ -18,13 +18,40 @@ impl Position {
 /// Authoritative position of an actor in World 01's logical 2.5D space.
 ///
 /// `x` and `y` locate the actor on the current support surface. Elevation is a
-/// gameplay coordinate rather than Bevy presentation depth; support and
-/// movement-medium identity are introduced by later SBX-36 slices.
+/// gameplay coordinate rather than Bevy presentation depth.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Reflect, Serialize, Deserialize)]
 pub struct WorldPosition {
     pub x: f32,
     pub y: f32,
     pub elevation_meters: f32,
+}
+
+/// The authored surface that currently determines a grounded Actor's height.
+///
+/// Terrain is one continuous support layer; its cells supply local surface and
+/// elevation data without becoming replicated Actor state. Route-surface IDs
+/// distinguish overlapping floors such as a bridge above the Terrain below.
+#[derive(Debug, Clone, PartialEq, Eq, Reflect, Serialize, Deserialize)]
+pub enum GroundSupport {
+    Terrain,
+    RouteSurface { route_surface_id: String },
+}
+
+/// Whether an Actor currently follows a ground surface or moves vertically by
+/// another rule set.
+///
+/// Airborne and flying behavior is intentionally not implemented yet. Keeping
+/// them explicit prevents a missing ground surface from becoming an implicit
+/// Terrain fallback.
+#[derive(Component, Debug, Clone, PartialEq, Eq, Reflect, Serialize, Deserialize)]
+pub enum MovementMedium {
+    Grounded(GroundSupport),
+    Airborne,
+    Flying,
+}
+
+impl MovementMedium {
+    pub const GROUNDED_TERRAIN: Self = Self::Grounded(GroundSupport::Terrain);
 }
 
 impl WorldPosition {

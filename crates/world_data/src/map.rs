@@ -25,6 +25,7 @@ pub struct WorldMap {
     height_tiles: u32,
     terrain_cell_meters: f32,
     terrain_cells: Vec<MapTerrainCell>,
+    terrain_cell_indices: Vec<Option<usize>>,
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
     template_anchors: Vec<MapTemplateAnchor>,
@@ -57,12 +58,18 @@ impl WorldMap {
             "Instance",
         )?;
 
+        let terrain_cell_indices = build_terrain_cell_indices(
+            scene.width_tiles,
+            scene.height_tiles,
+            &scene.terrain_cells,
+        )?;
         Ok(Self {
             scene_id: scene_id.to_owned(),
             width_tiles: scene.width_tiles,
             height_tiles: scene.height_tiles,
             terrain_cell_meters: scene.terrain_cell_meters,
             terrain_cells: scene.terrain_cells,
+            terrain_cell_indices,
             props: scene.props,
             route_surfaces: scene.route_surfaces,
             template_anchors: scene.template_anchors,
@@ -112,11 +119,14 @@ impl WorldMap {
         if x < 0.0 || y < 0.0 || x >= self.width_tiles as f32 || y >= self.height_tiles as f32 {
             return None;
         }
-        let x = x as u32;
-        let y = y as u32;
-        self.terrain_cells
-            .iter()
-            .find(|cell| cell.x == x && cell.y == y)
+        self.terrain_cell(x as u32, y as u32)
+    }
+
+    /// Returns one authored Terrain cell by its stable row-major coordinates.
+    pub fn terrain_cell(&self, x: u32, y: u32) -> Option<&MapTerrainCell> {
+        terrain_cell_index(self.width_tiles, self.height_tiles, x, y)
+            .and_then(|index| self.terrain_cell_indices.get(index).copied().flatten())
+            .and_then(|index| self.terrain_cells.get(index))
     }
 
     /// Places a point at the authored elevation of its containing Terrain cell.
@@ -409,12 +419,15 @@ impl WorldMap {
             });
         }
 
+        let terrain_cell_indices =
+            build_terrain_cell_indices(self.width_tiles, self.height_tiles, &terrain_cells)?;
         Ok(Self {
             scene_id: self.scene_id.clone(),
             width_tiles: self.width_tiles,
             height_tiles: self.height_tiles,
             terrain_cell_meters: self.terrain_cell_meters,
             terrain_cells,
+            terrain_cell_indices,
             props,
             route_surfaces: self.route_surfaces.clone(),
             template_anchors: self.template_anchors.clone(),
@@ -738,6 +751,49 @@ pub struct MapTerrainCell {
     /// The height of the walking surface, in meters.
     pub elevation_meters: f32,
     pub center: Position,
+}
+
+fn terrain_cell_index(width_tiles: u32, height_tiles: u32, x: u32, y: u32) -> Option<usize> {
+    if x >= width_tiles || y >= height_tiles {
+        return None;
+    }
+    let width = usize::try_from(width_tiles).ok()?;
+    usize::try_from(y)
+        .ok()?
+        .checked_mul(width)?
+        .checked_add(usize::try_from(x).ok()?)
+}
+
+fn build_terrain_cell_indices(
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cells: &[MapTerrainCell],
+) -> Result<Vec<Option<usize>>, WorldMapError> {
+    let cell_count = usize::try_from(width_tiles)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(height_tiles)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| WorldMapError::new("Terrain dimensions exceed addressable memory"))?;
+    let mut indices = vec![None; cell_count];
+    for (cell_index, cell) in terrain_cells.iter().enumerate() {
+        let index =
+            terrain_cell_index(width_tiles, height_tiles, cell.x, cell.y).ok_or_else(|| {
+                WorldMapError::new(format!(
+                    "Terrain cell ({}, {}) lies outside the scene",
+                    cell.x, cell.y
+                ))
+            })?;
+        if indices[index].replace(cell_index).is_some() {
+            return Err(WorldMapError::new(format!(
+                "Terrain cell ({}, {}) is duplicated",
+                cell.x, cell.y
+            )));
+        }
+    }
+    Ok(indices)
 }
 
 /// A SceneMaker-authored Path kept separate from the Terrain height field.

@@ -19,8 +19,8 @@ use world01_network::{
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
-    SimulationSet, WeaponAimRules, WorldColliderGrid, WorldSeparationStep, add_simulation_step,
-    add_world_runtime_rebuild,
+    SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid, WorldSeparationStep,
+    add_simulation_step, add_world_runtime_rebuild,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -81,6 +81,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map)?;
     let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
+    let traversal_catalog =
+        TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)?;
     let character_health = CharacterHealthCatalog::from_content(&content)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
     let character_mass = CharacterMassCatalog::from_geometry(&world_design, &mass_geometry)?;
@@ -117,6 +119,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_collision)
     .insert_resource(world_collider_grid)
     .insert_resource(collision_geometry)
+    .insert_resource(traversal_catalog)
     .insert_resource(character_health)
     .insert_resource(character_mass)
     .insert_resource(character_abilities)
