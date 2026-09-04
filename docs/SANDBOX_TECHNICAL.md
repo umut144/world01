@@ -352,12 +352,21 @@ version, a rare occupancy change during a client prediction rollback may replay
 buffered input against the newest world until normal server reconciliation;
 retaining historical worlds for every rollback tick is deliberately deferred
 unless playtesting shows that short discrepancy to be material.
-The current strict importer accepts export schema 9 and embedded scene schema
-10. It requires their water fields so an older snapshot cannot masquerade as
-current, but `WorldMap` does not yet model water and Templates carrying water
-are rejected. The headless server and graphical client therefore consume the
-same selected Instance dimensions and gameplay placements. SceneMaker stores only
-PolyTools asset keys and authoring geometry; the runtime resolves those keys
+The current strict importer accepts export schema 10 and embedded scene schema
+11. It requires their water and route-surface fields so an older snapshot
+cannot masquerade as current. `WorldMap` does not yet model water and Templates
+carrying water are rejected. Instances retain SceneMaker's independently
+elevated Path surfaces as validated, runtime-ready vertices, triangle indices,
+primitive boundary edges, centerline samples and stable authored segments.
+The signed `grade_percent` remains the exact authored integer rather than a
+value reconstructed from floating-point elevations. Grades 0 and ±25 are the
+normal traversal class; ±50 remain passable but require reduced speed, whose
+exact multiplier is still game tuning. Template route surfaces are parsed by
+the format but explicitly rejected until Template composition defines their
+translation and replacement behavior. The headless server and graphical client
+therefore consume the same selected Instance dimensions and gameplay
+placements. SceneMaker stores only PolyTools asset keys and authoring geometry;
+the runtime resolves those keys
 through its synchronized PolyTools content and renders the real runtime
 geometry. These facilities live inside the Labyrinth client application. There
 is no public reusable camera service, room service, map service, or

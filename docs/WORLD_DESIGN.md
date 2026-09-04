@@ -371,6 +371,15 @@ These are the World-01 baseline abilities for playable characters. Games may
 tune values, controls, or availability, but a different mechanical behavior
 must be documented as an explicit game variant.
 
+### Authored Path grades
+
+- SceneMaker-authored Paths retain their signed grade as semantic integer data.
+- `0%` and `±25%` use normal movement speed in World 01.
+- `±50%` remain passable but use a reduced movement speed. The exact reduction
+  is still open balancing rather than an invented default.
+- A grade whose absolute value exceeds `50%` is not passable under this initial
+  World-01 rule. The current authoring presets deliberately stop at `±50%`.
+
 ### RUN
 
 - Every playable character has RUN by default.

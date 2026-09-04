@@ -10,9 +10,9 @@ use serde::Deserialize;
 use crate::Position;
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 9;
+const FORMAT_VERSION: u32 = 10;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 10;
+const SCENE_VERSION: u32 = 11;
 const WORKSPACE_KEY: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
 
@@ -26,6 +26,7 @@ pub struct WorldMap {
     terrain_cell_meters: f32,
     terrain_cells: Vec<MapTerrainCell>,
     props: Vec<MapProp>,
+    route_surfaces: Vec<MapRouteSurface>,
     template_anchors: Vec<MapTemplateAnchor>,
 }
 
@@ -63,6 +64,7 @@ impl WorldMap {
             terrain_cell_meters: scene.terrain_cell_meters,
             terrain_cells: scene.terrain_cells,
             props: scene.props,
+            route_surfaces: scene.route_surfaces,
             template_anchors: scene.template_anchors,
         })
     }
@@ -97,6 +99,11 @@ impl WorldMap {
 
     pub fn props(&self) -> &[MapProp] {
         &self.props
+    }
+
+    /// Independently elevated Path surfaces, already tessellated by SceneMaker.
+    pub fn route_surfaces(&self) -> &[MapRouteSurface] {
+        &self.route_surfaces
     }
 
     /// Every place a Template may be put, with the group it asks for.
@@ -381,6 +388,7 @@ impl WorldMap {
             terrain_cell_meters: self.terrain_cell_meters,
             terrain_cells,
             props,
+            route_surfaces: self.route_surfaces.clone(),
             template_anchors: self.template_anchors.clone(),
         })
     }
@@ -582,6 +590,11 @@ impl WorldTemplate {
                 "a SceneMaker Template must not carry water",
             ));
         }
+        if !export.route_surface_bakes.is_empty() || !export.scene.route_surfaces.is_empty() {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template must not carry route surfaces until composition defines them",
+            ));
+        }
         let Some(definition) = export.scene.template_definition.take() else {
             return Err(WorldMapError::new(
                 "a SceneMaker Template requires a Template definition",
@@ -697,6 +710,59 @@ pub struct MapTerrainCell {
     /// The height of the walking surface, in meters.
     pub elevation_meters: f32,
     pub center: Position,
+}
+
+/// A SceneMaker-authored Path kept separate from the Terrain height field.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapRouteSurface {
+    pub route_surface_id: String,
+    pub asset_key: String,
+    pub surface: String,
+    pub vertices: Vec<MapRouteVertex>,
+    pub triangle_indices: Vec<u32>,
+    pub boundary_edges: Vec<MapRouteBoundaryEdge>,
+    pub centerline_samples: Vec<MapRouteCenterlineSample>,
+    pub segments: Vec<MapRouteSegment>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapRouteVertex {
+    pub position: Position,
+    pub elevation_meters: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MapRouteBoundaryEdge {
+    pub start_vertex_index: u32,
+    pub end_vertex_index: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapRouteCenterlineSample {
+    pub position: Position,
+    pub elevation_meters: f32,
+    pub width_meters: f32,
+    pub station_meters: f32,
+    pub authored_point_index: Option<u32>,
+}
+
+/// Runtime meaning retained from one authored Path interval.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MapRouteSegment {
+    pub segment_id: String,
+    pub grade_percent: i32,
+    pub start_point_index: u32,
+    pub end_point_index: u32,
+    pub start_sample_index: u32,
+    pub end_sample_index: u32,
+}
+
+impl MapRouteSegment {
+    /// World 01 initially treats ±50% as passable but slower. The exact speed
+    /// reduction is game tuning and is deliberately not invented here.
+    pub const fn requires_reduced_speed(&self) -> bool {
+        self.grade_percent == -50 || self.grade_percent == 50
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -861,6 +927,7 @@ struct ConvertedSceneBody {
     authoring_pixels_per_meter: f32,
     terrain_cells: Vec<MapTerrainCell>,
     props: Vec<MapProp>,
+    route_surfaces: Vec<MapRouteSurface>,
     template_anchors: Vec<MapTemplateAnchor>,
 }
 
@@ -871,6 +938,7 @@ fn convert_scene_body(
     let ExportDocument {
         grid,
         asset_profiles,
+        route_surface_bakes,
         scene,
         ..
     } = export;
@@ -878,6 +946,7 @@ fn convert_scene_body(
         size_cells,
         terrain_cells: source_terrain_cells,
         props: source_props,
+        route_surfaces: source_route_surfaces,
         template_anchors: source_template_anchors,
         ..
     } = scene;
@@ -972,6 +1041,13 @@ fn convert_scene_body(
         offset_y,
     )?;
     validate_authored_prop_footprints(&props)?;
+    let route_surfaces = convert_route_surfaces(
+        source_route_surfaces,
+        route_surface_bakes,
+        &profiles,
+        offset_x,
+        offset_y,
+    )?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
@@ -1015,8 +1091,269 @@ fn convert_scene_body(
         authoring_pixels_per_meter: grid.authoring_pixels_per_meter,
         terrain_cells,
         props,
+        route_surfaces,
         template_anchors,
     })
+}
+
+fn convert_route_surfaces(
+    sources: Vec<RouteSurfaceDocument>,
+    bakes: Vec<RouteSurfaceBakeDocument>,
+    profiles: &HashMap<String, AssetProfileDocument>,
+    offset_x: f32,
+    offset_y: f32,
+) -> Result<Vec<MapRouteSurface>, WorldMapError> {
+    if sources.len() != bakes.len() {
+        return Err(WorldMapError::new(
+            "authored route surfaces and route_surface_bakes must have the same length",
+        ));
+    }
+    let mut route_ids = HashSet::with_capacity(sources.len());
+    let mut segment_ids = HashSet::new();
+    let mut previous_route_id: Option<String> = None;
+    let mut converted = Vec::with_capacity(sources.len());
+    for (source, bake) in sources.into_iter().zip(bakes) {
+        if source.route_surface_id.is_empty()
+            || !route_ids.insert(source.route_surface_id.clone())
+            || previous_route_id
+                .as_ref()
+                .is_some_and(|previous| previous >= &source.route_surface_id)
+        {
+            return Err(WorldMapError::new(format!(
+                "route surface ID '{}' is empty, duplicated, or out of order",
+                source.route_surface_id
+            )));
+        }
+        previous_route_id = Some(source.route_surface_id.clone());
+        if source.route_surface_id != bake.route_surface_id || source.asset_key != bake.asset_key {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' does not match its runtime bake",
+                source.route_surface_id
+            )));
+        }
+        let Some(surface) = require_profile(profiles, &source.asset_key)?
+            .surface
+            .clone()
+        else {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' Asset '{}' has no exported surface",
+                source.route_surface_id, source.asset_key
+            )));
+        };
+        validate_route_source(&source)?;
+        for segment in &source.segments {
+            if !segment_ids.insert(segment.segment_id.clone()) {
+                return Err(WorldMapError::new(format!(
+                    "route segment ID '{}' is duplicated across Paths",
+                    segment.segment_id
+                )));
+            }
+        }
+        let vertices = bake
+            .vertices
+            .into_iter()
+            .map(|vertex| {
+                if !vertex.x_meters.is_finite()
+                    || !vertex.y_meters.is_finite()
+                    || !vertex.elevation_meters.is_finite()
+                {
+                    return Err(WorldMapError::new(format!(
+                        "route surface '{}' has a non-finite baked vertex",
+                        source.route_surface_id
+                    )));
+                }
+                Ok(MapRouteVertex {
+                    position: Position::new(vertex.x_meters + offset_x, vertex.y_meters + offset_y),
+                    elevation_meters: vertex.elevation_meters,
+                })
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        if bake.triangle_indices.is_empty() || bake.triangle_indices.len() % 3 != 0 {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' needs complete baked triangles",
+                source.route_surface_id
+            )));
+        }
+        for triangle in bake.triangle_indices.chunks_exact(3) {
+            if triangle
+                .iter()
+                .any(|index| *index as usize >= vertices.len())
+            {
+                return Err(WorldMapError::new(format!(
+                    "route surface '{}' has an invalid triangle index",
+                    source.route_surface_id
+                )));
+            }
+            let a = vertices[triangle[0] as usize].position;
+            let b = vertices[triangle[1] as usize].position;
+            let c = vertices[triangle[2] as usize].position;
+            let twice_area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if !twice_area.is_finite() || twice_area == 0.0 {
+                return Err(WorldMapError::new(format!(
+                    "route surface '{}' has a degenerate baked triangle",
+                    source.route_surface_id
+                )));
+            }
+        }
+        let boundary_edges = bake
+            .boundary_edges
+            .into_iter()
+            .map(|edge| {
+                if edge.start_vertex_index as usize >= vertices.len()
+                    || edge.end_vertex_index as usize >= vertices.len()
+                    || edge.start_vertex_index == edge.end_vertex_index
+                {
+                    return Err(WorldMapError::new(format!(
+                        "route surface '{}' has an invalid boundary edge",
+                        source.route_surface_id
+                    )));
+                }
+                Ok(MapRouteBoundaryEdge {
+                    start_vertex_index: edge.start_vertex_index,
+                    end_vertex_index: edge.end_vertex_index,
+                })
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        if boundary_edges.is_empty() {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' needs baked boundary edges",
+                source.route_surface_id
+            )));
+        }
+        let mut previous_station = None;
+        let centerline_samples = bake
+            .centerline_samples
+            .into_iter()
+            .map(|sample| {
+                if !sample.x_meters.is_finite()
+                    || !sample.y_meters.is_finite()
+                    || !sample.elevation_meters.is_finite()
+                    || !sample.width_meters.is_finite()
+                    || sample.width_meters <= 0.0
+                    || !sample.station_meters.is_finite()
+                    || sample.station_meters < 0.0
+                    || previous_station.is_some_and(|previous| previous >= sample.station_meters)
+                    || sample
+                        .authored_point_index
+                        .is_some_and(|index| index as usize >= source.points.len())
+                {
+                    return Err(WorldMapError::new(format!(
+                        "route surface '{}' has an invalid centerline sample",
+                        source.route_surface_id
+                    )));
+                }
+                previous_station = Some(sample.station_meters);
+                Ok(MapRouteCenterlineSample {
+                    position: Position::new(sample.x_meters + offset_x, sample.y_meters + offset_y),
+                    elevation_meters: sample.elevation_meters,
+                    width_meters: sample.width_meters,
+                    station_meters: sample.station_meters,
+                    authored_point_index: sample.authored_point_index,
+                })
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        if centerline_samples.len() < 2 {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' needs at least two centerline samples",
+                source.route_surface_id
+            )));
+        }
+        let segments =
+            validate_route_bake_segments(&source, bake.segments, centerline_samples.len())?;
+        converted.push(MapRouteSurface {
+            route_surface_id: source.route_surface_id,
+            asset_key: source.asset_key,
+            surface,
+            vertices,
+            triangle_indices: bake.triangle_indices,
+            boundary_edges,
+            centerline_samples,
+            segments,
+        });
+    }
+    Ok(converted)
+}
+
+fn validate_route_source(source: &RouteSurfaceDocument) -> Result<(), WorldMapError> {
+    if source.points.len() < 2 || source.segments.len() != source.points.len() - 1 {
+        return Err(WorldMapError::new(format!(
+            "route surface '{}' needs one segment per point pair",
+            source.route_surface_id
+        )));
+    }
+    for point in &source.points {
+        if !point.elevation_meters.is_finite()
+            || !point.width_meters.is_finite()
+            || point.width_meters <= 0.0
+            || point.position_authoring_px.x < 0
+            || point.position_authoring_px.y < 0
+            || !matches!(point.mode.as_str(), "linear" | "aligned")
+            || (point.mode == "linear"
+                && (point.handle_in_authoring_px.x != 0
+                    || point.handle_in_authoring_px.y != 0
+                    || point.handle_out_authoring_px.x != 0
+                    || point.handle_out_authoring_px.y != 0))
+        {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' has an invalid authored point",
+                source.route_surface_id
+            )));
+        }
+    }
+    let mut segment_ids = HashSet::with_capacity(source.segments.len());
+    for segment in &source.segments {
+        if segment.segment_id.is_empty()
+            || !segment_ids.insert(segment.segment_id.clone())
+            || !matches!(segment.grade_percent, -50 | -25 | 0 | 25 | 50)
+        {
+            return Err(WorldMapError::new(format!(
+                "route surface '{}' has an invalid authored segment",
+                source.route_surface_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_route_bake_segments(
+    source: &RouteSurfaceDocument,
+    baked: Vec<RouteSurfaceBakeSegmentDocument>,
+    sample_count: usize,
+) -> Result<Vec<MapRouteSegment>, WorldMapError> {
+    if baked.len() != source.segments.len() {
+        return Err(WorldMapError::new(format!(
+            "route surface '{}' bake has the wrong segment count",
+            source.route_surface_id
+        )));
+    }
+    baked
+        .into_iter()
+        .enumerate()
+        .map(|(index, segment)| {
+            let authored = &source.segments[index];
+            if segment.segment_id != authored.segment_id
+                || segment.grade_percent != authored.grade_percent
+                || segment.start_point_index as usize != index
+                || segment.end_point_index as usize != index + 1
+                || segment.start_sample_index as usize >= sample_count
+                || segment.end_sample_index as usize >= sample_count
+                || segment.start_sample_index >= segment.end_sample_index
+            {
+                return Err(WorldMapError::new(format!(
+                    "route surface '{}' has an invalid baked segment mapping",
+                    source.route_surface_id
+                )));
+            }
+            Ok(MapRouteSegment {
+                segment_id: segment.segment_id,
+                grade_percent: segment.grade_percent,
+                start_point_index: segment.start_point_index,
+                end_point_index: segment.end_point_index,
+                start_sample_index: segment.start_sample_index,
+                end_sample_index: segment.end_sample_index,
+            })
+        })
+        .collect()
 }
 
 struct ValidatedGridAnchor {
@@ -1248,6 +1585,7 @@ struct ExportDocument {
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
     water_raster: Vec<serde::de::IgnoredAny>,
+    route_surface_bakes: Vec<RouteSurfaceBakeDocument>,
     scene: SceneDocument,
 }
 
@@ -1292,8 +1630,77 @@ struct SceneDocument {
     terrain_cells: Vec<TerrainCellDocument>,
     props: Vec<PropDocument>,
     water_bodies: Vec<serde::de::IgnoredAny>,
+    route_surfaces: Vec<RouteSurfaceDocument>,
     template_definition: Option<TemplateDefinitionDocument>,
     template_anchors: Vec<TemplateAnchorDocument>,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceDocument {
+    route_surface_id: String,
+    asset_key: String,
+    points: Vec<RouteSurfacePointDocument>,
+    segments: Vec<RouteSurfaceSourceSegmentDocument>,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfacePointDocument {
+    position_authoring_px: PointDocument,
+    mode: String,
+    handle_in_authoring_px: PointDocument,
+    handle_out_authoring_px: PointDocument,
+    elevation_meters: f32,
+    width_meters: f32,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceSourceSegmentDocument {
+    segment_id: String,
+    grade_percent: i32,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceBakeDocument {
+    route_surface_id: String,
+    asset_key: String,
+    vertices: Vec<RouteSurfaceVertexDocument>,
+    triangle_indices: Vec<u32>,
+    boundary_edges: Vec<RouteSurfaceBoundaryEdgeDocument>,
+    centerline_samples: Vec<RouteSurfaceCenterlineSampleDocument>,
+    segments: Vec<RouteSurfaceBakeSegmentDocument>,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceVertexDocument {
+    x_meters: f32,
+    y_meters: f32,
+    elevation_meters: f32,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceBoundaryEdgeDocument {
+    start_vertex_index: u32,
+    end_vertex_index: u32,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceCenterlineSampleDocument {
+    x_meters: f32,
+    y_meters: f32,
+    elevation_meters: f32,
+    width_meters: f32,
+    station_meters: f32,
+    authored_point_index: Option<u32>,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceBakeSegmentDocument {
+    segment_id: String,
+    grade_percent: i32,
+    start_point_index: u32,
+    end_point_index: u32,
+    start_sample_index: u32,
+    end_sample_index: u32,
 }
 
 #[derive(Deserialize)]
@@ -1383,6 +1790,7 @@ fn export_document(
                 {{ "asset_key": "tree", "surface": null, "footprint_meters": {{ "width": 1.0, "height": 1.0 }}, "anchor_meters": {{ "x": 0.5, "y": 0.5 }} }}
             ],
             "water_raster": [],
+            "route_surface_bakes": [],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -1393,6 +1801,7 @@ fn export_document(
                 "terrain_cells": [{terrain_cells}],
                 "props": [{props}],
                 "water_bodies": [],
+                "route_surfaces": [],
                 "template_definition": null,
                 "template_anchors": [{anchors}],
                 "default_elevation_meters": 1.0
@@ -1481,6 +1890,18 @@ mod tests {
                 .iter()
                 .any(|placement| placement.asset_key == "ankh")
         );
+        assert_eq!(map.route_surfaces().len(), 3);
+        assert_eq!(
+            map.route_surfaces()
+                .iter()
+                .map(|route| route.segments[0].grade_percent)
+                .collect::<Vec<_>>(),
+            vec![25, 50, -50]
+        );
+        assert!(!map.route_surfaces()[0].segments[0].requires_reduced_speed());
+        assert!(map.route_surfaces()[1].segments[0].requires_reduced_speed());
+        assert!(!map.route_surfaces()[0].vertices.is_empty());
+        assert!(!map.route_surfaces()[0].boundary_edges.is_empty());
     }
 
     /// The embedded directory is a catalog rather than one hard-coded file.
@@ -1492,6 +1913,26 @@ mod tests {
 
         assert!(overworld.width_tiles() > cave.width_tiles());
         assert!(overworld.height_tiles() > cave.height_tiles());
+    }
+
+    #[test]
+    fn route_grades_and_baked_indices_are_validated_at_import() {
+        let source =
+            embedded_instance_source(TEST_SCENE_ID).expect("the embedded overworld source exists");
+        let unsupported_grade = source.replace(r#""grade_percent": 25"#, r#""grade_percent": 49"#);
+        let grade_error = WorldMap::from_source(&unsupported_grade, TEST_SCENE_ID)
+            .expect_err("an unsupported authored grade must be rejected");
+        assert!(grade_error.to_string().contains("authored segment"));
+
+        let mut invalid_index: serde_json::Value =
+            serde_json::from_str(source).expect("the embedded export is JSON");
+        invalid_index["route_surface_bakes"][0]["triangle_indices"][0] =
+            serde_json::Value::from(u32::MAX);
+        let invalid_index =
+            serde_json::to_string(&invalid_index).expect("the mutated export remains JSON");
+        let index_error = WorldMap::from_source(&invalid_index, TEST_SCENE_ID)
+            .expect_err("an out-of-range baked index must be rejected");
+        assert!(index_error.to_string().contains("triangle index"));
     }
 
     #[test]
@@ -2314,17 +2755,59 @@ mod tests {
     }
 
     #[test]
+    fn templates_with_route_surfaces_are_explicitly_rejected() {
+        let source = template_export(
+            r#"{
+                "group_number": 1,
+                "insertion_anchor_authoring_px": { "x": 32, "y": 32 }
+            }"#,
+            TEST_GRASS_CELL,
+            "",
+        );
+        let authored = source.replacen(
+            r#""route_surfaces": []"#,
+            r#""route_surfaces": [{
+                "route_surface_id": "route_0001",
+                "asset_key": "grass",
+                "points": [],
+                "segments": []
+            }]"#,
+            1,
+        );
+        let baked = source.replacen(
+            r#""route_surface_bakes": []"#,
+            r#""route_surface_bakes": [{
+                "route_surface_id": "route_0001",
+                "asset_key": "grass",
+                "vertices": [],
+                "triangle_indices": [],
+                "boundary_edges": [],
+                "centerline_samples": [],
+                "segments": []
+            }]"#,
+            1,
+        );
+
+        let authored_error = WorldTemplate::from_source(&authored, "test_template_unit")
+            .expect_err("a Template Path is not composed yet");
+        assert!(authored_error.to_string().contains("route surfaces"));
+        let baked_error = WorldTemplate::from_source(&baked, "test_template_unit")
+            .expect_err("a Template Path bake is not composed yet");
+        assert!(baked_error.to_string().contains("route surfaces"));
+    }
+
+    #[test]
     fn obsolete_export_and_scene_versions_are_rejected() {
         assert!(
             WorldMap::from_source(
-                &export_document(5, 10, TEST_GRASS_CELL, "", ""),
+                &export_document(9, 11, TEST_GRASS_CELL, "", ""),
                 TEST_SCENE_ID
             )
             .is_err()
         );
         assert!(
             WorldMap::from_source(
-                &export_document(9, 7, TEST_GRASS_CELL, "", ""),
+                &export_document(10, 10, TEST_GRASS_CELL, "", ""),
                 TEST_SCENE_ID
             )
             .is_err()

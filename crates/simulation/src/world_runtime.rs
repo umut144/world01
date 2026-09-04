@@ -486,7 +486,7 @@ mod tests {
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
-            "version": 9,
+            "version": 10,
             "workspace_key": "world01",
             "grid": {
                 "terrain_cell_meters": 1.0,
@@ -500,9 +500,10 @@ mod tests {
                 { "asset_key": "tree", "surface": null, "footprint_meters": { "width": 6.4375, "height": 8.0625 }, "anchor_meters": { "x": 3.21875, "y": 0.03125 } }
             ],
             "water_raster": [],
+            "route_surface_bakes": [],
             "scene": {
                 "schema": "srt.scene_maker_scene",
-                "version": 10,
+                "version": 11,
                 "scene_id": "runtime_test",
                 "scene_kind": "instance",
                 "size_cells": { "width": 16, "height": 16 },
@@ -517,6 +518,7 @@ mod tests {
                     "elevation_meters": 1.0
                 }],
                 "water_bodies": [],
+                "route_surfaces": [],
                 "template_definition": null,
                 "template_anchors": [{
                     "anchor_id": "template_anchor_001",

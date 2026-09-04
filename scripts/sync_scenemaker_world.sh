@@ -52,14 +52,14 @@ for source_export in "${source_exports[@]}"; do
     . as $root
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | .format == "scene_maker_scene_export"
-    and .version == 9
+    and .version == 10
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.water_cell_meters | type == "number" and isfinite and . > 0)
     and .scene.schema == "srt.scene_maker_scene"
-    and .scene.version == 10
+    and .scene.version == 11
     and (.scene.scene_id | type == "string" and length > 0)
     and (.scene.scene_kind == "instance" or .scene.scene_kind == "template")
     and .scene.coordinate_space == "scene_local_bottom_left_y_up"
@@ -70,6 +70,8 @@ for source_export in "${source_exports[@]}"; do
     and (.scene.template_anchors | type == "array")
     and (.scene.water_bodies | type == "array")
     and (.water_raster | type == "array")
+    and (.scene.route_surfaces | type == "array")
+    and (.route_surface_bakes | type == "array")
     and (if .scene.scene_kind == "instance" then
       .scene.template_definition == null
     else
@@ -80,6 +82,8 @@ for source_export in "${source_exports[@]}"; do
       and (.scene.template_anchors | length == 0)
       and (.scene.water_bodies | length == 0)
       and (.water_raster | length == 0)
+      and (.scene.route_surfaces | length == 0)
+      and (.route_surface_bakes | length == 0)
     end)
     and (.asset_profiles | type == "array")
     and (([.asset_profiles[].asset_key] | unique | length) == (.asset_profiles | length))
@@ -121,6 +125,43 @@ for source_export in "${source_exports[@]}"; do
         $root.scene.size_cells.height; $terrain_step))
     and (([.scene.template_anchors[].anchor_id] | unique | length)
       == (.scene.template_anchors | length))
+    and (([.scene.route_surfaces[].route_surface_id] | unique | length)
+      == (.scene.route_surfaces | length))
+    and (([.route_surface_bakes[].route_surface_id] | unique | length)
+      == (.route_surface_bakes | length))
+    and ([.scene.route_surfaces[].route_surface_id]
+      == [.route_surface_bakes[].route_surface_id])
+    and all(.scene.route_surfaces[]; . as $route
+      | (.route_surface_id | type == "string" and length > 0)
+      and (.asset_key | type == "string" and length > 0)
+      and (.points | type == "array" and length >= 2)
+      and (.segments | type == "array" and length == (($route.points | length) - 1))
+      and all($route.points[];
+        (.position_authoring_px.x | type == "number" and . == floor)
+        and (.position_authoring_px.y | type == "number" and . == floor)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.width_meters | type == "number" and isfinite and . > 0))
+      and all($route.segments[];
+        (.segment_id | type == "string" and length > 0)
+        and (.grade_percent == -50 or .grade_percent == -25
+          or .grade_percent == 0 or .grade_percent == 25 or .grade_percent == 50)))
+    and all(.route_surface_bakes[];
+      (.vertices | type == "array" and length > 0)
+      and (.triangle_indices | type == "array" and length > 0
+        and ((length % 3) == 0))
+      and (.boundary_edges | type == "array" and length > 0)
+      and (.centerline_samples | type == "array" and length >= 2)
+      and (.segments | type == "array" and length >= 1)
+      and all(.vertices[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite))
+      and all(.centerline_samples[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.width_meters | type == "number" and isfinite and . > 0)
+        and (.station_meters | type == "number" and isfinite and . >= 0)))
   ' "$source_export" >/dev/null \
     || fail "invalid SceneMaker export: $source_export"
 
@@ -131,6 +172,7 @@ for source_export in "${source_exports[@]}"; do
       || fail "asset '$asset_key' is not catalogued as '$expected_type' in world01"
   done < <(jq -r '
     ([.scene.terrain_cells[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
+    ([.scene.route_surfaces[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
     ([.scene.props[].asset_key] | unique | .[] | [., "props"] | @tsv)
   ' "$source_export")
 

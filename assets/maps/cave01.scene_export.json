@@ -1,6 +1,6 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 9,
+  "version": 10,
   "workspace_key": "world01",
   "grid": {
     "terrain_cell_meters": 1.0,
@@ -47,9 +47,10 @@
     }
   ],
   "water_raster": [],
+  "route_surface_bakes": [],
   "scene": {
     "schema": "srt.scene_maker_scene",
-    "version": 10,
+    "version": 11,
     "scene_id": "cave01",
     "scene_kind": "instance",
     "coordinate_space": "scene_local_bottom_left_y_up",
@@ -2461,6 +2462,7 @@
     ],
     "props": [],
     "water_bodies": [],
+    "route_surfaces": [],
     "template_definition": null,
     "template_anchors": [],
     "default_elevation_meters": 2.0
