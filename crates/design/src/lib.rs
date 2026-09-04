@@ -731,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn embedded_placement_ranks_cover_and_merge_the_world_catalog() {
+    fn embedded_placement_ranks_cover_and_replace_real_anchor_overlaps() {
         let design = load_world01_embedded().expect("embedded World 01 design parses");
         let ranks = design
             .placement_ranks()
@@ -752,18 +752,37 @@ mod tests {
         let template = templates
             .template("test_template02")
             .expect("the embedded integration Template exists");
-        let placement = overworld
-            .project_template("template_anchor_001", template)
-            .expect("the embedded Template fits the real Anchor");
-        let merged = overworld
-            .merged_with(&placement, &ranks)
-            .expect("the embedded ranks resolve the real placement");
+        for (anchor_id, displaced_tree) in [
+            ("template_anchor_001", "tree_0004"),
+            ("template_anchor_002", "tree_0001"),
+        ] {
+            assert!(
+                overworld
+                    .props()
+                    .iter()
+                    .any(|prop| prop.instance_id == displaced_tree),
+                "the authored overlap target must exist before placing at {anchor_id}"
+            );
+            let placement = overworld
+                .project_template(anchor_id, template)
+                .expect("the embedded Template fits the real Anchor");
+            let merged = overworld
+                .merged_with(&placement, &ranks)
+                .expect("the embedded ranks resolve the real placement");
 
-        assert!(merged.props().iter().any(|prop| {
-            prop.instance_id == "template.template_anchor_001.test_template02.ankh_0001"
-        }));
-        assert!(merged.props().iter().any(|prop| {
-            prop.instance_id == "template.template_anchor_001.test_template02.tree_0001"
-        }));
+            assert!(
+                !merged
+                    .props()
+                    .iter()
+                    .any(|prop| prop.instance_id == displaced_tree),
+                "the Template Ankh must replace {displaced_tree} at {anchor_id}"
+            );
+            assert!(merged.props().iter().any(|prop| {
+                prop.instance_id == format!("template.{anchor_id}.test_template02.ankh_0001")
+            }));
+            assert!(merged.props().iter().any(|prop| {
+                prop.instance_id == format!("template.{anchor_id}.test_template02.tree_0001")
+            }));
+        }
     }
 }
