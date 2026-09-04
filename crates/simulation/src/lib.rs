@@ -10,6 +10,7 @@ pub mod exertion;
 pub mod life;
 pub mod mass;
 pub mod movement;
+pub mod navigation;
 pub mod respawn;
 mod schedule;
 mod separation;
@@ -35,6 +36,9 @@ pub use life::{CharacterLifeConfigError, CharacterLifeRules, update_character_li
 pub use mass::{CharacterMassCatalog, MassModelError};
 pub use movement::{
     MovementConfigError, MovementStep, integrate_movement, update_character_orientation,
+};
+pub use navigation::{
+    CharacterTraversalProfile, TraversalCatalog, TraversalCatalogError, TraversalSpeed,
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};
