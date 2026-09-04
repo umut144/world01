@@ -113,6 +113,12 @@ impl WorldComposition {
         &self.current_map
     }
 
+    /// Mutates this protocol-neutral value directly.
+    ///
+    /// Runtime code must clone the installed composition, mutate the clone,
+    /// and submit its occupancy through [`WorldOccupancyRequest`]. Directly
+    /// mutating the installed resource bypasses atomic derived-world
+    /// validation.
     pub fn set_occupant(
         &mut self,
         anchor_id: &str,
@@ -133,6 +139,12 @@ impl WorldComposition {
         Ok(true)
     }
 
+    /// Mutates this protocol-neutral value directly.
+    ///
+    /// Runtime code must clone the installed composition, mutate the clone,
+    /// and submit its occupancy through [`WorldOccupancyRequest`]. Directly
+    /// mutating the installed resource bypasses atomic derived-world
+    /// validation.
     pub fn clear_occupant(
         &mut self,
         anchor_id: &str,

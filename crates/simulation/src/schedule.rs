@@ -141,9 +141,9 @@ mod tests {
     };
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
-        ActorId, BodyFacing, CharacterHealth, CharacterId, CharacterMass, DashIntent, DashState,
-        MovementIntent, MovementVelocity, Position, RunIntent, RunState, SelectedCharacter,
-        StaminaState, StatusEffectState,
+        ActorId, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterMass, DashIntent,
+        DashState, MovementIntent, MovementVelocity, Position, RunIntent, RunState,
+        SelectedCharacter, StaminaState, StatusEffectState,
     };
 
     use crate::{
@@ -309,7 +309,8 @@ mod tests {
             .insert_resource(
                 MageAttackRules::from_design(ticks, &game_design.mage, &game_design.mage_eye_beams)
                     .expect("mage design is valid"),
-            );
+            )
+            .insert_resource(AnkhLayout { positions: vec![] });
         add_simulation_step(&mut app, Update, SimulationAuthority::Predicted);
         app.add_systems(
             Update,

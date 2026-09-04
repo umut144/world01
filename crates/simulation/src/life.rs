@@ -91,7 +91,7 @@ impl Error for CharacterLifeConfigError {}
 pub fn update_character_life(
     rules: Res<CharacterLifeRules>,
     hurt_geometry: Option<Res<CharacterHurtGeometryCatalog>>,
-    ankh_layout: Option<Res<AnkhLayout>>,
+    ankh_layout: Res<AnkhLayout>,
     mut actors: ParamSet<(
         Query<(
             Entity,
@@ -156,17 +156,12 @@ pub fn update_character_life(
         })
         .collect::<Vec<_>>();
     let ankhs = ankh_layout
-        .as_deref()
-        .map(|layout| {
-            layout
-                .positions
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(index, position)| (Ankh::new(index as u32), position))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+        .positions
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, position)| (Ankh::new(index as u32), position))
+        .collect::<Vec<_>>();
     for (
         entity,
         actor_id,
@@ -509,7 +504,9 @@ mod tests {
     use world01_configs::load_embedded;
     use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
-    use world01_world_data::{BodyFacing, CharacterId, MovementIntent, SelectedCharacter};
+    use world01_world_data::{
+        AnkhLayout, BodyFacing, CharacterId, MovementIntent, SelectedCharacter,
+    };
 
     fn test_app() -> App {
         let runtime = load_embedded().expect("embedded runtime parses");
@@ -519,6 +516,7 @@ mod tests {
             CharacterLifeRules::from_design(runtime.simulation.ticks_per_second, &design.health)
                 .expect("embedded character life design is valid"),
         )
+        .insert_resource(AnkhLayout { positions: vec![] })
         .insert_resource(
             CharacterHurtGeometryCatalog::from_content(
                 &RuntimeContent::load_embedded().expect("embedded runtime content is valid"),

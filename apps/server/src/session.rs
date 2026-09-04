@@ -56,15 +56,13 @@ fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands)
 
 fn publish_world_occupancy(
     composition: Res<WorldComposition>,
-    runtime: Option<Res<WorldRuntimeState>>,
+    runtime: Res<WorldRuntimeState>,
     mut world_state: Query<&mut AnchorOccupancy, With<AuthoritativeWorldState>>,
 ) {
     if !composition.is_changed() {
         return;
     }
-    if runtime.is_some_and(|runtime| {
-        runtime.applied_generation() != Some(composition.occupancy().generation())
-    }) {
+    if runtime.applied_generation() != Some(composition.occupancy().generation()) {
         return;
     }
     let Ok(mut replicated) = world_state.single_mut() else {
@@ -173,7 +171,11 @@ fn spawn_position(actor_id: u64) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use world01_world_data::{PlacementRanks, WorldMap, WorldTemplateCatalog};
+    use world01_content::WorldCollisionGeometryCatalog;
+    use world01_simulation::{WorldColliderGrid, add_world_runtime_rebuild};
+    use world01_world_data::{
+        AnkhLayout, PlacementRanks, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
+    };
 
     #[derive(Resource, Default)]
     struct PublishedOccupancyChanges(u32);
@@ -203,21 +205,35 @@ mod tests {
             WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
         let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
             .expect("the current embedded Assets have Placement Ranks");
-        let composition = WorldComposition::new(map, &templates, &ranks)
+        let composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the initial composition is valid");
         let initial_occupancy = composition.occupancy().clone();
+        let mut authority = composition.clone();
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
+            .expect("embedded world collision is valid");
+        let grid = WorldColliderGrid::from_catalog(&collision);
+        let ankhs = AnkhLayout::from_map(&map);
 
         let mut app = App::new();
         app.insert_resource(composition)
+            .insert_resource(content)
+            .insert_resource(templates.clone())
+            .insert_resource(ranks.clone())
+            .insert_resource(map)
+            .insert_resource(collision)
+            .insert_resource(grid)
+            .insert_resource(ankhs)
             .init_resource::<PublishedOccupancyChanges>()
             .add_systems(Startup, spawn_world_state)
             .add_systems(
                 FixedUpdate,
                 (
-                    publish_world_occupancy,
+                    publish_world_occupancy.after(WorldRuntimeSet::Rebuild),
                     count_published_occupancy_changes.after(publish_world_occupancy),
                 ),
             );
+        add_world_runtime_rebuild(&mut app, FixedUpdate);
 
         app.world_mut().run_schedule(Startup);
         let published = app
@@ -232,15 +248,15 @@ mod tests {
         app.world_mut().run_schedule(FixedUpdate);
         assert_eq!(app.world().resource::<PublishedOccupancyChanges>().0, 1);
 
-        app.world_mut()
-            .resource_mut::<WorldComposition>()
+        authority
             .set_occupant("template_anchor_001", "test_template", &templates, &ranks)
             .expect("the server-owned assignment is valid");
-        let expected = app
-            .world()
-            .resource::<WorldComposition>()
-            .occupancy()
-            .clone();
+        let expected = authority.occupancy().clone();
+        assert!(
+            app.world_mut()
+                .resource_mut::<WorldOccupancyRequest>()
+                .submit(expected.clone())
+        );
         app.world_mut().run_schedule(FixedUpdate);
 
         let published = app
@@ -250,5 +266,37 @@ mod tests {
             .expect("the authoritative world-state entity remains unique");
         assert_eq!(published, &expected);
         assert_eq!(app.world().resource::<PublishedOccupancyChanges>().0, 2);
+    }
+
+    #[test]
+    fn world_state_does_not_publish_an_unapplied_composition_generation() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
+        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
+            .expect("the current embedded Assets have Placement Ranks");
+        let composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the initial composition is valid");
+        let initial_occupancy = composition.occupancy().clone();
+
+        let mut app = App::new();
+        app.insert_resource(composition)
+            .init_resource::<WorldRuntimeState>()
+            .add_systems(Startup, spawn_world_state)
+            .add_systems(FixedUpdate, publish_world_occupancy);
+        app.world_mut().run_schedule(Startup);
+
+        app.world_mut()
+            .resource_mut::<WorldComposition>()
+            .set_occupant("template_anchor_001", "test_template", &templates, &ranks)
+            .expect("the direct mutation creates an unapplied generation");
+        app.world_mut().run_schedule(FixedUpdate);
+
+        let published = app
+            .world_mut()
+            .query_filtered::<&AnchorOccupancy, With<AuthoritativeWorldState>>()
+            .single(app.world())
+            .expect("exactly one authoritative world-state entity exists");
+        assert_eq!(published, &initial_occupancy);
     }
 }

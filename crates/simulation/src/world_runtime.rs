@@ -173,8 +173,20 @@ mod tests {
     #[derive(Resource, Debug, Default)]
     struct MapChangeCount(u32);
 
+    #[derive(Resource, Debug, Default)]
+    struct RuntimeStateChangeCount(u32);
+
     fn count_map_changes(map: Res<WorldMap>, mut count: ResMut<MapChangeCount>) {
         if map.is_changed() {
+            count.0 += 1;
+        }
+    }
+
+    fn count_runtime_state_changes(
+        state: Res<WorldRuntimeState>,
+        mut count: ResMut<RuntimeStateChangeCount>,
+    ) {
+        if state.is_changed() {
             count.0 += 1;
         }
     }
@@ -305,6 +317,12 @@ mod tests {
         assert_eq!(app.world().resource::<WorldColliderGrid>(), &initial_grid);
         assert_eq!(app.world().resource::<AnkhLayout>(), &initial_ankhs);
         assert_eq!(app.world().resource::<MapChangeCount>().0, 3);
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeState>()
+                .applied_generation(),
+            Some(2)
+        );
     }
 
     #[test]
@@ -346,9 +364,17 @@ mod tests {
             .insert_resource(ankhs.clone())
             .init_resource::<WorldOccupancyRequest>()
             .init_resource::<WorldRuntimeState>()
-            .add_systems(Update, rebuild_world_runtime);
+            .init_resource::<RuntimeStateChangeCount>()
+            .add_systems(
+                Update,
+                (
+                    rebuild_world_runtime,
+                    count_runtime_state_changes.after(rebuild_world_runtime),
+                ),
+            );
 
         app.update();
+        assert_eq!(app.world().resource::<RuntimeStateChangeCount>().0, 1);
         app.world_mut()
             .resource_mut::<WorldOccupancyRequest>()
             .submit(authority.occupancy().clone());
@@ -377,6 +403,15 @@ mod tests {
                 .rejected_generation,
             Some(1)
         );
+        assert_eq!(app.world().resource::<RuntimeStateChangeCount>().0, 2);
+
+        app.update();
+        assert_eq!(
+            app.world().resource::<WorldComposition>(),
+            &initial_composition
+        );
+        assert_eq!(app.world().resource::<WorldMap>(), &map);
+        assert_eq!(app.world().resource::<RuntimeStateChangeCount>().0, 2);
     }
 
     #[test]
