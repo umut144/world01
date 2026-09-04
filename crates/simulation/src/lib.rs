@@ -39,7 +39,7 @@ pub use movement::{
 };
 pub use navigation::{
     CharacterTraversalProfile, TraversalCatalog, TraversalCatalogError, TraversalSpeed,
-    constrain_grounded_movement,
+    apply_grounded_route_speed, constrain_grounded_movement,
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
 pub use schedule::{SimulationAuthority, SimulationSet, add_simulation_step};

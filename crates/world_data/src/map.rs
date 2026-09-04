@@ -144,6 +144,15 @@ impl WorldMap {
         &self.route_surfaces
     }
 
+    pub fn route_surface(&self, route_surface_id: &str) -> Option<&MapRouteSurface> {
+        self.route_surfaces
+            .binary_search_by_key(&route_surface_id, |surface| {
+                surface.route_surface_id.as_str()
+            })
+            .ok()
+            .and_then(|index| self.route_surfaces.get(index))
+    }
+
     /// Every place a Template may be put, with the group it asks for.
     ///
     /// The base map loads with its Anchors empty. [`Self::project_template`]
@@ -807,6 +816,126 @@ pub struct MapRouteSurface {
     pub boundary_edges: Vec<MapRouteBoundaryEdge>,
     pub centerline_samples: Vec<MapRouteCenterlineSample>,
     pub segments: Vec<MapRouteSegment>,
+}
+
+impl MapRouteSurface {
+    /// Samples the baked walking height and authored grade at a point inside
+    /// this Path's horizontal footprint.
+    ///
+    /// Height follows the exported triangle plane. Grade remains the exact
+    /// authored integer assigned to the nearest baked centerline interval;
+    /// triangle geometry is never used to reconstruct that gameplay token.
+    pub fn sample_at(&self, position: Position) -> Option<MapRouteSurfaceSample> {
+        if !position.x.is_finite() || !position.y.is_finite() {
+            return None;
+        }
+        let elevation_meters = self.triangle_indices.chunks_exact(3).find_map(|triangle| {
+            let first = self.vertices.get(triangle[0] as usize)?;
+            let second = self.vertices.get(triangle[1] as usize)?;
+            let third = self.vertices.get(triangle[2] as usize)?;
+            interpolate_triangle_height(position, *first, *second, *third)
+        })?;
+        let grade_percent = self
+            .segments
+            .iter()
+            .enumerate()
+            .flat_map(|(segment_index, segment)| {
+                let start = segment.start_sample_index as usize;
+                let end = segment.end_sample_index as usize;
+                self.centerline_samples
+                    .get(start..=end)
+                    .into_iter()
+                    .flat_map(move |samples| {
+                        samples.windows(2).map(move |samples| {
+                            (
+                                point_segment_distance_squared(
+                                    position,
+                                    samples[0].position,
+                                    samples[1].position,
+                                ),
+                                segment_index,
+                                segment.grade_percent,
+                            )
+                        })
+                    })
+            })
+            .min_by(|first, second| {
+                first
+                    .0
+                    .total_cmp(&second.0)
+                    .then_with(|| first.1.cmp(&second.1))
+            })?
+            .2;
+        Some(MapRouteSurfaceSample {
+            elevation_meters,
+            grade_percent,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapRouteSurfaceSample {
+    pub elevation_meters: f32,
+    pub grade_percent: i32,
+}
+
+fn interpolate_triangle_height(
+    point: Position,
+    first: MapRouteVertex,
+    second: MapRouteVertex,
+    third: MapRouteVertex,
+) -> Option<f32> {
+    const EDGE_EPSILON: f32 = 1.0e-5;
+
+    let denominator = cross(
+        second.position.x - first.position.x,
+        second.position.y - first.position.y,
+        third.position.x - first.position.x,
+        third.position.y - first.position.y,
+    );
+    if !denominator.is_finite() || denominator == 0.0 {
+        return None;
+    }
+    let second_weight = cross(
+        point.x - first.position.x,
+        point.y - first.position.y,
+        third.position.x - first.position.x,
+        third.position.y - first.position.y,
+    ) / denominator;
+    let third_weight = cross(
+        second.position.x - first.position.x,
+        second.position.y - first.position.y,
+        point.x - first.position.x,
+        point.y - first.position.y,
+    ) / denominator;
+    let first_weight = 1.0 - second_weight - third_weight;
+    if first_weight < -EDGE_EPSILON || second_weight < -EDGE_EPSILON || third_weight < -EDGE_EPSILON
+    {
+        return None;
+    }
+    let elevation = first_weight * first.elevation_meters
+        + second_weight * second.elevation_meters
+        + third_weight * third.elevation_meters;
+    elevation.is_finite().then_some(elevation)
+}
+
+const fn cross(first_x: f32, first_y: f32, second_x: f32, second_y: f32) -> f32 {
+    first_x * second_y - first_y * second_x
+}
+
+fn point_segment_distance_squared(point: Position, start: Position, end: Position) -> f32 {
+    let segment_x = end.x - start.x;
+    let segment_y = end.y - start.y;
+    let length_squared = segment_x * segment_x + segment_y * segment_y;
+    let factor = if length_squared > 0.0 {
+        (((point.x - start.x) * segment_x + (point.y - start.y) * segment_y) / length_squared)
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let difference_x = point.x - (start.x + factor * segment_x);
+    let difference_y = point.y - (start.y + factor * segment_y);
+    difference_x * difference_x + difference_y * difference_y
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1976,6 +2105,63 @@ mod tests {
         );
         assert!(!map.route_surfaces()[0].vertices.is_empty());
         assert!(!map.route_surfaces()[0].boundary_edges.is_empty());
+    }
+
+    #[test]
+    fn route_sampling_uses_baked_height_and_authored_grade() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        for route in map.route_surfaces() {
+            let expected_grade = route.segments[0].grade_percent;
+            for sample in &route.centerline_samples {
+                let resolved = route
+                    .sample_at(sample.position)
+                    .expect("every baked centerline sample lies on its Path surface");
+                assert!(
+                    (resolved.elevation_meters - sample.elevation_meters).abs() < 0.000_1,
+                    "{} sampled {} instead of {}",
+                    route.route_surface_id,
+                    resolved.elevation_meters,
+                    sample.elevation_meters
+                );
+                assert_eq!(resolved.grade_percent, expected_grade);
+            }
+        }
+    }
+
+    #[test]
+    fn route_sampling_rejects_points_outside_the_baked_surface() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        assert_eq!(
+            map.route_surfaces()[0].sample_at(Position::new(10_000.0, 10_000.0)),
+            None
+        );
+        assert_eq!(map.route_surface("missing"), None);
+    }
+
+    #[test]
+    fn route_sampling_keeps_each_authored_segment_grade() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        let mut route = map.route_surfaces()[0].clone();
+        let grades = [0, 25, 50, -25, -50];
+        for (segment, grade) in route.segments.iter_mut().zip(grades) {
+            segment.grade_percent = grade;
+        }
+
+        for segment in &route.segments {
+            let first = route.centerline_samples[segment.start_sample_index as usize].position;
+            let second = route.centerline_samples[segment.start_sample_index as usize + 1].position;
+            let midpoint = Position::new((first.x + second.x) * 0.5, (first.y + second.y) * 0.5);
+            assert_eq!(
+                route
+                    .sample_at(midpoint)
+                    .expect("segment centerline lies on its Path")
+                    .grade_percent,
+                segment.grade_percent
+            );
+        }
     }
 
     /// The embedded directory is a catalog rather than one hard-coded file.

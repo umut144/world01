@@ -3,7 +3,7 @@
 mod ground;
 mod traversal;
 
-pub use ground::constrain_grounded_movement;
+pub use ground::{apply_grounded_route_speed, constrain_grounded_movement};
 pub use traversal::{
     CharacterTraversalProfile, TraversalCatalog, TraversalCatalogError, TraversalSpeed,
 };

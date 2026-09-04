@@ -248,13 +248,24 @@ cell before horizontal integration. Stationary grounded Actors also resample
 Terrain after a world-composition change, and Ankh respawns resolve their final
 height and Terrain support rather than retaining the Ankh's raw export height.
 
-Route-surface support has protocol identity but does not move yet; its height
-sampling, transitions to and from Terrain, and grade-dependent speed are the
-next elevation slice. Airborne and flying movement rules likewise do not exist
-yet. Current Character/world collision, revival overlap, Hammer impact, and
-Mage beam evaluation remain planar: they do not yet use the Actors' elevations
-to separate physical layers. Client presentation currently projects only `x`
-and `y`; Bevy
+Route-surface support is also active. Its height is barycentrically sampled
+from SceneMaker's baked triangles, while its speed class comes from the exact
+authored grade of the nearest baked centerline interval rather than from a
+floating-point slope reconstructed at runtime. Grades `0` and `±25` preserve
+the Actor's current movement speed; `±50` multiply the final requested speed,
+including RUN or DASH, by `0.5` before planar collision tests its endpoint.
+An Actor retains its current support while the target point remains on it.
+Terrain changes to a Route only when exactly one overlapping Route is
+surface-compatible, grade-passable, and within the Actor's allowed step
+height. A Route may change to Terrain or one uniquely reachable other Route by
+the same rule. An elevated bridge therefore does not pull up an Actor walking
+on Terrain below it, and multiple reachable overlapping Routes are not
+resolved by guessing the nearest height or first ID.
+
+Airborne and flying movement rules do not exist yet. Current Character/world
+collision, revival overlap, Hammer impact, and Mage beam evaluation remain
+planar: they do not yet use the Actors' elevations to separate physical layers.
+Client presentation currently projects only `x` and `y`; Bevy
 `Transform.z` remains presentation depth, including ordering among Terrain,
 Props, Characters, and projected weapon parts, rather than an authoritative
 physical coordinate. There is no generic sandbox
