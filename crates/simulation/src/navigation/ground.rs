@@ -609,6 +609,79 @@ mod tests {
     }
 
     #[test]
+    fn one_place_under_an_excavated_hill_carries_two_actors_at_their_own_heights() {
+        let mut app = app();
+        let (position, floor, hill_top) = {
+            let map = app.world().resource::<WorldMap>();
+            let cut = map
+                .route_surface_cuts()
+                .first()
+                .expect("the overworld carries an excavating Path");
+            let water_cell = |x: u32, y: u32| {
+                Position::new(
+                    -map.width_meters() / 2.0 + (x as f32 + 0.5) * map.water_cell_meters(),
+                    -map.height_meters() / 2.0 + (y as f32 + 0.5) * map.water_cell_meters(),
+                )
+            };
+            let cell = cut
+                .cells
+                .iter()
+                .find(|cell| {
+                    map.terrain_cell_at(water_cell(cell.x, cell.y))
+                        .is_some_and(|terrain| terrain.elevation_meters > cell.cut_top_meters)
+                })
+                .expect("the excavation reaches ground that stands above it");
+            let position = water_cell(cell.x, cell.y);
+            let hill_top = map
+                .terrain_cell_at(position)
+                .expect("that cell has Terrain")
+                .elevation_meters;
+            (position, cell.floor_meters, hill_top)
+        };
+
+        let spawn = |app: &mut App, elevation| {
+            app.world_mut()
+                .spawn((
+                    SelectedCharacter(CharacterId("hammerer".into())),
+                    MovementVelocity::ZERO,
+                    WorldPosition::new(position.x, position.y, elevation),
+                    MovementMedium::GROUNDED_TERRAIN,
+                ))
+                .id()
+        };
+        let through = spawn(&mut app, floor);
+        let over = spawn(&mut app, hill_top);
+
+        app.update();
+
+        assert_eq!(
+            app.world()
+                .get::<WorldPosition>(through)
+                .expect("the Actor in the excavation keeps its position")
+                .elevation_meters,
+            floor,
+            "the excavation leaves a floor to walk on"
+        );
+        assert_eq!(
+            app.world()
+                .get::<WorldPosition>(over)
+                .expect("the Actor above keeps its position")
+                .elevation_meters,
+            hill_top,
+            "the ground above the excavation still stands"
+        );
+        for actor in [through, over] {
+            assert!(
+                matches!(
+                    app.world().get::<MovementMedium>(actor),
+                    Some(MovementMedium::Grounded(_))
+                ),
+                "neither Actor loses its support"
+            );
+        }
+    }
+
+    #[test]
     fn terrain_enters_the_reachable_start_of_one_route() {
         let mut app = app();
         let (route_id, start, direction, terrain_elevation) = {

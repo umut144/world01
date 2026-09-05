@@ -15,10 +15,19 @@ pub(crate) fn resolve_terrain_position(
     candidate: WorldPosition,
 ) -> Option<WorldPosition> {
     let profile = traversal.character(character)?;
-    let cell = map.terrain_cell_at(candidate.horizontal())?;
-    profile
-        .permits_surface(&cell.surface)
-        .then(|| WorldPosition::new(candidate.x, candidate.y, cell.elevation_meters))
+    let horizontal = candidate.horizontal();
+    let cell = map.terrain_cell_at(horizontal)?;
+    if !profile.permits_surface(&cell.surface) {
+        return None;
+    }
+    let mut surfaces = Vec::new();
+    map.terrain_walking_surfaces(horizontal, &mut surfaces);
+    let elevation_meters = nearest_surface(&surfaces, candidate.elevation_meters)?;
+    Some(WorldPosition::new(
+        candidate.x,
+        candidate.y,
+        elevation_meters,
+    ))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,7 +80,10 @@ pub(super) fn resolve_current_support<'a>(
 ) -> CurrentSupport<'a> {
     let horizontal = position.horizontal();
     let (sample, excluded_route) = match support {
-        GroundSupport::Terrain => (sample_terrain(map, horizontal), None),
+        GroundSupport::Terrain => (
+            sample_terrain(map, horizontal, position.elevation_meters),
+            None,
+        ),
         GroundSupport::RouteSurface { route_surface_id } => {
             let Some(route) = map.route_surface(route_surface_id) else {
                 return CurrentSupport::MissingIdentity;
@@ -97,14 +109,46 @@ pub(super) fn resolve_current_support<'a>(
     }
 }
 
-fn sample_terrain(map: &WorldMap, position: Position) -> Option<GroundSample<'_>> {
+fn sample_terrain(
+    map: &WorldMap,
+    position: Position,
+    reference_elevation_meters: f32,
+) -> Option<GroundSample<'_>> {
     let cell = map.terrain_cell_at(position)?;
+    let mut surfaces = Vec::new();
+    map.terrain_walking_surfaces(position, &mut surfaces);
     Some(GroundSample {
         support: SampleSupport::Terrain,
         surface: &cell.surface,
-        elevation_meters: cell.elevation_meters,
+        elevation_meters: nearest_surface(&surfaces, reference_elevation_meters)?,
         grade_percent: None,
     })
+}
+
+/// The walking surface an Actor at this height stands on.
+///
+/// An excavated column offers more than one, and the nearest is the one the
+/// Actor is on: the floor of a tunnel for whoever walks through it, the ground
+/// above for whoever walks over it. Two equally near surfaces are refused
+/// rather than resolved by order, the same way two reachable Routes are.
+fn nearest_surface(surfaces: &[f32], elevation_meters: f32) -> Option<f32> {
+    let mut nearest: Option<(f32, f32)> = None;
+    let mut ambiguous = false;
+    for surface in surfaces.iter().copied() {
+        let distance = (surface - elevation_meters).abs();
+        match nearest {
+            Some((closest, _)) if distance > closest => continue,
+            Some((closest, _)) if distance == closest => ambiguous = true,
+            _ => {
+                nearest = Some((distance, surface));
+                ambiguous = false;
+            }
+        }
+    }
+    if ambiguous {
+        return None;
+    }
+    nearest.map(|(_, surface)| surface)
 }
 
 fn sample_route(route: &MapRouteSurface, position: Position) -> Option<GroundSample<'_>> {
@@ -147,7 +191,7 @@ pub(super) fn resolve_target<'a>(
         ReachableRoute::None => {}
     }
 
-    let terrain = sample_terrain(map, position)?;
+    let terrain = sample_terrain(map, position, current.elevation_meters)?;
     sample_is_reachable(profile, current.elevation_meters, terrain).then_some(terrain)
 }
 
@@ -169,7 +213,7 @@ fn resolve_detached_support<'a>(
         ReachableRoute::Ambiguous => return None,
         ReachableRoute::None => {}
     }
-    let terrain = sample_terrain(map, position)?;
+    let terrain = sample_terrain(map, position, current_elevation_meters)?;
     sample_is_reachable(profile, current_elevation_meters, terrain).then_some(terrain)
 }
 
@@ -235,6 +279,25 @@ pub(super) fn sample_is_usable(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_actor_stands_on_the_surface_nearest_its_own_height() {
+        assert_eq!(nearest_surface(&[1.0, 10.0], 1.2), Some(1.0));
+        assert_eq!(nearest_surface(&[1.0, 10.0], 9.6), Some(10.0));
+        assert_eq!(nearest_surface(&[4.0], 0.0), Some(4.0));
+        assert_eq!(nearest_surface(&[], 1.0), None);
+    }
+
+    #[test]
+    fn two_equally_near_surfaces_are_refused_rather_than_ordered() {
+        assert_eq!(nearest_surface(&[1.0, 3.0], 2.0), None);
+        assert_eq!(nearest_surface(&[3.0, 1.0], 2.0), None);
+        assert_eq!(
+            nearest_surface(&[1.0, 3.0, 3.1], 2.0),
+            None,
+            "a third surface further away does not resolve the tie"
+        );
+    }
 
     #[test]
     fn multiple_reachable_routes_are_explicitly_ambiguous() {
