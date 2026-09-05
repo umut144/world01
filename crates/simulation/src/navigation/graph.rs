@@ -13,7 +13,12 @@
 //! one thing a node does decide is whether the world's own collision geometry
 //! stands there, because that is the same for everybody.
 
-use std::{collections::HashMap, error::Error, fmt};
+use std::{
+    cmp::Ordering,
+    collections::{BinaryHeap, HashMap},
+    error::Error,
+    fmt,
+};
 
 use bevy::prelude::Vec2;
 use world01_content::WorldCollisionGeometryCatalog;
@@ -430,6 +435,65 @@ impl GroundNavigationGraph {
         }
     }
 
+    /// The cheapest way from one node to another for a Character, or `None`
+    /// when its own rules leave no way at all.
+    ///
+    /// Cost is time rather than distance: a stretch a Character crosses at half
+    /// speed costs twice its length, so a longer level way can beat a shorter
+    /// steep one. Equal costs resolve by node order, so the same question asked
+    /// twice answers the same way.
+    pub fn path(
+        &self,
+        from: usize,
+        to: usize,
+        profile: &CharacterTraversalProfile,
+    ) -> Option<Vec<usize>> {
+        let start = self.nodes.get(from)?;
+        let goal = self.nodes.get(to)?;
+        if !self.is_usable(start, profile) || !self.is_usable(goal, profile) {
+            return None;
+        }
+        if from == to {
+            return Some(vec![from]);
+        }
+
+        let mut costs = vec![f32::INFINITY; self.nodes.len()];
+        let mut came_from: Vec<Option<usize>> = vec![None; self.nodes.len()];
+        let mut frontier = BinaryHeap::new();
+        let mut steps = Vec::new();
+
+        costs[from] = 0.0;
+        frontier.push(Frontier {
+            estimate: distance_between(start, goal),
+            cost: 0.0,
+            node: from,
+        });
+
+        while let Some(current) = frontier.pop() {
+            if current.node == to {
+                return retrace(&came_from, from, to);
+            }
+            if current.cost > costs[current.node] {
+                continue;
+            }
+            self.steps_from(current.node, profile, &mut steps);
+            for step in &steps {
+                let cost = current.cost + step.distance_meters / step.speed.multiplier();
+                if cost >= costs[step.node] {
+                    continue;
+                }
+                costs[step.node] = cost;
+                came_from[step.node] = Some(current.node);
+                frontier.push(Frontier {
+                    estimate: cost + distance_between(&self.nodes[step.node], goal),
+                    cost,
+                    node: step.node,
+                });
+            }
+        }
+        None
+    }
+
     fn is_usable(&self, node: &GroundNavigationNode, profile: &CharacterTraversalProfile) -> bool {
         !node.blocked
             && self
@@ -497,6 +561,43 @@ impl GroundNavigationGraph {
             .get(usize::from(surface.0))
             .map(String::as_str)
     }
+}
+
+/// One node waiting to be expanded, ordered so the cheapest estimate leaves the
+/// heap first and an equal estimate resolves by node order.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Frontier {
+    estimate: f32,
+    cost: f32,
+    node: usize,
+}
+
+impl Eq for Frontier {}
+
+impl Ord for Frontier {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other
+            .estimate
+            .total_cmp(&self.estimate)
+            .then_with(|| other.node.cmp(&self.node))
+    }
+}
+
+impl PartialOrd for Frontier {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn retrace(came_from: &[Option<usize>], from: usize, to: usize) -> Option<Vec<usize>> {
+    let mut path = vec![to];
+    let mut node = to;
+    while node != from {
+        node = (*came_from.get(node)?)?;
+        path.push(node);
+    }
+    path.reverse();
+    Some(path)
 }
 
 /// A cell and the eight around it.
@@ -592,7 +693,9 @@ mod tests {
         CollisionComponentGeometry, PlacedCollisionGeometry, RuntimeComponentGeometry,
         RuntimeContent,
     };
-    use world01_design::load_embedded as load_game_design;
+    use world01_design::{
+        CharacterTraversalDesign, TraversalDesign, load_embedded as load_game_design,
+    };
     use world01_world_data::CharacterId;
 
     use crate::TraversalCatalog;
@@ -1101,6 +1204,119 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The nodes standing below ground that reaches above them: the excavation.
+    fn tunnel_nodes(map: &WorldMap, graph: &GroundNavigationGraph) -> Vec<usize> {
+        graph
+            .nodes()
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| matches!(node.support(), GroundSupport::Terrain))
+            .filter(|(_, node)| {
+                map.terrain_cell_at(node.position())
+                    .is_some_and(|cell| cell.elevation_meters > node.elevation_meters())
+            })
+            .map(|(index, _)| index)
+            .collect()
+    }
+
+    #[test]
+    fn a_path_leads_through_the_hill_rather_than_over_it() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+
+        let tunnel = tunnel_nodes(&map, &graph);
+        let west = *tunnel
+            .iter()
+            .min_by(|first, second| {
+                graph.nodes()[**first]
+                    .position()
+                    .x
+                    .total_cmp(&graph.nodes()[**second].position().x)
+            })
+            .expect("the excavation has a western end");
+        let east = *tunnel
+            .iter()
+            .max_by(|first, second| {
+                graph.nodes()[**first]
+                    .position()
+                    .x
+                    .total_cmp(&graph.nodes()[**second].position().x)
+            })
+            .expect("the excavation has an eastern end");
+
+        let path = graph
+            .path(west, east, &profile)
+            .expect("the excavation connects its own ends");
+
+        assert_eq!(path.first().copied(), Some(west));
+        assert_eq!(path.last().copied(), Some(east));
+
+        let ceiling = map
+            .route_surface_cuts()
+            .first()
+            .and_then(|cut| cut.cells.first())
+            .expect("the excavation has cells")
+            .cut_top_meters;
+        for node in &path {
+            assert!(
+                graph.nodes()[*node].elevation_meters() <= ceiling,
+                "the way through never climbs the ground standing above it"
+            );
+        }
+
+        let mut steps = Vec::new();
+        for pair in path.windows(2) {
+            graph.steps_from(pair[0], &profile, &mut steps);
+            assert!(
+                steps.iter().any(|step| step.node == pair[1]),
+                "every move on the way is one the Character may actually make"
+            );
+        }
+    }
+
+    #[test]
+    fn a_character_that_crosses_no_surface_of_this_world_finds_no_way() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let stranger = TraversalCatalog::from_design(&TraversalDesign {
+            schema_version: 1,
+            characters: vec![CharacterTraversalDesign {
+                asset_key: "swimmer".into(),
+                surfaces: vec!["water".into()],
+                max_step_height_meters: 0.5,
+                normal_speed_max_abs_grade_percent: 25,
+                passable_max_abs_grade_percent: 50,
+                reduced_speed_multiplier: 0.5,
+            }],
+        })
+        .expect("a single explicit profile is valid")
+        .character(&CharacterId("swimmer".into()))
+        .expect("that profile was just defined")
+        .clone();
+
+        let tunnel = tunnel_nodes(&map, &graph);
+        let (west, east) = (tunnel[0], tunnel[tunnel.len() - 1]);
+
+        assert!(graph.path(west, east, &profile).is_some());
+        assert!(
+            graph.path(west, east, &stranger).is_none(),
+            "a Character that crosses none of this world's surfaces goes nowhere"
+        );
+    }
+
+    #[test]
+    fn a_way_to_where_one_already_stands_is_that_place() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let cell = map.terrain_cell(5, 5).expect("the world has that cell");
+        let node = index_at(&graph, cell.center, cell.elevation_meters);
+
+        assert_eq!(graph.path(node, node, &profile), Some(vec![node]));
     }
 
     #[test]
