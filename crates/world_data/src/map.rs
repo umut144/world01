@@ -29,8 +29,16 @@ pub struct WorldMap {
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
+    terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
+}
+
+/// One height range the authored world takes out of a Terrain column.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct TerrainCut {
+    floor_meters: f32,
+    cut_top_meters: f32,
 }
 
 impl WorldMap {
@@ -74,6 +82,7 @@ impl WorldMap {
             terrain_cell_indices,
             props: scene.props,
             route_surfaces: scene.route_surfaces,
+            terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
             water_cell_meters: scene.water_cell_meters,
             template_anchors: scene.template_anchors,
@@ -131,6 +140,60 @@ impl WorldMap {
         terrain_cell_index(self.width_tiles, self.height_tiles, x, y)
             .and_then(|index| self.terrain_cell_indices.get(index).copied().flatten())
             .and_then(|index| self.terrain_cells.get(index))
+    }
+
+    /// Fills `surfaces` with the Terrain walking surfaces at a point, lowest
+    /// first, and clears whatever was there before.
+    ///
+    /// A cell's `elevation_meters` is the top of its solid column rather than
+    /// necessarily a walking surface: an authored Path may take a range out of
+    /// that column, and every maximal run of solid that survives presents a
+    /// surface at its top. A point under an excavated hill therefore reports
+    /// two, the floor of the excavation and the ground still standing above it.
+    ///
+    /// The column is resolved at the point asked for, never voted on across a
+    /// cell, because the authored excavation is finer than one Terrain cell.
+    pub fn terrain_walking_surfaces(&self, position: Position, surfaces: &mut Vec<f32>) {
+        surfaces.clear();
+        let Some(cell) = self.terrain_cell_at(position) else {
+            return;
+        };
+        let mut ceiling = cell.elevation_meters;
+        if let Some(cuts) = self.terrain_cuts_at(position) {
+            let mut merged: Vec<TerrainCut> = Vec::new();
+            for cut in cuts.iter().filter(|cut| cut.floor_meters < ceiling) {
+                match merged.last_mut() {
+                    Some(last) if cut.floor_meters <= last.cut_top_meters => {
+                        last.cut_top_meters = last.cut_top_meters.max(cut.cut_top_meters);
+                    }
+                    _ => merged.push(*cut),
+                }
+            }
+            for cut in merged.iter().rev() {
+                if cut.cut_top_meters < ceiling {
+                    surfaces.push(ceiling);
+                }
+                ceiling = cut.floor_meters;
+            }
+        }
+        surfaces.push(ceiling);
+        surfaces.reverse();
+    }
+
+    fn terrain_cuts_at(&self, position: Position) -> Option<&[TerrainCut]> {
+        if self.terrain_cuts.is_empty() {
+            return None;
+        }
+        let minimum_x = -self.width_meters() / 2.0;
+        let minimum_y = -self.height_meters() / 2.0;
+        let x = ((position.x - minimum_x) / self.water_cell_meters).floor();
+        let y = ((position.y - minimum_y) / self.water_cell_meters).floor();
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        self.terrain_cuts
+            .get(&(x as u32, y as u32))
+            .map(Vec::as_slice)
     }
 
     /// Places a point at the authored elevation of its containing Terrain cell.
@@ -457,6 +520,7 @@ impl WorldMap {
             props,
             route_surfaces: self.route_surfaces.clone(),
             route_surface_cuts: self.route_surface_cuts.clone(),
+            terrain_cuts: self.terrain_cuts.clone(),
             water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
         })
@@ -1905,6 +1969,35 @@ fn validate_header(
     Ok(())
 }
 
+/// Groups the derived excavation cells by the cell they cut, so resolving a
+/// column is a lookup instead of a scan across every Path.
+///
+/// Intervals are ordered by floor and then by top, because two Paths may cut
+/// the same cell and a column must resolve the same way every time.
+fn index_terrain_cuts(cuts: &[MapRouteSurfaceCut]) -> HashMap<(u32, u32), Vec<TerrainCut>> {
+    let mut indexed: HashMap<(u32, u32), Vec<TerrainCut>> = HashMap::new();
+    for cut in cuts {
+        for cell in &cut.cells {
+            indexed
+                .entry((cell.x, cell.y))
+                .or_default()
+                .push(TerrainCut {
+                    floor_meters: cell.floor_meters,
+                    cut_top_meters: cell.cut_top_meters,
+                });
+        }
+    }
+    for intervals in indexed.values_mut() {
+        intervals.sort_by(|first, second| {
+            first
+                .floor_meters
+                .total_cmp(&second.floor_meters)
+                .then_with(|| first.cut_top_meters.total_cmp(&second.cut_top_meters))
+        });
+    }
+    indexed
+}
+
 fn require_profile<'a>(
     profiles: &'a HashMap<String, AssetProfileDocument>,
     asset_key: &str,
@@ -2609,6 +2702,77 @@ mod tests {
             document["route_surface_cut_raster"] = serde_json::Value::Array(Vec::new());
         });
         assert!(missing_cut.contains("needs its derived cut cells"));
+    }
+
+    fn water_cell_center(map: &WorldMap, x: u32, y: u32) -> Position {
+        Position::new(
+            -map.width_meters() / 2.0 + (x as f32 + 0.5) * map.water_cell_meters(),
+            -map.height_meters() / 2.0 + (y as f32 + 0.5) * map.water_cell_meters(),
+        )
+    }
+
+    #[test]
+    fn an_excavated_column_presents_the_floor_and_the_ground_still_above_it() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        let cut = &map.route_surface_cuts()[0];
+        let mut surfaces = Vec::new();
+
+        let under_the_hill = cut
+            .cells
+            .iter()
+            .find(|cell| {
+                map.terrain_cell_at(water_cell_center(&map, cell.x, cell.y))
+                    .is_some_and(|terrain| terrain.elevation_meters > cell.cut_top_meters)
+            })
+            .expect("the excavation reaches ground that stands above it");
+        let hill_top = map
+            .terrain_cell_at(water_cell_center(&map, under_the_hill.x, under_the_hill.y))
+            .expect("that cell has Terrain")
+            .elevation_meters;
+        map.terrain_walking_surfaces(
+            water_cell_center(&map, under_the_hill.x, under_the_hill.y),
+            &mut surfaces,
+        );
+        assert_eq!(surfaces, vec![under_the_hill.floor_meters, hill_top]);
+
+        let over_flat_ground = cut
+            .cells
+            .iter()
+            .find(|cell| {
+                map.terrain_cell_at(water_cell_center(&map, cell.x, cell.y))
+                    .is_some_and(|terrain| terrain.elevation_meters <= cell.floor_meters)
+            })
+            .expect("the same excavation also crosses flat ground");
+        map.terrain_walking_surfaces(
+            water_cell_center(&map, over_flat_ground.x, over_flat_ground.y),
+            &mut surfaces,
+        );
+        assert_eq!(
+            surfaces,
+            vec![
+                map.terrain_cell_at(water_cell_center(
+                    &map,
+                    over_flat_ground.x,
+                    over_flat_ground.y
+                ))
+                .expect("that cell has Terrain")
+                .elevation_meters
+            ],
+            "an excavation that starts at the surface removes nothing"
+        );
+    }
+
+    #[test]
+    fn ground_no_excavation_reaches_presents_one_surface() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        let cell = map.terrain_cell(0, 0).expect("the world has a first cell");
+        let mut surfaces = Vec::new();
+
+        map.terrain_walking_surfaces(cell.center, &mut surfaces);
+
+        assert_eq!(surfaces, vec![cell.elevation_meters]);
     }
 
     #[test]
