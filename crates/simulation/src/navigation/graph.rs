@@ -19,8 +19,21 @@ use bevy::prelude::Vec2;
 use world01_content::WorldCollisionGeometryCatalog;
 use world01_world_data::{GroundSupport, Position, WorldMap};
 
+use super::{CharacterTraversalProfile, TraversalSpeed};
 use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
 use crate::spatial::overlap::{GeometryTransform, point_in_component};
+
+/// The eight directions Terrain movement may take, as cell offsets.
+const TERRAIN_DIRECTIONS: [(i64, i64); 8] = [
+    (-1, 0),
+    (1, 0),
+    (0, -1),
+    (0, 1),
+    (-1, -1),
+    (-1, 1),
+    (1, -1),
+    (1, 1),
+];
 
 /// One surface name inside a graph.
 ///
@@ -71,6 +84,29 @@ impl GroundNavigationNode {
 pub struct GroundNavigationGraph {
     surfaces: Vec<String>,
     nodes: Vec<GroundNavigationNode>,
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    /// The nodes each Terrain cell's column resolved to, by row-major cell.
+    cell_nodes: Vec<TerrainCellNodes>,
+    /// The cell each Terrain node stands in. Terrain nodes are the leading run
+    /// of `nodes`, so an index beyond this is a Route node.
+    node_cells: Vec<u32>,
+}
+
+/// Where one Terrain cell's nodes sit inside the node list.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+struct TerrainCellNodes {
+    first: u32,
+    count: u32,
+}
+
+/// One move a Character may make from a node.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GroundNavigationStep {
+    pub node: usize,
+    pub distance_meters: f32,
+    pub speed: TraversalSpeed,
 }
 
 impl GroundNavigationGraph {
@@ -93,6 +129,9 @@ impl GroundNavigationGraph {
         let mut surfaces = Vec::new();
         let mut nodes = Vec::with_capacity(map.terrain_cells().len());
         let mut candidates = Vec::new();
+        let cell_count = (map.width_tiles() as usize).saturating_mul(map.height_tiles() as usize);
+        let mut cell_nodes = vec![TerrainCellNodes::default(); cell_count];
+        let mut node_cells = Vec::with_capacity(map.terrain_cells().len());
 
         let mut column = Vec::new();
         for cell in map.terrain_cells() {
@@ -107,7 +146,20 @@ impl GroundNavigationGraph {
             // World collision is planar, so it says the same thing about every
             // height this column offers.
             let blocked = stands_in_world_collision(cell.center, collision, grid, &mut candidates);
+            let first = u32::try_from(nodes.len()).map_err(|_| {
+                GroundNavigationError("a world cannot hold more nodes than a `u32` counts".into())
+            })?;
+            let Some(index) = cell_index(map.width_tiles(), map.height_tiles(), cell.x, cell.y)
+            else {
+                return Err(GroundNavigationError(format!(
+                    "Terrain cell ({}, {}) lies outside its own map",
+                    cell.x, cell.y
+                )));
+            };
+            let count = u32::try_from(column.len()).unwrap_or(u32::MAX);
+            cell_nodes[index] = TerrainCellNodes { first, count };
             for elevation_meters in column.iter().copied() {
+                node_cells.push(u32::try_from(index).unwrap_or(u32::MAX));
                 nodes.push(GroundNavigationNode {
                     position: cell.center,
                     elevation_meters,
@@ -144,7 +196,126 @@ impl GroundNavigationGraph {
             }
         }
 
-        Ok(Self { surfaces, nodes })
+        Ok(Self {
+            surfaces,
+            nodes,
+            width_tiles: map.width_tiles(),
+            height_tiles: map.height_tiles(),
+            terrain_cell_meters: map.terrain_cell_meters(),
+            cell_nodes,
+            node_cells,
+        })
+    }
+
+    /// Fills `steps` with the places a Character with this profile may reach
+    /// from one node in a single move, and clears whatever was there before.
+    ///
+    /// Terrain moves in eight directions. A diagonal needs both of the
+    /// orthogonal cells it passes between to offer a step of their own, so a
+    /// Character cannot slip through the corner between two obstacles. Which
+    /// heights connect is the profile's own step rule, so the two nodes of an
+    /// excavated column join floor to floor and ground to ground rather than
+    /// across.
+    pub fn steps_from(
+        &self,
+        node: usize,
+        profile: &CharacterTraversalProfile,
+        steps: &mut Vec<GroundNavigationStep>,
+    ) {
+        steps.clear();
+        let Some(from) = self.nodes.get(node) else {
+            return;
+        };
+        if !self.is_usable(from, profile) {
+            return;
+        }
+        let Some(cell) = self.node_cells.get(node).copied() else {
+            return;
+        };
+        let Some((x, y)) = self.cell_position(cell) else {
+            return;
+        };
+
+        let diagonal = self.terrain_cell_meters * std::f32::consts::SQRT_2;
+        for (offset_x, offset_y) in TERRAIN_DIRECTIONS {
+            if offset_x != 0
+                && offset_y != 0
+                && !(self.offers_a_step(from, profile, x, y, offset_x, 0)
+                    && self.offers_a_step(from, profile, x, y, 0, offset_y))
+            {
+                continue;
+            }
+            let distance_meters = if offset_x != 0 && offset_y != 0 {
+                diagonal
+            } else {
+                self.terrain_cell_meters
+            };
+            for reachable in self.reachable_in(from, profile, x, y, offset_x, offset_y) {
+                steps.push(GroundNavigationStep {
+                    node: reachable,
+                    distance_meters,
+                    speed: TraversalSpeed::Normal,
+                });
+            }
+        }
+    }
+
+    fn is_usable(&self, node: &GroundNavigationNode, profile: &CharacterTraversalProfile) -> bool {
+        !node.blocked
+            && self
+                .surface_name(node.surface())
+                .is_some_and(|surface| profile.permits_surface(surface))
+    }
+
+    fn offers_a_step(
+        &self,
+        from: &GroundNavigationNode,
+        profile: &CharacterTraversalProfile,
+        x: u32,
+        y: u32,
+        offset_x: i64,
+        offset_y: i64,
+    ) -> bool {
+        self.reachable_in(from, profile, x, y, offset_x, offset_y)
+            .next()
+            .is_some()
+    }
+
+    fn reachable_in<'a>(
+        &'a self,
+        from: &'a GroundNavigationNode,
+        profile: &'a CharacterTraversalProfile,
+        x: u32,
+        y: u32,
+        offset_x: i64,
+        offset_y: i64,
+    ) -> impl Iterator<Item = usize> + 'a {
+        let neighbour = offset_cell(
+            self.width_tiles,
+            self.height_tiles,
+            x,
+            y,
+            offset_x,
+            offset_y,
+        )
+        .and_then(|index| self.cell_nodes.get(index).copied())
+        .unwrap_or_default();
+        let first = neighbour.first as usize;
+        (first..first + neighbour.count as usize).filter(move |index| {
+            self.nodes.get(*index).is_some_and(|node| {
+                self.is_usable(node, profile)
+                    && profile.permits_step(from.elevation_meters, node.elevation_meters)
+            })
+        })
+    }
+
+    fn cell_position(&self, index: u32) -> Option<(u32, u32)> {
+        let index = index as usize;
+        if index >= self.cell_nodes.len() || self.width_tiles == 0 {
+            return None;
+        }
+        let width = self.width_tiles as usize;
+        Some(((index % width) as u32, (index / width) as u32))
     }
 
     pub fn nodes(&self) -> &[GroundNavigationNode] {
@@ -156,6 +327,23 @@ impl GroundNavigationGraph {
             .get(usize::from(surface.0))
             .map(String::as_str)
     }
+}
+
+fn cell_index(width_tiles: u32, height_tiles: u32, x: u32, y: u32) -> Option<usize> {
+    (x < width_tiles && y < height_tiles).then(|| y as usize * width_tiles as usize + x as usize)
+}
+
+fn offset_cell(
+    width_tiles: u32,
+    height_tiles: u32,
+    x: u32,
+    y: u32,
+    offset_x: i64,
+    offset_y: i64,
+) -> Option<usize> {
+    let x = u32::try_from(i64::from(x) + offset_x).ok()?;
+    let y = u32::try_from(i64::from(y) + offset_y).ok()?;
+    cell_index(width_tiles, height_tiles, x, y)
 }
 
 fn stands_in_world_collision(
@@ -223,6 +411,10 @@ mod tests {
         CollisionComponentGeometry, PlacedCollisionGeometry, RuntimeComponentGeometry,
         RuntimeContent,
     };
+    use world01_design::load_embedded as load_game_design;
+    use world01_world_data::CharacterId;
+
+    use crate::TraversalCatalog;
 
     use super::*;
 
@@ -443,6 +635,181 @@ mod tests {
 
         assert_eq!(terrain.surface(), route.surface());
         assert_eq!(graph.surface_name(terrain.surface()), Some("land"));
+    }
+
+    fn hammerer() -> CharacterTraversalProfile {
+        let design = load_game_design().expect("embedded design loads");
+        TraversalCatalog::from_design(&design.traversal)
+            .expect("embedded traversal profiles are valid")
+            .character(&CharacterId("hammerer".into()))
+            .expect("the Hammerer has traversal rules")
+            .clone()
+    }
+
+    fn index_at(graph: &GroundNavigationGraph, position: Position, elevation: f32) -> usize {
+        graph
+            .nodes()
+            .iter()
+            .position(|node| node.position() == position && node.elevation_meters() == elevation)
+            .expect("that place has a node")
+    }
+
+    #[test]
+    fn flat_ground_connects_in_eight_directions() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        let cell = map.terrain_cell(5, 5).expect("the world has that cell");
+        graph.steps_from(
+            index_at(&graph, cell.center, cell.elevation_meters),
+            &profile,
+            &mut steps,
+        );
+
+        assert_eq!(steps.len(), 8);
+        let diagonal = map.terrain_cell_meters() * std::f32::consts::SQRT_2;
+        assert_eq!(
+            steps
+                .iter()
+                .filter(|step| step.distance_meters == diagonal)
+                .count(),
+            4,
+            "four of the eight are diagonals and cost more"
+        );
+    }
+
+    #[test]
+    fn a_diagonal_needs_both_cells_it_passes_between() {
+        let map = overworld();
+        let profile = hammerer();
+        let placement = cell_center(&map, 6, 5);
+        let collision = WorldCollisionGeometryCatalog {
+            regions: vec![PlacedCollisionGeometry {
+                instance_id: "silhouette".into(),
+                position: Position::new(placement.x, placement.y - 1.0),
+                component: standing_silhouette(),
+            }],
+        };
+        let graph = derive(&map, &collision);
+        let mut steps = Vec::new();
+
+        let blocked = index_at(
+            &graph,
+            placement,
+            map.terrain_cell(6, 5)
+                .expect("the world has that cell")
+                .elevation_meters,
+        );
+        assert!(
+            graph.nodes()[blocked].is_blocked(),
+            "the collider covers the cell east of the one we step from"
+        );
+
+        let cell = map.terrain_cell(5, 5).expect("the world has that cell");
+        graph.steps_from(
+            index_at(&graph, cell.center, cell.elevation_meters),
+            &profile,
+            &mut steps,
+        );
+
+        let reached = steps
+            .iter()
+            .map(|step| graph.nodes()[step.node].position())
+            .collect::<Vec<_>>();
+        assert!(
+            !reached.contains(&placement),
+            "a blocked cell is never a step of its own"
+        );
+        for corner in [cell_center(&map, 6, 4), cell_center(&map, 6, 6)] {
+            assert!(
+                !reached.contains(&corner),
+                "a diagonal past the blocked cell is refused rather than cutting the corner"
+            );
+        }
+        assert_eq!(reached.len(), 5, "the other five directions remain");
+    }
+
+    #[test]
+    fn a_step_too_high_is_no_connection() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        let mut column = Vec::new();
+        let (low, high) = map
+            .terrain_cells()
+            .iter()
+            .find_map(|cell| {
+                let neighbour = map.terrain_cell(cell.x + 1, cell.y)?;
+                map.terrain_walking_surfaces(cell.center, &mut column);
+                (column.len() == 1 && neighbour.elevation_meters - cell.elevation_meters > 0.5)
+                    .then_some((cell, neighbour))
+            })
+            .expect("the overworld steps up somewhere too steeply to walk");
+
+        graph.steps_from(
+            index_at(&graph, low.center, low.elevation_meters),
+            &profile,
+            &mut steps,
+        );
+
+        assert!(
+            !steps
+                .iter()
+                .any(|step| graph.nodes()[step.node].position() == high.center
+                    && graph.nodes()[step.node].elevation_meters() == high.elevation_meters),
+            "a rise of more than the Character's step height is not a connection"
+        );
+    }
+
+    #[test]
+    fn an_excavated_column_connects_floor_to_floor_and_ground_to_ground() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+        let mut column = Vec::new();
+
+        let excavated = map
+            .terrain_cells()
+            .iter()
+            .find(|cell| {
+                map.terrain_walking_surfaces(cell.center, &mut column);
+                column.len() > 1
+            })
+            .expect("the overworld is excavated somewhere");
+        map.terrain_walking_surfaces(excavated.center, &mut column);
+        let floor = column[0];
+        let ground = column[1];
+
+        graph.steps_from(
+            index_at(&graph, excavated.center, floor),
+            &profile,
+            &mut steps,
+        );
+        for step in &steps {
+            let reached = graph.nodes()[step.node].elevation_meters();
+            assert!(
+                (reached - floor).abs() <= 0.5,
+                "the tunnel connects along its own floor, never up to the ground above"
+            );
+        }
+
+        graph.steps_from(
+            index_at(&graph, excavated.center, ground),
+            &profile,
+            &mut steps,
+        );
+        for step in &steps {
+            let reached = graph.nodes()[step.node].elevation_meters();
+            assert!(
+                (reached - ground).abs() <= 0.5,
+                "and the ground above connects along itself"
+            );
+        }
     }
 
     #[test]
