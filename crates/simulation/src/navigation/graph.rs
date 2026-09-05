@@ -13,7 +13,7 @@
 //! one thing a node does decide is whether the world's own collision geometry
 //! stands there, because that is the same for everybody.
 
-use std::{error::Error, fmt};
+use std::{collections::HashMap, error::Error, fmt};
 
 use bevy::prelude::Vec2;
 use world01_content::WorldCollisionGeometryCatalog;
@@ -92,6 +92,13 @@ pub struct GroundNavigationGraph {
     /// The cell each Terrain node stands in. Terrain nodes are the leading run
     /// of `nodes`, so an index beyond this is a Route node.
     node_cells: Vec<u32>,
+    /// For each Route node, the authored grade of the interval to the next
+    /// sample of its own Path, and `None` where its Path ends.
+    route_intervals: Vec<Option<i32>>,
+    /// The Route nodes standing in each Terrain cell.
+    cell_route_nodes: HashMap<u32, Vec<usize>>,
+    /// The Terrain cell each Route node stands in, where it stands in one.
+    route_cells: Vec<Option<u32>>,
 }
 
 /// Where one Terrain cell's nodes sit inside the node list.
@@ -133,6 +140,10 @@ impl GroundNavigationGraph {
         let mut cell_nodes = vec![TerrainCellNodes::default(); cell_count];
         let mut node_cells = Vec::with_capacity(map.terrain_cells().len());
 
+        let mut route_intervals = Vec::new();
+        let mut route_cells = Vec::new();
+        let mut cell_route_nodes: HashMap<u32, Vec<usize>> = HashMap::new();
+
         let mut column = Vec::new();
         for cell in map.terrain_cells() {
             let surface = intern(&mut surfaces, &cell.surface)?;
@@ -173,6 +184,32 @@ impl GroundNavigationGraph {
         for route in map.route_surfaces() {
             let surface = intern(&mut surfaces, &route.surface)?;
             for (index, sample) in route.centerline_samples.iter().enumerate() {
+                let ends_here = index + 1 == route.centerline_samples.len();
+                let grade = route
+                    .segments
+                    .iter()
+                    .find(|segment| {
+                        segment.start_sample_index as usize <= index
+                            && index + 1 <= segment.end_sample_index as usize
+                    })
+                    .map(|segment| segment.grade_percent);
+                if !ends_here && grade.is_none() {
+                    return Err(GroundNavigationError(format!(
+                        "Route '{}' has an interval no authored segment covers",
+                        route.route_surface_id
+                    )));
+                }
+                route_intervals.push((!ends_here).then_some(grade).flatten());
+                let standing_in = map
+                    .terrain_cell_at(sample.position)
+                    .and_then(|cell| {
+                        cell_index(map.width_tiles(), map.height_tiles(), cell.x, cell.y)
+                    })
+                    .and_then(|cell| u32::try_from(cell).ok());
+                route_cells.push(standing_in);
+                if let Some(cell) = standing_in {
+                    cell_route_nodes.entry(cell).or_default().push(nodes.len());
+                }
                 let Some(resolved) = route.sample_at(sample.position) else {
                     return Err(GroundNavigationError(format!(
                         "Route '{}' does not support its own centerline sample {index}",
@@ -204,6 +241,9 @@ impl GroundNavigationGraph {
             terrain_cell_meters: map.terrain_cell_meters(),
             cell_nodes,
             node_cells,
+            route_intervals,
+            cell_route_nodes,
+            route_cells,
         })
     }
 
@@ -229,6 +269,19 @@ impl GroundNavigationGraph {
         if !self.is_usable(from, profile) {
             return;
         }
+        match from.support() {
+            GroundSupport::Terrain => self.terrain_steps(node, from, profile, steps),
+            GroundSupport::RouteSurface { .. } => self.route_steps(node, from, profile, steps),
+        }
+    }
+
+    fn terrain_steps(
+        &self,
+        node: usize,
+        from: &GroundNavigationNode,
+        profile: &CharacterTraversalProfile,
+        steps: &mut Vec<GroundNavigationStep>,
+    ) {
         let Some(cell) = self.node_cells.get(node).copied() else {
             return;
         };
@@ -254,6 +307,123 @@ impl GroundNavigationGraph {
                 steps.push(GroundNavigationStep {
                     node: reachable,
                     distance_meters,
+                    speed: TraversalSpeed::Normal,
+                });
+            }
+        }
+        self.enter_a_path(from, profile, x, y, steps);
+    }
+
+    /// Adds the Path a Character may step onto from Terrain.
+    ///
+    /// Exactly one Path may be within reach. Two overlapping ones leave the
+    /// Character on Terrain rather than being resolved by nearest height or
+    /// first ID, which is the rule movement already follows.
+    fn enter_a_path(
+        &self,
+        from: &GroundNavigationNode,
+        profile: &CharacterTraversalProfile,
+        x: u32,
+        y: u32,
+        steps: &mut Vec<GroundNavigationStep>,
+    ) {
+        let mut reachable = Vec::new();
+        let mut entered: Option<&str> = None;
+        for (offset_x, offset_y) in around() {
+            let Some(cell) = offset_cell(
+                self.width_tiles,
+                self.height_tiles,
+                x,
+                y,
+                offset_x,
+                offset_y,
+            ) else {
+                continue;
+            };
+            let Some(candidates) = u32::try_from(cell)
+                .ok()
+                .and_then(|cell| self.cell_route_nodes.get(&cell))
+            else {
+                continue;
+            };
+            for index in candidates.iter().copied() {
+                let Some(node) = self.nodes.get(index) else {
+                    continue;
+                };
+                let GroundSupport::RouteSurface { route_surface_id } = node.support() else {
+                    continue;
+                };
+                if !self.is_usable(node, profile)
+                    || !profile.permits_step(from.elevation_meters, node.elevation_meters)
+                {
+                    continue;
+                }
+                match entered {
+                    Some(known) if known != route_surface_id => return,
+                    _ => entered = Some(route_surface_id),
+                }
+                reachable.push(index);
+            }
+        }
+        for index in reachable {
+            steps.push(GroundNavigationStep {
+                node: index,
+                distance_meters: distance_between(from, &self.nodes[index]),
+                speed: TraversalSpeed::Normal,
+            });
+        }
+    }
+
+    /// A Path carries a Character along its own authored intervals, and lets it
+    /// leave for the Terrain around it.
+    fn route_steps(
+        &self,
+        node: usize,
+        from: &GroundNavigationNode,
+        profile: &CharacterTraversalProfile,
+        steps: &mut Vec<GroundNavigationStep>,
+    ) {
+        let Some(interval) = node.checked_sub(self.node_cells.len()) else {
+            return;
+        };
+        let along = [
+            (interval.checked_sub(1), node.checked_sub(1)),
+            (Some(interval), Some(node + 1)),
+        ];
+        for (interval, neighbour) in along {
+            let Some(grade) = interval.and_then(|interval| self.route_intervals.get(interval))
+            else {
+                continue;
+            };
+            let (Some(grade), Some(neighbour)) = (*grade, neighbour) else {
+                continue;
+            };
+            let Some(next) = self.nodes.get(neighbour) else {
+                continue;
+            };
+            let Some(speed) = profile.speed_for_grade(grade) else {
+                continue;
+            };
+            if self.is_usable(next, profile) {
+                steps.push(GroundNavigationStep {
+                    node: neighbour,
+                    distance_meters: distance_between(from, next),
+                    speed,
+                });
+            }
+        }
+
+        let Some(cell) = self.route_cells.get(interval).copied().flatten() else {
+            return;
+        };
+        let Some((x, y)) = self.cell_position(cell) else {
+            return;
+        };
+        for (offset_x, offset_y) in around() {
+            for index in self.reachable_in(from, profile, x, y, offset_x, offset_y) {
+                steps.push(GroundNavigationStep {
+                    node: index,
+                    distance_meters: distance_between(from, &self.nodes[index]),
                     speed: TraversalSpeed::Normal,
                 });
             }
@@ -327,6 +497,17 @@ impl GroundNavigationGraph {
             .get(usize::from(surface.0))
             .map(String::as_str)
     }
+}
+
+/// A cell and the eight around it.
+fn around() -> impl Iterator<Item = (i64, i64)> {
+    std::iter::once((0, 0)).chain(TERRAIN_DIRECTIONS)
+}
+
+fn distance_between(from: &GroundNavigationNode, to: &GroundNavigationNode) -> f32 {
+    let x = to.position.x - from.position.x;
+    let y = to.position.y - from.position.y;
+    x.hypot(y)
 }
 
 fn cell_index(width_tiles: u32, height_tiles: u32, x: u32, y: u32) -> Option<usize> {
@@ -809,6 +990,116 @@ mod tests {
                 (reached - ground).abs() <= 0.5,
                 "and the ground above connects along itself"
             );
+        }
+    }
+
+    #[test]
+    fn a_path_carries_its_authored_grade_into_the_step() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        let route = map
+            .route_surfaces()
+            .iter()
+            .find(|route| {
+                route
+                    .segments
+                    .iter()
+                    .any(|segment| segment.grade_percent.abs() == 50)
+            })
+            .expect("the overworld authors a half-speed Path");
+        let segment = route
+            .segments
+            .iter()
+            .find(|segment| segment.grade_percent.abs() == 50)
+            .expect("that Path has the steep segment");
+        let sample = &route.centerline_samples[segment.start_sample_index as usize];
+        let elevation = route
+            .sample_at(sample.position)
+            .expect("a Path supports its own centerline")
+            .elevation_meters;
+
+        graph.steps_from(
+            index_at(&graph, sample.position, elevation),
+            &profile,
+            &mut steps,
+        );
+
+        assert!(
+            steps
+                .iter()
+                .any(|step| step.speed == TraversalSpeed::Reduced(0.5)),
+            "a steep authored interval costs the Character its speed"
+        );
+    }
+
+    #[test]
+    fn terrain_and_a_path_reach_each_other() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        let (terrain, route) = graph
+            .nodes()
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| matches!(node.support(), GroundSupport::RouteSurface { .. }))
+            .find_map(|(route_index, route_node)| {
+                let cell = map.terrain_cell_at(route_node.position())?;
+                let terrain_index = graph.nodes().iter().position(|node| {
+                    node.position() == cell.center
+                        && matches!(node.support(), GroundSupport::Terrain)
+                        && (node.elevation_meters() - route_node.elevation_meters()).abs() <= 0.5
+                })?;
+                Some((terrain_index, route_index))
+            })
+            .expect("a Path starts within a step of the Terrain under it");
+
+        graph.steps_from(terrain, &profile, &mut steps);
+        assert!(
+            steps.iter().any(|step| step.node == route),
+            "Terrain enters the Path it is standing under"
+        );
+
+        graph.steps_from(route, &profile, &mut steps);
+        assert!(
+            steps.iter().any(|step| step.node == terrain),
+            "and the Path lets the Character leave for that Terrain again"
+        );
+    }
+
+    #[test]
+    fn a_path_does_not_continue_past_its_own_end() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        for route in map.route_surfaces() {
+            let last = route.centerline_samples.last().expect("a Path has samples");
+            let elevation = route
+                .sample_at(last.position)
+                .expect("a Path supports its own centerline")
+                .elevation_meters;
+            graph.steps_from(
+                index_at(&graph, last.position, elevation),
+                &profile,
+                &mut steps,
+            );
+
+            for step in &steps {
+                if let GroundSupport::RouteSurface { route_surface_id } =
+                    graph.nodes()[step.node].support()
+                {
+                    assert_eq!(
+                        route_surface_id, &route.route_surface_id,
+                        "the end of a Path never continues into another one"
+                    );
+                }
+            }
         }
     }
 
