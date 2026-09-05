@@ -384,6 +384,22 @@ pub(crate) fn component_projection_minimum(
         .max(0.0)
 }
 
+/// Whether a point lies inside a Component.
+///
+/// A point has no edges of its own, so the shared narrow phase reduces to the
+/// Component's own edge normals. Asking it rather than writing a second
+/// predicate keeps one contact band: a point exactly on a boundary counts as
+/// inside, just as touching Components count as overlapping.
+pub(crate) fn point_in_component(
+    component: &RuntimeComponentGeometry,
+    transform: GeometryTransform,
+    point: Vec2,
+) -> bool {
+    component.indices.chunks_exact(3).any(|triangle| {
+        triangles_overlap(triangle_points(component, transform, triangle), [point; 3])
+    })
+}
+
 /// Existing narrow-phase overlap predicate shared by collision and combat.
 ///
 /// Its axes deliberately remain unnormalised, so the epsilon scales with edge

@@ -7,11 +7,18 @@
 //!
 //! Nodes deliberately carry no judgement about who may use them. Which
 //! surfaces a Character may cross is its own traversal profile's answer, given
-//! when a path is asked for, so one derived world serves every Character.
+//! when a path is asked for, so one derived world serves every Character. The
+//! one thing a node does decide is whether the world's own collision geometry
+//! stands there, because that is the same for everybody.
 
 use std::{error::Error, fmt};
 
+use bevy::prelude::Vec2;
+use world01_content::WorldCollisionGeometryCatalog;
 use world01_world_data::{GroundSupport, Position, WorldMap};
+
+use crate::spatial::broadphase::{Aabb, WorldColliderGrid};
+use crate::spatial::overlap::{GeometryTransform, point_in_component};
 
 /// One surface name inside a graph.
 ///
@@ -27,6 +34,7 @@ pub struct GroundNavigationNode {
     elevation_meters: f32,
     surface: NavigationSurface,
     support: GroundSupport,
+    blocked: bool,
 }
 
 impl GroundNavigationNode {
@@ -45,6 +53,15 @@ impl GroundNavigationNode {
     pub const fn support(&self) -> &GroundSupport {
         &self.support
     }
+
+    /// Whether the world's own collision geometry stands at this node.
+    ///
+    /// The test is the node's point, not a Character's body, so a gap narrower
+    /// than a Character still offers unblocked nodes. Fitting through is the
+    /// mover's problem, not the topology's.
+    pub const fn is_blocked(&self) -> bool {
+        self.blocked
+    }
 }
 
 /// The nodes a composed world offers a grounded Actor.
@@ -61,9 +78,17 @@ impl GroundNavigationGraph {
     /// same projection onto the baked centerline that carries a walking Actor,
     /// rather than from the sample's stored height, so a node cannot describe a
     /// height the Route would not actually give.
-    pub fn from_map(map: &WorldMap) -> Result<Self, GroundNavigationError> {
+    ///
+    /// The grid only narrows which colliders each node is tested against; the
+    /// shared narrow phase still decides.
+    pub fn from_world(
+        map: &WorldMap,
+        collision: &WorldCollisionGeometryCatalog,
+        grid: &WorldColliderGrid,
+    ) -> Result<Self, GroundNavigationError> {
         let mut surfaces = Vec::new();
         let mut nodes = Vec::with_capacity(map.terrain_cells().len());
+        let mut candidates = Vec::new();
 
         for cell in map.terrain_cells() {
             let surface = intern(&mut surfaces, &cell.surface)?;
@@ -72,6 +97,7 @@ impl GroundNavigationGraph {
                 elevation_meters: cell.elevation_meters,
                 surface,
                 support: GroundSupport::Terrain,
+                blocked: stands_in_world_collision(cell.center, collision, grid, &mut candidates),
             });
         }
 
@@ -91,6 +117,12 @@ impl GroundNavigationGraph {
                     support: GroundSupport::RouteSurface {
                         route_surface_id: route.route_surface_id.clone(),
                     },
+                    blocked: stands_in_world_collision(
+                        sample.position,
+                        collision,
+                        grid,
+                        &mut candidates,
+                    ),
                 });
             }
         }
@@ -107,6 +139,34 @@ impl GroundNavigationGraph {
             .get(usize::from(surface.0))
             .map(String::as_str)
     }
+}
+
+fn stands_in_world_collision(
+    position: Position,
+    collision: &WorldCollisionGeometryCatalog,
+    grid: &WorldColliderGrid,
+    candidates: &mut Vec<u32>,
+) -> bool {
+    let point = Vec2::new(position.x, position.y);
+    grid.candidates(
+        Aabb {
+            minimum: point,
+            maximum: point,
+        },
+        candidates,
+    );
+    candidates.iter().any(|index| {
+        collision
+            .regions
+            .get(*index as usize)
+            .is_some_and(|region| {
+                point_in_component(
+                    region.component.geometry(),
+                    GeometryTransform::translated(region.position),
+                    point,
+                )
+            })
+    })
 }
 
 fn intern(
@@ -142,16 +202,64 @@ impl Error for GroundNavigationError {}
 mod tests {
     use std::collections::HashMap;
 
+    use world01_content::{
+        CollisionComponentGeometry, PlacedCollisionGeometry, RuntimeComponentGeometry,
+        RuntimeContent,
+    };
+
     use super::*;
 
     fn overworld() -> WorldMap {
         WorldMap::load_embedded("overworld01").expect("embedded Instance is valid")
     }
 
+    fn derive(map: &WorldMap, collision: &WorldCollisionGeometryCatalog) -> GroundNavigationGraph {
+        let grid = WorldColliderGrid::from_catalog(collision);
+        GroundNavigationGraph::from_world(map, collision, &grid)
+            .expect("embedded world derives nodes")
+    }
+
+    fn without_collision(map: &WorldMap) -> GroundNavigationGraph {
+        derive(map, &WorldCollisionGeometryCatalog::default())
+    }
+
+    fn cell_center(map: &WorldMap, x: u32, y: u32) -> Position {
+        map.terrain_cells()
+            .iter()
+            .find(|cell| cell.x == x && cell.y == y)
+            .expect("the world has that Terrain cell")
+            .center
+    }
+
+    fn node_at(graph: &GroundNavigationGraph, position: Position) -> &GroundNavigationNode {
+        graph
+            .nodes()
+            .iter()
+            .find(|node| node.position() == position)
+            .expect("every authored cell has a node")
+    }
+
+    /// A standing silhouette: as wide as it is tall, and entirely on one side
+    /// of the position it is placed at, the way an authored Prop Region is.
+    fn standing_silhouette() -> CollisionComponentGeometry {
+        CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+            component_id: "trunk".into(),
+            name: "trunk".into(),
+            vertices: vec![
+                Vec2::new(-0.9, 0.1),
+                Vec2::new(0.9, 0.1),
+                Vec2::new(0.9, 3.1),
+                Vec2::new(-0.9, 3.1),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        })
+        .expect("the test silhouette has valid collision topology")
+    }
+
     #[test]
     fn every_terrain_cell_and_centerline_sample_becomes_a_node() {
         let map = overworld();
-        let graph = GroundNavigationGraph::from_map(&map).expect("embedded world derives nodes");
+        let graph = without_collision(&map);
 
         let samples = map
             .route_surfaces()
@@ -173,7 +281,7 @@ mod tests {
     #[test]
     fn a_terrain_node_stands_at_its_authored_cell_height() {
         let map = overworld();
-        let graph = GroundNavigationGraph::from_map(&map).expect("embedded world derives nodes");
+        let graph = without_collision(&map);
 
         for cell in [
             map.terrain_cells().first().expect("the world has Terrain"),
@@ -182,11 +290,7 @@ mod tests {
                 .find(|cell| cell.elevation_meters > 1.0)
                 .expect("the world has raised Terrain"),
         ] {
-            let node = graph
-                .nodes()
-                .iter()
-                .find(|node| node.position() == cell.center)
-                .expect("every authored cell has a node");
+            let node = node_at(&graph, cell.center);
 
             assert_eq!(node.elevation_meters(), cell.elevation_meters);
             assert_eq!(
@@ -200,7 +304,7 @@ mod tests {
     #[test]
     fn route_nodes_carry_their_authored_support_identity() {
         let map = overworld();
-        let graph = GroundNavigationGraph::from_map(&map).expect("embedded world derives nodes");
+        let graph = without_collision(&map);
 
         let mut counted = HashMap::new();
         for node in graph.nodes() {
@@ -223,7 +327,7 @@ mod tests {
     #[test]
     fn a_repeated_surface_is_named_once() {
         let map = overworld();
-        let graph = GroundNavigationGraph::from_map(&map).expect("embedded world derives nodes");
+        let graph = without_collision(&map);
 
         let terrain = graph
             .nodes()
@@ -238,5 +342,80 @@ mod tests {
 
         assert_eq!(terrain.surface(), route.surface());
         assert_eq!(graph.surface_name(terrain.surface()), Some("land"));
+    }
+
+    #[test]
+    fn a_world_collider_blocks_the_ground_it_actually_covers() {
+        let map = overworld();
+        let placement = cell_center(&map, 50, 50);
+        let collision = WorldCollisionGeometryCatalog {
+            regions: vec![PlacedCollisionGeometry {
+                instance_id: "silhouette".into(),
+                position: placement,
+                component: standing_silhouette(),
+            }],
+        };
+        let graph = derive(&map, &collision);
+
+        for offset in 1..=3 {
+            let covered = cell_center(&map, 50, 50 + offset);
+            assert!(
+                node_at(&graph, covered).is_blocked(),
+                "the collider covers the cell {offset} m away from its placement"
+            );
+        }
+
+        assert!(
+            !node_at(&graph, cell_center(&map, 50, 49)).is_blocked(),
+            "the collider reaches away from its placement, never behind it"
+        );
+        assert!(
+            !node_at(&graph, placement).is_blocked(),
+            "the ground the Prop itself stands on is outside its authored Region"
+        );
+
+        for node in graph.nodes().iter().filter(|node| node.is_blocked()) {
+            let local = node.position();
+            assert!(
+                (local.x - placement.x).abs() <= 0.9
+                    && (0.1..=3.1).contains(&(local.y - placement.y)),
+                "only ground inside the authored Region is blocked"
+            );
+        }
+    }
+
+    #[test]
+    fn authored_world_colliders_reach_away_from_the_prop_position() {
+        let map = overworld();
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
+            .expect("embedded world collision is valid");
+        let graph = derive(&map, &collision);
+
+        assert!(
+            !collision.regions.is_empty(),
+            "the embedded world places colliding Props"
+        );
+        assert!(
+            graph.nodes().iter().any(GroundNavigationNode::is_blocked),
+            "those Props block ground"
+        );
+
+        for region in &collision.regions {
+            let lowest = region
+                .component
+                .geometry()
+                .vertices
+                .iter()
+                .map(|vertex| vertex.y)
+                .fold(f32::INFINITY, f32::min);
+            assert!(
+                lowest >= 0.0,
+                "'{}' is authored as a standing silhouette starting at its own \
+                 position, so the ground it blocks lies beyond it rather than \
+                 around it",
+                region.instance_id
+            );
+        }
     }
 }
