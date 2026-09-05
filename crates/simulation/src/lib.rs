@@ -38,7 +38,8 @@ pub use movement::{
     MovementConfigError, MovementStep, integrate_movement, update_character_orientation,
 };
 pub use navigation::{
-    CharacterTraversalProfile, TraversalCatalog, TraversalCatalogError, TraversalSpeed,
+    CharacterTraversalProfile, GroundNavigationError, GroundNavigationGraph, GroundNavigationNode,
+    NavigationSurface, TraversalCatalog, TraversalCatalogError, TraversalSpeed,
     apply_grounded_route_speed, constrain_grounded_movement,
 };
 pub use respawn::{RespawnActor, choose_respawn_position};
