@@ -891,9 +891,10 @@ World-01 baseline uses one deliberately simple linear model:
   Mage character design exposes `pupil_size_ratio` (`1.0` current baseline)
   as a radius multiplier for Mage's generated pupils only; it does not change
   eye geometry, beam origins, or laser width. Mage's
-  `pupil_edge_clearance_ratio` (`0.35` baseline) controls how much of that
-  pupil radius must remain inside the eye while its gaze moves: `1.0` prevents
-  a visible edge cut, while smaller values permit more clipping.
+  `pupil_edge_clearance_ratio` controls how much of that pupil radius must
+  remain inside the eye while its gaze moves: `1.0` prevents a visible edge cut,
+  while smaller values permit more clipping. It is Mage's own tuning value in
+  the design data and carries no World-01 baseline.
 - The two beams are distinct damage sources. At maximum charge, a target hit
   by both receives `40 HP` total damage.
 - Each beam stops at its first collision with a `CollisionRegion`, such as a
