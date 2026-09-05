@@ -248,7 +248,10 @@ Character to a valid point at the nearest usable Ankh. This safety relocation
 is not a death or ordinary respawn; it changes neither HP nor the Character's
 respawn count. Once falling has an implemented movement rule, losing support
 may enter that rule instead, but an Ankh remains the last-resort recovery when
-no more specific outcome can safely resolve the Character.
+no more specific outcome can safely resolve the Character. The safety rule
+applies in every life state. Moving a dead Character also ends a revival whose
+required physical overlap is lost; the world change does not preserve an
+otherwise invalid revival position.
 
 Two consequences the implementation has to carry rather than assume away:
 

@@ -288,6 +288,9 @@ position and support together while leaving life state, HP, and the normal
 respawn count unchanged. It also recovers the currently otherwise terminal
 `Airborne` state; `Flying` is not recovered. This server-owned fallback can be
 replaced by an explicit Template outcome or by falling once either rule exists.
+It applies independently of life state, so relocating a dead Actor can end an
+active revival when the required overlap is lost. A successful relocation is
+reported to the game console with Actor ID, reason, and destination.
 
 Airborne and flying movement rules do not exist yet. Current Character/world
 collision, revival overlap, Hammer impact, and Mage beam evaluation remain
@@ -298,8 +301,10 @@ The current top-down projection maps only its horizontal `x` and `y` to the
 visible Character transform; physical elevation remains available to a later
 side-scroller or other projection. Bevy `Transform.z` remains presentation
 depth, including ordering among Terrain, Props, Characters, and projected
-weapon parts, rather than an authoritative physical coordinate. There is no
-generic sandbox
+weapon parts, rather than an authoritative physical coordinate. Corrections
+of at most `1.0 m` retain the existing exponential presentation smoothing;
+larger authoritative discontinuities are presented as a hard cut instead of a
+multi-second glide across the map. There is no generic sandbox
 entity-instantiation path today. Server session code currently turns a
 character join request into a Labyrinth player with movement, gaze, health, and
 optional Hammer components at one of five fixed spawn positions. The

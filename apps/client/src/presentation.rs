@@ -43,6 +43,7 @@ const SELECTION_HEIGHT_METERS: f32 = VIEWPORT_HEIGHT_METERS * 0.75;
 const PREVIEW_SCALE: f32 = 0.95;
 const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
+const CORRECTION_HARD_SNAP_DISTANCE_SQUARED: f32 = 1.0;
 const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
 const PROP_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_PRESENTATION_LAYER: f32 = -1.0;
@@ -934,7 +935,13 @@ fn sync_rendered_positions(
 
         if let Some(mut correction) = correction {
             if correction.is_changed() {
-                correction.offset = presented.0 - rendered;
+                let visual_error = presented.0 - rendered;
+                correction.offset =
+                    if visual_error.length_squared() > CORRECTION_HARD_SNAP_DISTANCE_SQUARED {
+                        Vec3::ZERO
+                    } else {
+                        visual_error
+                    };
             }
             correction.offset *= correction_decay;
             rendered += correction.offset;
@@ -1219,5 +1226,40 @@ mod tests {
     #[test]
     fn reconciliation_error_halves_over_configured_period() {
         assert!((correction_decay(CORRECTION_HALF_LIFE_SECONDS) - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn large_authoritative_correction_is_presented_as_a_hard_cut() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_systems(PostUpdate, sync_rendered_positions);
+        let entity = app
+            .world_mut()
+            .spawn((
+                WorldPosition::new(60.0, 0.0, 8.0),
+                PresentedWorldPosition(Vec3::ZERO),
+                ClientPositionCorrection { offset: Vec3::ZERO },
+                Transform::from_xyz(0.0, 0.0, 3.0),
+                RenderedCharacter,
+            ))
+            .id();
+
+        app.update();
+
+        assert_eq!(
+            app.world().get::<PresentedWorldPosition>(entity),
+            Some(&PresentedWorldPosition(Vec3::new(60.0, 0.0, 8.0)))
+        );
+        assert_eq!(
+            app.world()
+                .get::<Transform>(entity)
+                .map(|transform| transform.translation),
+            Some(Vec3::new(60.0, 0.0, 3.0))
+        );
+        assert!(
+            app.world()
+                .get::<ClientPositionCorrection>(entity)
+                .is_none()
+        );
     }
 }

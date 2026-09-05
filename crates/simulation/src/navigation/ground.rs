@@ -1,4 +1,7 @@
-use bevy::prelude::{ParamSet, Query, Res};
+use bevy::{
+    log::info,
+    prelude::{ParamSet, Query, Res},
+};
 use world01_content::CharacterHurtGeometryCatalog;
 use world01_world_data::{
     ActorId, Ankh, AnkhLayout, BodyFacing, CharacterLifeState, GroundSupport, MapRouteSurface,
@@ -12,7 +15,7 @@ use super::{CharacterTraversalProfile, TraversalCatalog};
 
 /// Recovers Actors whose support disappeared or became unusable after a world
 /// change. This is the server-owned safety rule until airborne falling exists.
-pub fn recover_invalid_ground_support(
+pub(crate) fn recover_invalid_ground_support(
     rules: Option<Res<CharacterLifeRules>>,
     map: Option<Res<WorldMap>>,
     traversal: Option<Res<TraversalCatalog>>,
@@ -66,7 +69,7 @@ pub fn recover_invalid_ground_support(
         let Some(profile) = traversal.character(&character.0) else {
             continue;
         };
-        let needs_recovery = match &*medium {
+        let recovery_reason = match &*medium {
             MovementMedium::Grounded(support) => {
                 match resolve_current_support(&map, profile, support, *position) {
                     CurrentSupport::Resolved(sample) if sample_is_usable(profile, sample) => {
@@ -74,19 +77,19 @@ pub fn recover_invalid_ground_support(
                         if sample.support != SampleSupport::from(support) {
                             *medium = MovementMedium::Grounded(sample.support.to_owned());
                         }
-                        false
+                        None
                     }
                     CurrentSupport::Resolved(_)
                     | CurrentSupport::MissingIdentity
-                    | CurrentSupport::Unsupported => true,
+                    | CurrentSupport::Unsupported => Some("invalid ground support"),
                 }
             }
-            MovementMedium::Airborne => true,
-            MovementMedium::Flying => false,
+            MovementMedium::Airborne => Some("airborne movement is not implemented"),
+            MovementMedium::Flying => None,
         };
-        if !needs_recovery {
+        let Some(recovery_reason) = recovery_reason else {
             continue;
-        }
+        };
 
         let Some(candidate) = choose_respawn_position(
             actor_id.0,
@@ -117,6 +120,15 @@ pub fn recover_invalid_ground_support(
         if let Some(mut velocity) = velocity {
             *velocity = MovementVelocity::ZERO;
         }
+        info!(
+            target: "game_console",
+            "Actor {} safely relocated to an Ankh position ({:.2}, {:.2}, {:.2} m): {}",
+            actor_id.0,
+            resolved.x,
+            resolved.y,
+            resolved.elevation_meters,
+            recovery_reason,
+        );
     }
 }
 
