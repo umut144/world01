@@ -45,21 +45,26 @@ for source_export in "${source_exports[@]}"; do
         and ((. / $step) == ((. / $step) | floor)))
       and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step)
         and ((. / $step) == ((. / $step) | floor)));
+    def route_operation($segment):
+      ($segment.operation == "additive" and $segment.clearance_above_meters == null)
+      or ($segment.operation == "subtractive"
+        and ($segment.clearance_above_meters | type == "number" and isfinite and . > 0));
     def scene_position($position; $width; $height; $step):
       ($position.x | type == "number" and . == floor and . >= 0 and . <= ($width * $step))
       and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step));
 
     . as $root
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
+    | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 10
+    and .version == 11
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.water_cell_meters | type == "number" and isfinite and . > 0)
     and .scene.schema == "srt.scene_maker_scene"
-    and .scene.version == 11
+    and .scene.version == 12
     and (.scene.scene_id | type == "string" and length > 0)
     and (.scene.scene_kind == "instance" or .scene.scene_kind == "template")
     and .scene.coordinate_space == "scene_local_bottom_left_y_up"
@@ -72,6 +77,7 @@ for source_export in "${source_exports[@]}"; do
     and (.water_raster | type == "array")
     and (.scene.route_surfaces | type == "array")
     and (.route_surface_bakes | type == "array")
+    and (.route_surface_cut_raster | type == "array")
     and (if .scene.scene_kind == "instance" then
       .scene.template_definition == null
     else
@@ -84,6 +90,7 @@ for source_export in "${source_exports[@]}"; do
       and (.water_raster | length == 0)
       and (.scene.route_surfaces | length == 0)
       and (.route_surface_bakes | length == 0)
+      and (.route_surface_cut_raster | length == 0)
     end)
     and (.asset_profiles | type == "array")
     and (([.asset_profiles[].asset_key] | unique | length) == (.asset_profiles | length))
@@ -144,7 +151,8 @@ for source_export in "${source_exports[@]}"; do
       and all($route.segments[];
         (.segment_id | type == "string" and length > 0)
         and (.grade_percent == -50 or .grade_percent == -25
-          or .grade_percent == 0 or .grade_percent == 25 or .grade_percent == 50)))
+          or .grade_percent == 0 or .grade_percent == 25 or .grade_percent == 50)
+        and route_operation(.)))
     and all(.route_surface_bakes[];
       (.vertices | type == "array" and length > 0)
       and (.triangle_indices | type == "array" and length > 0
@@ -152,6 +160,7 @@ for source_export in "${source_exports[@]}"; do
       and (.boundary_edges | type == "array" and length > 0)
       and (.centerline_samples | type == "array" and length >= 2)
       and (.segments | type == "array" and length >= 1)
+      and all(.segments[]; route_operation(.))
       and all(.vertices[];
         (.x_meters | type == "number" and isfinite)
         and (.y_meters | type == "number" and isfinite)
@@ -162,6 +171,28 @@ for source_export in "${source_exports[@]}"; do
         and (.elevation_meters | type == "number" and isfinite)
         and (.width_meters | type == "number" and isfinite and . > 0)
         and (.station_meters | type == "number" and isfinite and . >= 0)))
+    and (([.route_surface_cut_raster[].route_surface_id] | unique | length)
+      == (.route_surface_cut_raster | length))
+    and (([.route_surface_cut_raster[].route_surface_id] | sort)
+      == ([.scene.route_surfaces[]
+        | select(any(.segments[]; .operation == "subtractive"))
+        | .route_surface_id] | sort))
+    and ($water_cells == ($water_cells | floor) and $water_cells >= 1)
+    and all(.route_surface_cut_raster[]; . as $cut
+      | ([$root.scene.route_surfaces[]
+          | select(.route_surface_id == $cut.route_surface_id)
+          | .segments[]
+          | select(.operation == "subtractive")
+          | .segment_id]) as $excavating
+      | all($cut.cells[]; . as $cell
+        | ($cell.x | type == "number" and . == floor and . >= 0
+          and . < ($root.scene.size_cells.width * $water_cells))
+        and ($cell.y | type == "number" and . == floor and . >= 0
+          and . < ($root.scene.size_cells.height * $water_cells))
+        and ($excavating | index($cell.segment_id) != null)
+        and ($cell.floor_meters | type == "number" and isfinite)
+        and ($cell.cut_top_meters | type == "number" and isfinite)
+        and ($cell.cut_top_meters > $cell.floor_meters)))
   ' "$source_export" >/dev/null \
     || fail "invalid SceneMaker export: $source_export"
 

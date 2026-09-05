@@ -10,9 +10,9 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 10;
+const FORMAT_VERSION: u32 = 11;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 11;
+const SCENE_VERSION: u32 = 12;
 const WORKSPACE_KEY: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
 
@@ -28,6 +28,8 @@ pub struct WorldMap {
     terrain_cell_indices: Vec<Option<usize>>,
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
+    route_surface_cuts: Vec<MapRouteSurfaceCut>,
+    water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
 
@@ -72,6 +74,8 @@ impl WorldMap {
             terrain_cell_indices,
             props: scene.props,
             route_surfaces: scene.route_surfaces,
+            route_surface_cuts: scene.route_surface_cuts,
+            water_cell_meters: scene.water_cell_meters,
             template_anchors: scene.template_anchors,
         })
     }
@@ -142,6 +146,19 @@ impl WorldMap {
     /// Independently elevated Path surfaces, already tessellated by SceneMaker.
     pub fn route_surfaces(&self) -> &[MapRouteSurface] {
         &self.route_surfaces
+    }
+
+    /// The finer grid the authored volumetric rasters use, in meters.
+    pub const fn water_cell_meters(&self) -> f32 {
+        self.water_cell_meters
+    }
+
+    /// The Terrain each excavating Path removes, one entry per such Path.
+    ///
+    /// A purely additive Path is absent rather than present and empty, and an
+    /// excavation that falls outside the Scene leaves its Path with no cells.
+    pub fn route_surface_cuts(&self) -> &[MapRouteSurfaceCut] {
+        &self.route_surface_cuts
     }
 
     pub fn route_surface(&self, route_surface_id: &str) -> Option<&MapRouteSurface> {
@@ -439,6 +456,8 @@ impl WorldMap {
             terrain_cell_indices,
             props,
             route_surfaces: self.route_surfaces.clone(),
+            route_surface_cuts: self.route_surface_cuts.clone(),
+            water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
         })
     }
@@ -638,6 +657,11 @@ impl WorldTemplate {
         if !export.water_raster.is_empty() || !export.scene.water_bodies.is_empty() {
             return Err(WorldMapError::new(
                 "a SceneMaker Template must not carry water",
+            ));
+        }
+        if !export.route_surface_cut_raster.is_empty() {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template must not carry route surface cuts",
             ));
         }
         if !export.route_surface_bakes.is_empty() || !export.scene.route_surfaces.is_empty() {
@@ -1004,11 +1028,51 @@ pub struct MapRouteCenterlineSample {
     pub authored_point_index: Option<u32>,
 }
 
+/// What an authored Path segment does to the Terrain it crosses.
+///
+/// This is the authored meaning. It is never recovered from whether Terrain
+/// happens to overlap the Path, and a subtractive segment is never treated as
+/// an additive one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RouteSegmentOperation {
+    /// Materializes its surface and removes nothing.
+    Additive,
+    /// Removes `[floor, floor + clearance]` from the Terrain solid at every
+    /// station, while its own surface survives that cut.
+    Subtractive { clearance_above_meters: f32 },
+}
+
+/// The Terrain one excavating Path removes.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapRouteSurfaceCut {
+    pub route_surface_id: String,
+    pub cells: Vec<MapRouteCutCell>,
+}
+
+/// One excavated cell, on the finer grid the authored volumetric rasters use.
+///
+/// SceneMaker derives these cells rather than leaving them to a consumer: at an
+/// authored operation transition a bisecting plane decides which neighbour owns
+/// which side, and reconstructing that from baked triangles would disagree with
+/// what the author inspected.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapRouteCutCell {
+    pub x: u32,
+    pub y: u32,
+    /// The segment that asked for this cell.
+    pub segment_id: String,
+    /// The height that survives the cut, and the floor an Actor walks on.
+    pub floor_meters: f32,
+    /// The height up to which Terrain is gone.
+    pub cut_top_meters: f32,
+}
+
 /// Runtime meaning retained from one authored Path interval.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MapRouteSegment {
     pub segment_id: String,
     pub grade_percent: i32,
+    pub operation: RouteSegmentOperation,
     pub start_point_index: u32,
     pub end_point_index: u32,
     pub start_sample_index: u32,
@@ -1178,6 +1242,8 @@ struct ConvertedSceneBody {
     terrain_cells: Vec<MapTerrainCell>,
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
+    route_surface_cuts: Vec<MapRouteSurfaceCut>,
+    water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
 
@@ -1189,6 +1255,7 @@ fn convert_scene_body(
         grid,
         asset_profiles,
         route_surface_bakes,
+        route_surface_cut_raster,
         scene,
         ..
     } = export;
@@ -1211,6 +1278,11 @@ fn convert_scene_body(
     if !grid.terrain_cell_meters.is_finite() || grid.terrain_cell_meters <= 0.0 {
         return Err(WorldMapError::new(
             "terrain_cell_meters must be finite and greater than zero",
+        ));
+    }
+    if !grid.water_cell_meters.is_finite() || grid.water_cell_meters <= 0.0 {
+        return Err(WorldMapError::new(
+            "water_cell_meters must be finite and greater than zero",
         ));
     }
     if !grid.authoring_pixels_per_meter.is_finite() || grid.authoring_pixels_per_meter <= 0.0 {
@@ -1334,6 +1406,15 @@ fn convert_scene_body(
         })
         .collect::<Result<Vec<_>, WorldMapError>>()?;
 
+    let route_surface_cuts = convert_route_surface_cuts(
+        route_surface_cut_raster,
+        &route_surfaces,
+        width_tiles,
+        height_tiles,
+        grid.terrain_cell_meters,
+        grid.water_cell_meters,
+    )?;
+
     Ok(ConvertedSceneBody {
         width_tiles,
         height_tiles,
@@ -1342,6 +1423,8 @@ fn convert_scene_body(
         terrain_cells,
         props,
         route_surfaces,
+        route_surface_cuts,
+        water_cell_meters: grid.water_cell_meters,
         template_anchors,
     })
 }
@@ -1531,6 +1614,123 @@ fn convert_route_surfaces(
     Ok(converted)
 }
 
+/// Reads an authored segment operation, refusing every disagreement between it
+/// and its clearance rather than repairing one from the other.
+fn segment_operation(
+    route_surface_id: &str,
+    operation: &str,
+    clearance_above_meters: Option<f32>,
+) -> Result<RouteSegmentOperation, WorldMapError> {
+    match (operation, clearance_above_meters) {
+        ("additive", None) => Ok(RouteSegmentOperation::Additive),
+        ("subtractive", Some(clearance)) if clearance.is_finite() && clearance > 0.0 => {
+            Ok(RouteSegmentOperation::Subtractive {
+                clearance_above_meters: clearance,
+            })
+        }
+        _ => Err(WorldMapError::new(format!(
+            "route surface '{route_surface_id}' has a segment whose operation and clearance disagree"
+        ))),
+    }
+}
+
+/// Converts the derived excavation cells of every Path that carries one.
+///
+/// The set of entries has to be exactly the Paths that excavate: a purely
+/// additive Path is absent rather than present and empty, while an excavating
+/// Path whose cells fall outside the Scene is present with none.
+///
+/// The finer grid has to nest inside the Terrain grid for a cell to be placed
+/// at all, so a world without excavation is never asked to.
+fn convert_route_surface_cuts(
+    raster: Vec<RouteSurfaceCutRasterDocument>,
+    routes: &[MapRouteSurface],
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    water_cell_meters: f32,
+) -> Result<Vec<MapRouteSurfaceCut>, WorldMapError> {
+    let expected = routes
+        .iter()
+        .filter(|route| {
+            route.segments.iter().any(|segment| {
+                matches!(segment.operation, RouteSegmentOperation::Subtractive { .. })
+            })
+        })
+        .map(|route| route.route_surface_id.as_str())
+        .collect::<HashSet<_>>();
+    if expected.is_empty() && raster.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ratio = terrain_cell_meters / water_cell_meters;
+    if !ratio.is_finite() || ratio < 1.0 || ratio.fract() != 0.0 {
+        return Err(WorldMapError::new(
+            "a Terrain cell must cover a whole number of water cells",
+        ));
+    }
+    let per_terrain_cell = ratio as u32;
+    let mut seen = HashSet::with_capacity(raster.len());
+    let mut converted = Vec::with_capacity(raster.len());
+    for entry in raster {
+        if !expected.contains(entry.route_surface_id.as_str())
+            || !seen.insert(entry.route_surface_id.clone())
+        {
+            return Err(WorldMapError::new(format!(
+                "cut raster entry '{}' names no excavating Path, or names one twice",
+                entry.route_surface_id
+            )));
+        }
+        let Some(route) = routes
+            .iter()
+            .find(|route| route.route_surface_id == entry.route_surface_id)
+        else {
+            return Err(WorldMapError::new(format!(
+                "cut raster entry '{}' has no route surface",
+                entry.route_surface_id
+            )));
+        };
+        let cells = entry
+            .cells
+            .into_iter()
+            .map(|cell| {
+                let excavates = route.segments.iter().any(|segment| {
+                    segment.segment_id == cell.segment_id
+                        && matches!(segment.operation, RouteSegmentOperation::Subtractive { .. })
+                });
+                if !excavates
+                    || cell.x >= width_tiles.saturating_mul(per_terrain_cell)
+                    || cell.y >= height_tiles.saturating_mul(per_terrain_cell)
+                    || !cell.floor_meters.is_finite()
+                    || !cell.cut_top_meters.is_finite()
+                    || cell.cut_top_meters <= cell.floor_meters
+                {
+                    return Err(WorldMapError::new(format!(
+                        "route surface '{}' has an invalid cut cell",
+                        entry.route_surface_id
+                    )));
+                }
+                Ok(MapRouteCutCell {
+                    x: cell.x,
+                    y: cell.y,
+                    segment_id: cell.segment_id,
+                    floor_meters: cell.floor_meters,
+                    cut_top_meters: cell.cut_top_meters,
+                })
+            })
+            .collect::<Result<Vec<_>, WorldMapError>>()?;
+        converted.push(MapRouteSurfaceCut {
+            route_surface_id: entry.route_surface_id,
+            cells,
+        });
+    }
+    if seen.len() != expected.len() {
+        return Err(WorldMapError::new(
+            "every excavating Path needs its derived cut cells",
+        ));
+    }
+    Ok(converted)
+}
+
 fn validate_route_source(source: &RouteSurfaceDocument) -> Result<(), WorldMapError> {
     if source.points.len() < 2 || source.segments.len() != source.points.len() - 1 {
         return Err(WorldMapError::new(format!(
@@ -1568,6 +1768,11 @@ fn validate_route_source(source: &RouteSurfaceDocument) -> Result<(), WorldMapEr
                 source.route_surface_id
             )));
         }
+        segment_operation(
+            &source.route_surface_id,
+            &segment.operation,
+            segment.clearance_above_meters,
+        )?;
     }
     Ok(())
 }
@@ -1588,7 +1793,18 @@ fn validate_route_bake_segments(
         .enumerate()
         .map(|(index, segment)| {
             let authored = &source.segments[index];
-            if segment.segment_id != authored.segment_id
+            let operation = segment_operation(
+                &source.route_surface_id,
+                &segment.operation,
+                segment.clearance_above_meters,
+            )?;
+            let authored_operation = segment_operation(
+                &source.route_surface_id,
+                &authored.operation,
+                authored.clearance_above_meters,
+            )?;
+            if operation != authored_operation
+                || segment.segment_id != authored.segment_id
                 || segment.grade_percent != authored.grade_percent
                 || segment.start_point_index as usize != index
                 || segment.end_point_index as usize != index + 1
@@ -1604,6 +1820,7 @@ fn validate_route_bake_segments(
             Ok(MapRouteSegment {
                 segment_id: segment.segment_id,
                 grade_percent: segment.grade_percent,
+                operation,
                 start_point_index: segment.start_point_index,
                 end_point_index: segment.end_point_index,
                 start_sample_index: segment.start_sample_index,
@@ -1843,7 +2060,23 @@ struct ExportDocument {
     asset_profiles: Vec<AssetProfileDocument>,
     water_raster: Vec<serde::de::IgnoredAny>,
     route_surface_bakes: Vec<RouteSurfaceBakeDocument>,
+    route_surface_cut_raster: Vec<RouteSurfaceCutRasterDocument>,
     scene: SceneDocument,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceCutRasterDocument {
+    route_surface_id: String,
+    cells: Vec<RouteSurfaceCutCellDocument>,
+}
+
+#[derive(Deserialize)]
+struct RouteSurfaceCutCellDocument {
+    x: u32,
+    y: u32,
+    segment_id: String,
+    floor_meters: f32,
+    cut_top_meters: f32,
 }
 
 #[derive(Deserialize)]
@@ -1914,6 +2147,8 @@ struct RouteSurfacePointDocument {
 struct RouteSurfaceSourceSegmentDocument {
     segment_id: String,
     grade_percent: i32,
+    operation: String,
+    clearance_above_meters: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -1954,6 +2189,8 @@ struct RouteSurfaceCenterlineSampleDocument {
 struct RouteSurfaceBakeSegmentDocument {
     segment_id: String,
     grade_percent: i32,
+    operation: String,
+    clearance_above_meters: Option<f32>,
     start_point_index: u32,
     end_point_index: u32,
     start_sample_index: u32,
@@ -2048,6 +2285,7 @@ fn export_document(
             ],
             "water_raster": [],
             "route_surface_bakes": [],
+            "route_surface_cut_raster": [],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -2147,13 +2385,13 @@ mod tests {
                 .iter()
                 .any(|placement| placement.asset_key == "ankh")
         );
-        assert_eq!(map.route_surfaces().len(), 3);
+        assert_eq!(map.route_surfaces().len(), 4);
         assert_eq!(
             map.route_surfaces()
                 .iter()
                 .map(|route| route.segments[0].grade_percent)
                 .collect::<Vec<_>>(),
-            vec![25, 50, -50]
+            vec![25, 50, -50, 0]
         );
         assert!(!map.route_surfaces()[0].vertices.is_empty());
         assert!(!map.route_surfaces()[0].boundary_edges.is_empty());
@@ -2273,6 +2511,104 @@ mod tests {
         let index_error = WorldMap::from_source(&invalid_index, TEST_SCENE_ID)
             .expect_err("an out-of-range baked index must be rejected");
         assert!(index_error.to_string().contains("triangle index"));
+    }
+
+    #[test]
+    fn authored_segment_operations_reach_the_map() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+
+        let excavating = map
+            .route_surface("route_0004")
+            .expect("the overworld carries an excavating Path");
+        assert_eq!(
+            excavating.segments[0].operation,
+            RouteSegmentOperation::Subtractive {
+                clearance_above_meters: 2.0
+            }
+        );
+        for route in map.route_surfaces() {
+            if route.route_surface_id == "route_0004" {
+                continue;
+            }
+            for segment in &route.segments {
+                assert_eq!(segment.operation, RouteSegmentOperation::Additive);
+            }
+        }
+    }
+
+    #[test]
+    fn an_excavating_path_carries_its_derived_cut_cells() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+
+        assert_eq!(map.water_cell_meters(), 0.5);
+        assert_eq!(map.route_surface_cuts().len(), 1);
+        let cut = &map.route_surface_cuts()[0];
+        assert_eq!(cut.route_surface_id, "route_0004");
+        assert_eq!(cut.cells.len(), 245);
+
+        let route = map
+            .route_surface(&cut.route_surface_id)
+            .expect("a cut names its own Path");
+        for cell in &cut.cells {
+            assert!(
+                route.segments.iter().any(|segment| {
+                    segment.segment_id == cell.segment_id
+                        && matches!(segment.operation, RouteSegmentOperation::Subtractive { .. })
+                }),
+                "every cell names a subtractive segment of its Path"
+            );
+            assert_eq!(cell.floor_meters, 1.0);
+            assert_eq!(cell.cut_top_meters, 3.0);
+        }
+    }
+
+    #[test]
+    fn an_operation_that_disagrees_with_its_clearance_is_rejected() {
+        let source =
+            embedded_instance_source(TEST_SCENE_ID).expect("the embedded overworld source exists");
+        let mutate = |change: &dyn Fn(&mut serde_json::Value)| {
+            let mut document: serde_json::Value =
+                serde_json::from_str(source).expect("the embedded export is JSON");
+            change(&mut document);
+            let mutated =
+                serde_json::to_string(&document).expect("the mutated export remains JSON");
+            WorldMap::from_source(&mutated, TEST_SCENE_ID)
+                .expect_err("a contradictory export must be rejected")
+                .to_string()
+        };
+
+        let additive_with_clearance = mutate(&|document| {
+            document["scene"]["route_surfaces"][0]["segments"][0]["clearance_above_meters"] =
+                serde_json::Value::from(2.0);
+        });
+        assert!(additive_with_clearance.contains("operation and clearance disagree"));
+
+        let subtractive_without_clearance = mutate(&|document| {
+            document["scene"]["route_surfaces"][3]["segments"][0]["clearance_above_meters"] =
+                serde_json::Value::Null;
+        });
+        assert!(subtractive_without_clearance.contains("operation and clearance disagree"));
+
+        let disagreeing_bake = mutate(&|document| {
+            document["route_surface_bakes"][3]["segments"][0]["operation"] =
+                serde_json::Value::from("additive");
+            document["route_surface_bakes"][3]["segments"][0]["clearance_above_meters"] =
+                serde_json::Value::Null;
+        });
+        assert!(disagreeing_bake.contains("baked segment mapping"));
+
+        let cut_without_excavation = mutate(&|document| {
+            document["route_surface_cut_raster"][0]["route_surface_id"] =
+                serde_json::Value::from("route_0001");
+        });
+        assert!(cut_without_excavation.contains("names no excavating Path"));
+
+        let missing_cut = mutate(&|document| {
+            document["route_surface_cut_raster"] = serde_json::Value::Array(Vec::new());
+        });
+        assert!(missing_cut.contains("needs its derived cut cells"));
     }
 
     #[test]
@@ -3140,14 +3476,14 @@ mod tests {
     fn obsolete_export_and_scene_versions_are_rejected() {
         assert!(
             WorldMap::from_source(
-                &export_document(9, 11, TEST_GRASS_CELL, "", ""),
+                &export_document(10, 12, TEST_GRASS_CELL, "", ""),
                 TEST_SCENE_ID
             )
             .is_err()
         );
         assert!(
             WorldMap::from_source(
-                &export_document(10, 10, TEST_GRASS_CELL, "", ""),
+                &export_document(11, 11, TEST_GRASS_CELL, "", ""),
                 TEST_SCENE_ID
             )
             .is_err()

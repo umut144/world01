@@ -1,6 +1,6 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 10,
+  "version": 11,
   "workspace_key": "world01",
   "grid": {
     "terrain_cell_meters": 1.0,
@@ -14,11 +14,11 @@
       "surface": null,
       "footprint_meters": {
         "width": 1.0625,
-        "height": 1.71875
+        "height": 1.4375
       },
       "anchor_meters": {
         "x": 0.53125,
-        "y": 0.3125
+        "y": 0.03125
       }
     },
     {
@@ -48,9 +48,10 @@
   ],
   "water_raster": [],
   "route_surface_bakes": [],
+  "route_surface_cut_raster": [],
   "scene": {
     "schema": "srt.scene_maker_scene",
-    "version": 11,
+    "version": 12,
     "scene_id": "test_template02",
     "scene_kind": "template",
     "coordinate_space": "scene_local_bottom_left_y_up",
