@@ -280,6 +280,23 @@ nearest height or first ID. A missing referenced Route makes the absent
 support explicit as `Airborne`; only geometric displacement away from an
 existing support may reconnect to another uniquely reachable support.
 
+Terrain support resolves a column rather than reading a cell top. A Terrain
+cell's `elevation_meters` is the top of its solid column and not necessarily a
+walking surface: an authored Path segment may be subtractive, and the export's
+derived cut cells then remove a height range from that solid. Every maximal run
+of solid that survives presents a walking surface at its top, so one horizontal
+place under an excavated hill offers two - the floor of the excavation and the
+ground still standing above it - while the same excavation crossing flat ground
+removes nothing. The column is resolved at the point asked for rather than
+voted on across a Terrain cell, because the authored excavation uses the finer
+water grid: a vote would either promise ground that is solid or refuse ground
+that is open. Which surface supports an Actor follows from the height it
+already has, and two equally near surfaces are refused rather than ordered.
+Derived ground navigation contributes one node per resolved walking surface,
+so a bot can be routed through a hill rather than only over it. Water is not
+modelled yet, so its own cuts do not participate; the water and cut rasters of
+the current Instance do not overlap.
+
 Airborne falling does not yet have a movement rule. On the server, an Actor
 whose current support disappears or becomes unusable therefore uses the Ankh
 as a last-resort safety exit. The deterministic candidate search selects
