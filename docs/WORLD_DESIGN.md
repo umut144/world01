@@ -169,6 +169,42 @@ camera returns to top-down. The camera transition does not teleport between
 unrelated coordinate systems; the interior traversal and its exits connect
 real elevations in the same World-01 space.
 
+### Layers and modes of the same world
+
+World 01 is authored and simulated as layered 3D, the way SceneMaker authors
+it. Elevation is not an axis things extend through; it is the layer a thing
+belongs to. A useful way to picture it is flat cards lying on each layer - a
+tree, an Ankh, a bridge - with Characters, bots and other Actors moving across
+them. The cards are the mental model rather than a runtime concept; what is
+real is which layer a thing belongs to.
+
+That decides what collision needs in the top-down mode. A collider belongs to a
+layer, so it needs the elevation it sits at and nothing more: no height, no
+vertical extent, no volume. A bridge half a meter above a forest crosses every
+tree in it, because bridge and trees belong to different layers and a layer
+does not reach into its neighbour. Whether two things block each other is a
+question about their layers, not about overlapping vertical intervals.
+
+Some behavior still plays out between layers rather than on one. The Hammerer's
+strike crosses through depth rather than around the body in the screen plane,
+and flight will leave the layers entirely. Those are deliberate exceptions that
+carry their own vertical rule; they do not turn elevation into a continuum for
+everything else.
+
+A different projection of this same world is a mode of it, not another world.
+The MMORPG's side-scroller is the first planned one. A Character keeps its
+identity and its abilities there while the mechanics may differ: the Wizard
+still has Blink, but it reaches less far and may be used in the middle of a
+jump, and the DASH input is the jump. A tree stops lying flat on its layer and
+stands upright for the first time, so its authored `CollisionRegion` becomes a
+platform to jump onto or over rather than an obstacle to walk around. The
+polygon is the same one; what differs is which of its axes the mode presents as
+height.
+
+What a mode may change is control mapping, presentation, and the mechanics of
+an ability. What it must not change is who a Character is, which abilities it
+has, or where a place is in World 01.
+
 Bots reason about this world space rather than about the current camera. Ground
 bots use navigation connections between elevated supporting surfaces. A later
 flying bot may use a three-dimensional airspace graph, and authored traversal
@@ -498,6 +534,10 @@ must be documented as an explicit game variant.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Each is declared, neither is defaulted, and where a character
   can be hit says nothing about where it stands.
+- One authored `CollisionRegion` serves every mode of the world. Top-down reads
+  the card as it lies on its layer; the side-scroller reads the same polygon
+  standing upright, where its vertical extent is what makes it a platform. A
+  character or Prop declares one Region, never one per projection.
 - A `CollisionRegion` says where a character stands and what it blocks. It is not
   a source for navigation clearance. Because the authored shape is a standing
   silhouette rather than a ground footprint, a radius derived from it measures

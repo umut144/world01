@@ -350,11 +350,13 @@ a separate three-dimensional airspace graph, connected to ground or structure
 navigation only through explicit movement transitions. Equality of elevation
 alone never creates a traversal connection.
 
-Current collision geometry remains two-dimensional. Physical flight,
-overpasses, and vertically separated colliders will require collision height
-intervals or another explicit volumetric contract so overlapping horizontal
-geometry blocks only when its elevation ranges also overlap. That extension is
-not part of the initial world-position migration or SBX-24 ground-navigation
+Current collision geometry remains two-dimensional and carries no elevation at
+all: `WorldCollisionGeometryCatalog::from_content_and_map` keeps a placement's
+`position` and drops its `elevation_meters`. World 01 is layered rather than
+volumetric, so what overpasses and vertically separated colliders need is that
+elevation rather than a height interval: two colliders on different layers do
+not block each other, whatever their horizontal geometry does. That extension
+is not part of the initial world-position migration or SBX-24 ground-navigation
 slice.
 
 ## Camera and room presentation
