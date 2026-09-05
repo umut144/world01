@@ -2,8 +2,10 @@
 //!
 //! A node is a place a grounded Actor can stand: a horizontal position, the
 //! physical height it stands at, and the identity of the support whose height
-//! that is. Terrain contributes one node per authored cell, and each Route
-//! surface contributes one node per baked centerline sample.
+//! that is. Terrain contributes one node per walking surface its column
+//! resolves to - two where an authored Path has been driven through a hill,
+//! one everywhere else - and each Route surface contributes one node per baked
+//! centerline sample.
 //!
 //! Nodes deliberately carry no judgement about who may use them. Which
 //! surfaces a Character may cross is its own traversal profile's answer, given
@@ -74,10 +76,12 @@ pub struct GroundNavigationGraph {
 impl GroundNavigationGraph {
     /// Derives the nodes of one composed world.
     ///
-    /// Terrain heights come from the authored cell. Route heights come from the
-    /// same projection onto the baked centerline that carries a walking Actor,
-    /// rather than from the sample's stored height, so a node cannot describe a
-    /// height the Route would not actually give.
+    /// Terrain heights come from resolving the cell's column at the node's own
+    /// position, so an excavated place offers the floor of the excavation and
+    /// the ground still standing above it as two separate places to be. Route
+    /// heights come from the same projection onto the baked centerline that
+    /// carries a walking Actor, rather than from the sample's stored height, so
+    /// a node cannot describe a height the Route would not actually give.
     ///
     /// The grid only narrows which colliders each node is tested against; the
     /// shared narrow phase still decides.
@@ -90,15 +94,28 @@ impl GroundNavigationGraph {
         let mut nodes = Vec::with_capacity(map.terrain_cells().len());
         let mut candidates = Vec::new();
 
+        let mut column = Vec::new();
         for cell in map.terrain_cells() {
             let surface = intern(&mut surfaces, &cell.surface)?;
-            nodes.push(GroundNavigationNode {
-                position: cell.center,
-                elevation_meters: cell.elevation_meters,
-                surface,
-                support: GroundSupport::Terrain,
-                blocked: stands_in_world_collision(cell.center, collision, grid, &mut candidates),
-            });
+            map.terrain_walking_surfaces(cell.center, &mut column);
+            if column.is_empty() {
+                return Err(GroundNavigationError(format!(
+                    "Terrain cell ({}, {}) resolves to no walking surface",
+                    cell.x, cell.y
+                )));
+            }
+            // World collision is planar, so it says the same thing about every
+            // height this column offers.
+            let blocked = stands_in_world_collision(cell.center, collision, grid, &mut candidates);
+            for elevation_meters in column.iter().copied() {
+                nodes.push(GroundNavigationNode {
+                    position: cell.center,
+                    elevation_meters,
+                    surface,
+                    support: GroundSupport::Terrain,
+                    blocked,
+                });
+            }
         }
 
         for route in map.route_surfaces() {
@@ -257,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn every_terrain_cell_and_centerline_sample_becomes_a_node() {
+    fn every_walking_surface_and_centerline_sample_becomes_a_node() {
         let map = overworld();
         let graph = without_collision(&map);
 
@@ -266,38 +283,122 @@ mod tests {
             .iter()
             .map(|route| route.centerline_samples.len())
             .sum::<usize>();
+        let mut column = Vec::new();
+        let walking_surfaces = map
+            .terrain_cells()
+            .iter()
+            .map(|cell| {
+                map.terrain_walking_surfaces(cell.center, &mut column);
+                column.len()
+            })
+            .sum::<usize>();
 
-        assert_eq!(graph.nodes().len(), map.terrain_cells().len() + samples);
+        assert!(
+            walking_surfaces > map.terrain_cells().len(),
+            "the overworld is excavated somewhere"
+        );
+        assert_eq!(graph.nodes().len(), walking_surfaces + samples);
         assert_eq!(
             graph
                 .nodes()
                 .iter()
                 .filter(|node| matches!(node.support(), GroundSupport::Terrain))
                 .count(),
-            map.terrain_cells().len()
+            walking_surfaces
         );
     }
 
     #[test]
-    fn a_terrain_node_stands_at_its_authored_cell_height() {
+    fn a_terrain_node_stands_where_its_column_resolves() {
         let map = overworld();
         let graph = without_collision(&map);
+        let mut column = Vec::new();
+
+        let excavated = map
+            .terrain_cells()
+            .iter()
+            .find(|cell| {
+                map.terrain_walking_surfaces(cell.center, &mut column);
+                column.len() > 1
+            })
+            .expect("the overworld is excavated somewhere");
 
         for cell in [
             map.terrain_cells().first().expect("the world has Terrain"),
-            map.terrain_cells()
-                .iter()
-                .find(|cell| cell.elevation_meters > 1.0)
-                .expect("the world has raised Terrain"),
+            excavated,
         ] {
-            let node = node_at(&graph, cell.center);
+            map.terrain_walking_surfaces(cell.center, &mut column);
+            let standing = graph
+                .nodes()
+                .iter()
+                .filter(|node| {
+                    node.position() == cell.center
+                        && matches!(node.support(), GroundSupport::Terrain)
+                })
+                .collect::<Vec<_>>();
 
-            assert_eq!(node.elevation_meters(), cell.elevation_meters);
             assert_eq!(
-                graph.surface_name(node.surface()),
-                Some(cell.surface.as_str())
+                standing
+                    .iter()
+                    .map(|node| node.elevation_meters())
+                    .collect::<Vec<_>>(),
+                column,
+                "a cell offers exactly the places its column resolves to"
             );
-            assert_eq!(node.support(), &GroundSupport::Terrain);
+            for node in standing {
+                assert_eq!(
+                    graph.surface_name(node.surface()),
+                    Some(cell.surface.as_str())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_excavated_place_offers_the_tunnel_and_the_ground_above_it() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let cut = map
+            .route_surface_cuts()
+            .first()
+            .expect("the overworld carries an excavating Path");
+
+        let deepest = graph
+            .nodes()
+            .iter()
+            .filter(|node| matches!(node.support(), GroundSupport::Terrain))
+            .filter(|node| {
+                map.terrain_cell_at(node.position())
+                    .is_some_and(|cell| cell.elevation_meters > node.elevation_meters())
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            !deepest.is_empty(),
+            "an excavation leaves places to stand below the ground above them"
+        );
+        for node in &deepest {
+            let above = graph
+                .nodes()
+                .iter()
+                .find(|other| {
+                    other.position() == node.position()
+                        && matches!(other.support(), GroundSupport::Terrain)
+                        && other.elevation_meters() > node.elevation_meters()
+                })
+                .expect("the ground above an excavation is a place of its own");
+            assert_eq!(
+                above.elevation_meters(),
+                map.terrain_cell_at(node.position())
+                    .expect("that cell has Terrain")
+                    .elevation_meters
+            );
+            assert!(
+                cut.cells
+                    .iter()
+                    .any(|cell| cell.floor_meters == node.elevation_meters()),
+                "the lower place is the floor the authored excavation left"
+            );
         }
     }
 
