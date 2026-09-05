@@ -526,11 +526,13 @@ must be documented as an explicit game variant.
   the tree's collider covers part of its trunk, not the crown it draws.
 - A `CollisionRegion` may be drawn freely or may borrow the shape of a
   Component. Every playable character currently uses Component-backed Regions;
-  four use separate body and feet Regions while the others borrow one body
-  shape. A collider is therefore still a standing silhouette rather than a
-  footprint. Flatter shapes close to the feet are the intended refinement;
-  because the Region is authored either way, that change is content and touches
-  no code.
+  four borrow two Components while the others borrow one. Which Component a
+  Region borrows carries no meaning of its own: a Region sitting on a
+  character's hat is as legitimate as one at the bottom of its body, it may
+  look funny, and it is allowed to. A character need not own a Component of any
+  particular name for a Region to be authored, so nothing derives a Region from
+  anatomy and nothing may assume that one Region is the ground while another is
+  the body.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Each is declared, neither is defaulted, and where a character
   can be hit says nothing about where it stands.
