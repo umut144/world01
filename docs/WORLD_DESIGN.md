@@ -91,13 +91,18 @@ this document instead of copying a shared mechanic as if it were game-owned.
 - Simulation/gameplay and presentation/art are separate iteration layers.
 - Shared foundations should not prevent plausible future team play, but future
   systems should not be implemented speculatively.
-- **No fallbacks.** Where a Character or Asset needs data, it declares that data
-  explicitly. Nothing is guessed from a default, a name convention, or a
-  substitute source, because a fallback turns forgotten data into behaviour that
-  looks plausible instead of into a failure a test reports. Where absence is a
-  legitimate state - a Character that occupies no space - absence is modelled as
-  itself and stays legal; where it is not, loading fails and says what is
-  missing.
+- **No fallbacks, applied where they would hide a mistake.** This is a principle
+  to reach for deliberately, not a project-wide ban on defaults. It earns its
+  place wherever forgotten data would become behaviour that looks plausible
+  instead of a failure a test reports: authored `CollisionRegion`s and
+  `HurtRegion`s, hurt-geometry declarations, mass classification, traversal
+  profiles, and placement ranks. There a Character or Asset declares its data
+  explicitly, and nothing is guessed from a default, a name convention, or a
+  substitute source. Where a value is genuinely one shared World-01 baseline,
+  a single documented default remains the simpler and better answer. Where
+  absence is a legitimate state - a Character that occupies no space - absence is
+  modelled as itself and stays legal; where it is not, loading fails and says
+  what is missing.
 
 ## World scale and authored assets
 
@@ -493,6 +498,14 @@ must be documented as an explicit game variant.
 - `CollisionRegion` and `HurtRegion` are separate concerns and never substitute
   for each other. Each is declared, neither is defaulted, and where a character
   can be hit says nothing about where it stands.
+- A `CollisionRegion` says where a character stands and what it blocks. It is not
+  a source for navigation clearance. Because the authored shape is a standing
+  silhouette rather than a ground footprint, a radius derived from it measures
+  how tall a character is drawn rather than how much room it needs to pass
+  something. Ground navigation therefore uses no per-character clearance. Should
+  one ever become necessary, it is a single explicit World-01 value in the design
+  data, identical for every character, and authored rather than derived from
+  collision geometry.
 - A character without a `CollisionRegion` occupies no space: it blocks nobody
   and nothing blocks it, while it can still be hit at its declared hurt
   geometry. Missing collision geometry is a legal content state, not an error; a

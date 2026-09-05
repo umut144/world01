@@ -67,8 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map)?;
     let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
-    let traversal_catalog =
-        TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)?;
+    let traversal_catalog = TraversalCatalog::from_design(&game_design.traversal)?;
     let character_assets = CharacterAssetLibrary::from_content(
         content.clone(),
         world_design.eyes.pupil_area_ratio,

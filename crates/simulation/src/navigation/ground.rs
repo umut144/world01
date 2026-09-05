@@ -493,9 +493,7 @@ fn sample_is_usable(profile: &CharacterTraversalProfile, sample: GroundSample<'_
 mod tests {
     use bevy::prelude::{App, IntoScheduleConfigs, Update, Vec2};
     use world01_configs::load_embedded as load_runtime;
-    use world01_content::{
-        CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, RuntimeContent,
-    };
+    use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
         ActorId, AnkhLayout, BodyFacing, CharacterHealth, CharacterId, CharacterLifeState,
@@ -506,11 +504,8 @@ mod tests {
 
     fn app() -> App {
         let runtime = load_runtime().expect("embedded runtime configuration is valid");
-        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let geometry = CharacterCollisionGeometryCatalog::from_content(&content)
-            .expect("embedded collision geometry is valid");
         let design = load_game_design().expect("embedded game design is valid");
-        let traversal = TraversalCatalog::from_design_and_geometry(&design.traversal, &geometry)
+        let traversal = TraversalCatalog::from_design(&design.traversal)
             .expect("embedded traversal profiles are valid");
         let mut app = App::new();
         app.insert_resource(
@@ -535,8 +530,6 @@ mod tests {
     fn recovery_app() -> App {
         let runtime = load_runtime().expect("embedded runtime configuration is valid");
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let geometry = CharacterCollisionGeometryCatalog::from_content(&content)
-            .expect("embedded collision geometry is valid");
         let game_design = load_game_design().expect("embedded game design is valid");
         let world_design = load_world01_embedded().expect("embedded World 01 design is valid");
         let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
@@ -552,7 +545,7 @@ mod tests {
         .insert_resource(map)
         .insert_resource(ankhs)
         .insert_resource(
-            TraversalCatalog::from_design_and_geometry(&game_design.traversal, &geometry)
+            TraversalCatalog::from_design(&game_design.traversal)
                 .expect("embedded traversal profiles are valid"),
         )
         .insert_resource(

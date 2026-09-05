@@ -537,9 +537,7 @@ mod tests {
     use super::*;
     use bevy::prelude::{App, Update};
     use world01_configs::load_embedded;
-    use world01_content::{
-        CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, RuntimeContent,
-    };
+    use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
     use world01_design::{load_embedded as load_game_design, load_world01_embedded};
     use world01_world_data::{
         AnkhLayout, BodyFacing, CharacterId, MovementIntent, MovementMedium, SelectedCharacter,
@@ -551,8 +549,6 @@ mod tests {
         let design = load_world01_embedded().expect("embedded World 01 design parses");
         let game_design = load_game_design().expect("embedded game design parses");
         let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
-        let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)
-            .expect("embedded collision geometry is valid");
         let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let ankhs = AnkhLayout::from_map(&map);
         let mut app = App::new();
@@ -563,7 +559,7 @@ mod tests {
         .insert_resource(ankhs)
         .insert_resource(map)
         .insert_resource(
-            TraversalCatalog::from_design_and_geometry(&game_design.traversal, &collision_geometry)
+            TraversalCatalog::from_design(&game_design.traversal)
                 .expect("embedded traversal profiles are valid"),
         )
         .insert_resource(
