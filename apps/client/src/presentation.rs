@@ -5,6 +5,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::f32::consts::FRAC_PI_2;
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
 #[cfg(feature = "dev")]
@@ -14,7 +15,7 @@ use world01_network::{
 };
 use world01_simulation::WorldRuntimeState;
 use world01_world_data::{
-    Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection,
+    Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection, MapBridge,
     MovementIntent, RunState, SelectedCharacter, WorldMap, WorldPosition,
 };
 
@@ -28,8 +29,8 @@ use crate::input::{
 };
 use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_pupil_mesh, repeated_flat_asset_mesh, spawn_ankh_projected_visual,
-    spawn_character_visual, spawn_projected_prop_visual,
+    CharacterAssetLibrary, bevy_pupil_mesh, flat_asset_bounds, repeated_flat_asset_mesh,
+    spawn_ankh_projected_visual, spawn_character_visual, spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
@@ -45,6 +46,9 @@ const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 const CORRECTION_HARD_SNAP_DISTANCE_SQUARED: f32 = 1.0;
 const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
+/// A deck lies on the world, not in it: above the Terrain it spans, below
+/// everything that stands on either.
+const BRIDGE_PRESENTATION_LAYER: f32 = -9.0;
 const PROP_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_PRESENTATION_LAYER: f32 = -1.0;
 const ANKH_TILT_DEGREES: f32 = 30.0;
@@ -753,6 +757,111 @@ fn setup_map_visuals(
             ANKH_OUTLINE_DEPTH_METERS,
         ) {
             error!(asset_key = %prop.asset_key, %error, "cannot spawn map prop visual");
+        }
+    }
+
+    for bridge in map.bridges() {
+        spawn_bridge_visual(
+            &mut commands,
+            bridge,
+            &character_assets,
+            &mut meshes,
+            &mut flat_materials,
+            &mut projection_materials,
+        );
+    }
+}
+
+/// Draws one authored bridge: every plank where SceneMaker laid it, and a post
+/// at every corner.
+///
+/// The plank Asset is drawn once and placed many times. It arrives at the size
+/// it was authored at, so it is centred on itself and stretched to the two
+/// measures the bake gives each plank: its long side runs across the deck, its
+/// short side along the span, which is the near-uniform reading of the two.
+fn spawn_bridge_visual(
+    commands: &mut Commands,
+    bridge: &MapBridge,
+    character_assets: &CharacterAssetLibrary,
+    meshes: &mut Assets<Mesh>,
+    flat_materials: &mut Assets<ColorMaterial>,
+    projection_materials: &mut Assets<ProjectionDepthMaterial>,
+) {
+    let Some(plank_manifest) = character_assets
+        .prop(&bridge.plank_asset_key)
+        .filter(|manifest| !manifest.is_palette())
+    else {
+        error!(asset_key = %bridge.plank_asset_key, "cannot render bridge: missing drawable plank Asset");
+        return;
+    };
+    let Some((minimum, maximum)) = flat_asset_bounds(plank_manifest) else {
+        error!(asset_key = %bridge.plank_asset_key, "cannot render bridge: plank Asset has no fill mesh");
+        return;
+    };
+    let extent = maximum - minimum;
+    if extent.x <= 0.0 || extent.y <= 0.0 {
+        error!(asset_key = %bridge.plank_asset_key, "cannot render bridge: plank Asset has no area");
+        return;
+    }
+    let centre = (minimum + maximum) * 0.5;
+    let plank_mesh = match repeated_flat_asset_mesh(plank_manifest, [-centre]) {
+        Ok(mesh) => meshes.add(mesh),
+        Err(error) => {
+            error!(bridge = %bridge.bridge_id, %error, "cannot build bridge plank mesh");
+            return;
+        }
+    };
+    let plank_material = flat_materials.add(map_asset_color(&bridge.plank_asset_key));
+    // The heading runs along the span, and a plank lies across it.
+    let plank_rotation = Quat::from_rotation_z(bridge.heading_radians - FRAC_PI_2);
+    for plank in &bridge.planks {
+        commands.spawn((
+            RenderedMap,
+            Mesh2d(plank_mesh.clone()),
+            MeshMaterial2d(plank_material.clone()),
+            Transform {
+                translation: Vec3::new(
+                    plank.position.x,
+                    plank.position.y,
+                    BRIDGE_PRESENTATION_LAYER,
+                ),
+                rotation: plank_rotation,
+                scale: Vec3::new(
+                    plank.width_meters / extent.x,
+                    plank.depth_meters / extent.y,
+                    1.0,
+                ),
+            },
+        ));
+    }
+
+    let Some(post_manifest) = character_assets
+        .prop(&bridge.anchor_asset_key)
+        .filter(|manifest| !manifest.is_palette())
+    else {
+        error!(asset_key = %bridge.anchor_asset_key, "cannot render bridge posts: missing drawable Asset");
+        return;
+    };
+    for post in &bridge.posts {
+        let root = commands
+            .spawn((
+                RenderedMap,
+                Transform::from_xyz(post.position.x, post.position.y, PROP_PRESENTATION_LAYER),
+                Visibility::default(),
+            ))
+            .id();
+        if let Err(error) = spawn_projected_prop_visual(
+            commands,
+            root,
+            meshes,
+            projection_materials,
+            post_manifest,
+            map_asset_color(&bridge.anchor_asset_key),
+            Quat::IDENTITY,
+            PROP_PRESENTATION_LAYER,
+            ANKH_OUTLINE_DEPTH_METERS,
+        ) {
+            error!(post = %post.post_id, %error, "cannot spawn bridge post visual");
         }
     }
 }

@@ -757,10 +757,36 @@ fn spawn_projected_prop_visual_with_contours(
     Ok(())
 }
 
+/// The corner bounds of an Asset's flat fill geometry in its own frame.
+///
+/// A caller that places one flat Asset many times needs them twice: to put the
+/// shape on its own centre before rotating it, and to stretch it to a size the
+/// world asks for rather than the one it was drawn at.
+pub fn flat_asset_bounds(manifest: &RuntimeManifest) -> Option<(Vec2, Vec2)> {
+    let (vertices, _) = flat_asset_parts(manifest, [Vec2::ZERO]).ok()?;
+    let first = Vec2::from_array(*vertices.first()?);
+    Some(
+        vertices
+            .iter()
+            .fold((first, first), |(minimum, maximum), vertex| {
+                let vertex = Vec2::from_array(*vertex);
+                (minimum.min(vertex), maximum.max(vertex))
+            }),
+    )
+}
+
 pub fn repeated_flat_asset_mesh(
     manifest: &RuntimeManifest,
     offsets: impl IntoIterator<Item = Vec2>,
 ) -> Result<Mesh, PolyToolsAssetError> {
+    let (vertices, indices) = flat_asset_parts(manifest, offsets)?;
+    Ok(bevy_mesh_from_parts(&vertices, &indices))
+}
+
+fn flat_asset_parts(
+    manifest: &RuntimeManifest,
+    offsets: impl IntoIterator<Item = Vec2>,
+) -> Result<(Vec<[f32; 2]>, Vec<u32>), PolyToolsAssetError> {
     let offsets = offsets.into_iter().collect::<Vec<_>>();
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -800,7 +826,7 @@ pub fn repeated_flat_asset_mesh(
             manifest.asset_key
         )));
     }
-    Ok(bevy_mesh_from_parts(&vertices, &indices))
+    Ok((vertices, indices))
 }
 
 fn append_repeated_mesh(
