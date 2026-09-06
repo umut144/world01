@@ -18,9 +18,9 @@ use world01_network::{
 };
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
-    HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep, SimulationAuthority,
-    SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid, WorldSeparationStep,
-    add_simulation_step, add_world_runtime_rebuild,
+    GroundNavigationGraph, HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep,
+    SimulationAuthority, SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid,
+    WorldNavigation, WorldSeparationStep, add_simulation_step, add_world_runtime_rebuild,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -80,6 +80,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_collision =
         WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map)?;
     let world_collider_grid = WorldColliderGrid::from_catalog(&world_collision);
+    let navigation =
+        GroundNavigationGraph::from_world(&world_map, &world_collision, &world_collider_grid)?;
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
     let traversal_catalog = TraversalCatalog::from_design(&game_design.traversal)?;
     let character_health = CharacterHealthCatalog::from_content(&content)?;
@@ -117,6 +119,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(mage_eye_geometry)
     .insert_resource(world_collision)
     .insert_resource(world_collider_grid)
+    .insert_resource(navigation)
     .insert_resource(collision_geometry)
     .insert_resource(traversal_catalog)
     .insert_resource(character_health)
@@ -128,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_map)
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
-    add_world_runtime_rebuild(&mut app, FixedUpdate);
+    add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
     app.configure_sets(
         FixedUpdate,
         SimulationSet::GameplayStep.after(ServerNetworkSet::PrepareSimulation),

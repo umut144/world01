@@ -50,7 +50,9 @@ pub use separation::{
 };
 pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
-pub use world_runtime::{WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild};
+pub use world_runtime::{
+    WorldNavigation, WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild,
+};
 
 #[cfg(test)]
 mod tests {

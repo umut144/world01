@@ -20,6 +20,7 @@ use std::{
     fmt,
 };
 
+use bevy::prelude::Resource;
 use bevy::prelude::Vec2;
 use world01_content::WorldCollisionGeometryCatalog;
 use world01_world_data::{GroundSupport, Position, WorldMap};
@@ -85,7 +86,7 @@ impl GroundNavigationNode {
 }
 
 /// The nodes a composed world offers a grounded Actor.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq)]
 pub struct GroundNavigationGraph {
     surfaces: Vec<String>,
     nodes: Vec<GroundNavigationNode>,

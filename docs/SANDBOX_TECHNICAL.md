@@ -464,7 +464,24 @@ or Placement Ranks. Deterministic world derivation therefore currently assumes
 that client and server come from the same content build; a compatibility
 fingerprint or handshake is required before heterogeneous builds are allowed to
 connect.
-Navigation is not implemented yet. Client terrain, Prop, and Ankh presentation
+Ground navigation is derived with the rest of that transaction, and only by the
+server: a predicting client never runs a bot's decision, so deriving one there
+would cost every world change a representation nothing reads and would put a
+bot's knowledge on a machine that must not have it. A node is one place a
+grounded Actor can stand, carrying horizontal position, physical elevation and
+the identity of its support, so two surfaces at one horizontal place stay
+distinct. Terrain contributes one node per walking surface its column resolves
+to and Route surfaces one per baked centerline sample. Nodes carry no judgement
+about who may use them: Terrain connects in eight directions with a diagonal
+refused unless both orthogonal cells offer a step of their own, a Path carries
+its authored grade, and Terrain enters a Path only where exactly one is within
+reach - but which of those connections exist is the asking Character's own
+traversal profile, so one derived world serves every Character. A path query
+answers in time rather than distance and resolves equal costs by node order.
+A world collider blocks a node whose point stands inside it; fitting a body
+through a gap remains the mover's problem rather than the topology's.
+
+Client terrain, Prop, and Ankh presentation
 entities are rebuilt together exactly once for each applied runtime generation;
 they never render an unaccepted occupancy snapshot. For manual acceptance, the
 temporary in-game digit controls send an ordered reliable request rather than

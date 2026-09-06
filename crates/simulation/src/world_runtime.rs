@@ -7,7 +7,21 @@ use world01_world_data::{
     WorldTemplateCatalog,
 };
 
+use crate::navigation::{GroundNavigationError, GroundNavigationGraph};
 use crate::{SimulationSet, WorldColliderGrid};
+
+/// Whether an app derives ground navigation from the world it composes.
+#[derive(Resource, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorldNavigation {
+    /// Derived with the rest of the world and kept current, for the authority
+    /// that runs bots.
+    Derived,
+    /// Not derived at all. A predicting client never runs a bot's decision, so
+    /// deriving one there would cost every world change a representation
+    /// nothing reads - and put a bot's knowledge on a machine that must not
+    /// have it.
+    Absent,
+}
 
 /// The atomic world-resource transition before collision reads the new world.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -33,8 +47,13 @@ impl WorldRuntimeState {
 }
 
 /// Installs the shared server/client world-resource transaction.
-pub fn add_world_runtime_rebuild(app: &mut App, schedule: impl ScheduleLabel + Clone) {
-    app.init_resource::<WorldOccupancyRequest>()
+pub fn add_world_runtime_rebuild(
+    app: &mut App,
+    schedule: impl ScheduleLabel + Clone,
+    navigation: WorldNavigation,
+) {
+    app.insert_resource(navigation)
+        .init_resource::<WorldOccupancyRequest>()
         .init_resource::<WorldRuntimeState>()
         .add_systems(
             schedule,
@@ -48,6 +67,7 @@ pub fn add_world_runtime_rebuild(app: &mut App, schedule: impl ScheduleLabel + C
 enum WorldRuntimeBuildError {
     Composition(String),
     Collision(RegionGeometryError),
+    Navigation(GroundNavigationError),
     MissingAnkh,
 }
 
@@ -56,6 +76,7 @@ impl fmt::Display for WorldRuntimeBuildError {
         match self {
             Self::Composition(message) => formatter.write_str(message),
             Self::Collision(error) => error.fmt(formatter),
+            Self::Navigation(error) => error.fmt(formatter),
             Self::MissingAnkh => {
                 formatter.write_str("composed world requires at least one Ankh placement")
             }
@@ -70,10 +91,15 @@ struct DerivedWorldResources {
     collision: WorldCollisionGeometryCatalog,
     grid: WorldColliderGrid,
     ankhs: AnkhLayout,
+    navigation: Option<GroundNavigationGraph>,
 }
 
 impl DerivedWorldResources {
-    fn build(content: &RuntimeContent, map: &WorldMap) -> Result<Self, WorldRuntimeBuildError> {
+    fn build(
+        content: &RuntimeContent,
+        map: &WorldMap,
+        navigation: WorldNavigation,
+    ) -> Result<Self, WorldRuntimeBuildError> {
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(content, map)
             .map_err(WorldRuntimeBuildError::Collision)?;
         let grid = WorldColliderGrid::from_catalog(&collision);
@@ -81,11 +107,19 @@ impl DerivedWorldResources {
         if ankhs.positions.is_empty() {
             return Err(WorldRuntimeBuildError::MissingAnkh);
         }
+        let navigation = match navigation {
+            WorldNavigation::Derived => Some(
+                GroundNavigationGraph::from_world(map, &collision, &grid)
+                    .map_err(WorldRuntimeBuildError::Navigation)?,
+            ),
+            WorldNavigation::Absent => None,
+        };
         Ok(Self {
             map: map.clone(),
             collision,
             grid,
             ankhs,
+            navigation,
         })
     }
 }
@@ -101,6 +135,8 @@ fn rebuild_world_runtime(
     mut collision: ResMut<WorldCollisionGeometryCatalog>,
     mut grid: ResMut<WorldColliderGrid>,
     mut ankhs: ResMut<AnkhLayout>,
+    navigation: Res<WorldNavigation>,
+    mut graph: Option<ResMut<GroundNavigationGraph>>,
     mut state: ResMut<WorldRuntimeState>,
 ) {
     let requested = request.latest().filter(|occupancy| {
@@ -133,7 +169,7 @@ fn rebuild_world_runtime(
     }
 
     let source = candidate.as_ref().unwrap_or(&composition);
-    let derived = match DerivedWorldResources::build(&content, source.current_map()) {
+    let derived = match DerivedWorldResources::build(&content, source.current_map(), *navigation) {
         Ok(derived) => derived,
         Err(error) => {
             reject_generation(target_generation, error, &mut state);
@@ -148,6 +184,9 @@ fn rebuild_world_runtime(
     *collision = derived.collision;
     *grid = derived.grid;
     *ankhs = derived.ankhs;
+    if let (Some(derived), Some(graph)) = (derived.navigation, graph.as_mut()) {
+        **graph = derived;
+    }
     state.applied_generation = Some(target_generation);
     state.rejected_generation = None;
 }
@@ -230,6 +269,9 @@ mod tests {
     }
 
     fn app_with_world(world: EmbeddedWorld) -> App {
+        let navigation =
+            GroundNavigationGraph::from_world(&world.map, &world.collision, &world.grid)
+                .expect("the embedded world derives navigation");
         let mut app = App::new();
         app.insert_resource(world.content)
             .insert_resource(world.templates)
@@ -239,6 +281,8 @@ mod tests {
             .insert_resource(world.collision)
             .insert_resource(world.grid)
             .insert_resource(world.ankhs)
+            .insert_resource(navigation)
+            .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
             .init_resource::<WorldRuntimeState>();
         app
@@ -326,6 +370,42 @@ mod tests {
     }
 
     #[test]
+    fn navigation_follows_the_world_it_is_derived_from() {
+        let world = embedded_world();
+        let mut authority = world.composition.clone();
+        let templates = world.templates.clone();
+        let ranks = world.ranks.clone();
+        let mut app = app_with_world(world);
+        add_world_runtime_rebuild(&mut app, Update, WorldNavigation::Derived);
+        app.update();
+        let before = app.world().resource::<GroundNavigationGraph>().clone();
+
+        authority
+            .set_occupant("template_anchor_002", "test_template02", &templates, &ranks)
+            .expect("the authority assignment is valid");
+        app.world_mut()
+            .resource_mut::<WorldOccupancyRequest>()
+            .submit(authority.occupancy().clone());
+        app.update();
+
+        let after = app.world().resource::<GroundNavigationGraph>();
+        assert_ne!(
+            &before, after,
+            "a Template that changes the world changes where a bot may walk"
+        );
+        assert_eq!(
+            after,
+            &GroundNavigationGraph::from_world(
+                app.world().resource::<WorldMap>(),
+                app.world().resource::<WorldCollisionGeometryCatalog>(),
+                app.world().resource::<WorldColliderGrid>(),
+            )
+            .expect("the applied world derives navigation"),
+            "and it describes the world that was actually applied"
+        );
+    }
+
+    #[test]
     fn a_generation_without_an_ankh_is_rejected_without_partial_changes() {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let templates =
@@ -362,6 +442,7 @@ mod tests {
             .insert_resource(collision.clone())
             .insert_resource(grid.clone())
             .insert_resource(ankhs.clone())
+            .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
             .init_resource::<WorldRuntimeState>()
             .init_resource::<RuntimeStateChangeCount>()
@@ -458,7 +539,7 @@ mod tests {
                 Update,
                 separate_characters_from_world.in_set(SimulationSet::Collision),
             );
-        add_world_runtime_rebuild(&mut app, Update);
+        add_world_runtime_rebuild(&mut app, Update, WorldNavigation::Derived);
         let actor = app
             .world_mut()
             .spawn((

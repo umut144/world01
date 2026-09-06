@@ -296,7 +296,7 @@ fn spawn_world_position(map: &WorldMap, actor_id: u64) -> Option<WorldPosition> 
 mod tests {
     use super::*;
     use world01_content::WorldCollisionGeometryCatalog;
-    use world01_simulation::{WorldColliderGrid, add_world_runtime_rebuild};
+    use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
         AnkhLayout, PlacementRanks, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
     };
@@ -516,7 +516,7 @@ mod tests {
                     count_published_occupancy_changes.after(publish_world_occupancy),
                 ),
             );
-        add_world_runtime_rebuild(&mut app, FixedUpdate);
+        add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
 
         app.world_mut().run_schedule(Startup);
         let published = app
