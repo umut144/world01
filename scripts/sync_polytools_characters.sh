@@ -86,6 +86,44 @@ if ! jq -e '
   exit 1
 fi
 
+# The Keys world01 writes down on purpose: hand-written design data that a
+# person reads and edits, where an opaque identity would age into a lie no
+# tool refreshes. A rename in PolyTools ages these Keys instead, and
+# previous_keys is where the new name is found. A living Key always wins over
+# any previous_keys entry: a Key another Asset has taken over names that Asset.
+design_asset_keys() {
+  jq -r '.characters[].asset_key' "$project_root/crates/design/traversal.json"
+  jq -r '.characters[].asset_key' "$project_root/crates/design/hurt.json"
+  jq -r '
+    .characters[].asset_key,
+    (.characters[].equipped_weapon_asset_keys // [])[],
+    .weapons[].asset_key
+  ' "$project_root/crates/design/mass.json"
+  sed -n 's/^asset_key = "\(.*\)"$/\1/p' "$project_root/crates/design/world01.toml"
+}
+
+while IFS= read -r design_key; do
+  [[ -n "$design_key" ]] || continue
+  if jq -e --arg key "$design_key" \
+    'any(.assets[]; .asset_key == $key)' "$source_catalog" >/dev/null; then
+    continue
+  fi
+  renamed_to="$(jq -r --arg key "$design_key" '
+    [.assets[] | select(.previous_keys | index($key)) | .asset_key] | first // ""
+  ' "$source_catalog")"
+  retired_as="$(jq -r --arg key "$design_key" '
+    [.retired_assets[] | select(.last_asset_key == $key) | .asset_id] | first // ""
+  ' "$source_catalog")"
+  if [[ -n "$renamed_to" ]]; then
+    error_message "world01 design data names '$design_key', which PolyTools now calls '$renamed_to'"
+  elif [[ -n "$retired_as" ]]; then
+    error_message "world01 design data names '$design_key', an Asset PolyTools has withdrawn"
+  else
+    error_message "world01 design data names '$design_key', which the PolyTools catalog does not know"
+  fi
+  exit 1
+done < <(design_asset_keys | LC_ALL=C sort -u)
+
 destination_for_type() {
   case "$1" in
     character) printf '%s\n' 'characters' ;;
