@@ -58,7 +58,7 @@ if [[ ! -f "$source_catalog" ]]; then
 fi
 
 if ! jq -e '
-  .schema_version == 1
+  .schema_version == 2
   and (.world_key | type == "string")
   and (.world_key | length > 0)
   and (.assets | type == "array")
@@ -70,7 +70,8 @@ if ! jq -e '
     and (.asset_type | length > 0)
     and (.runtime_package | type == "string")
     and (.runtime_package | length > 0)
-    and (.asset_type | . == "character" or . == "props" or . == "weapons" or . == "terrain" or . == "icons" or . == "symbols")
+    and (.asset_type | . == "character" or . == "props" or . == "weapons" or . == "terrain" or . == "items" or . == "icon" or . == "symbols")
+    and (.asset_category | . == "single" or . == "set" or . == "palette")
   )
   and (([.assets[].asset_key] | unique | length) == ([.assets[].asset_key] | length))
 ' "$source_catalog" >/dev/null; then
@@ -84,7 +85,8 @@ destination_for_type() {
     props) printf '%s\n' 'props' ;;
     weapons) printf '%s\n' 'weapons' ;;
     terrain) printf '%s\n' 'terrain' ;;
-    icons) printf '%s\n' 'icons' ;;
+    items) printf '%s\n' 'items' ;;
+    icon) printf '%s\n' 'icons' ;;
     symbols) printf '%s\n' 'symbols' ;;
     *)
       error_message "unsupported PolyTools asset type: $1"
@@ -96,7 +98,8 @@ destination_for_type() {
 asset_type_for_directory() {
   case "$1" in
     characters) printf '%s\n' 'character' ;;
-    props|weapons|terrain|icons|symbols) printf '%s\n' "$1" ;;
+    icons) printf '%s\n' 'icon' ;;
+    props|weapons|terrain|items|symbols) printf '%s\n' "$1" ;;
     *)
       error_message "unsupported destination directory: $1"
       exit 1
@@ -108,7 +111,7 @@ mkdir -p "$assets_dir"
 staging_dir="$(mktemp -d "$assets_dir/.polytools-staging.XXXXXX")"
 backup_dir="$(mktemp -d "$assets_dir/.polytools-backup.XXXXXX")"
 
-for directory in characters props weapons terrain icons symbols; do
+for directory in characters props weapons terrain items icons symbols; do
   mkdir -p "$staging_dir/$directory"
 done
 
@@ -125,8 +128,9 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
   if ! jq -e \
     --arg key "$asset_key" \
     --arg type "$asset_type" \
+    --slurpfile catalog "$source_catalog" \
     '
-      .schema_version == 16
+      .schema_version == 19
       and .asset_key == $key
       and .asset_type == $type
       and (.regions | type == "array")
@@ -142,7 +146,25 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
         else true end)
       ))
       and (.asset_pivot | type == "array" and length == 2 and all(.[]; type == "number" and isfinite))
-      and (.components | type == "array" and length > 0)
+      and (.asset_category | . == "single" or . == "set" or . == "palette")
+      and (.components | type == "array")
+      and (if .asset_category == "palette" then
+        (.components | length == 0)
+        and (.attachment_frames | length == 0)
+        and (.regions | length == 0)
+        and (.variants | type == "array" and length > 0)
+        and (.variants | all(.[]; type == "string" and test("^[a-z0-9_]+$")))
+        and (([.variants[]] | unique | length) == (.variants | length))
+        and (.variants == (.variants | sort))
+        and all(.variants[]; . as $variant
+          | $catalog[0].assets
+          | any(.asset_key == $variant
+            and .asset_type == $type
+            and .asset_category == "single"))
+      else
+        (has("variants") | not)
+        and (.components | length > 0)
+      end)
       and (.components | all(.[];
         (.component_id | type == "string" and length > 0)
         and (.name | type == "string" and length > 0)
@@ -189,14 +211,14 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
 done < <(jq -r '.assets[] | [.asset_type, .asset_key, .runtime_package] | @tsv' "$source_catalog" | sort)
 
 cp "$source_catalog" "$staging_dir/catalog.json"
-for directory in characters props weapons terrain icons symbols; do
+for directory in characters props weapons terrain items icons symbols; do
   asset_type="$(asset_type_for_directory "$directory")"
   jq --arg type "$asset_type" '
     .assets |= map(select(.asset_type == $type))
   ' "$source_catalog" >"$staging_dir/$directory/catalog.json"
 done
 
-for directory in characters props weapons terrain icons symbols; do
+for directory in characters props weapons terrain items icons symbols; do
   if [[ -e "$assets_dir/$directory" ]]; then
     mv "$assets_dir/$directory" "$backup_dir/$directory"
   fi
