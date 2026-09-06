@@ -1,6 +1,6 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 14,
+  "version": 15,
   "workspace_key": "world01",
   "grid": {
     "terrain_cell_meters": 1.0,
@@ -17782,6 +17782,34 @@
           "end_vertex_index": 0
         }
       ],
+      "centerline_samples": [
+        {
+          "x_meters": 37.1875,
+          "y_meters": 34.03125,
+          "elevation_meters": 1,
+          "width_meters": 4.25,
+          "station_meters": 0,
+          "authored_point_index": 0
+        },
+        {
+          "x_meters": 43.34375,
+          "y_meters": 20.1875,
+          "elevation_meters": 1,
+          "width_meters": 4.25,
+          "station_meters": 15.150869,
+          "authored_point_index": 1
+        }
+      ],
+      "ground_at_start": {
+        "elevation_meters": 1.0,
+        "asset_key": "grass",
+        "source_id": null
+      },
+      "ground_at_end": {
+        "elevation_meters": 1.0,
+        "asset_key": "grass",
+        "source_id": null
+      },
       "posts": [
         {
           "post_id": "bridge_0001.post_start_left",
@@ -17983,6 +18011,34 @@
           "end_vertex_index": 0
         }
       ],
+      "centerline_samples": [
+        {
+          "x_meters": 44.90625,
+          "y_meters": 36.78125,
+          "elevation_meters": 1,
+          "width_meters": 4,
+          "station_meters": 0,
+          "authored_point_index": 0
+        },
+        {
+          "x_meters": 55.625,
+          "y_meters": 26.625,
+          "elevation_meters": 1,
+          "width_meters": 4,
+          "station_meters": 14.766212,
+          "authored_point_index": 1
+        }
+      ],
+      "ground_at_start": {
+        "elevation_meters": 1.0,
+        "asset_key": "grass",
+        "source_id": null
+      },
+      "ground_at_end": {
+        "elevation_meters": 1.0,
+        "asset_key": "grass",
+        "source_id": null
+      },
       "posts": [
         {
           "post_id": "bridge_0002.post_start_left",

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 14;
+const FORMAT_VERSION: u32 = 15;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 15;
 const WORKSPACE_KEY: &str = "world01";
@@ -1164,16 +1164,29 @@ pub struct MapBridge {
     /// The direction the deck spans, counter-clockwise from +X.
     pub heading_radians: f32,
     /// The deck itself: the walking surface, as a closed authored polygon.
-    pub vertices: Vec<MapBridgeVertex>,
+    pub vertices: Vec<MapRouteVertex>,
     pub triangle_indices: Vec<u32>,
+    /// The line the author drew, in the same shape a Path publishes, because
+    /// SceneMaker bakes a deck as a Path. A straight span is already straight,
+    /// so this is its two ends.
+    pub centerline_samples: Vec<MapRouteCenterlineSample>,
     pub planks: Vec<MapBridgePlank>,
     pub posts: Vec<MapBridgePost>,
+    /// What lies at each end of the deck when the deck itself is taken away.
+    /// `None` where nothing lies there at all, which is a bridge into nothing.
+    pub ground_at_start: Option<MapBridgeGround>,
+    pub ground_at_end: Option<MapBridgeGround>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MapBridgeVertex {
-    pub position: Position,
+/// The ground a bridge end rests over, as SceneMaker's own column rule finds
+/// it. Whether it can be walked on is read from the Asset, the way it is
+/// everywhere else, and whether it is within a step is an Actor's question.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapBridgeGround {
     pub elevation_meters: f32,
+    pub asset_key: String,
+    /// The Path or Bridge this ground belongs to, or `None` for Terrain.
+    pub source_id: Option<String>,
 }
 
 /// One plank of a deck. `depth_meters` runs along the span and
@@ -1617,9 +1630,13 @@ fn convert_bridges(
                 source.plank_asset_key
             )));
         };
-        if !source.elevation_meters.is_finite() || !bake.heading_degrees.is_finite() {
+        if !source.elevation_meters.is_finite()
+            || !bake.heading_degrees.is_finite()
+            || !source.width_meters.is_finite()
+            || source.width_meters <= 0.0
+        {
             return Err(WorldMapError::new(format!(
-                "Bridge '{}' has a non-finite elevation or heading",
+                "Bridge '{}' has a non-finite elevation, heading or width",
                 source.bridge_id
             )));
         }
@@ -1642,7 +1659,7 @@ fn convert_bridges(
                         source.bridge_id
                     )));
                 }
-                Ok(MapBridgeVertex {
+                Ok(MapRouteVertex {
                     position: Position::new(vertex.x_meters + offset_x, vertex.y_meters + offset_y),
                     elevation_meters: vertex.elevation_meters,
                 })
@@ -1660,6 +1677,61 @@ fn convert_bridges(
                 source.bridge_id
             )));
         }
+        // SceneMaker's contract says a bridge is straight and level, so a
+        // single elevation carries it. That is checked here rather than
+        // trusted: a deck that ever tilts must arrive as a new export version.
+        if vertices
+            .iter()
+            .any(|vertex| !level_with(vertex.elevation_meters, source.elevation_meters))
+        {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' has a corner off its own elevation",
+                source.bridge_id
+            )));
+        }
+        if bake.centerline_samples.len() < 2 || !bake.length_meters.is_finite() {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' has no centerline to walk along",
+                source.bridge_id
+            )));
+        }
+        let mut centerline_samples = Vec::with_capacity(bake.centerline_samples.len());
+        let mut previous_station: Option<f32> = None;
+        for sample in bake.centerline_samples {
+            if !sample.x_meters.is_finite()
+                || !sample.y_meters.is_finite()
+                || !level_with(sample.elevation_meters, source.elevation_meters)
+                || !level_with(sample.width_meters, source.width_meters)
+                || !sample.station_meters.is_finite()
+                || previous_station.is_some_and(|previous| sample.station_meters <= previous)
+            {
+                return Err(WorldMapError::new(format!(
+                    "Bridge '{}' has an invalid centerline sample",
+                    source.bridge_id
+                )));
+            }
+            previous_station = Some(sample.station_meters);
+            centerline_samples.push(MapRouteCenterlineSample {
+                position: Position::new(sample.x_meters + offset_x, sample.y_meters + offset_y),
+                elevation_meters: sample.elevation_meters,
+                width_meters: sample.width_meters,
+                station_meters: sample.station_meters,
+                authored_point_index: sample.authored_point_index,
+            });
+        }
+        let first_station = centerline_samples
+            .first()
+            .map(|sample| sample.station_meters)
+            .unwrap_or_default();
+        let last_station = previous_station.unwrap_or_default();
+        if !level_with(first_station, 0.0) || !level_with(last_station, bake.length_meters) {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' does not run from one end of its own span to the other",
+                source.bridge_id
+            )));
+        }
+        let ground_at_start = convert_bridge_ground(bake.ground_at_start, &source.bridge_id)?;
+        let ground_at_end = convert_bridge_ground(bake.ground_at_end, &source.bridge_id)?;
         if bake.planks.len() as u32 != source.plank_count {
             return Err(WorldMapError::new(format!(
                 "Bridge '{}' was ordered with {} planks and baked with {}",
@@ -1757,11 +1829,41 @@ fn convert_bridges(
             heading_radians: bake.heading_degrees.to_radians(),
             vertices,
             triangle_indices: bake.triangle_indices,
+            centerline_samples,
             planks,
             posts,
+            ground_at_start,
+            ground_at_end,
         });
     }
     Ok(converted)
+}
+
+/// A bridge end either rests over something or over nothing at all.
+fn convert_bridge_ground(
+    ground: Option<BridgeGroundDocument>,
+    bridge_id: &str,
+) -> Result<Option<MapBridgeGround>, WorldMapError> {
+    let Some(ground) = ground else {
+        return Ok(None);
+    };
+    if !ground.elevation_meters.is_finite() || ground.asset_key.is_empty() {
+        return Err(WorldMapError::new(format!(
+            "Bridge '{bridge_id}' names invalid ground at one of its ends"
+        )));
+    }
+    Ok(Some(MapBridgeGround {
+        elevation_meters: ground.elevation_meters,
+        asset_key: ground.asset_key,
+        source_id: ground.source_id,
+    }))
+}
+
+/// Two authored measures agree when they differ by less than the export writes.
+fn level_with(measured: f32, authored: f32) -> bool {
+    const AUTHORED_TOLERANCE_METERS: f32 = 1.0e-4;
+
+    (measured - authored).abs() <= AUTHORED_TOLERANCE_METERS
 }
 
 fn convert_route_surfaces(
@@ -2434,6 +2536,7 @@ struct BridgeDocument {
     bridge_id: String,
     plank_asset_key: String,
     anchor_asset_key: String,
+    width_meters: f32,
     elevation_meters: f32,
     plank_count: u32,
 }
@@ -2442,12 +2545,16 @@ struct BridgeDocument {
 struct BridgeBakeDocument {
     bridge_id: String,
     plank_asset_key: String,
+    length_meters: f32,
     heading_degrees: f32,
     plank_count: u32,
     vertices: Vec<BridgeVertexDocument>,
     triangle_indices: Vec<u32>,
+    centerline_samples: Vec<RouteSurfaceCenterlineSampleDocument>,
     planks: Vec<BridgePlankDocument>,
     posts: Vec<BridgePostDocument>,
+    ground_at_start: Option<BridgeGroundDocument>,
+    ground_at_end: Option<BridgeGroundDocument>,
 }
 
 #[derive(Deserialize)]
@@ -2455,6 +2562,13 @@ struct BridgeVertexDocument {
     x_meters: f32,
     y_meters: f32,
     elevation_meters: f32,
+}
+
+#[derive(Deserialize)]
+struct BridgeGroundDocument {
+    elevation_meters: f32,
+    asset_key: String,
+    source_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -4214,6 +4328,28 @@ mod tests {
             assert_eq!(bridge.surface, "wood");
             assert_eq!(bridge.vertices.len(), 4);
             assert_eq!(bridge.posts.len(), 4);
+            assert!(bridge.centerline_samples.len() >= 2);
+            assert_eq!(
+                bridge
+                    .centerline_samples
+                    .first()
+                    .map(|sample| sample.station_meters),
+                Some(0.0)
+            );
+            assert!(
+                bridge
+                    .centerline_samples
+                    .iter()
+                    .all(|sample| sample.elevation_meters == bridge.elevation_meters),
+                "a deck is level, so its centerline sits at its own elevation"
+            );
+            for ground in [&bridge.ground_at_start, &bridge.ground_at_end] {
+                let ground = ground
+                    .as_ref()
+                    .expect("both ends of an authored bridge rest over something");
+                assert!(!ground.asset_key.is_empty());
+                assert!(ground.elevation_meters.is_finite());
+            }
             assert!(!bridge.planks.is_empty());
             assert!(bridge.heading_radians.is_finite());
             assert!(

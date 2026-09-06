@@ -64,6 +64,11 @@ for source_export in "${source_exports[@]}"; do
       ($segment.operation == "additive" and $segment.clearance_above_meters == null)
       or ($segment.operation == "subtractive"
         and ($segment.clearance_above_meters | type == "number" and isfinite and . > 0));
+    def bridge_ground($ground):
+      ($ground == null)
+      or (($ground.elevation_meters | type == "number" and isfinite)
+        and ($ground.asset_key | type == "string" and length > 0)
+        and ($ground.source_id | . == null or (type == "string" and length > 0)));
     def scene_position($position; $width; $height; $step):
       ($position.x | type == "number" and . == floor and . >= 0 and . <= ($width * $step))
       and ($position.y | type == "number" and . == floor and . >= 0 and . <= ($height * $step));
@@ -72,7 +77,7 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 14
+    and .version == 15
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
@@ -213,6 +218,18 @@ for source_export in "${source_exports[@]}"; do
         and ($bake.plank_gap_meters == $bridge.plank_gap_meters))
       and (.length_meters | type == "number" and isfinite and . > 0)
       and (.heading_degrees | type == "number" and isfinite)
+      and (.centerline_samples | type == "array" and length >= 2)
+      and ([.centerline_samples[].station_meters] == ([.centerline_samples[].station_meters] | sort))
+      and (.centerline_samples[0].station_meters == 0)
+      and (.centerline_samples[-1].station_meters == $bake.length_meters)
+      and all(.centerline_samples[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.width_meters | type == "number" and isfinite and . > 0)
+        and (.station_meters | type == "number" and isfinite and . >= 0))
+      and bridge_ground(.ground_at_start)
+      and bridge_ground(.ground_at_end)
       and (.plank_depth_meters | type == "number" and isfinite and . > 0)
       and (.vertices | type == "array" and length == 4)
       and all(.vertices[];
