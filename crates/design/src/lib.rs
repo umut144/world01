@@ -713,7 +713,7 @@ mod tests {
             .find(|profile| profile.asset_key == "hammerer")
             .expect("Hammerer has an explicit traversal profile");
 
-        assert_eq!(hammerer.surfaces, ["land"]);
+        assert_eq!(hammerer.surfaces, ["land", "wood"]);
         assert_eq!(hammerer.max_step_height_meters, 0.5);
         assert_eq!(hammerer.normal_speed_max_abs_grade_percent, 25);
         assert_eq!(hammerer.passable_max_abs_grade_percent, 50);
