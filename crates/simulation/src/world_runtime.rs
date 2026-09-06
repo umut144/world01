@@ -579,7 +579,7 @@ mod tests {
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
-            "version": 11,
+            "version": 14,
             "workspace_key": "world01",
             "grid": {
                 "terrain_cell_meters": 1.0,
@@ -595,9 +595,10 @@ mod tests {
             "water_raster": [],
             "route_surface_bakes": [],
             "route_surface_cut_raster": [],
+            "bridge_bakes": [],
             "scene": {
                 "schema": "srt.scene_maker_scene",
-                "version": 12,
+                "version": 15,
                 "scene_id": "runtime_test",
                 "scene_kind": "instance",
                 "size_cells": { "width": 16, "height": 16 },
@@ -613,6 +614,7 @@ mod tests {
                 }],
                 "water_bodies": [],
                 "route_surfaces": [],
+                "bridges": [],
                 "template_definition": null,
                 "template_anchors": [{
                     "anchor_id": "template_anchor_001",

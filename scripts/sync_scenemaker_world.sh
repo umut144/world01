@@ -72,14 +72,14 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 11
+    and .version == 14
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.water_cell_meters | type == "number" and isfinite and . > 0)
     and .scene.schema == "srt.scene_maker_scene"
-    and .scene.version == 12
+    and .scene.version == 15
     and (.scene.scene_id | type == "string" and length > 0)
     and (.scene.scene_kind == "instance" or .scene.scene_kind == "template")
     and .scene.coordinate_space == "scene_local_bottom_left_y_up"
@@ -93,6 +93,8 @@ for source_export in "${source_exports[@]}"; do
     and (.scene.route_surfaces | type == "array")
     and (.route_surface_bakes | type == "array")
     and (.route_surface_cut_raster | type == "array")
+    and (.scene.bridges | type == "array")
+    and (.bridge_bakes | type == "array")
     and (if .scene.scene_kind == "instance" then
       .scene.template_definition == null
     else
@@ -106,6 +108,8 @@ for source_export in "${source_exports[@]}"; do
       and (.scene.route_surfaces | length == 0)
       and (.route_surface_bakes | length == 0)
       and (.route_surface_cut_raster | length == 0)
+      and (.scene.bridges | length == 0)
+      and (.bridge_bakes | length == 0)
     end)
     and (.asset_profiles | type == "array")
     and (([.asset_profiles[].asset_key] | unique | length) == (.asset_profiles | length))
@@ -186,6 +190,65 @@ for source_export in "${source_exports[@]}"; do
         and (.elevation_meters | type == "number" and isfinite)
         and (.width_meters | type == "number" and isfinite and . > 0)
         and (.station_meters | type == "number" and isfinite and . >= 0)))
+    and (([.scene.bridges[].bridge_id] | unique | length) == (.scene.bridges | length))
+    and ([.scene.bridges[].bridge_id] == [.bridge_bakes[].bridge_id])
+    and all(.scene.bridges[];
+      (.bridge_id | type == "string" and length > 0)
+      and (.plank_asset_key | type == "string" and length > 0)
+      and (.anchor_asset_key | type == "string" and length > 0)
+      and scene_position(.start_authoring_px; $root.scene.size_cells.width;
+        $root.scene.size_cells.height; $terrain_step)
+      and scene_position(.end_authoring_px; $root.scene.size_cells.width;
+        $root.scene.size_cells.height; $terrain_step)
+      and (.width_meters | type == "number" and isfinite and . > 0)
+      and (.elevation_meters | type == "number" and isfinite)
+      and (.plank_count | type == "number" and . == floor and . > 0)
+      and (.plank_gap_meters | type == "number" and isfinite and . >= 0))
+    and all(.bridge_bakes[]; . as $bake
+      | ([$root.scene.bridges[] | select(.bridge_id == $bake.bridge_id)]) as $authored
+      | ($authored | length) == 1
+      and ($authored[0] as $bridge
+        | ($bake.plank_asset_key == $bridge.plank_asset_key)
+        and ($bake.plank_count == $bridge.plank_count)
+        and ($bake.plank_gap_meters == $bridge.plank_gap_meters))
+      and (.length_meters | type == "number" and isfinite and . > 0)
+      and (.heading_degrees | type == "number" and isfinite)
+      and (.plank_depth_meters | type == "number" and isfinite and . > 0)
+      and (.vertices | type == "array" and length == 4)
+      and all(.vertices[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite))
+      and (.triangle_indices | type == "array" and length > 0 and ((length % 3) == 0))
+      and all(.triangle_indices[];
+        type == "number" and . == floor and . >= 0 and . < ($bake.vertices | length))
+      and (.boundary_edges | type == "array" and length == 4)
+      and all(.boundary_edges[];
+        (.start_vertex_index | type == "number" and . == floor and . >= 0
+          and . < ($bake.vertices | length))
+        and (.end_vertex_index | type == "number" and . == floor and . >= 0
+          and . < ($bake.vertices | length)))
+      and (.planks | type == "array" and length == $bake.plank_count)
+      and (([.planks[].plank_id] | unique | length) == (.planks | length))
+      and all(.planks[];
+        (.plank_id | type == "string" and length > 0)
+        and (.asset_key == $bake.plank_asset_key)
+        and (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.depth_meters | type == "number" and isfinite and . > 0)
+        and (.width_meters | type == "number" and isfinite and . > 0))
+      and (.posts | type == "array" and length == 4)
+      and (([.posts[].post_id] | unique | length) == 4)
+      and (([.posts[].corner] | unique | length) == 4)
+      and all(.posts[]; . as $post
+        | ($post.post_id | type == "string" and length > 0)
+        and ($post.corner | type == "string" and length > 0)
+        and ($post.asset_key == ($root.scene.bridges[]
+          | select(.bridge_id == $bake.bridge_id) | .anchor_asset_key))
+        and ($post.x_meters | type == "number" and isfinite)
+        and ($post.y_meters | type == "number" and isfinite)
+        and ($post.elevation_meters | type == "number" and isfinite)))
     and (([.route_surface_cut_raster[].route_surface_id] | unique | length)
       == (.route_surface_cut_raster | length))
     and (([.route_surface_cut_raster[].route_surface_id] | sort)
@@ -222,7 +285,9 @@ for source_export in "${source_exports[@]}"; do
   done < <(jq -r '
     ([.scene.terrain_cells[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
     ([.scene.route_surfaces[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
-    ([.scene.props[].asset_key] | unique | .[] | [., "props"] | @tsv)
+    ([.scene.props[].asset_key] | unique | .[] | [., "props"] | @tsv),
+    ([.scene.bridges[].plank_asset_key] | unique | .[] | [., "props"] | @tsv),
+    ([.scene.bridges[].anchor_asset_key] | unique | .[] | [., "props"] | @tsv)
   ' "$source_export")
 
   cp "$source_export" "$staging_directory/$(basename "$source_export")"

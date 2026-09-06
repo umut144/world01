@@ -10,9 +10,9 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 11;
+const FORMAT_VERSION: u32 = 14;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 12;
+const SCENE_VERSION: u32 = 15;
 const WORKSPACE_KEY: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
 
@@ -29,6 +29,7 @@ pub struct WorldMap {
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
+    bridges: Vec<MapBridge>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
@@ -82,6 +83,7 @@ impl WorldMap {
             terrain_cell_indices,
             props: scene.props,
             route_surfaces: scene.route_surfaces,
+            bridges: scene.bridges,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
             water_cell_meters: scene.water_cell_meters,
@@ -222,6 +224,11 @@ impl WorldMap {
     /// excavation that falls outside the Scene leaves its Path with no cells.
     pub fn route_surface_cuts(&self) -> &[MapRouteSurfaceCut] {
         &self.route_surface_cuts
+    }
+
+    /// The authored bridges, each already laid out by SceneMaker.
+    pub fn bridges(&self) -> &[MapBridge] {
+        &self.bridges
     }
 
     pub fn route_surface(&self, route_surface_id: &str) -> Option<&MapRouteSurface> {
@@ -520,6 +527,9 @@ impl WorldMap {
             props,
             route_surfaces: self.route_surfaces.clone(),
             route_surface_cuts: self.route_surface_cuts.clone(),
+            // A Template carries no bridges, so composition keeps the ones the
+            // Instance was authored with.
+            bridges: self.bridges.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
             water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
@@ -731,6 +741,11 @@ impl WorldTemplate {
         if !export.route_surface_bakes.is_empty() || !export.scene.route_surfaces.is_empty() {
             return Err(WorldMapError::new(
                 "a SceneMaker Template must not carry route surfaces until composition defines them",
+            ));
+        }
+        if !export.bridge_bakes.is_empty() || !export.scene.bridges.is_empty() {
+            return Err(WorldMapError::new(
+                "a SceneMaker Template must not carry bridges until composition defines them",
             ));
         }
         let Some(definition) = export.scene.template_definition.take() else {
@@ -1131,6 +1146,56 @@ pub struct MapRouteCutCell {
     pub cut_top_meters: f32,
 }
 
+/// A SceneMaker-authored bridge: a deck laid across a gap, the planks that
+/// show it, and the posts standing at its corners.
+///
+/// SceneMaker bakes the layout, so `plank_count` and the authored gap travel
+/// only as a record of what was ordered. Laying the row out a second time here
+/// is the one way this world and the authored one could drift apart.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapBridge {
+    pub bridge_id: String,
+    /// The Asset each plank shows, and the Asset standing at each corner.
+    pub plank_asset_key: String,
+    pub anchor_asset_key: String,
+    /// What the deck offers to walk on, taken from the plank Asset's profile.
+    pub surface: String,
+    pub elevation_meters: f32,
+    /// The direction the deck spans, counter-clockwise from +X.
+    pub heading_radians: f32,
+    /// The deck itself: the walking surface, as a closed authored polygon.
+    pub vertices: Vec<MapBridgeVertex>,
+    pub triangle_indices: Vec<u32>,
+    pub planks: Vec<MapBridgePlank>,
+    pub posts: Vec<MapBridgePost>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapBridgeVertex {
+    pub position: Position,
+    pub elevation_meters: f32,
+}
+
+/// One plank of a deck. `depth_meters` runs along the span and
+/// `width_meters` across it, which is the full deck width.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapBridgePlank {
+    pub plank_id: String,
+    pub position: Position,
+    pub elevation_meters: f32,
+    pub depth_meters: f32,
+    pub width_meters: f32,
+}
+
+/// One post at a corner of a deck.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapBridgePost {
+    pub post_id: String,
+    pub corner: String,
+    pub position: Position,
+    pub elevation_meters: f32,
+}
+
 /// Runtime meaning retained from one authored Path interval.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapRouteSegment {
@@ -1307,6 +1372,7 @@ struct ConvertedSceneBody {
     props: Vec<MapProp>,
     route_surfaces: Vec<MapRouteSurface>,
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
+    bridges: Vec<MapBridge>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
@@ -1320,6 +1386,7 @@ fn convert_scene_body(
         asset_profiles,
         route_surface_bakes,
         route_surface_cut_raster,
+        bridge_bakes,
         scene,
         ..
     } = export;
@@ -1328,6 +1395,7 @@ fn convert_scene_body(
         terrain_cells: source_terrain_cells,
         props: source_props,
         route_surfaces: source_route_surfaces,
+        bridges: source_bridges,
         template_anchors: source_template_anchors,
         ..
     } = scene;
@@ -1434,6 +1502,7 @@ fn convert_scene_body(
         offset_x,
         offset_y,
     )?;
+    let bridges = convert_bridges(source_bridges, bridge_bakes, &profiles, offset_x, offset_y)?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
@@ -1488,9 +1557,211 @@ fn convert_scene_body(
         props,
         route_surfaces,
         route_surface_cuts,
+        bridges,
         water_cell_meters: grid.water_cell_meters,
         template_anchors,
     })
+}
+
+/// Joins each authored bridge with the layout SceneMaker baked for it.
+///
+/// Nothing here is re-derived from the authored line: the deck, the planks and
+/// the posts are taken as delivered, and the authored counts are used only to
+/// check that what arrived is what was ordered.
+fn convert_bridges(
+    sources: Vec<BridgeDocument>,
+    bakes: Vec<BridgeBakeDocument>,
+    profiles: &HashMap<String, AssetProfileDocument>,
+    offset_x: f32,
+    offset_y: f32,
+) -> Result<Vec<MapBridge>, WorldMapError> {
+    if sources.len() != bakes.len() {
+        return Err(WorldMapError::new(
+            "authored bridges and bridge_bakes must have the same length",
+        ));
+    }
+    let mut bridge_ids = HashSet::with_capacity(sources.len());
+    let mut converted = Vec::with_capacity(sources.len());
+    for (source, bake) in sources.into_iter().zip(bakes) {
+        if source.bridge_id.is_empty() || !bridge_ids.insert(source.bridge_id.clone()) {
+            return Err(WorldMapError::new(format!(
+                "Bridge ID '{}' is empty or duplicated",
+                source.bridge_id
+            )));
+        }
+        if bake.bridge_id != source.bridge_id {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' is baked under another ID",
+                source.bridge_id
+            )));
+        }
+        if source.plank_asset_key.is_empty() || source.anchor_asset_key.is_empty() {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' does not name both of its Assets",
+                source.bridge_id
+            )));
+        }
+        if bake.plank_asset_key != source.plank_asset_key || bake.plank_count != source.plank_count
+        {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' is baked from another plank Asset or count",
+                source.bridge_id
+            )));
+        }
+        let Some(surface) = require_profile(profiles, &source.plank_asset_key)?
+            .surface
+            .clone()
+        else {
+            return Err(WorldMapError::new(format!(
+                "bridge asset '{}' has no exported surface",
+                source.plank_asset_key
+            )));
+        };
+        if !source.elevation_meters.is_finite() || !bake.heading_degrees.is_finite() {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' has a non-finite elevation or heading",
+                source.bridge_id
+            )));
+        }
+        if bake.vertices.len() != 4 {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' deck is not a quad",
+                source.bridge_id
+            )));
+        }
+        let vertices = bake
+            .vertices
+            .into_iter()
+            .map(|vertex| {
+                if !vertex.x_meters.is_finite()
+                    || !vertex.y_meters.is_finite()
+                    || !vertex.elevation_meters.is_finite()
+                {
+                    return Err(WorldMapError::new(format!(
+                        "Bridge '{}' deck has a non-finite corner",
+                        source.bridge_id
+                    )));
+                }
+                Ok(MapBridgeVertex {
+                    position: Position::new(vertex.x_meters + offset_x, vertex.y_meters + offset_y),
+                    elevation_meters: vertex.elevation_meters,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if bake.triangle_indices.is_empty()
+            || bake.triangle_indices.len() % 3 != 0
+            || bake
+                .triangle_indices
+                .iter()
+                .any(|index| *index as usize >= vertices.len())
+        {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' deck has invalid triangles",
+                source.bridge_id
+            )));
+        }
+        if bake.planks.len() as u32 != source.plank_count {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' was ordered with {} planks and baked with {}",
+                source.bridge_id,
+                source.plank_count,
+                bake.planks.len()
+            )));
+        }
+        let mut plank_ids = HashSet::with_capacity(bake.planks.len());
+        let mut planks = Vec::with_capacity(bake.planks.len());
+        for plank in bake.planks {
+            if plank.plank_id.is_empty() || !plank_ids.insert(plank.plank_id.clone()) {
+                return Err(WorldMapError::new(format!(
+                    "plank ID '{}' is empty or duplicated",
+                    plank.plank_id
+                )));
+            }
+            if plank.asset_key != source.plank_asset_key {
+                return Err(WorldMapError::new(format!(
+                    "plank '{}' shows another Asset than its Bridge",
+                    plank.plank_id
+                )));
+            }
+            if !plank.x_meters.is_finite()
+                || !plank.y_meters.is_finite()
+                || !plank.elevation_meters.is_finite()
+                || !plank.depth_meters.is_finite()
+                || plank.depth_meters <= 0.0
+                || !plank.width_meters.is_finite()
+                || plank.width_meters <= 0.0
+            {
+                return Err(WorldMapError::new(format!(
+                    "plank '{}' has invalid placement or size",
+                    plank.plank_id
+                )));
+            }
+            planks.push(MapBridgePlank {
+                plank_id: plank.plank_id,
+                position: Position::new(plank.x_meters + offset_x, plank.y_meters + offset_y),
+                elevation_meters: plank.elevation_meters,
+                depth_meters: plank.depth_meters,
+                width_meters: plank.width_meters,
+            });
+        }
+        let mut post_ids = HashSet::with_capacity(bake.posts.len());
+        let mut corners = HashSet::with_capacity(bake.posts.len());
+        let mut posts = Vec::with_capacity(bake.posts.len());
+        for post in bake.posts {
+            if post.post_id.is_empty() || !post_ids.insert(post.post_id.clone()) {
+                return Err(WorldMapError::new(format!(
+                    "post ID '{}' is empty or duplicated",
+                    post.post_id
+                )));
+            }
+            if post.corner.is_empty() || !corners.insert(post.corner.clone()) {
+                return Err(WorldMapError::new(format!(
+                    "post '{}' repeats a corner of its Bridge",
+                    post.post_id
+                )));
+            }
+            if post.asset_key != source.anchor_asset_key {
+                return Err(WorldMapError::new(format!(
+                    "post '{}' shows another Asset than its Bridge",
+                    post.post_id
+                )));
+            }
+            if !post.x_meters.is_finite()
+                || !post.y_meters.is_finite()
+                || !post.elevation_meters.is_finite()
+            {
+                return Err(WorldMapError::new(format!(
+                    "post '{}' has a non-finite placement",
+                    post.post_id
+                )));
+            }
+            posts.push(MapBridgePost {
+                post_id: post.post_id,
+                corner: post.corner,
+                position: Position::new(post.x_meters + offset_x, post.y_meters + offset_y),
+                elevation_meters: post.elevation_meters,
+            });
+        }
+        if posts.len() != vertices.len() {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' does not carry a post at every deck corner",
+                source.bridge_id
+            )));
+        }
+        converted.push(MapBridge {
+            bridge_id: source.bridge_id,
+            plank_asset_key: source.plank_asset_key,
+            anchor_asset_key: source.anchor_asset_key,
+            surface,
+            elevation_meters: source.elevation_meters,
+            heading_radians: bake.heading_degrees.to_radians(),
+            vertices,
+            triangle_indices: bake.triangle_indices,
+            planks,
+            posts,
+        });
+    }
+    Ok(converted)
 }
 
 fn convert_route_surfaces(
@@ -2154,7 +2425,57 @@ struct ExportDocument {
     water_raster: Vec<serde::de::IgnoredAny>,
     route_surface_bakes: Vec<RouteSurfaceBakeDocument>,
     route_surface_cut_raster: Vec<RouteSurfaceCutRasterDocument>,
+    bridge_bakes: Vec<BridgeBakeDocument>,
     scene: SceneDocument,
+}
+
+#[derive(Deserialize)]
+struct BridgeDocument {
+    bridge_id: String,
+    plank_asset_key: String,
+    anchor_asset_key: String,
+    elevation_meters: f32,
+    plank_count: u32,
+}
+
+#[derive(Deserialize)]
+struct BridgeBakeDocument {
+    bridge_id: String,
+    plank_asset_key: String,
+    heading_degrees: f32,
+    plank_count: u32,
+    vertices: Vec<BridgeVertexDocument>,
+    triangle_indices: Vec<u32>,
+    planks: Vec<BridgePlankDocument>,
+    posts: Vec<BridgePostDocument>,
+}
+
+#[derive(Deserialize)]
+struct BridgeVertexDocument {
+    x_meters: f32,
+    y_meters: f32,
+    elevation_meters: f32,
+}
+
+#[derive(Deserialize)]
+struct BridgePlankDocument {
+    plank_id: String,
+    asset_key: String,
+    x_meters: f32,
+    y_meters: f32,
+    elevation_meters: f32,
+    depth_meters: f32,
+    width_meters: f32,
+}
+
+#[derive(Deserialize)]
+struct BridgePostDocument {
+    post_id: String,
+    corner: String,
+    asset_key: String,
+    x_meters: f32,
+    y_meters: f32,
+    elevation_meters: f32,
 }
 
 #[derive(Deserialize)]
@@ -2214,6 +2535,7 @@ struct SceneDocument {
     props: Vec<PropDocument>,
     water_bodies: Vec<serde::de::IgnoredAny>,
     route_surfaces: Vec<RouteSurfaceDocument>,
+    bridges: Vec<BridgeDocument>,
     template_definition: Option<TemplateDefinitionDocument>,
     template_anchors: Vec<TemplateAnchorDocument>,
 }
@@ -2379,6 +2701,7 @@ fn export_document(
             "water_raster": [],
             "route_surface_bakes": [],
             "route_surface_cut_raster": [],
+            "bridge_bakes": [],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -2390,6 +2713,7 @@ fn export_document(
                 "props": [{props}],
                 "water_bodies": [],
                 "route_surfaces": [],
+                "bridges": [],
                 "template_definition": null,
                 "template_anchors": [{anchors}],
                 "default_elevation_meters": 1.0
@@ -3875,6 +4199,49 @@ mod tests {
 
         assert!(WorldMap::from_source(&outside, TEST_SCENE_ID).is_err());
         assert!(WorldMap::from_source(&unprofiled, TEST_SCENE_ID).is_err());
+    }
+
+    #[test]
+    fn the_embedded_world_carries_its_authored_bridges() {
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let half_width = map.width_meters() * 0.5;
+        let half_height = map.height_meters() * 0.5;
+
+        assert_eq!(map.bridges().len(), 2);
+        for bridge in map.bridges() {
+            assert_eq!(bridge.plank_asset_key, "plank");
+            assert_eq!(bridge.anchor_asset_key, "post");
+            assert_eq!(bridge.surface, "wood");
+            assert_eq!(bridge.vertices.len(), 4);
+            assert_eq!(bridge.posts.len(), 4);
+            assert!(!bridge.planks.is_empty());
+            assert!(bridge.heading_radians.is_finite());
+            assert!(
+                bridge
+                    .triangle_indices
+                    .iter()
+                    .all(|index| (*index as usize) < bridge.vertices.len())
+            );
+            assert!(
+                bridge
+                    .planks
+                    .iter()
+                    .all(|plank| plank.depth_meters > 0.0 && plank.width_meters > 0.0),
+                "every plank arrives with the two measures it is drawn from"
+            );
+            for position in bridge
+                .vertices
+                .iter()
+                .map(|vertex| vertex.position)
+                .chain(bridge.planks.iter().map(|plank| plank.position))
+                .chain(bridge.posts.iter().map(|post| post.position))
+            {
+                assert!(
+                    position.x.abs() <= half_width && position.y.abs() <= half_height,
+                    "a bridge arrives in the same centred frame as the rest of the world"
+                );
+            }
+        }
     }
 
     #[test]
