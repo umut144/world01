@@ -257,11 +257,18 @@ impl WorldCollisionGeometryCatalog {
     ) -> Result<Self, RegionGeometryError> {
         let mut regions = Vec::new();
         for placement in map.props() {
+            // A placement whose Asset is not here is a broken world, not an
+            // empty one. Passing over it would leave the Prop standing in the
+            // picture while it blocks nothing, which is exactly the failure a
+            // rename upstream produces.
             let Some(manifest) = content
                 .prop(&placement.asset_key)
                 .or_else(|| content.terrain(&placement.asset_key))
             else {
-                continue;
+                return Err(RegionGeometryError(format!(
+                    "'{}' places Asset '{}', which this content does not carry",
+                    placement.instance_id, placement.asset_key
+                )));
             };
             for region in &manifest.regions {
                 if region.role != "collision" {

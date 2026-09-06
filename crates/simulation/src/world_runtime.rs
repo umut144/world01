@@ -576,6 +576,22 @@ mod tests {
         assert_eq!(app.world().get::<WorldPosition>(actor), Some(&separated));
     }
 
+    #[test]
+    fn a_world_that_places_an_asset_the_content_does_not_carry_is_refused() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        // The Asset is renamed in its profile and in its placement alike, so
+        // the map stays well formed and only the content lacks the Asset.
+        let stranger =
+            single_ankh_instance().replace(r#""asset_key": "ankh""#, r#""asset_key": "obelisk""#);
+        let map = WorldMap::from_source(&stranger, "runtime_test")
+            .expect("the map itself is well formed");
+
+        assert!(
+            WorldCollisionGeometryCatalog::from_content_and_map(&content, &map).is_err(),
+            "a Prop whose Asset is missing is reported, not passed over"
+        );
+    }
+
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
