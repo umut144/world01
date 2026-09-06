@@ -31,6 +31,21 @@ command -v jq >/dev/null 2>&1 || fail 'jq is required.'
 [[ -d "$source_directory" ]] || fail "export directory not found: $source_directory"
 [[ -f "$asset_catalog" ]] || fail "world01 asset catalog not found: $asset_catalog"
 
+# The Keys that only exist as members of a Palette. A map names the Palette, so
+# that surface and Placement Rank attach to the choice and not to one of the
+# Assets it chooses between.
+palette_variants=""
+while IFS= read -r asset_manifest; do
+  variants="$(jq -r '
+    select(.asset_category == "palette")
+    | .asset_type as $asset_type
+    | .variants[]
+    | [., $asset_type]
+    | @tsv
+  ' "$asset_manifest")" || fail "cannot read asset manifest: $asset_manifest"
+  [[ -z "$variants" ]] || palette_variants+="$variants"$'\n'
+done < <(find "$project_root/assets" -type f -name 'manifest.json' | LC_ALL=C sort)
+
 source_exports=()
 while IFS= read -r source_export; do
   source_exports+=("$source_export")
@@ -201,6 +216,9 @@ for source_export in "${source_exports[@]}"; do
       any(.assets[]; .asset_key == $key and .asset_type == $type)
     ' "$asset_catalog" >/dev/null \
       || fail "asset '$asset_key' is not catalogued as '$expected_type' in world01"
+    if printf '%s' "$palette_variants" | grep -Fqx "$asset_key"$'\t'"$expected_type"; then
+      fail "asset '$asset_key' is a member of a Palette; a map names the Palette itself, so that surface and Placement Rank attach to the choice"
+    fi
   done < <(jq -r '
     ([.scene.terrain_cells[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
     ([.scene.route_surfaces[].asset_key] | unique | .[] | [., "terrain"] | @tsv),
