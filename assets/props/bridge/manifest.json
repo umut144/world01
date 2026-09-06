@@ -26,10 +26,11 @@
 					1.0
 				]
 			},
-			"name": "rope_post",
+			"name": "post",
 			"parent_component_id": null,
 			"projection_depth_meters": 0.1,
-			"source_asset_key": "rope_post",
+			"role": "post",
+			"source_asset_key": "post",
 			"z_index": 0
 		},
 		{
@@ -53,6 +54,7 @@
 			"name": "plank",
 			"parent_component_id": null,
 			"projection_depth_meters": 0.1,
+			"role": "plank",
 			"source_asset_key": "plank",
 			"z_index": 0
 		}
@@ -72,7 +74,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 19,
+	"schema_version": 20,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

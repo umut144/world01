@@ -2505,7 +2505,7 @@
 					]
 				]
 			},
-			"name": "body",
+			"name": "main",
 			"parent_component_id": null,
 			"projection_depth_corners": [
 				{
@@ -2542,7 +2542,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 19,
+	"schema_version": 20,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

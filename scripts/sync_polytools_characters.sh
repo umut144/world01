@@ -130,7 +130,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
     --arg type "$asset_type" \
     --slurpfile catalog "$source_catalog" \
     '
-      .schema_version == 19
+      .schema_version == 20
       and .asset_key == $key
       and .asset_type == $type
       and (.regions | type == "array")

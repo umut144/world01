@@ -23,10 +23,10 @@
     },
     {
       "asset_category": "single",
-      "asset_key": "rope_post",
+      "asset_key": "post",
       "asset_type": "props",
-      "display_name": "Rope Post",
-      "runtime_package": "PolyToolsRuntimeExports/rope_post/manifest.json"
+      "display_name": "Post",
+      "runtime_package": "PolyToolsRuntimeExports/post/manifest.json"
     },
     {
       "asset_category": "single",

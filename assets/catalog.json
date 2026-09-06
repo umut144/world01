@@ -135,6 +135,13 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_key": "post",
+			"asset_type": "props",
+			"display_name": "Post",
+			"runtime_package": "PolyToolsRuntimeExports/post/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "potion",
 			"asset_type": "items",
 			"display_name": "Potion",
@@ -160,13 +167,6 @@
 			"asset_type": "character",
 			"display_name": "Rogue",
 			"runtime_package": "PolyToolsRuntimeExports/rogue/manifest.json"
-		},
-		{
-			"asset_category": "single",
-			"asset_key": "rope_post",
-			"asset_type": "props",
-			"display_name": "Rope Post",
-			"runtime_package": "PolyToolsRuntimeExports/rope_post/manifest.json"
 		},
 		{
 			"asset_category": "single",

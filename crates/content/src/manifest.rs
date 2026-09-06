@@ -14,7 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 19;
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 20;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
@@ -828,9 +828,7 @@ fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> 
         ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
         ("props", "bridge") => Some(include_str!("../../../assets/props/bridge/manifest.json")),
         ("props", "plank") => Some(include_str!("../../../assets/props/plank/manifest.json")),
-        ("props", "rope_post") => Some(include_str!(
-            "../../../assets/props/rope_post/manifest.json"
-        )),
+        ("props", "post") => Some(include_str!("../../../assets/props/post/manifest.json")),
         ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
         ("terrain", "grass") => Some(include_str!("../../../assets/terrain/grass/manifest.json")),
         ("terrain", "grass01") => Some(include_str!(

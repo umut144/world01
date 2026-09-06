@@ -83,7 +83,7 @@
 					1.0
 				]
 			},
-			"name": "body_horizontal",
+			"name": "main_horizontal",
 			"parent_component_id": null,
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -164,7 +164,7 @@
 					1.0
 				]
 			},
-			"name": "body_vertical",
+			"name": "main_vertical",
 			"parent_component_id": null,
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -186,7 +186,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 19,
+	"schema_version": 20,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

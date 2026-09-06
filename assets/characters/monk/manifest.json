@@ -19796,7 +19796,7 @@
 			"source_component_id": "component_106"
 		}
 	],
-	"schema_version": 19,
+	"schema_version": 20,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

@@ -1,6 +1,6 @@
 {
 	"asset_category": "single",
-	"asset_key": "rope_post",
+	"asset_key": "post",
 	"asset_pivot": [
 		0.0,
 		0.0
@@ -1444,7 +1444,7 @@
 					]
 				]
 			},
-			"name": "body",
+			"name": "main",
 			"parent_component_id": null,
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -1461,7 +1461,7 @@
 		"x_axis": "right",
 		"y_axis": "up"
 	},
-	"display_name": "Rope Post",
+	"display_name": "Post",
 	"presentation": {
 		"authored_facing": "neutral"
 	},
@@ -1500,7 +1500,7 @@
 			]
 		}
 	],
-	"schema_version": 19,
+	"schema_version": 20,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
