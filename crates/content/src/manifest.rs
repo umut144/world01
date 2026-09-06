@@ -14,7 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 16;
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 19;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
@@ -79,6 +79,12 @@ impl RuntimeContent {
             let mut manifest: RuntimeManifest = serde_json::from_str(source).map_err(|error| {
                 ContentError::new(format!("cannot parse {}: {error}", asset.asset_key))
             })?;
+            if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
+                return Err(ContentError::new(format!(
+                    "{} uses unsupported schema {}",
+                    manifest.asset_key, manifest.schema_version
+                )));
+            }
             resolve_asset_references(&mut manifest, &source_cache)?;
             if asset.asset_type == "character" {
                 validate_character_manifest(&manifest, &asset.asset_key)?;
@@ -103,6 +109,8 @@ impl RuntimeContent {
                 "character catalog contains no loadable character manifests",
             ));
         }
+        validate_palette_variants(&props)?;
+        validate_palette_variants(&terrain)?;
         let hammer = hammer.ok_or_else(|| ContentError::new("catalog is missing Hammer"))?;
         Ok(Self {
             characters,
@@ -141,6 +149,25 @@ impl RuntimeContent {
     pub fn terrain(&self, asset_key: &str) -> Option<&RuntimeManifest> {
         self.terrain.get(asset_key)
     }
+
+    /// The terrain Asset that a cell actually draws.
+    ///
+    /// A Single draws itself. A Palette draws one of the interchangeable
+    /// Singles it names, and which one is a plain function of the cell's
+    /// coordinates: every client derives the same choice, nobody sends it and
+    /// nothing stores it, so the world looks the same everywhere and again
+    /// after a rebuild.
+    pub fn terrain_variant(&self, asset_key: &str, x: u32, y: u32) -> Option<&RuntimeManifest> {
+        let manifest = self.terrain.get(asset_key)?;
+        let RuntimeComposition::Palette { variants } = &manifest.composition else {
+            return Some(manifest);
+        };
+        let count = u32::try_from(variants.len()).ok()?.max(1);
+        let variant = variants.get((cell_variant_mix(x, y) % count) as usize)?;
+        self.terrain
+            .get(variant.as_str())
+            .filter(|chosen| matches!(chosen.composition, RuntimeComposition::Single))
+    }
 }
 
 #[derive(Deserialize)]
@@ -171,19 +198,104 @@ pub struct RuntimePresentation {
     pub authored_facing: AuthoredFacing,
 }
 
+/// What an Asset is made of.
+///
+/// PolyTools schema 19 sorts every Asset into one of three kinds, and only a
+/// Palette carries `variants`. Keeping the two together in one value makes a
+/// Single that names variants, and a Palette that names none, unrepresentable
+/// past this boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RuntimeComposition {
+    /// One Asset that draws itself.
+    Single,
+    /// One Asset assembled from other Assets, each named by an Asset Reference.
+    Set,
+    /// A choice between interchangeable Single Assets. Carries no geometry.
+    Palette { variants: Vec<String> },
+}
+
 #[derive(Clone, Deserialize)]
+#[serde(try_from = "RawRuntimeManifest")]
 pub struct RuntimeManifest {
     pub schema_version: u32,
     pub asset_key: String,
     pub asset_type: String,
     pub asset_pivot: [f32; 2],
-    #[serde(default)]
+    pub composition: RuntimeComposition,
     pub presentation: RuntimePresentation,
     pub components: Vec<RuntimeComponent>,
-    #[serde(default)]
     pub attachment_frames: Vec<RuntimeAttachmentFrame>,
-    #[serde(default)]
     pub regions: Vec<RuntimeRegion>,
+}
+
+impl RuntimeManifest {
+    /// The Singles a Palette chooses between; empty for every other Asset.
+    pub fn variants(&self) -> &[String] {
+        match &self.composition {
+            RuntimeComposition::Palette { variants } => variants,
+            RuntimeComposition::Single | RuntimeComposition::Set => &[],
+        }
+    }
+
+    pub fn is_palette(&self) -> bool {
+        matches!(self.composition, RuntimeComposition::Palette { .. })
+    }
+}
+
+#[derive(Deserialize)]
+struct RawRuntimeManifest {
+    schema_version: u32,
+    asset_key: String,
+    asset_type: String,
+    asset_category: String,
+    asset_pivot: [f32; 2],
+    #[serde(default)]
+    presentation: RuntimePresentation,
+    components: Vec<RuntimeComponent>,
+    #[serde(default)]
+    variants: Option<Vec<String>>,
+    #[serde(default)]
+    attachment_frames: Vec<RuntimeAttachmentFrame>,
+    #[serde(default)]
+    regions: Vec<RuntimeRegion>,
+}
+
+impl TryFrom<RawRuntimeManifest> for RuntimeManifest {
+    type Error = String;
+
+    fn try_from(raw: RawRuntimeManifest) -> Result<Self, Self::Error> {
+        let composition = match (raw.asset_category.as_str(), raw.variants) {
+            ("single", None) => RuntimeComposition::Single,
+            ("set", None) => RuntimeComposition::Set,
+            ("palette", Some(variants)) => RuntimeComposition::Palette { variants },
+            ("palette", None) => {
+                return Err(format!("Palette {} names no variants", raw.asset_key));
+            }
+            ("single" | "set", Some(_)) => {
+                return Err(format!(
+                    "{} is a {} and must not name variants",
+                    raw.asset_key, raw.asset_category
+                ));
+            }
+            (category, _) => {
+                return Err(format!(
+                    "{} has unknown asset category {category}",
+                    raw.asset_key
+                ));
+            }
+        };
+        Ok(Self {
+            schema_version: raw.schema_version,
+            asset_key: raw.asset_key,
+            asset_type: raw.asset_type,
+            asset_pivot: raw.asset_pivot,
+            composition,
+            presentation: raw.presentation,
+            components: raw.components,
+            attachment_frames: raw.attachment_frames,
+            regions: raw.regions,
+        })
+    }
 }
 
 #[derive(Clone, Deserialize)]
@@ -197,16 +309,6 @@ pub struct RuntimeAttachmentFrame {
 pub struct RuntimeFrameTransform {
     pub position: [f32; 2],
     pub rotation_radians: f32,
-}
-
-#[derive(Clone, Deserialize)]
-struct RuntimeSymbolManifest {
-    #[serde(alias = "asset_key")]
-    key: String,
-    #[serde(rename = "type", alias = "asset_type")]
-    asset_kind: String,
-    #[serde(default)]
-    components: Vec<RuntimeComponent>,
 }
 
 #[derive(Clone, Deserialize)]
@@ -336,17 +438,25 @@ fn resolve_asset_references(
         let source = sources
             .get(source_key)
             .ok_or_else(|| ContentError::new(format!("missing referenced asset {source_key}")))?;
-        let symbol: RuntimeSymbolManifest = serde_json::from_str(source).map_err(|error| {
+        let referenced: RuntimeManifest = serde_json::from_str(source).map_err(|error| {
             ContentError::new(format!(
                 "cannot parse referenced asset {source_key}: {error}"
             ))
         })?;
-        if symbol.key != source_key || symbol.asset_kind != "symbols" {
+        if referenced.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
             return Err(ContentError::new(format!(
-                "referenced asset {source_key} is not a symbols manifest"
+                "referenced asset {source_key} uses unsupported schema {}",
+                referenced.schema_version
             )));
         }
-        component.referenced_components = symbol.components;
+        if referenced.asset_key != source_key
+            || !matches!(referenced.composition, RuntimeComposition::Single)
+        {
+            return Err(ContentError::new(format!(
+                "referenced asset {source_key} is not a Single Asset"
+            )));
+        }
+        component.referenced_components = referenced.components;
     }
     Ok(())
 }
@@ -355,13 +465,10 @@ fn validate_character_manifest(
     manifest: &RuntimeManifest,
     expected_key: &str,
 ) -> Result<(), ContentError> {
-    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION {
-        return Err(ContentError::new(format!(
-            "{} uses unsupported schema {}",
-            manifest.asset_key, manifest.schema_version
-        )));
-    }
-    if manifest.asset_key != expected_key || manifest.asset_type != "character" {
+    if manifest.asset_key != expected_key
+        || manifest.asset_type != "character"
+        || !matches!(manifest.composition, RuntimeComposition::Single)
+    {
         return Err(ContentError::new(
             "manifest asset key does not match its package",
         ));
@@ -385,13 +492,11 @@ fn validate_character_manifest(
 }
 
 fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if manifest.schema_version != RUNTIME_MANIFEST_SCHEMA_VERSION
-        || manifest.asset_key != HAMMER_ASSET_KEY
+    if manifest.asset_key != HAMMER_ASSET_KEY
         || manifest.asset_type != "weapons"
+        || !matches!(manifest.composition, RuntimeComposition::Single)
     {
-        return Err(ContentError::new(
-            "Hammer must be a schema-16 weapons manifest",
-        ));
+        return Err(ContentError::new("Hammer must be a single weapons Asset"));
     }
     validate_asset_contents(manifest)?;
     attachment_frame(manifest, WEAPON_GRIP_ROLE)?;
@@ -425,7 +530,16 @@ pub(crate) fn attachment_frame<'a>(
 }
 
 fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentError> {
-    if !finite_pair(manifest.asset_pivot) || manifest.components.is_empty() {
+    if !finite_pair(manifest.asset_pivot) {
+        return Err(ContentError::new(format!(
+            "{} has invalid asset metadata",
+            manifest.asset_key
+        )));
+    }
+    if let RuntimeComposition::Palette { variants } = &manifest.composition {
+        return validate_palette_contents(manifest, variants);
+    }
+    if manifest.components.is_empty() {
         return Err(ContentError::new(format!(
             "{} has invalid asset metadata",
             manifest.asset_key
@@ -584,6 +698,61 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
     Ok(())
 }
 
+/// A Palette is a choice, not a drawing: it names Singles and carries nothing
+/// that could be drawn, attached to, or collided with.
+fn validate_palette_contents(
+    manifest: &RuntimeManifest,
+    variants: &[String],
+) -> Result<(), ContentError> {
+    let unique = variants.iter().collect::<BTreeSet<_>>();
+    if variants.is_empty()
+        || unique.len() != variants.len()
+        || variants.iter().any(|variant| variant.is_empty())
+        || !manifest.components.is_empty()
+        || !manifest.attachment_frames.is_empty()
+        || !manifest.regions.is_empty()
+    {
+        return Err(ContentError::new(format!(
+            "{} is not a usable Palette",
+            manifest.asset_key
+        )));
+    }
+    Ok(())
+}
+
+/// Every variant a Palette names has to be a loaded Single of the same Asset
+/// type, so choosing one can never end in an empty drawing.
+fn validate_palette_variants(
+    assets: &HashMap<String, RuntimeManifest>,
+) -> Result<(), ContentError> {
+    for manifest in assets.values() {
+        for variant in manifest.variants() {
+            let usable = assets.get(variant.as_str()).is_some_and(|candidate| {
+                matches!(candidate.composition, RuntimeComposition::Single)
+                    && candidate.asset_type == manifest.asset_type
+            });
+            if !usable {
+                return Err(ContentError::new(format!(
+                    "Palette {} names {variant}, which is not a loaded single {} Asset",
+                    manifest.asset_key, manifest.asset_type
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Mixes a cell's coordinates into the index of the Palette member it shows.
+///
+/// Plain arithmetic on the coordinates alone - no randomness, no session salt,
+/// nothing kept - so two clients looking at the same cell see the same Asset.
+fn cell_variant_mix(x: u32, y: u32) -> u32 {
+    let mut mixed = x.wrapping_mul(0x9E37_79B1) ^ y.wrapping_mul(0x85EB_CA6B);
+    mixed ^= mixed >> 15;
+    mixed = mixed.wrapping_mul(0x2545_F491);
+    mixed ^ (mixed >> 13)
+}
+
 fn validate_mesh_parts(
     vertices: &[[f32; 2]],
     indices: &[u32],
@@ -657,9 +826,29 @@ fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> 
             "../../../assets/characters/wizard/manifest.json"
         )),
         ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
+        ("props", "bridge") => Some(include_str!("../../../assets/props/bridge/manifest.json")),
+        ("props", "plank") => Some(include_str!("../../../assets/props/plank/manifest.json")),
+        ("props", "rope_post") => Some(include_str!(
+            "../../../assets/props/rope_post/manifest.json"
+        )),
         ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
         ("terrain", "grass") => Some(include_str!("../../../assets/terrain/grass/manifest.json")),
+        ("terrain", "grass01") => Some(include_str!(
+            "../../../assets/terrain/grass01/manifest.json"
+        )),
+        ("terrain", "grass02") => Some(include_str!(
+            "../../../assets/terrain/grass02/manifest.json"
+        )),
+        ("terrain", "grass03") => Some(include_str!(
+            "../../../assets/terrain/grass03/manifest.json"
+        )),
+        ("terrain", "grass04") => Some(include_str!(
+            "../../../assets/terrain/grass04/manifest.json"
+        )),
         ("terrain", "river") => Some(include_str!("../../../assets/terrain/river/manifest.json")),
+        ("terrain", "river01") => Some(include_str!(
+            "../../../assets/terrain/river01/manifest.json"
+        )),
         ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
         ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
         ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),
@@ -711,5 +900,91 @@ mod tests {
                 .iter()
                 .all(|corner| { !corner.point_id.is_empty() && finite_pair(corner.position) })
         );
+    }
+
+    #[test]
+    fn embedded_grass_is_a_palette_over_loaded_single_assets() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+        let grass = content.terrain("grass").expect("grass is catalogued");
+
+        assert!(grass.is_palette());
+        assert!(grass.components.is_empty());
+        assert!(grass.regions.is_empty());
+        assert!(!grass.variants().is_empty());
+        for variant in grass.variants() {
+            let single = content
+                .terrain(variant)
+                .expect("a Palette only names loaded Assets");
+            assert_eq!(single.composition, RuntimeComposition::Single);
+            assert_eq!(single.asset_type, grass.asset_type);
+        }
+    }
+
+    #[test]
+    fn a_palette_cell_resolves_to_one_single_and_keeps_resolving_to_it() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+        let grass = content.terrain("grass").expect("grass is catalogued");
+        let mut chosen_keys = BTreeSet::new();
+
+        for y in 0..16 {
+            for x in 0..16 {
+                let chosen = content
+                    .terrain_variant("grass", x, y)
+                    .expect("a Palette cell resolves to a Single");
+                assert_eq!(chosen.composition, RuntimeComposition::Single);
+                assert!(!chosen.components.is_empty());
+                assert!(grass.variants().contains(&chosen.asset_key));
+                let again = content
+                    .terrain_variant("grass", x, y)
+                    .expect("the same cell resolves again");
+                assert_eq!(chosen.asset_key, again.asset_key);
+                chosen_keys.insert(chosen.asset_key.clone());
+            }
+        }
+
+        assert_eq!(chosen_keys.len(), grass.variants().len());
+    }
+
+    #[test]
+    fn a_single_terrain_cell_resolves_to_itself() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+
+        assert_eq!(
+            content
+                .terrain_variant("grass01", 7, 3)
+                .map(|manifest| manifest.asset_key.as_str()),
+            Some("grass01")
+        );
+    }
+
+    #[test]
+    fn a_single_cannot_name_variants_and_a_palette_cannot_omit_them() {
+        assert!(
+            serde_json::from_str::<RuntimeManifest>(&probe_manifest(
+                "single",
+                ",\"variants\":[\"grass01\"]"
+            ))
+            .is_err()
+        );
+        assert!(serde_json::from_str::<RuntimeManifest>(&probe_manifest("palette", "")).is_err());
+
+        let palette: RuntimeManifest =
+            serde_json::from_str(&probe_manifest("palette", ",\"variants\":[\"grass01\"]"))
+                .expect("a Palette that names variants parses");
+
+        assert_eq!(
+            palette.composition,
+            RuntimeComposition::Palette {
+                variants: vec!["grass01".to_owned()],
+            }
+        );
+    }
+
+    fn probe_manifest(asset_category: &str, variants: &str) -> String {
+        format!(
+            "{{\"schema_version\":{RUNTIME_MANIFEST_SCHEMA_VERSION},\"asset_key\":\"probe\",\
+             \"asset_type\":\"terrain\",\"asset_category\":\"{asset_category}\",\
+             \"asset_pivot\":[0.0,0.0],\"components\":[]{variants}}}"
+        )
     }
 }

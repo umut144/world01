@@ -1,19 +1,42 @@
 {
   "assets": [
     {
+      "asset_category": "single",
       "asset_key": "ankh",
       "asset_type": "props",
       "display_name": "Ankh",
       "runtime_package": "PolyToolsRuntimeExports/ankh/manifest.json"
     },
     {
+      "asset_category": "set",
+      "asset_key": "bridge",
+      "asset_type": "props",
+      "display_name": "Bridge",
+      "runtime_package": "PolyToolsRuntimeExports/bridge/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "plank",
+      "asset_type": "props",
+      "display_name": "Plank",
+      "runtime_package": "PolyToolsRuntimeExports/plank/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "rope_post",
+      "asset_type": "props",
+      "display_name": "Rope Post",
+      "runtime_package": "PolyToolsRuntimeExports/rope_post/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_key": "tree",
       "asset_type": "props",
       "display_name": "Tree",
       "runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

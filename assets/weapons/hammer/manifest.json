@@ -1,4 +1,5 @@
 {
+	"asset_category": "single",
 	"asset_key": "hammer",
 	"asset_pivot": [
 		0.0,
@@ -7310,7 +7311,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 16,
+	"schema_version": 19,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

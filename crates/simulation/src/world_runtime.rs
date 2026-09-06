@@ -524,7 +524,19 @@ mod tests {
                 })
             })
             .expect("the Template adds collision geometry");
-        let start = WorldPosition::new(new_region.position.x, new_region.position.y + 0.5, 1.0);
+        // Stand in the middle of the new collider rather than a fixed distance
+        // from its placement, so the test asks about separation and not about
+        // how tall the authored Asset happens to be.
+        let vertices = &new_region.component.geometry().vertices;
+        let inside = vertices
+            .iter()
+            .fold(Vec2::ZERO, |sum, vertex| sum + *vertex)
+            / vertices.len() as f32;
+        let start = WorldPosition::new(
+            new_region.position.x + inside.x,
+            new_region.position.y + inside.y,
+            1.0,
+        );
 
         let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&world.content)
             .expect("embedded Character collision geometry is valid");

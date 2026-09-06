@@ -1,121 +1,203 @@
 {
 	"assets": [
 		{
+			"asset_category": "single",
 			"asset_key": "ankh",
 			"asset_type": "props",
 			"display_name": "Ankh",
 			"runtime_package": "PolyToolsRuntimeExports/ankh/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "archerf",
 			"asset_type": "character",
 			"display_name": "ArcherF",
 			"runtime_package": "PolyToolsRuntimeExports/archerf/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "barde",
 			"asset_type": "character",
 			"display_name": "Barde",
 			"runtime_package": "PolyToolsRuntimeExports/barde/manifest.json"
 		},
 		{
+			"asset_category": "set",
+			"asset_key": "bridge",
+			"asset_type": "props",
+			"display_name": "Bridge",
+			"runtime_package": "PolyToolsRuntimeExports/bridge/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "chantres",
 			"asset_type": "character",
 			"display_name": "Chantres",
 			"runtime_package": "PolyToolsRuntimeExports/chantres/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "glavier",
 			"asset_type": "character",
 			"display_name": "Glavier",
 			"runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
 		},
 		{
+			"asset_category": "palette",
 			"asset_key": "grass",
 			"asset_type": "terrain",
 			"display_name": "Grass",
 			"runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
 		},
 		{
+			"asset_category": "single",
+			"asset_key": "grass01",
+			"asset_type": "terrain",
+			"display_name": "Grass01",
+			"runtime_package": "PolyToolsRuntimeExports/grass01/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_key": "grass02",
+			"asset_type": "terrain",
+			"display_name": "Grass02",
+			"runtime_package": "PolyToolsRuntimeExports/grass02/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_key": "grass03",
+			"asset_type": "terrain",
+			"display_name": "Grass03",
+			"runtime_package": "PolyToolsRuntimeExports/grass03/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_key": "grass04",
+			"asset_type": "terrain",
+			"display_name": "Grass04",
+			"runtime_package": "PolyToolsRuntimeExports/grass04/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "hammer",
 			"asset_type": "weapons",
 			"display_name": "Hammer",
 			"runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "hammerer",
 			"asset_type": "character",
 			"display_name": "Hammerer",
 			"runtime_package": "PolyToolsRuntimeExports/hammerer/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "heart",
 			"asset_type": "symbols",
 			"display_name": "Heart",
 			"runtime_package": "PolyToolsRuntimeExports/heart/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "mage",
 			"asset_type": "character",
 			"display_name": "Mage",
 			"runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "monk",
 			"asset_type": "character",
 			"display_name": "Monk",
 			"runtime_package": "PolyToolsRuntimeExports/monk/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "orb",
 			"asset_type": "symbols",
 			"display_name": "Orb",
 			"runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
 		},
 		{
+			"asset_category": "single",
+			"asset_key": "plank",
+			"asset_type": "props",
+			"display_name": "Plank",
+			"runtime_package": "PolyToolsRuntimeExports/plank/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "plus",
 			"asset_type": "symbols",
 			"display_name": "Plus",
 			"runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
 		},
 		{
+			"asset_category": "single",
+			"asset_key": "potion",
+			"asset_type": "items",
+			"display_name": "Potion",
+			"runtime_package": "PolyToolsRuntimeExports/potion/manifest.json"
+		},
+		{
+			"asset_category": "palette",
 			"asset_key": "river",
 			"asset_type": "terrain",
 			"display_name": "River",
 			"runtime_package": "PolyToolsRuntimeExports/river/manifest.json"
 		},
 		{
+			"asset_category": "single",
+			"asset_key": "river01",
+			"asset_type": "terrain",
+			"display_name": "River01",
+			"runtime_package": "PolyToolsRuntimeExports/river01/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "rogue",
 			"asset_type": "character",
 			"display_name": "Rogue",
 			"runtime_package": "PolyToolsRuntimeExports/rogue/manifest.json"
 		},
 		{
+			"asset_category": "single",
+			"asset_key": "rope_post",
+			"asset_type": "props",
+			"display_name": "Rope Post",
+			"runtime_package": "PolyToolsRuntimeExports/rope_post/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_key": "sorcerer",
 			"asset_type": "character",
 			"display_name": "Sorcerer",
 			"runtime_package": "PolyToolsRuntimeExports/sorcerer/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "tree",
 			"asset_type": "props",
 			"display_name": "Tree",
 			"runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "warrior",
 			"asset_type": "character",
 			"display_name": "Warrior",
 			"runtime_package": "PolyToolsRuntimeExports/warrior/manifest.json"
 		},
 		{
+			"asset_category": "single",
 			"asset_key": "wizard",
 			"asset_type": "character",
 			"display_name": "Wizard",
 			"runtime_package": "PolyToolsRuntimeExports/wizard/manifest.json"
 		}
 	],
-	"schema_version": 1,
+	"schema_version": 2,
 	"world_key": "world01",
 	"world_name": "Secrets, Room's & Travels'"
 }

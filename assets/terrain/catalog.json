@@ -1,19 +1,56 @@
 {
   "assets": [
     {
+      "asset_category": "palette",
       "asset_key": "grass",
       "asset_type": "terrain",
       "display_name": "Grass",
       "runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
     },
     {
+      "asset_category": "single",
+      "asset_key": "grass01",
+      "asset_type": "terrain",
+      "display_name": "Grass01",
+      "runtime_package": "PolyToolsRuntimeExports/grass01/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "grass02",
+      "asset_type": "terrain",
+      "display_name": "Grass02",
+      "runtime_package": "PolyToolsRuntimeExports/grass02/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "grass03",
+      "asset_type": "terrain",
+      "display_name": "Grass03",
+      "runtime_package": "PolyToolsRuntimeExports/grass03/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "grass04",
+      "asset_type": "terrain",
+      "display_name": "Grass04",
+      "runtime_package": "PolyToolsRuntimeExports/grass04/manifest.json"
+    },
+    {
+      "asset_category": "palette",
       "asset_key": "river",
       "asset_type": "terrain",
       "display_name": "River",
       "runtime_package": "PolyToolsRuntimeExports/river/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_key": "river01",
+      "asset_type": "terrain",
+      "display_name": "River01",
+      "runtime_package": "PolyToolsRuntimeExports/river01/manifest.json"
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

@@ -734,7 +734,7 @@ mod tests {
     }
 
     /// A standing silhouette: as wide as it is tall, and entirely on one side
-    /// of the position it is placed at, the way an authored Prop Region is.
+    /// of the position it is placed at.
     fn standing_silhouette() -> CollisionComponentGeometry {
         CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
             component_id: "trunk".into(),
@@ -744,6 +744,23 @@ mod tests {
                 Vec2::new(0.9, 0.1),
                 Vec2::new(0.9, 3.1),
                 Vec2::new(-0.9, 3.1),
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+        })
+        .expect("the test silhouette has valid collision topology")
+    }
+
+    /// A silhouette drawn around the position it is placed at, the way an Asset
+    /// centred on its own origin exports.
+    fn centred_silhouette() -> CollisionComponentGeometry {
+        CollisionComponentGeometry::from_geometry(RuntimeComponentGeometry {
+            component_id: "boulder".into(),
+            name: "boulder".into(),
+            vertices: vec![
+                Vec2::new(-0.9, -1.1),
+                Vec2::new(0.9, -1.1),
+                Vec2::new(0.9, 1.1),
+                Vec2::new(-0.9, 1.1),
             ],
             indices: vec![0, 1, 2, 0, 2, 3],
         })
@@ -1343,11 +1360,11 @@ mod tests {
 
         assert!(
             !node_at(&graph, cell_center(&map, 50, 49)).is_blocked(),
-            "the collider reaches away from its placement, never behind it"
+            "this collider lies beyond its placement, so the ground behind it stays open"
         );
         assert!(
             !node_at(&graph, placement).is_blocked(),
-            "the ground the Prop itself stands on is outside its authored Region"
+            "this collider leaves the ground at its own placement open"
         );
 
         for node in graph.nodes().iter().filter(|node| node.is_blocked()) {
@@ -1361,7 +1378,36 @@ mod tests {
     }
 
     #[test]
-    fn authored_world_colliders_reach_away_from_the_prop_position() {
+    fn a_world_collider_may_be_drawn_around_its_own_placement() {
+        let map = overworld();
+        let placement = cell_center(&map, 50, 50);
+        let collision = WorldCollisionGeometryCatalog {
+            regions: vec![PlacedCollisionGeometry {
+                instance_id: "boulder".into(),
+                position: placement,
+                component: centred_silhouette(),
+            }],
+        };
+        let graph = derive(&map, &collision);
+
+        assert!(
+            node_at(&graph, placement).is_blocked(),
+            "a Region that covers its own placement blocks that ground too"
+        );
+        for neighbour in [49, 51] {
+            assert!(
+                node_at(&graph, cell_center(&map, 50, neighbour)).is_blocked(),
+                "the Region covers the ground on both sides of its placement"
+            );
+        }
+        assert!(
+            !node_at(&graph, cell_center(&map, 50, 52)).is_blocked(),
+            "ground the Region does not cover stays open"
+        );
+    }
+
+    #[test]
+    fn the_embedded_world_blocks_ground_where_it_places_colliding_props() {
         let map = overworld();
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
@@ -1376,22 +1422,5 @@ mod tests {
             graph.nodes().iter().any(GroundNavigationNode::is_blocked),
             "those Props block ground"
         );
-
-        for region in &collision.regions {
-            let lowest = region
-                .component
-                .geometry()
-                .vertices
-                .iter()
-                .map(|vertex| vertex.y)
-                .fold(f32::INFINITY, f32::min);
-            assert!(
-                lowest >= 0.0,
-                "'{}' is authored as a standing silhouette starting at its own \
-                 position, so the ground it blocks lies beyond it rather than \
-                 around it",
-                region.instance_id
-            );
-        }
     }
 }

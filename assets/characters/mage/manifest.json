@@ -1,4 +1,5 @@
 {
+	"asset_category": "single",
 	"asset_key": "mage",
 	"asset_pivot": [
 		0.0,
@@ -14879,7 +14880,7 @@
 			"source_component_id": "component_16"
 		}
 	],
-	"schema_version": 16,
+	"schema_version": 19,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

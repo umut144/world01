@@ -4,7 +4,7 @@ use bevy::{
     transform::{TransformSystems, helper::TransformHelper},
     window::PrimaryWindow,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 #[cfg(feature = "dev")]
 use std::{path::Path, time::SystemTime};
 #[cfg(feature = "dev")]
@@ -642,8 +642,11 @@ fn setup_ankh_visuals(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ProjectionDepthMaterial>>,
 ) {
-    let Some(ankh_manifest) = character_assets.prop("ankh") else {
-        error!("cannot spawn Ankhs: missing Ankh prop manifest");
+    let Some(ankh_manifest) = character_assets
+        .prop("ankh")
+        .filter(|prop| !prop.is_palette())
+    else {
+        error!("cannot spawn Ankhs: missing drawable Ankh prop manifest");
         return;
     };
 
@@ -680,14 +683,29 @@ fn setup_map_visuals(
     mut flat_materials: ResMut<Assets<ColorMaterial>>,
     mut projection_materials: ResMut<Assets<ProjectionDepthMaterial>>,
 ) {
-    let mut terrain_offsets = BTreeMap::<&str, Vec<Vec2>>::new();
+    // A cell names the Asset the map authored; a Palette resolves that name to
+    // the Single this cell draws, so cells of one Palette still batch per
+    // drawn Asset. The authored name keeps its colour either way.
+    let mut terrain_offsets = BTreeMap::<(&str, &str), Vec<Vec2>>::new();
+    let mut unresolved = BTreeSet::<&str>::new();
     for cell in map.terrain_cells() {
+        let Some(manifest) = character_assets.terrain_variant(&cell.asset_key, cell.x, cell.y)
+        else {
+            unresolved.insert(cell.asset_key.as_str());
+            continue;
+        };
         terrain_offsets
-            .entry(&cell.asset_key)
+            .entry((cell.asset_key.as_str(), manifest.asset_key.as_str()))
             .or_default()
             .push(Vec2::new(cell.center.x, cell.center.y));
     }
-    for (asset_key, offsets) in terrain_offsets {
+    for asset_key in unresolved {
+        error!(
+            asset_key,
+            "cannot render map terrain: no drawable PolyTools Asset"
+        );
+    }
+    for ((authored_key, asset_key), offsets) in terrain_offsets {
         let Some(manifest) = character_assets.terrain(asset_key) else {
             error!(
                 asset_key,
@@ -700,7 +718,7 @@ fn setup_map_visuals(
                 commands.spawn((
                     RenderedMap,
                     Mesh2d(meshes.add(mesh)),
-                    MeshMaterial2d(flat_materials.add(map_asset_color(asset_key))),
+                    MeshMaterial2d(flat_materials.add(map_asset_color(authored_key))),
                     Transform::from_xyz(0.0, 0.0, TERRAIN_PRESENTATION_LAYER),
                 ));
             }
@@ -709,8 +727,11 @@ fn setup_map_visuals(
     }
 
     for prop in map.props().iter().filter(|prop| prop.asset_key != "ankh") {
-        let Some(manifest) = character_assets.prop(&prop.asset_key) else {
-            error!(asset_key = %prop.asset_key, "cannot render map prop: missing PolyTools manifest");
+        let Some(manifest) = character_assets
+            .prop(&prop.asset_key)
+            .filter(|manifest| !manifest.is_palette())
+        else {
+            error!(asset_key = %prop.asset_key, "cannot render map prop: missing drawable PolyTools manifest");
             continue;
         };
         let root = commands

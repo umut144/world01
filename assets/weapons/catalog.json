@@ -1,13 +1,14 @@
 {
   "assets": [
     {
+      "asset_category": "single",
       "asset_key": "hammer",
       "asset_type": "weapons",
       "display_name": "Hammer",
       "runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
     }
   ],
-  "schema_version": 1,
+  "schema_version": 2,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

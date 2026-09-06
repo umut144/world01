@@ -165,6 +165,10 @@ impl CharacterAssetLibrary {
         self.content.terrain(asset_key)
     }
 
+    pub fn terrain_variant(&self, asset_key: &str, x: u32, y: u32) -> Option<&RuntimeManifest> {
+        self.content.terrain_variant(asset_key, x, y)
+    }
+
     pub fn body_pivot(&self, character: &CharacterId) -> Vec2 {
         let Some(manifest) = self.character(character) else {
             return Vec2::ZERO;
