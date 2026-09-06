@@ -24,7 +24,9 @@
       "asset_key": "plank",
       "asset_type": "props",
       "display_name": "Plank",
-      "previous_keys": [],
+      "previous_keys": [
+        "deck"
+      ],
       "runtime_package": "PolyToolsRuntimeExports/plank/manifest.json"
     },
     {
@@ -33,7 +35,9 @@
       "asset_key": "post",
       "asset_type": "props",
       "display_name": "Post",
-      "previous_keys": [],
+      "previous_keys": [
+        "rope_post"
+      ],
       "runtime_package": "PolyToolsRuntimeExports/post/manifest.json"
     },
     {

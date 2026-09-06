@@ -96,7 +96,9 @@
       "asset_key": "wizard",
       "asset_type": "character",
       "display_name": "Wizard",
-      "previous_keys": [],
+      "previous_keys": [
+        "wizardtest"
+      ],
       "runtime_package": "PolyToolsRuntimeExports/wizard/manifest.json"
     }
   ],
