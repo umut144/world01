@@ -2,27 +2,34 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_8",
       "asset_key": "heart",
       "asset_type": "symbols",
       "display_name": "Heart",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/heart/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_7",
       "asset_key": "orb",
       "asset_type": "symbols",
       "display_name": "Orb",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/orb/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_12",
       "asset_key": "plus",
       "asset_type": "symbols",
       "display_name": "Plus",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/plus/manifest.json"
     }
   ],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

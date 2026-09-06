@@ -2,13 +2,16 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_20",
       "asset_key": "potion",
       "asset_type": "items",
       "display_name": "Potion",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/potion/manifest.json"
     }
   ],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_12",
 	"asset_key": "plus",
 	"asset_pivot": [
 		0.0,
@@ -186,7 +187,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

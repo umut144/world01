@@ -14,7 +14,7 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 20;
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 21;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
@@ -218,6 +218,9 @@ pub enum RuntimeComposition {
 #[serde(try_from = "RawRuntimeManifest")]
 pub struct RuntimeManifest {
     pub schema_version: u32,
+    /// The identity PolyTools keeps across a rename. Opaque: it is compared,
+    /// never parsed, and world01 stores nothing by it today.
+    pub asset_id: String,
     pub asset_key: String,
     pub asset_type: String,
     pub asset_pivot: [f32; 2],
@@ -245,6 +248,7 @@ impl RuntimeManifest {
 #[derive(Deserialize)]
 struct RawRuntimeManifest {
     schema_version: u32,
+    asset_id: String,
     asset_key: String,
     asset_type: String,
     asset_category: String,
@@ -264,6 +268,9 @@ impl TryFrom<RawRuntimeManifest> for RuntimeManifest {
     type Error = String;
 
     fn try_from(raw: RawRuntimeManifest) -> Result<Self, Self::Error> {
+        if raw.asset_id.is_empty() {
+            return Err(format!("{} carries no asset identity", raw.asset_key));
+        }
         let composition = match (raw.asset_category.as_str(), raw.variants) {
             ("single", None) => RuntimeComposition::Single,
             ("set", None) => RuntimeComposition::Set,
@@ -286,6 +293,7 @@ impl TryFrom<RawRuntimeManifest> for RuntimeManifest {
         };
         Ok(Self {
             schema_version: raw.schema_version,
+            asset_id: raw.asset_id,
             asset_key: raw.asset_key,
             asset_type: raw.asset_type,
             asset_pivot: raw.asset_pivot,
@@ -333,6 +341,8 @@ pub struct RuntimeComponent {
     pub contour_stroke_mesh: Option<RuntimeStrokeMesh>,
     #[serde(default)]
     pub source_asset_key: Option<String>,
+    #[serde(default)]
+    pub source_asset_id: Option<String>,
     #[serde(skip)]
     pub referenced_components: Vec<RuntimeComponent>,
 }
@@ -454,6 +464,13 @@ fn resolve_asset_references(
         {
             return Err(ContentError::new(format!(
                 "referenced asset {source_key} is not a Single Asset"
+            )));
+        }
+        // The Key reads well, the identity is what points. A Reference that
+        // names one and misses the other has survived a rename only halfway.
+        if component.source_asset_id.as_deref() != Some(referenced.asset_id.as_str()) {
+            return Err(ContentError::new(format!(
+                "referenced asset {source_key} does not carry the identity the reference names"
             )));
         }
         component.referenced_components = referenced.components;
@@ -944,6 +961,30 @@ mod tests {
     }
 
     #[test]
+    fn an_asset_reference_points_at_an_identity_and_not_only_at_a_name() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+        let bridge = content.prop("bridge").expect("Bridge is catalogued");
+        let post = content.prop("post").expect("Post is catalogued");
+
+        assert_eq!(bridge.composition, RuntimeComposition::Set);
+        assert!(!post.asset_id.is_empty());
+        let member = bridge
+            .components
+            .iter()
+            .find(|component| component.source_asset_key.as_deref() == Some("post"))
+            .expect("the Bridge names a Post member");
+
+        assert_eq!(
+            member.source_asset_id.as_deref(),
+            Some(post.asset_id.as_str())
+        );
+        assert!(
+            !member.referenced_components.is_empty(),
+            "a resolved Reference carries the Components of the Asset it instances"
+        );
+    }
+
+    #[test]
     fn a_single_terrain_cell_resolves_to_itself() {
         let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
 
@@ -980,7 +1021,8 @@ mod tests {
 
     fn probe_manifest(asset_category: &str, variants: &str) -> String {
         format!(
-            "{{\"schema_version\":{RUNTIME_MANIFEST_SCHEMA_VERSION},\"asset_key\":\"probe\",\
+            "{{\"schema_version\":{RUNTIME_MANIFEST_SCHEMA_VERSION},\
+             \"asset_id\":\"asset_probe\",\"asset_key\":\"probe\",\
              \"asset_type\":\"terrain\",\"asset_category\":\"{asset_category}\",\
              \"asset_pivot\":[0.0,0.0],\"components\":[]{variants}}}"
         )

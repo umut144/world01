@@ -1,6 +1,7 @@
 {
   "assets": [],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

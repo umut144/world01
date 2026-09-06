@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_9",
 	"asset_key": "barde",
 	"asset_pivot": [
 		0.0,
@@ -4999,6 +5000,7 @@
 			"name": "belly",
 			"parent_component_id": "component_55",
 			"projection_depth_meters": 0.1,
+			"source_asset_id": "asset_7",
 			"source_asset_key": "orb",
 			"z_index": 2
 		},
@@ -7306,6 +7308,7 @@
 			"name": "eye_left",
 			"parent_component_id": "component_59",
 			"projection_depth_meters": 0.1,
+			"source_asset_id": "asset_12",
 			"source_asset_key": "plus",
 			"z_index": 4
 		},
@@ -7330,6 +7333,7 @@
 			"name": "eye_right",
 			"parent_component_id": "component_59",
 			"projection_depth_meters": 0.1,
+			"source_asset_id": "asset_12",
 			"source_asset_key": "plus",
 			"z_index": 4
 		}
@@ -7364,7 +7368,7 @@
 			"source_component_id": "component_56"
 		}
 	],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

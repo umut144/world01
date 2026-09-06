@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_16",
 	"asset_key": "monk",
 	"asset_pivot": [
 		0.0,
@@ -19796,7 +19797,7 @@
 			"source_component_id": "component_106"
 		}
 	],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

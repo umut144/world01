@@ -2,83 +2,106 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_14",
       "asset_key": "archerf",
       "asset_type": "character",
       "display_name": "ArcherF",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/archerf/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_9",
       "asset_key": "barde",
       "asset_type": "character",
       "display_name": "Barde",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/barde/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_13",
       "asset_key": "chantres",
       "asset_type": "character",
       "display_name": "Chantres",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/chantres/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_3",
       "asset_key": "glavier",
       "asset_type": "character",
       "display_name": "Glavier",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/glavier/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_6",
       "asset_key": "hammerer",
       "asset_type": "character",
       "display_name": "Hammerer",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/hammerer/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_2",
       "asset_key": "mage",
       "asset_type": "character",
       "display_name": "Mage",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/mage/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_16",
       "asset_key": "monk",
       "asset_type": "character",
       "display_name": "Monk",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/monk/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_4",
       "asset_key": "rogue",
       "asset_type": "character",
       "display_name": "Rogue",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/rogue/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_5",
       "asset_key": "sorcerer",
       "asset_type": "character",
       "display_name": "Sorcerer",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/sorcerer/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_15",
       "asset_key": "warrior",
       "asset_type": "character",
       "display_name": "Warrior",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/warrior/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_1",
       "asset_key": "wizard",
       "asset_type": "character",
       "display_name": "Wizard",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/wizard/manifest.json"
     }
   ],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

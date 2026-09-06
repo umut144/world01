@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_10",
 	"asset_key": "tree",
 	"asset_pivot": [
 		0.0,
@@ -29782,7 +29783,7 @@
 			]
 		}
 	],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

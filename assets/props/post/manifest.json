@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_27",
 	"asset_key": "post",
 	"asset_pivot": [
 		0.0,
@@ -1500,7 +1501,7 @@
 			]
 		}
 	],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

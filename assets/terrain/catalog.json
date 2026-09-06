@@ -2,55 +2,70 @@
   "assets": [
     {
       "asset_category": "palette",
+      "asset_id": "asset_18",
       "asset_key": "grass",
       "asset_type": "terrain",
       "display_name": "Grass",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/grass/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_22",
       "asset_key": "grass01",
       "asset_type": "terrain",
       "display_name": "Grass01",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/grass01/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_23",
       "asset_key": "grass02",
       "asset_type": "terrain",
       "display_name": "Grass02",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/grass02/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_25",
       "asset_key": "grass03",
       "asset_type": "terrain",
       "display_name": "Grass03",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/grass03/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_24",
       "asset_key": "grass04",
       "asset_type": "terrain",
       "display_name": "Grass04",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/grass04/manifest.json"
     },
     {
       "asset_category": "palette",
+      "asset_id": "asset_19",
       "asset_key": "river",
       "asset_type": "terrain",
       "display_name": "River",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/river/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_26",
       "asset_key": "river01",
       "asset_type": "terrain",
       "display_name": "River01",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/river01/manifest.json"
     }
   ],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }

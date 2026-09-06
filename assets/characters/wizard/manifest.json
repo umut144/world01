@@ -1,5 +1,6 @@
 {
 	"asset_category": "single",
+	"asset_id": "asset_1",
 	"asset_key": "wizard",
 	"asset_pivot": [
 		0.0,
@@ -13504,7 +13505,7 @@
 			"source_component_id": "component_6"
 		}
 	],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

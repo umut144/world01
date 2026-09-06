@@ -1,5 +1,6 @@
 {
 	"asset_category": "set",
+	"asset_id": "asset_21",
 	"asset_key": "bridge",
 	"asset_pivot": [
 		0.0,
@@ -30,6 +31,7 @@
 			"parent_component_id": null,
 			"projection_depth_meters": 0.1,
 			"role": "post",
+			"source_asset_id": "asset_27",
 			"source_asset_key": "post",
 			"z_index": 0
 		},
@@ -55,6 +57,7 @@
 			"parent_component_id": null,
 			"projection_depth_meters": 0.1,
 			"role": "plank",
+			"source_asset_id": "asset_28",
 			"source_asset_key": "plank",
 			"z_index": 0
 		}
@@ -74,7 +77,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 20,
+	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

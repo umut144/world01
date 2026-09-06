@@ -58,7 +58,7 @@ if [[ ! -f "$source_catalog" ]]; then
 fi
 
 if ! jq -e '
-  .schema_version == 2
+  .schema_version == 3
   and (.world_key | type == "string")
   and (.world_key | length > 0)
   and (.assets | type == "array")
@@ -72,7 +72,14 @@ if ! jq -e '
     and (.runtime_package | length > 0)
     and (.asset_type | . == "character" or . == "props" or . == "weapons" or . == "terrain" or . == "items" or . == "icon" or . == "symbols")
     and (.asset_category | . == "single" or . == "set" or . == "palette")
+    and (.asset_id | type == "string" and length > 0)
+    and (.previous_keys | type == "array" and all(.[]; type == "string" and length > 0))
   )
+  and (([.assets[].asset_id] | unique | length) == (.assets | length))
+  and (.retired_assets | type == "array" and all(.[];
+    (.asset_id | type == "string" and length > 0)
+    and (.last_asset_key | type == "string" and length > 0)))
+  and (([.assets[].asset_id] - [.retired_assets[].asset_id]) == [.assets[].asset_id])
   and (([.assets[].asset_key] | unique | length) == ([.assets[].asset_key] | length))
 ' "$source_catalog" >/dev/null; then
   error_message "invalid PolyTools world catalog: $source_catalog"
@@ -130,9 +137,19 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
     --arg type "$asset_type" \
     --slurpfile catalog "$source_catalog" \
     '
-      .schema_version == 20
+      .schema_version == 21
       and .asset_key == $key
       and .asset_type == $type
+      and (.asset_id | type == "string" and length > 0)
+      and (.asset_id == ($catalog[0].assets[] | select(.asset_key == $key) | .asset_id))
+      and (.components | all(.[]; . as $component
+        | if $component.kind == "asset_reference" then
+          ($component.source_asset_key | type == "string" and length > 0)
+          and ($component.source_asset_id | type == "string" and length > 0)
+          and any($catalog[0].assets[];
+            .asset_key == $component.source_asset_key
+            and .asset_id == $component.source_asset_id)
+        else ($component | has("source_asset_id") | not) end))
       and (.regions | type == "array")
       and (.regions | all(.[];
         (.region_id | type == "string" and length > 0)

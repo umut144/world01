@@ -2,41 +2,52 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_17",
       "asset_key": "ankh",
       "asset_type": "props",
       "display_name": "Ankh",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/ankh/manifest.json"
     },
     {
       "asset_category": "set",
+      "asset_id": "asset_21",
       "asset_key": "bridge",
       "asset_type": "props",
       "display_name": "Bridge",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/bridge/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_28",
       "asset_key": "plank",
       "asset_type": "props",
       "display_name": "Plank",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/plank/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_27",
       "asset_key": "post",
       "asset_type": "props",
       "display_name": "Post",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/post/manifest.json"
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_10",
       "asset_key": "tree",
       "asset_type": "props",
       "display_name": "Tree",
+      "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
     }
   ],
-  "schema_version": 2,
+  "retired_assets": [],
+  "schema_version": 3,
   "world_key": "world01",
   "world_name": "Secrets, Room's & Travels'"
 }
