@@ -231,7 +231,7 @@ fn unique_reachable_route<'a>(
     position: Position,
     excluded_route: Option<&str>,
 ) -> ReachableRoute<'a> {
-    select_unique_route(map.route_surfaces().iter().filter_map(|route| {
+    select_unique_route(map.walked_surfaces().filter_map(|route| {
         if excluded_route == Some(route.route_surface_id.as_str()) {
             return None;
         }

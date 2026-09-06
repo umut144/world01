@@ -187,7 +187,7 @@ impl GroundNavigationGraph {
             }
         }
 
-        for route in map.route_surfaces() {
+        for route in map.walked_surfaces() {
             let surface = intern(&mut surfaces, &route.surface)?;
             for (index, sample) in route.centerline_samples.iter().enumerate() {
                 let ends_here = index + 1 == route.centerline_samples.len();
@@ -702,6 +702,7 @@ mod tests {
     use crate::TraversalCatalog;
 
     use super::*;
+    use world01_world_data::RouteSegmentOperation;
 
     fn overworld() -> WorldMap {
         WorldMap::load_embedded("overworld01").expect("embedded Instance is valid")
@@ -773,8 +774,7 @@ mod tests {
         let graph = without_collision(&map);
 
         let samples = map
-            .route_surfaces()
-            .iter()
+            .walked_surfaces()
             .map(|route| route.centerline_samples.len())
             .sum::<usize>();
         let mut column = Vec::new();
@@ -908,13 +908,74 @@ mod tests {
             }
         }
 
-        assert_eq!(counted.len(), map.route_surfaces().len());
-        for route in map.route_surfaces() {
+        assert_eq!(counted.len(), map.walked_surfaces().count());
+        for route in map.walked_surfaces() {
             assert_eq!(
                 counted.get(route.route_surface_id.as_str()).copied(),
                 Some(route.centerline_samples.len()),
                 "Route '{}' contributes one node per centerline sample",
                 route.route_surface_id
+            );
+        }
+    }
+
+    #[test]
+    fn a_character_steps_from_the_ground_onto_an_authored_deck_and_back() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let profile = hammerer();
+        let mut steps = Vec::new();
+
+        let bridge = map
+            .bridges()
+            .first()
+            .expect("the overworld authors a bridge");
+        let end = bridge
+            .centerline_samples
+            .first()
+            .expect("a deck runs from one end to the other");
+        let deck = index_at(&graph, end.position, end.elevation_meters);
+        let ground = map
+            .terrain_cell_at(end.position)
+            .expect("a bridge end lies over authored Terrain");
+        let standing = index_at(&graph, ground.center, ground.elevation_meters);
+
+        graph.steps_from(standing, &profile, &mut steps);
+        assert!(
+            steps.iter().any(|step| step.node == deck),
+            "a Character standing at the end of a bridge may step onto its deck"
+        );
+
+        graph.steps_from(deck, &profile, &mut steps);
+        assert!(
+            steps.iter().any(|step| step.node == standing),
+            "and may step back off it"
+        );
+    }
+
+    #[test]
+    fn a_deck_is_carried_as_the_path_it_was_baked_from() {
+        let map = overworld();
+
+        assert_eq!(map.bridge_decks().len(), map.bridges().len());
+        assert_eq!(
+            map.walked_surfaces().count(),
+            map.route_surfaces().len() + map.bridges().len()
+        );
+        for (bridge, deck) in map.bridges().iter().zip(map.bridge_decks()) {
+            assert_eq!(deck.route_surface_id, bridge.bridge_id);
+            assert_eq!(deck.surface, bridge.surface);
+            assert_eq!(deck.centerline_samples, bridge.centerline_samples);
+            assert_eq!(deck.segments.len(), 1, "a bridge has exactly one interval");
+            assert_eq!(deck.segments[0].grade_percent, 0);
+            assert_eq!(
+                deck.segments[0].operation,
+                RouteSegmentOperation::Additive,
+                "a bridge takes nothing out of the Terrain it spans"
+            );
+            assert!(
+                map.route_surface(&bridge.bridge_id).is_some(),
+                "a deck answers to its own ID like any other walked surface"
             );
         }
     }
@@ -1122,8 +1183,7 @@ mod tests {
         let mut steps = Vec::new();
 
         let route = map
-            .route_surfaces()
-            .iter()
+            .walked_surfaces()
             .find(|route| {
                 route
                     .segments
@@ -1199,7 +1259,7 @@ mod tests {
         let profile = hammerer();
         let mut steps = Vec::new();
 
-        for route in map.route_surfaces() {
+        for route in map.walked_surfaces() {
             let last = route.centerline_samples.last().expect("a Path has samples");
             let elevation = route
                 .sample_at(last.position)

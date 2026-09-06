@@ -30,6 +30,7 @@ pub struct WorldMap {
     route_surfaces: Vec<MapRouteSurface>,
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
     bridges: Vec<MapBridge>,
+    bridge_decks: Vec<MapRouteSurface>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
@@ -84,6 +85,7 @@ impl WorldMap {
             props: scene.props,
             route_surfaces: scene.route_surfaces,
             bridges: scene.bridges,
+            bridge_decks: scene.bridge_decks,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
             water_cell_meters: scene.water_cell_meters,
@@ -231,7 +233,27 @@ impl WorldMap {
         &self.bridges
     }
 
+    /// The decks of those bridges, as the Paths they are baked from.
+    pub fn bridge_decks(&self) -> &[MapRouteSurface] {
+        &self.bridge_decks
+    }
+
+    /// Every authored surface a Character walks along rather than over: the
+    /// Paths and the bridge decks, which are the same thing to whoever walks.
+    pub fn walked_surfaces(&self) -> impl Iterator<Item = &MapRouteSurface> {
+        self.route_surfaces.iter().chain(self.bridge_decks.iter())
+    }
+
+    /// An authored Path or a bridge deck, by the ID its nodes carry.
     pub fn route_surface(&self, route_surface_id: &str) -> Option<&MapRouteSurface> {
+        self.bridge_decks
+            .binary_search_by_key(&route_surface_id, |deck| deck.route_surface_id.as_str())
+            .ok()
+            .and_then(|index| self.bridge_decks.get(index))
+            .or_else(|| self.authored_route_surface(route_surface_id))
+    }
+
+    fn authored_route_surface(&self, route_surface_id: &str) -> Option<&MapRouteSurface> {
         self.route_surfaces
             .binary_search_by_key(&route_surface_id, |surface| {
                 surface.route_surface_id.as_str()
@@ -530,6 +552,7 @@ impl WorldMap {
             // A Template carries no bridges, so composition keeps the ones the
             // Instance was authored with.
             bridges: self.bridges.clone(),
+            bridge_decks: self.bridge_decks.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
             water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
@@ -1166,6 +1189,7 @@ pub struct MapBridge {
     /// The deck itself: the walking surface, as a closed authored polygon.
     pub vertices: Vec<MapRouteVertex>,
     pub triangle_indices: Vec<u32>,
+    pub boundary_edges: Vec<MapRouteBoundaryEdge>,
     /// The line the author drew, in the same shape a Path publishes, because
     /// SceneMaker bakes a deck as a Path. A straight span is already straight,
     /// so this is its two ends.
@@ -1386,6 +1410,7 @@ struct ConvertedSceneBody {
     route_surfaces: Vec<MapRouteSurface>,
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
     bridges: Vec<MapBridge>,
+    bridge_decks: Vec<MapRouteSurface>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
@@ -1516,6 +1541,7 @@ fn convert_scene_body(
         offset_y,
     )?;
     let bridges = convert_bridges(source_bridges, bridge_bakes, &profiles, offset_x, offset_y)?;
+    let bridge_decks = bridge_decks(&bridges, &route_surfaces)?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
@@ -1571,9 +1597,74 @@ fn convert_scene_body(
         route_surfaces,
         route_surface_cuts,
         bridges,
+        bridge_decks,
         water_cell_meters: grid.water_cell_meters,
         template_anchors,
     })
+}
+
+/// A deck is a Path to whoever walks on it.
+///
+/// SceneMaker bakes a bridge as a Path bake and publishes the same centerline,
+/// so world01 carries it as one and every rule that already knows how to stand
+/// on a Path, step onto it and leave it applies unchanged. The single thing not
+/// delivered is the authored interval, because a bridge has exactly one and the
+/// contract says what it is: level, and taking nothing out of the Terrain.
+fn bridge_decks(
+    bridges: &[MapBridge],
+    route_surfaces: &[MapRouteSurface],
+) -> Result<Vec<MapRouteSurface>, WorldMapError> {
+    let mut decks = Vec::with_capacity(bridges.len());
+    for bridge in bridges {
+        if route_surfaces
+            .iter()
+            .any(|route| route.route_surface_id == bridge.bridge_id)
+        {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' carries the ID of an authored Path",
+                bridge.bridge_id
+            )));
+        }
+        let Some(bounds) = MapRouteBounds::from_vertices(&bridge.vertices) else {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' deck has no corners to bound",
+                bridge.bridge_id
+            )));
+        };
+        let last_sample = u32::try_from(bridge.centerline_samples.len() - 1).map_err(|_| {
+            WorldMapError::new(format!(
+                "Bridge '{}' has more centerline samples than a `u32` counts",
+                bridge.bridge_id
+            ))
+        })?;
+        decks.push(MapRouteSurface {
+            route_surface_id: bridge.bridge_id.clone(),
+            asset_key: bridge.plank_asset_key.clone(),
+            surface: bridge.surface.clone(),
+            vertices: bridge.vertices.clone(),
+            triangle_indices: bridge.triangle_indices.clone(),
+            boundary_edges: bridge.boundary_edges.clone(),
+            centerline_samples: bridge.centerline_samples.clone(),
+            segments: vec![MapRouteSegment {
+                segment_id: format!("{}.deck", bridge.bridge_id),
+                grade_percent: 0,
+                operation: RouteSegmentOperation::Additive,
+                start_point_index: 0,
+                end_point_index: last_sample,
+                start_sample_index: 0,
+                end_sample_index: last_sample,
+            }],
+            bounds,
+        });
+    }
+    decks.sort_by(|first, second| first.route_surface_id.cmp(&second.route_surface_id));
+    if decks
+        .windows(2)
+        .any(|pair| pair[0].route_surface_id == pair[1].route_surface_id)
+    {
+        return Err(WorldMapError::new("two bridges share one ID"));
+    }
+    Ok(decks)
 }
 
 /// Joins each authored bridge with the layout SceneMaker baked for it.
@@ -1686,6 +1777,25 @@ fn convert_bridges(
         {
             return Err(WorldMapError::new(format!(
                 "Bridge '{}' has a corner off its own elevation",
+                source.bridge_id
+            )));
+        }
+        let boundary_edges = bake
+            .boundary_edges
+            .iter()
+            .map(|edge| MapRouteBoundaryEdge {
+                start_vertex_index: edge.start_vertex_index,
+                end_vertex_index: edge.end_vertex_index,
+            })
+            .collect::<Vec<_>>();
+        if boundary_edges.is_empty()
+            || boundary_edges.iter().any(|edge| {
+                edge.start_vertex_index as usize >= vertices.len()
+                    || edge.end_vertex_index as usize >= vertices.len()
+            })
+        {
+            return Err(WorldMapError::new(format!(
+                "Bridge '{}' deck has no usable outline",
                 source.bridge_id
             )));
         }
@@ -1829,6 +1939,7 @@ fn convert_bridges(
             heading_radians: bake.heading_degrees.to_radians(),
             vertices,
             triangle_indices: bake.triangle_indices,
+            boundary_edges,
             centerline_samples,
             planks,
             posts,
@@ -2550,6 +2661,7 @@ struct BridgeBakeDocument {
     plank_count: u32,
     vertices: Vec<BridgeVertexDocument>,
     triangle_indices: Vec<u32>,
+    boundary_edges: Vec<RouteSurfaceBoundaryEdgeDocument>,
     centerline_samples: Vec<RouteSurfaceCenterlineSampleDocument>,
     planks: Vec<BridgePlankDocument>,
     posts: Vec<BridgePostDocument>,
