@@ -2,6 +2,8 @@
 # Agent side of the validation loop: put a request into the queue that the
 # running check-agent watcher serves, and report the result.
 #
+# check-agent protocol 2
+#
 #   ./scripts/check-agent-run.sh --tests     request a run and wait for it
 #   ./scripts/check-agent-run.sh --poll      keep waiting for this session's run
 #   ./scripts/check-agent-run.sh --full      print the whole output, not a tail
@@ -15,6 +17,11 @@
 #   3   no watcher running (start it with `checkw start`)
 #   4   still running, call again with --poll
 #   5   the request is gone without a result; request again, do not wait
+#
+# Every result carries the protocol of the watcher that produced it. When it
+# differs from this script's constant, the run is still valid but the mismatch
+# is reported on stderr: a watcher process outliving an updated script is the
+# drift that actually happens, and only a restart clears it.
 #
 # Several sessions share one watcher, so a session is identified by
 # CHECK_AGENT_SESSION. Without it the identity is derived from the physical
@@ -31,6 +38,9 @@
 #   CHECK_AGENT_ARGS     arguments a request may carry (default --tests)
 
 set -eu
+
+# Keep equal to the constant in check-agent.sh.
+protocol=2
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   echo "check-agent-run: not inside a git worktree" >&2
@@ -89,6 +99,16 @@ read_field() {
 
 report() {
   # report <id>
+  seen=$(read_field "$dir/results/$1" protocol)
+  case "$seen" in ''|*[!0-9]*) seen=0 ;; esac
+  if [ "$seen" -lt "$protocol" ]; then
+    echo "WATCHER-VERALTET: Ergebnis aus Protokoll $seen, dieses Skript spricht $protocol." >&2
+    echo "Der laufende Watcher-Prozess ist älter als sein Skript und gehört neu gestartet:" >&2
+    echo "  checkw stop && checkw start" >&2
+  elif [ "$seen" -gt "$protocol" ]; then
+    echo "RUNNER-VERALTET: Ergebnis aus Protokoll $seen, dieses Skript spricht $protocol." >&2
+    echo "Dieses Skript ist älter als der Watcher; die Kopie im Repo gehört nachgezogen." >&2
+  fi
   sed -n '1,/^--- output ---$/p' "$dir/results/$1"
   log="$dir/logs/$1.log"
   rc=$(read_field "$dir/results/$1" exit)

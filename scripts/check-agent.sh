@@ -1,6 +1,8 @@
 #!/bin/sh
 # Watcher for agent-triggered validation runs.
 #
+# check-agent protocol 2
+#
 # Start this once in a terminal tab and leave it running:
 #
 #   checkw start          (or ./scripts/check-agent.sh)
@@ -30,6 +32,12 @@
 #   CHECK_CLIPBOARD=0     do not copy output to the clipboard
 
 set -eu
+
+# Layout of requests/ and of the result header. Bump this whenever either
+# changes, and keep it equal to the constant in check-agent-run.sh: it is
+# written into every result so a session can tell a watcher process that still
+# runs an older script from a current one.
+protocol=2
 
 root=$(git rev-parse --show-toplevel 2>/dev/null) || {
   echo "check-agent: not inside a git worktree" >&2
@@ -126,6 +134,7 @@ while :; do
       printf 'args=%s\n' "$args"
       printf 'duration=%s\n' "$duration"
       printf 'lines=%s\n' "$lines"
+      printf 'protocol=%s\n' "$protocol"
       printf 'head=%s\n' "$head"
       printf 'dirty=%s\n' "$dirty"
       printf -- '--- output ---\n'

@@ -39,6 +39,13 @@ The state lives in `.agent-check/`:
                        then the output
     logs/<id>.log      raw output of that run, also useful for `grep`
 
+Every result also carries the `protocol` of the watcher that wrote it. If the
+runner reports WATCHER-VERALTET, the watcher process is older than its script:
+the run itself is still valid, but say so and ask the developer for `checkw stop
+&& checkw start` before relying on anything a newer script added to the header.
+RUNNER-VERALTET is the other direction — this repo's copy of the scripts is
+behind and has to be pulled over again.
+
 `result` and `last.log` at the top level hold whichever run finished last, no
 matter who asked for it. They are the developer's view and what `checkw status`
 reads; this session does not read them, because the run they describe is often
@@ -99,6 +106,12 @@ Never move or delete anything below `.git/` by hand; the `_to_delete/` rule
 below does not reach in there. A lock that a running Git still holds belongs to
 it, and taking it away destroys its commit. If a Git command fails on a lock,
 run `./scripts/git-unlock.sh`; if it refuses, say so and ask.
+
+Call it as `GIT_UNLOCK_AGE=5 ./scripts/git-unlock.sh`. What actually protects a
+live lock is lsof; the age is only the fallback for a file whose use cannot be
+proven, and five seconds is margin enough for the leftovers of a commit that has
+already returned. A loosened margin belongs in the call, where it is read, not
+in the script's default.
 
 ## Tooling wishes go to the developer
 
