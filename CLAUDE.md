@@ -29,32 +29,58 @@ validation goes through the watcher:
     ./scripts/check-agent-run.sh --full       # print the complete output
 
 The developer keeps the watcher running in a terminal tab (`checkw start`). It
-executes `./scripts/check.sh` on the host with the normal toolchain and warm
-`target/`, and reports back through `.agent-check/`: `result` (header with `id`,
-`exit`, `args`, `duration`, `lines`, then the output) and `last.log` (the raw
-output, also useful for `grep`).
+serves one queue, so several sessions can share it, and it runs
+`./scripts/check.sh` on the host with the normal toolchain and warm `target/`.
+The state lives in `.agent-check/`:
 
-The developer's own manual runs (`check` / `checkt`) land there too. They always
-write `manual-result` (same header, with `id=manual-<epoch>`) and `manual.log`.
-They are mirrored into `result` and `last.log` only when no request of this
-session is outstanding — that is, when `pending-id` matches the `id` in
-`result`; while a request is pending, both stay untouched, so a manual run is
-never mistaken for the requested one. Before requesting a run, `manual-result`
-is worth a look: the developer may just have run the same thing by hand. Do not
-rely on the file existing, and note that its header does not say which state of
-the tree it ran against — when in doubt, request a fresh run.
+    requests/<id>      queued request, oldest served first
+    pending/<session>  the id this session waits for
+    results/<id>       header with `id`, `exit`, `args`, `duration`, `lines`,
+                       then the output
+    logs/<id>.log      raw output of that run, also useful for `grep`
+
+`result` and `last.log` at the top level hold whichever run finished last, no
+matter who asked for it. They are the developer's view and what `checkw status`
+reads; this session does not read them, because the run they describe is often
+not its own.
+
+Sessions are told apart by `CHECK_AGENT_SESSION`, which `--poll` needs to find
+its own request again. Export one stable value for the whole session; without it
+the identity is derived from the physical path of the worktree, which is stable
+per sandbox but cannot separate two sessions working from the same path.
+
+The developer's own manual runs (`check` / `checkt`) write `manual-result` (same
+header, with `id=manual-<epoch>`) and `manual.log`. Before requesting a run,
+`manual-result` is worth a look: the developer may just have run the same thing
+by hand. It is absent until the first manual run in a given clone, and its
+header does not say which state of the tree it ran against — when in doubt,
+request a fresh run. `manual.log` is captured through a command substitution,
+which strips trailing blank lines, so for one and the same run it can differ
+from the watcher's log by exactly those; compare runs through the header
+fields, never by comparing logs byte for byte.
 
 Runner exit codes:
 
 - `0` — the wrapper succeeded.
 - `1` — the wrapper failed; its own exit code is in the `exit=` header line.
-- `3` — no watcher is running. This is the only case in which the developer is
-  asked: state plainly that the watcher is off, ask them to start it with
-  `checkw start` (foreground, so status line and sound stay in the tab), and
-  wait for confirmation instead of falling back to asking them to run the
-  wrapper by hand.
-- `4` — the run is still going; call again with `--poll` rather than reporting
-  a result.
+- `2` — `--poll` without a request of this session.
+- `3` — no watcher is running. This always needs the developer: state plainly
+  that the watcher is off, ask them to type `checkw start` in a terminal tab
+  (foreground, so status line and sound stay there), and wait for their
+  confirmation instead of falling back to asking them to run the wrapper by
+  hand.
+- `4` — this session's run is still queued or running; call again with `--poll`
+  rather than reporting a result.
+- `5` — the request is gone and no result was written: the watcher was restarted
+  while it was queued, or it sat unread for over an hour. Request again; never
+  keep polling.
+
+Beyond exit code 3, stop and ask the developer whenever the obstacle is not
+yours to remove: the same request fails or is dropped three times in a row, a
+run keeps polling far past its usual duration, or the failure names something
+about the machine rather than the code — a missing toolchain, a full disk, a
+binary that is gone. Say what you tried, what you saw, and what you need.
+Changing code in response to a broken environment is worse than waiting.
 
 The usual validation rules of `AGENTS.md` are unchanged by this: the watcher is
 only the transport. Silent success stays silent, failures are diagnosed from the
@@ -80,9 +106,9 @@ below. The developer takes care of the shell and dotfiles side.
 
 ### Wishlist
 
-_Nothing open. The two earlier entries — manual runs published to
-`.agent-check/`, and a `checkw` helper to control the watcher — were built on
-the shell side on 2026-09-07._
+_Nothing open. Earlier entries — manual runs published to `.agent-check/`, a
+`checkw` helper to control the watcher, and the request queue that lets several
+sessions share one watcher — were all built on 2026-09-07._
 
 ## Deleting files from the sandbox
 

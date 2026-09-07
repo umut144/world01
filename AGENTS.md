@@ -100,6 +100,16 @@ The user is a solo developer. Prefer iterative, high-leverage work and avoid pre
 - Run relevant targeted tests when behavior covered by tests was changed.
 - Do not automatically run the complete test suite unless the change scope justifies it.
 - `./scripts/check.sh --tests` additionally runs the library crates' test suites. Use it before and after a refactor that touches simulation, content, or protocol behaviour; the default path stays test-free so routine edits do not build test binaries.
+- Agents whose shell has no Rust toolchain (for example a Claude session working
+  through the mounted project folder) must not stop and ask the developer to run
+  the wrapper by hand. They use the watcher path instead: the developer keeps
+  `./scripts/check-agent.sh` running in a terminal tab, and the agent requests a
+  run with `./scripts/check-agent-run.sh` (same arguments as the wrapper, e.g.
+  `--tests`; `--poll` to keep waiting on a long run, `--full` for the complete
+  output). The watcher executes `./scripts/check.sh` on the host with the normal
+  toolchain and warm `target/`, and writes exit code and output to
+  `.agent-check/`. Exit code 3 means no watcher is running; only then ask the
+  developer to start one.
 - Never run `cargo build`, `cargo run`, release builds, benchmarks, or graphical/manual tests unless explicitly requested.
 - Use dynamic linking for development validation only, never as a release requirement.
 
