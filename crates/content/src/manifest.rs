@@ -8,6 +8,8 @@ use bevy::prelude::Resource;
 use serde::Deserialize;
 use world01_world_data::CharacterId;
 
+include!(concat!(env!("OUT_DIR"), "/embedded_asset_manifests.rs"));
+
 pub const HAMMER_ASSET_KEY: &str = "hammer";
 pub const WEAPON_SOCKET_ROLE: &str = "weapon_socket_primary";
 pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
@@ -819,72 +821,18 @@ fn valid_region_mesh(region: &RuntimeRegion) -> bool {
             .any(|index| *index as usize >= region.vertices.len())
 }
 
+/// Looks up one embedded Asset package.
+///
+/// The table it reads is generated from the world catalog at build time, so a
+/// newly catalogued Asset arrives with the sync rather than with an edit here,
+/// and a catalogued Asset without a package fails the build naming the file.
 fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> {
-    match (asset_type, asset_key) {
-        ("character", "archerf") => Some(include_str!(
-            "../../../assets/characters/archerf/manifest.json"
-        )),
-        ("character", "barde") => Some(include_str!(
-            "../../../assets/characters/barde/manifest.json"
-        )),
-        ("character", "chantres") => Some(include_str!(
-            "../../../assets/characters/chantres/manifest.json"
-        )),
-        ("character", "glavier") => Some(include_str!(
-            "../../../assets/characters/glavier/manifest.json"
-        )),
-        ("character", "hammerer") => Some(include_str!(
-            "../../../assets/characters/hammerer/manifest.json"
-        )),
-        ("character", "mage") => Some(include_str!(
-            "../../../assets/characters/mage/manifest.json"
-        )),
-        ("character", "monk") => Some(include_str!(
-            "../../../assets/characters/monk/manifest.json"
-        )),
-        ("character", "rogue") => Some(include_str!(
-            "../../../assets/characters/rogue/manifest.json"
-        )),
-        ("character", "sorcerer") => Some(include_str!(
-            "../../../assets/characters/sorcerer/manifest.json"
-        )),
-        ("character", "warrior") => Some(include_str!(
-            "../../../assets/characters/warrior/manifest.json"
-        )),
-        ("character", "wizard") => Some(include_str!(
-            "../../../assets/characters/wizard/manifest.json"
-        )),
-        ("props", "ankh") => Some(include_str!("../../../assets/props/ankh/manifest.json")),
-        ("props", "bridge") => Some(include_str!("../../../assets/props/bridge/manifest.json")),
-        ("props", "plank") => Some(include_str!("../../../assets/props/plank/manifest.json")),
-        ("props", "post") => Some(include_str!("../../../assets/props/post/manifest.json")),
-        ("props", "tree") => Some(include_str!("../../../assets/props/tree/manifest.json")),
-        ("terrain", "grass") => Some(include_str!("../../../assets/terrain/grass/manifest.json")),
-        ("terrain", "grass01") => Some(include_str!(
-            "../../../assets/terrain/grass01/manifest.json"
-        )),
-        ("terrain", "grass02") => Some(include_str!(
-            "../../../assets/terrain/grass02/manifest.json"
-        )),
-        ("terrain", "grass03") => Some(include_str!(
-            "../../../assets/terrain/grass03/manifest.json"
-        )),
-        ("terrain", "grass04") => Some(include_str!(
-            "../../../assets/terrain/grass04/manifest.json"
-        )),
-        ("terrain", "river") => Some(include_str!("../../../assets/terrain/river/manifest.json")),
-        ("terrain", "river01") => Some(include_str!(
-            "../../../assets/terrain/river01/manifest.json"
-        )),
-        ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
-        ("weapons", "throwing_knife") => Some(include_str!(
-            "../../../assets/weapons/throwing_knife/manifest.json"
-        )),
-        ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
-        ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),
-        ("symbols", "plus") => Some(include_str!("../../../assets/symbols/plus/manifest.json")),
-        _ => None,
-    }
+    EMBEDDED_ASSET_MANIFESTS
+        .iter()
+        .find(|(embedded_type, embedded_key, _)| {
+            *embedded_type == asset_type && *embedded_key == asset_key
+        })
+        .map(|(_, _, source)| *source)
 }
 
 #[cfg(test)]

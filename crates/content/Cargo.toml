@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 
+[build-dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
 [dependencies]
 bevy = { workspace = true, features = ["std"] }
 world01-world-data = { path = "../world_data" }
