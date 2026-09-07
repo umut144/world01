@@ -23,6 +23,7 @@ pub struct RuntimeContent {
     characters: HashMap<CharacterId, RuntimeManifest>,
     props: HashMap<String, RuntimeManifest>,
     terrain: HashMap<String, RuntimeManifest>,
+    weapons: HashMap<String, RuntimeManifest>,
     hammer: RuntimeManifest,
 }
 
@@ -65,6 +66,7 @@ impl RuntimeContent {
         let mut characters = HashMap::new();
         let mut props = HashMap::new();
         let mut terrain = HashMap::new();
+        let mut weapons = HashMap::new();
         let mut hammer = None;
         for asset in &catalog.assets {
             if !matches!(
@@ -101,6 +103,9 @@ impl RuntimeContent {
             } else if asset.asset_type == "terrain" {
                 validate_asset_contents(&manifest)?;
                 terrain.insert(asset.asset_key.clone(), manifest);
+            } else if asset.asset_type == "weapons" {
+                validate_asset_contents(&manifest)?;
+                weapons.insert(asset.asset_key.clone(), manifest);
             }
         }
 
@@ -116,6 +121,7 @@ impl RuntimeContent {
             characters,
             props,
             terrain,
+            weapons,
             hammer,
         })
     }
@@ -148,6 +154,12 @@ impl RuntimeContent {
 
     pub fn terrain(&self, asset_key: &str) -> Option<&RuntimeManifest> {
         self.terrain.get(asset_key)
+    }
+
+    /// A catalogued weapon other than the Hammer, which has its own accessor
+    /// because the sandbox binds it by name.
+    pub fn weapon(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.weapons.get(asset_key)
     }
 
     /// The terrain Asset that a cell actually draws.
@@ -865,6 +877,9 @@ fn embedded_manifest(asset_type: &str, asset_key: &str) -> Option<&'static str> 
             "../../../assets/terrain/river01/manifest.json"
         )),
         ("weapons", "hammer") => Some(include_str!("../../../assets/weapons/hammer/manifest.json")),
+        ("weapons", "throwing_knife") => Some(include_str!(
+            "../../../assets/weapons/throwing_knife/manifest.json"
+        )),
         ("symbols", "heart") => Some(include_str!("../../../assets/symbols/heart/manifest.json")),
         ("symbols", "orb") => Some(include_str!("../../../assets/symbols/orb/manifest.json")),
         ("symbols", "plus") => Some(include_str!("../../../assets/symbols/plus/manifest.json")),

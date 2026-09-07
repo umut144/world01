@@ -231,6 +231,17 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_29",
+			"asset_key": "throwing_knife",
+			"asset_type": "weapons",
+			"display_name": "Throwing Knife",
+			"previous_keys": [
+				"knife"
+			],
+			"runtime_package": "PolyToolsRuntimeExports/throwing_knife/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_10",
 			"asset_key": "tree",
 			"asset_type": "props",

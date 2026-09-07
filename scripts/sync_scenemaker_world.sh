@@ -273,6 +273,34 @@ for source_export in "${source_exports[@]}"; do
         | select(any(.segments[]; .operation == "subtractive"))
         | .route_surface_id] | sort))
     and ($water_cells == ($water_cells | floor) and $water_cells >= 1)
+    and (([.scene.water_bodies[].water_body_id] | unique | length)
+      == (.scene.water_bodies | length))
+    and ([.scene.water_bodies[].water_body_id] == [.water_raster[].water_body_id])
+    and all(.scene.water_bodies[];
+      (.water_body_id | type == "string" and length > 0)
+      and (.water_kind | type == "string" and length > 0)
+      and (.asset_key | type == "string" and length > 0)
+      and (.points | type == "array" and length >= 2)
+      and all(.points[];
+        (.position_authoring_px.x | type == "number" and . == floor)
+        and (.position_authoring_px.y | type == "number" and . == floor)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.width_meters | type == "number" and isfinite and . > 0)
+        and (.channel_depth_meters | type == "number" and isfinite and . > 0)
+        and (.clearance_above_meters | type == "number" and isfinite and . >= 0)))
+    and all(.water_raster[];
+      (.cells | type == "array" and length > 0)
+      and all(.cells[];
+        (.x | type == "number" and . == floor and . >= 0
+          and . < ($root.scene.size_cells.width * $water_cells))
+        and (.y | type == "number" and . == floor and . >= 0
+          and . < ($root.scene.size_cells.height * $water_cells))
+        and (.bed_meters | type == "number" and isfinite)
+        and (.surface_meters | type == "number" and isfinite)
+        and (.cut_top_meters | type == "number" and isfinite)
+        and (.surface_meters > .bed_meters)
+        and (.cut_top_meters >= .surface_meters))
+      and (([.cells[] | "\(.x):\(.y)"] | unique | length) == (.cells | length)))
     and all(.route_surface_cut_raster[]; . as $cut
       | ([$root.scene.route_surfaces[]
           | select(.route_surface_id == $cut.route_surface_id)

@@ -31,6 +31,7 @@ pub struct WorldMap {
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
     bridges: Vec<MapBridge>,
     bridge_decks: Vec<MapRouteSurface>,
+    water_bodies: Vec<MapWaterBody>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
@@ -86,6 +87,7 @@ impl WorldMap {
             route_surfaces: scene.route_surfaces,
             bridges: scene.bridges,
             bridge_decks: scene.bridge_decks,
+            water_bodies: scene.water_bodies,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
             water_cell_meters: scene.water_cell_meters,
@@ -236,6 +238,11 @@ impl WorldMap {
     /// The decks of those bridges, as the Paths they are baked from.
     pub fn bridge_decks(&self) -> &[MapRouteSurface] {
         &self.bridge_decks
+    }
+
+    /// The authored water of this map, each body with the cells it occupies.
+    pub fn water_bodies(&self) -> &[MapWaterBody] {
+        &self.water_bodies
     }
 
     /// Every authored surface a Character walks along rather than over: the
@@ -553,6 +560,9 @@ impl WorldMap {
             // Instance was authored with.
             bridges: self.bridges.clone(),
             bridge_decks: self.bridge_decks.clone(),
+            // A Template carries no water yet, so composition keeps the water
+            // the Instance was authored with.
+            water_bodies: self.water_bodies.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
             water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
@@ -1169,6 +1179,38 @@ pub struct MapRouteCutCell {
     pub cut_top_meters: f32,
 }
 
+/// A SceneMaker-authored body of water, with the ground it has taken.
+///
+/// The authored spine is what the author drew; these cells are what SceneMaker
+/// resolved from it on the finer water grid, and they are what the simulation
+/// reads. The spine itself belongs to the drawing and arrives with the bake
+/// that draws it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapWaterBody {
+    pub water_body_id: String,
+    /// What kind of water this is, as the author classified it.
+    pub water_kind: String,
+    pub asset_key: String,
+    /// What the water offers to walk on, from its Asset's profile - which is
+    /// how a Terrain cell gets its surface too.
+    pub surface: String,
+    pub cells: Vec<MapWaterCell>,
+}
+
+/// One cell of water, on the same finer grid the Path cuts use.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapWaterCell {
+    pub x: u32,
+    pub y: u32,
+    /// The bed the channel was cut down to.
+    pub bed_meters: f32,
+    /// The height the water stands at.
+    pub surface_meters: f32,
+    /// The height up to which Terrain is gone, so that the channel keeps the
+    /// air the author gave it.
+    pub cut_top_meters: f32,
+}
+
 /// A SceneMaker-authored bridge: a deck laid across a gap, the planks that
 /// show it, and the posts standing at its corners.
 ///
@@ -1411,6 +1453,7 @@ struct ConvertedSceneBody {
     route_surface_cuts: Vec<MapRouteSurfaceCut>,
     bridges: Vec<MapBridge>,
     bridge_decks: Vec<MapRouteSurface>,
+    water_bodies: Vec<MapWaterBody>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
@@ -1425,6 +1468,7 @@ fn convert_scene_body(
         route_surface_bakes,
         route_surface_cut_raster,
         bridge_bakes,
+        water_raster,
         scene,
         ..
     } = export;
@@ -1434,6 +1478,7 @@ fn convert_scene_body(
         props: source_props,
         route_surfaces: source_route_surfaces,
         bridges: source_bridges,
+        water_bodies: source_water_bodies,
         template_anchors: source_template_anchors,
         ..
     } = scene;
@@ -1542,6 +1587,15 @@ fn convert_scene_body(
     )?;
     let bridges = convert_bridges(source_bridges, bridge_bakes, &profiles, offset_x, offset_y)?;
     let bridge_decks = bridge_decks(&bridges, &route_surfaces)?;
+    let water_bodies = convert_water_bodies(
+        source_water_bodies,
+        water_raster,
+        &profiles,
+        width_tiles,
+        height_tiles,
+        grid.terrain_cell_meters,
+        grid.water_cell_meters,
+    )?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
         .into_iter()
@@ -1598,9 +1652,118 @@ fn convert_scene_body(
         route_surface_cuts,
         bridges,
         bridge_decks,
+        water_bodies,
         water_cell_meters: grid.water_cell_meters,
         template_anchors,
     })
+}
+
+/// Joins each authored body of water with the cells SceneMaker resolved for it.
+///
+/// A water cell says three heights: the bed the channel was cut to, the height
+/// the water stands at, and the height up to which Terrain is gone. They are
+/// read here and checked against each other; what they mean for walking is the
+/// column rule's business.
+fn convert_water_bodies(
+    sources: Vec<WaterBodyDocument>,
+    raster: Vec<WaterRasterDocument>,
+    profiles: &HashMap<String, AssetProfileDocument>,
+    width_tiles: u32,
+    height_tiles: u32,
+    terrain_cell_meters: f32,
+    water_cell_meters: f32,
+) -> Result<Vec<MapWaterBody>, WorldMapError> {
+    if sources.len() != raster.len() {
+        return Err(WorldMapError::new(
+            "authored water bodies and water_raster must have the same length",
+        ));
+    }
+    if sources.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ratio = terrain_cell_meters / water_cell_meters;
+    if !ratio.is_finite() || ratio < 1.0 || ratio.fract() != 0.0 {
+        return Err(WorldMapError::new(
+            "a Terrain cell must cover a whole number of water cells",
+        ));
+    }
+    let per_terrain_cell = ratio as u32;
+    let mut body_ids = HashSet::with_capacity(sources.len());
+    let mut converted = Vec::with_capacity(sources.len());
+    for (source, entry) in sources.into_iter().zip(raster) {
+        if source.water_body_id.is_empty() || !body_ids.insert(source.water_body_id.clone()) {
+            return Err(WorldMapError::new(format!(
+                "water body ID '{}' is empty or duplicated",
+                source.water_body_id
+            )));
+        }
+        if entry.water_body_id != source.water_body_id {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' is rastered under another ID",
+                source.water_body_id
+            )));
+        }
+        if source.water_kind.is_empty() || source.asset_key.is_empty() {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' does not name its kind and Asset",
+                source.water_body_id
+            )));
+        }
+        let Some(surface) = require_profile(profiles, &source.asset_key)?
+            .surface
+            .clone()
+        else {
+            return Err(WorldMapError::new(format!(
+                "water asset '{}' has no exported surface",
+                source.asset_key
+            )));
+        };
+        let mut occupied = HashSet::with_capacity(entry.cells.len());
+        let mut cells = Vec::with_capacity(entry.cells.len());
+        for cell in entry.cells {
+            if cell.x >= width_tiles.saturating_mul(per_terrain_cell)
+                || cell.y >= height_tiles.saturating_mul(per_terrain_cell)
+                || !occupied.insert((cell.x, cell.y))
+            {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has a cell outside the world or twice over",
+                    source.water_body_id
+                )));
+            }
+            if !cell.bed_meters.is_finite()
+                || !cell.surface_meters.is_finite()
+                || !cell.cut_top_meters.is_finite()
+                || cell.surface_meters <= cell.bed_meters
+                || cell.cut_top_meters < cell.surface_meters
+            {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has a cell whose bed, surface and cut do not stack up",
+                    source.water_body_id
+                )));
+            }
+            cells.push(MapWaterCell {
+                x: cell.x,
+                y: cell.y,
+                bed_meters: cell.bed_meters,
+                surface_meters: cell.surface_meters,
+                cut_top_meters: cell.cut_top_meters,
+            });
+        }
+        if cells.is_empty() {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' occupies no cell at all",
+                source.water_body_id
+            )));
+        }
+        converted.push(MapWaterBody {
+            water_body_id: source.water_body_id,
+            water_kind: source.water_kind,
+            asset_key: source.asset_key,
+            surface,
+            cells,
+        });
+    }
+    Ok(converted)
 }
 
 /// A deck is a Path to whoever walks on it.
@@ -2635,7 +2798,7 @@ struct ExportDocument {
     workspace_key: String,
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
-    water_raster: Vec<serde::de::IgnoredAny>,
+    water_raster: Vec<WaterRasterDocument>,
     route_surface_bakes: Vec<RouteSurfaceBakeDocument>,
     route_surface_cut_raster: Vec<RouteSurfaceCutRasterDocument>,
     bridge_bakes: Vec<BridgeBakeDocument>,
@@ -2720,6 +2883,28 @@ struct RouteSurfaceCutCellDocument {
 }
 
 #[derive(Deserialize)]
+struct WaterBodyDocument {
+    water_body_id: String,
+    water_kind: String,
+    asset_key: String,
+}
+
+#[derive(Deserialize)]
+struct WaterRasterDocument {
+    water_body_id: String,
+    cells: Vec<WaterCellDocument>,
+}
+
+#[derive(Deserialize)]
+struct WaterCellDocument {
+    x: u32,
+    y: u32,
+    bed_meters: f32,
+    surface_meters: f32,
+    cut_top_meters: f32,
+}
+
+#[derive(Deserialize)]
 struct GridDocument {
     terrain_cell_meters: f32,
     authoring_pixels_per_meter: f32,
@@ -2759,7 +2944,7 @@ struct SceneDocument {
     coordinate_space: String,
     terrain_cells: Vec<TerrainCellDocument>,
     props: Vec<PropDocument>,
-    water_bodies: Vec<serde::de::IgnoredAny>,
+    water_bodies: Vec<WaterBodyDocument>,
     route_surfaces: Vec<RouteSurfaceDocument>,
     bridges: Vec<BridgeDocument>,
     template_definition: Option<TemplateDefinitionDocument>,
@@ -4425,6 +4610,26 @@ mod tests {
 
         assert!(WorldMap::from_source(&outside, TEST_SCENE_ID).is_err());
         assert!(WorldMap::from_source(&unprofiled, TEST_SCENE_ID).is_err());
+    }
+
+    #[test]
+    fn the_embedded_world_carries_its_authored_water() {
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let bodies = map.water_bodies();
+
+        assert_eq!(bodies.len(), 1);
+        for body in bodies {
+            assert_eq!(body.water_kind, "river");
+            assert_eq!(body.surface, "water");
+            assert!(!body.cells.is_empty());
+            assert!(
+                body.cells.iter().all(|cell| {
+                    cell.bed_meters < cell.surface_meters
+                        && cell.surface_meters <= cell.cut_top_meters
+                }),
+                "a water cell stacks bed, surface and cut in that order"
+            );
+        }
     }
 
     #[test]
