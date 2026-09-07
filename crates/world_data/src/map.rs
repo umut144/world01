@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 15;
+const FORMAT_VERSION: u32 = 16;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 15;
 const WORKSPACE_KEY: &str = "world01";
@@ -1269,6 +1269,15 @@ pub struct MapWaterBody {
     /// how a Terrain cell gets its surface too.
     pub surface: String,
     pub cells: Vec<MapWaterCell>,
+    /// The band this body is drawn as, baked by SceneMaker from the same
+    /// flattener a Path uses. It carries no authored interval, because water
+    /// has no grade to walk and takes nothing out of the Terrain that the
+    /// cells above have not already taken.
+    pub vertices: Vec<MapRouteVertex>,
+    pub triangle_indices: Vec<u32>,
+    /// The line the author drew, which is where anything flowing in this water
+    /// is placed: station along the course, width across it.
+    pub centerline_samples: Vec<MapRouteCenterlineSample>,
 }
 
 /// One cell of water, on the same finer grid the Path cuts use.
@@ -1542,6 +1551,7 @@ fn convert_scene_body(
         route_surface_bakes,
         route_surface_cut_raster,
         bridge_bakes,
+        water_bakes,
         water_raster,
         scene,
         ..
@@ -1664,6 +1674,9 @@ fn convert_scene_body(
     let water_bodies = convert_water_bodies(
         source_water_bodies,
         water_raster,
+        water_bakes,
+        offset_x,
+        offset_y,
         &profiles,
         width_tiles,
         height_tiles,
@@ -1741,15 +1754,18 @@ fn convert_scene_body(
 fn convert_water_bodies(
     sources: Vec<WaterBodyDocument>,
     raster: Vec<WaterRasterDocument>,
+    bakes: Vec<WaterBakeDocument>,
+    offset_x: f32,
+    offset_y: f32,
     profiles: &HashMap<String, AssetProfileDocument>,
     width_tiles: u32,
     height_tiles: u32,
     terrain_cell_meters: f32,
     water_cell_meters: f32,
 ) -> Result<Vec<MapWaterBody>, WorldMapError> {
-    if sources.len() != raster.len() {
+    if sources.len() != raster.len() || sources.len() != bakes.len() {
         return Err(WorldMapError::new(
-            "authored water bodies and water_raster must have the same length",
+            "authored water bodies, water_raster and water_bakes must have the same length",
         ));
     }
     if sources.is_empty() {
@@ -1764,16 +1780,17 @@ fn convert_water_bodies(
     let per_terrain_cell = ratio as u32;
     let mut body_ids = HashSet::with_capacity(sources.len());
     let mut converted = Vec::with_capacity(sources.len());
-    for (source, entry) in sources.into_iter().zip(raster) {
+    for ((source, entry), bake) in sources.into_iter().zip(raster).zip(bakes) {
         if source.water_body_id.is_empty() || !body_ids.insert(source.water_body_id.clone()) {
             return Err(WorldMapError::new(format!(
                 "water body ID '{}' is empty or duplicated",
                 source.water_body_id
             )));
         }
-        if entry.water_body_id != source.water_body_id {
+        if entry.water_body_id != source.water_body_id || bake.water_body_id != source.water_body_id
+        {
             return Err(WorldMapError::new(format!(
-                "water body '{}' is rastered under another ID",
+                "water body '{}' is rastered or baked under another ID",
                 source.water_body_id
             )));
         }
@@ -1829,12 +1846,78 @@ fn convert_water_bodies(
                 source.water_body_id
             )));
         }
+        let vertices = bake
+            .vertices
+            .into_iter()
+            .map(|vertex| {
+                if !vertex.x_meters.is_finite()
+                    || !vertex.y_meters.is_finite()
+                    || !vertex.elevation_meters.is_finite()
+                {
+                    return Err(WorldMapError::new(format!(
+                        "water body '{}' has a non-finite corner",
+                        source.water_body_id
+                    )));
+                }
+                Ok(MapRouteVertex {
+                    position: Position::new(vertex.x_meters + offset_x, vertex.y_meters + offset_y),
+                    elevation_meters: vertex.elevation_meters,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if vertices.len() < 3
+            || bake.triangle_indices.is_empty()
+            || bake.triangle_indices.len() % 3 != 0
+            || bake
+                .triangle_indices
+                .iter()
+                .any(|index| *index as usize >= vertices.len())
+        {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' has no usable band",
+                source.water_body_id
+            )));
+        }
+        let mut centerline_samples = Vec::with_capacity(bake.centerline_samples.len());
+        let mut previous_station: Option<f32> = None;
+        for sample in bake.centerline_samples {
+            if !sample.x_meters.is_finite()
+                || !sample.y_meters.is_finite()
+                || !sample.elevation_meters.is_finite()
+                || !sample.width_meters.is_finite()
+                || sample.width_meters <= 0.0
+                || !sample.station_meters.is_finite()
+                || previous_station.is_some_and(|previous| sample.station_meters <= previous)
+            {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has an invalid centerline sample",
+                    source.water_body_id
+                )));
+            }
+            previous_station = Some(sample.station_meters);
+            centerline_samples.push(MapRouteCenterlineSample {
+                position: Position::new(sample.x_meters + offset_x, sample.y_meters + offset_y),
+                elevation_meters: sample.elevation_meters,
+                width_meters: sample.width_meters,
+                station_meters: sample.station_meters,
+                authored_point_index: sample.authored_point_index,
+            });
+        }
+        if centerline_samples.len() < 2 {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' has no centerline to flow along",
+                source.water_body_id
+            )));
+        }
         converted.push(MapWaterBody {
             water_body_id: source.water_body_id,
             water_kind: source.water_kind,
             asset_key: source.asset_key,
             surface,
             cells,
+            vertices,
+            triangle_indices: bake.triangle_indices,
+            centerline_samples,
         });
     }
     Ok(converted)
@@ -2909,6 +2992,7 @@ struct ExportDocument {
     route_surface_bakes: Vec<RouteSurfaceBakeDocument>,
     route_surface_cut_raster: Vec<RouteSurfaceCutRasterDocument>,
     bridge_bakes: Vec<BridgeBakeDocument>,
+    water_bakes: Vec<WaterBakeDocument>,
     scene: SceneDocument,
 }
 
@@ -2994,6 +3078,14 @@ struct WaterBodyDocument {
     water_body_id: String,
     water_kind: String,
     asset_key: String,
+}
+
+#[derive(Deserialize)]
+struct WaterBakeDocument {
+    water_body_id: String,
+    vertices: Vec<BridgeVertexDocument>,
+    triangle_indices: Vec<u32>,
+    centerline_samples: Vec<RouteSurfaceCenterlineSampleDocument>,
 }
 
 #[derive(Deserialize)]
@@ -3220,6 +3312,7 @@ fn export_document(
             "route_surface_bakes": [],
             "route_surface_cut_raster": [],
             "bridge_bakes": [],
+            "water_bakes": [],
             "scene": {{
                 "schema": "{SCENE_SCHEMA}",
                 "version": {scene_version},
@@ -4745,6 +4838,22 @@ mod tests {
                         && cell.surface_meters <= cell.cut_top_meters
                 }),
                 "a water cell stacks bed, surface and cut in that order"
+            );
+            assert!(body.vertices.len() >= 3, "a body arrives with a band");
+            assert!(
+                body.triangle_indices.len() % 3 == 0
+                    && body
+                        .triangle_indices
+                        .iter()
+                        .all(|index| (*index as usize) < body.vertices.len())
+            );
+            assert!(body.centerline_samples.len() >= 2);
+            assert_eq!(
+                body.centerline_samples
+                    .first()
+                    .map(|sample| sample.station_meters),
+                Some(0.0),
+                "the course is measured from the end the author drew first"
             );
         }
     }

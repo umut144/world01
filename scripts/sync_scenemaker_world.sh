@@ -77,7 +77,7 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 15
+    and .version == 16
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
@@ -100,6 +100,7 @@ for source_export in "${source_exports[@]}"; do
     and (.route_surface_cut_raster | type == "array")
     and (.scene.bridges | type == "array")
     and (.bridge_bakes | type == "array")
+    and (.water_bakes | type == "array")
     and (if .scene.scene_kind == "instance" then
       .scene.template_definition == null
     else
@@ -115,6 +116,7 @@ for source_export in "${source_exports[@]}"; do
       and (.route_surface_cut_raster | length == 0)
       and (.scene.bridges | length == 0)
       and (.bridge_bakes | length == 0)
+      and (.water_bakes | length == 0)
     end)
     and (.asset_profiles | type == "array")
     and (([.asset_profiles[].asset_key] | unique | length) == (.asset_profiles | length))
@@ -288,6 +290,27 @@ for source_export in "${source_exports[@]}"; do
         and (.width_meters | type == "number" and isfinite and . > 0)
         and (.channel_depth_meters | type == "number" and isfinite and . > 0)
         and (.clearance_above_meters | type == "number" and isfinite and . >= 0)))
+    and ([.scene.water_bodies[].water_body_id] == [.water_bakes[].water_body_id])
+    and all(.water_bakes[]; . as $bake
+      | (.asset_key | type == "string" and length > 0)
+      and (.vertices | type == "array" and length >= 3)
+      and all(.vertices[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite))
+      and (.triangle_indices | type == "array" and length > 0 and ((length % 3) == 0))
+      and all(.triangle_indices[];
+        type == "number" and . == floor and . >= 0 and . < ($bake.vertices | length))
+      and (.centerline_samples | type == "array" and length >= 2)
+      and (.centerline_samples[0].station_meters == 0)
+      and ([.centerline_samples[].station_meters]
+        == ([.centerline_samples[].station_meters] | sort))
+      and all(.centerline_samples[];
+        (.x_meters | type == "number" and isfinite)
+        and (.y_meters | type == "number" and isfinite)
+        and (.elevation_meters | type == "number" and isfinite)
+        and (.width_meters | type == "number" and isfinite and . > 0)
+        and (.station_meters | type == "number" and isfinite and . >= 0)))
     and all(.water_raster[];
       (.cells | type == "array" and length > 0)
       and all(.cells[];

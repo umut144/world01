@@ -1,6 +1,6 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 15,
+  "version": 16,
   "workspace_key": "world01",
   "grid": {
     "terrain_cell_meters": 1.0,
@@ -71,6 +71,7 @@
     }
   ],
   "water_raster": [],
+  "water_bakes": [],
   "route_surface_bakes": [],
   "route_surface_cut_raster": [],
   "bridge_bakes": [],
