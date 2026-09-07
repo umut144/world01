@@ -74,6 +74,28 @@ Open: whether the cap is exactly one half, and whether it is evaluated at the
 branch point alone or across a window of stations when two branches sit close
 together.
 
+## Tides and drying, which are not built
+
+Water in this world rises and falls, and a river can dry out; a bed that falls
+dry is meant to open the cave mouths in its flanks. None of that is built, and
+none of it is designed here. What is settled is that the column may not make it
+impossible:
+
+- A water cell offers **two** walking surfaces, the bed and the water standing
+  over it, the same way an excavated column offers the tunnel floor and the
+  ground above it. The bed is never dropped just because water covers it today.
+- A surface under standing water is marked **flooded**, and a flooded surface is
+  offered to nobody. That is what keeps a Character on the bank without any rule
+  about water having to be written into movement.
+- The water level a surface is measured against is the authored one. A world
+  with tides would move that value; the same ground would stop being flooded,
+  and the graph would be rebuilt the way it already is when a map changes.
+- The depth at a place is the difference between the two surfaces of its column,
+  so wading - crossing where the water is shallow - would not need new data
+  either, only a rule in a Character's profile.
+
+Until then water is simply not walkable, at the bank and everywhere else.
+
 ## Phases
 
 ### Phase 1 — one river, no branches

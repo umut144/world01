@@ -152,8 +152,11 @@ impl GroundNavigationGraph {
 
         let mut column = Vec::new();
         for cell in map.terrain_cells() {
-            let surface = intern(&mut surfaces, &cell.surface)?;
             map.terrain_walking_surfaces(cell.center, &mut column);
+            // Ground under standing water is no place to stand. It stays in the
+            // world - a falling water level would uncover it - but it is not a
+            // node while the water is over it.
+            column.retain(|surface| !surface.flooded);
             if column.is_empty() {
                 return Err(GroundNavigationError(format!(
                     "Terrain cell ({}, {}) resolves to no walking surface",
@@ -175,11 +178,12 @@ impl GroundNavigationGraph {
             };
             let count = u32::try_from(column.len()).unwrap_or(u32::MAX);
             cell_nodes[index] = TerrainCellNodes { first, count };
-            for elevation_meters in column.iter().copied() {
+            for standing_on in column.iter() {
+                let surface = intern(&mut surfaces, standing_on.surface)?;
                 node_cells.push(u32::try_from(index).unwrap_or(u32::MAX));
                 nodes.push(GroundNavigationNode {
                     position: cell.center,
-                    elevation_meters,
+                    elevation_meters: standing_on.elevation_meters,
                     surface,
                     support: GroundSupport::Terrain,
                     blocked,
@@ -702,7 +706,7 @@ mod tests {
     use crate::TraversalCatalog;
 
     use super::*;
-    use world01_world_data::RouteSegmentOperation;
+    use world01_world_data::{MapColumnSurface, RouteSegmentOperation};
 
     fn overworld() -> WorldMap {
         WorldMap::load_embedded("overworld01").expect("embedded Instance is valid")
@@ -724,6 +728,12 @@ mod tests {
             .find(|cell| cell.x == x && cell.y == y)
             .expect("the world has that Terrain cell")
             .center
+    }
+
+    /// The surfaces of a column a Character could stand on, which is what the
+    /// graph turns into nodes.
+    fn unflooded(column: &[MapColumnSurface<'_>]) -> usize {
+        column.iter().filter(|surface| !surface.flooded).count()
     }
 
     fn node_at(graph: &GroundNavigationGraph, position: Position) -> &GroundNavigationNode {
@@ -783,7 +793,7 @@ mod tests {
             .iter()
             .map(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                column.len()
+                unflooded(&column)
             })
             .sum::<usize>();
 
@@ -813,7 +823,7 @@ mod tests {
             .iter()
             .find(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                column.len() > 1
+                unflooded(&column) > 1
             })
             .expect("the overworld is excavated somewhere");
 
@@ -836,13 +846,20 @@ mod tests {
                     .iter()
                     .map(|node| node.elevation_meters())
                     .collect::<Vec<_>>(),
-                column,
+                column
+                    .iter()
+                    .filter(|surface| !surface.flooded)
+                    .map(|surface| surface.elevation_meters)
+                    .collect::<Vec<_>>(),
                 "a cell offers exactly the places its column resolves to"
             );
-            for node in standing {
+            for (node, standing_on) in standing
+                .iter()
+                .zip(column.iter().filter(|surface| !surface.flooded))
+            {
                 assert_eq!(
                     graph.surface_name(node.surface()),
-                    Some(cell.surface.as_str())
+                    Some(standing_on.surface)
                 );
             }
         }
@@ -1108,7 +1125,8 @@ mod tests {
             .find_map(|cell| {
                 let neighbour = map.terrain_cell(cell.x + 1, cell.y)?;
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                (column.len() == 1 && neighbour.elevation_meters - cell.elevation_meters > 0.5)
+                (unflooded(&column) == 1
+                    && neighbour.elevation_meters - cell.elevation_meters > 0.5)
                     .then_some((cell, neighbour))
             })
             .expect("the overworld steps up somewhere too steeply to walk");
@@ -1141,12 +1159,12 @@ mod tests {
             .iter()
             .find(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                column.len() > 1
+                unflooded(&column) > 1
             })
             .expect("the overworld is excavated somewhere");
         map.terrain_walking_surfaces(excavated.center, &mut column);
-        let floor = column[0];
-        let ground = column[1];
+        let floor = column[0].elevation_meters;
+        let ground = column[1].elevation_meters;
 
         graph.steps_from(
             index_at(&graph, excavated.center, floor),

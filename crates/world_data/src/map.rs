@@ -33,6 +33,7 @@ pub struct WorldMap {
     bridge_decks: Vec<MapRouteSurface>,
     water_bodies: Vec<MapWaterBody>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
+    water_columns: HashMap<(u32, u32), WaterColumn>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
@@ -42,6 +43,15 @@ pub struct WorldMap {
 struct TerrainCut {
     floor_meters: f32,
     cut_top_meters: f32,
+}
+
+/// The water standing in one cell, and the channel it was given.
+#[derive(Debug, Clone, PartialEq)]
+struct WaterColumn {
+    bed_meters: f32,
+    surface_meters: f32,
+    cut_top_meters: f32,
+    surface: String,
 }
 
 impl WorldMap {
@@ -87,6 +97,7 @@ impl WorldMap {
             route_surfaces: scene.route_surfaces,
             bridges: scene.bridges,
             bridge_decks: scene.bridge_decks,
+            water_columns: index_water_columns(&scene.water_bodies),
             water_bodies: scene.water_bodies,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
@@ -159,31 +170,93 @@ impl WorldMap {
     ///
     /// The column is resolved at the point asked for, never voted on across a
     /// cell, because the authored excavation is finer than one Terrain cell.
-    pub fn terrain_walking_surfaces(&self, position: Position, surfaces: &mut Vec<f32>) {
+    pub fn terrain_walking_surfaces<'a>(
+        &'a self,
+        position: Position,
+        surfaces: &mut Vec<MapColumnSurface<'a>>,
+    ) {
         surfaces.clear();
         let Some(cell) = self.terrain_cell_at(position) else {
             return;
         };
+        let water = self.water_column_at(position);
+        let mut cuts = self
+            .terrain_cuts_at(position)
+            .map(<[TerrainCut]>::to_vec)
+            .unwrap_or_default();
+        // Standing water takes the same kind of range out of the column an
+        // excavating Path does: down to the bed it was cut to, up to the height
+        // that keeps the channel open.
+        if let Some(water) = water {
+            cuts.push(TerrainCut {
+                floor_meters: water.bed_meters,
+                cut_top_meters: water.cut_top_meters,
+            });
+            cuts.sort_by(|first, second| {
+                first
+                    .floor_meters
+                    .total_cmp(&second.floor_meters)
+                    .then_with(|| first.cut_top_meters.total_cmp(&second.cut_top_meters))
+            });
+        }
+
         let mut ceiling = cell.elevation_meters;
-        if let Some(cuts) = self.terrain_cuts_at(position) {
-            let mut merged: Vec<TerrainCut> = Vec::new();
-            for cut in cuts.iter().filter(|cut| cut.floor_meters < ceiling) {
-                match merged.last_mut() {
-                    Some(last) if cut.floor_meters <= last.cut_top_meters => {
-                        last.cut_top_meters = last.cut_top_meters.max(cut.cut_top_meters);
-                    }
-                    _ => merged.push(*cut),
+        let mut merged: Vec<TerrainCut> = Vec::new();
+        for cut in cuts.iter().filter(|cut| cut.floor_meters < ceiling) {
+            match merged.last_mut() {
+                Some(last) if cut.floor_meters <= last.cut_top_meters => {
+                    last.cut_top_meters = last.cut_top_meters.max(cut.cut_top_meters);
                 }
-            }
-            for cut in merged.iter().rev() {
-                if cut.cut_top_meters < ceiling {
-                    surfaces.push(ceiling);
-                }
-                ceiling = cut.floor_meters;
+                _ => merged.push(*cut),
             }
         }
-        surfaces.push(ceiling);
+        for cut in merged.iter().rev() {
+            if cut.cut_top_meters < ceiling {
+                surfaces.push(MapColumnSurface {
+                    elevation_meters: ceiling,
+                    surface: &cell.surface,
+                    flooded: false,
+                });
+            }
+            ceiling = cut.floor_meters;
+        }
+        surfaces.push(MapColumnSurface {
+            elevation_meters: ceiling,
+            surface: &cell.surface,
+            flooded: water.is_some_and(|water| ceiling < water.surface_meters),
+        });
         surfaces.reverse();
+
+        // The water itself is the last surface the column offers, standing over
+        // the ground it flooded.
+        if let Some(water) = water {
+            let index = surfaces
+                .iter()
+                .position(|surface| surface.elevation_meters > water.surface_meters)
+                .unwrap_or(surfaces.len());
+            surfaces.insert(
+                index,
+                MapColumnSurface {
+                    elevation_meters: water.surface_meters,
+                    surface: &water.surface,
+                    flooded: false,
+                },
+            );
+        }
+    }
+
+    fn water_column_at(&self, position: Position) -> Option<&WaterColumn> {
+        if self.water_columns.is_empty() {
+            return None;
+        }
+        let minimum_x = -self.width_meters() / 2.0;
+        let minimum_y = -self.height_meters() / 2.0;
+        let x = ((position.x - minimum_x) / self.water_cell_meters).floor();
+        let y = ((position.y - minimum_y) / self.water_cell_meters).floor();
+        if x < 0.0 || y < 0.0 {
+            return None;
+        }
+        self.water_columns.get(&(x as u32, y as u32))
     }
 
     fn terrain_cuts_at(&self, position: Position) -> Option<&[TerrainCut]> {
@@ -564,6 +637,7 @@ impl WorldMap {
             // the Instance was authored with.
             water_bodies: self.water_bodies.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
+            water_columns: self.water_columns.clone(),
             water_cell_meters: self.water_cell_meters,
             template_anchors: self.template_anchors.clone(),
         })
@@ -2621,6 +2695,39 @@ fn validate_header(
 ///
 /// Intervals are ordered by floor and then by top, because two Paths may cut
 /// the same cell and a column must resolve the same way every time.
+/// One walking surface a column offers.
+///
+/// A surface is `flooded` when standing water covers it. Which water level that
+/// is measured against is the authored one today; a world with tides would move
+/// it, and the same ground would stop being flooded without the column having
+/// to be rebuilt.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapColumnSurface<'a> {
+    pub elevation_meters: f32,
+    /// What this surface offers to walk on: the Terrain's own surface, or the
+    /// water's where the surface is the water.
+    pub surface: &'a str,
+    pub flooded: bool,
+}
+
+fn index_water_columns(bodies: &[MapWaterBody]) -> HashMap<(u32, u32), WaterColumn> {
+    let mut indexed = HashMap::new();
+    for body in bodies {
+        for cell in &body.cells {
+            indexed.insert(
+                (cell.x, cell.y),
+                WaterColumn {
+                    bed_meters: cell.bed_meters,
+                    surface_meters: cell.surface_meters,
+                    cut_top_meters: cell.cut_top_meters,
+                    surface: body.surface.clone(),
+                },
+            );
+        }
+    }
+    indexed
+}
+
 fn index_terrain_cuts(cuts: &[MapRouteSurfaceCut]) -> HashMap<(u32, u32), Vec<TerrainCut>> {
     let mut indexed: HashMap<(u32, u32), Vec<TerrainCut>> = HashMap::new();
     for cut in cuts {
@@ -3439,6 +3546,13 @@ mod tests {
         assert!(missing_cut.contains("needs its derived cut cells"));
     }
 
+    fn elevations(surfaces: &[MapColumnSurface<'_>]) -> Vec<f32> {
+        surfaces
+            .iter()
+            .map(|surface| surface.elevation_meters)
+            .collect()
+    }
+
     fn water_cell_center(map: &WorldMap, x: u32, y: u32) -> Position {
         Position::new(
             -map.width_meters() / 2.0 + (x as f32 + 0.5) * map.water_cell_meters(),
@@ -3469,7 +3583,10 @@ mod tests {
             water_cell_center(&map, under_the_hill.x, under_the_hill.y),
             &mut surfaces,
         );
-        assert_eq!(surfaces, vec![under_the_hill.floor_meters, hill_top]);
+        assert_eq!(
+            elevations(&surfaces),
+            vec![under_the_hill.floor_meters, hill_top]
+        );
 
         let over_flat_ground = cut
             .cells
@@ -3484,7 +3601,7 @@ mod tests {
             &mut surfaces,
         );
         assert_eq!(
-            surfaces,
+            elevations(&surfaces),
             vec![
                 map.terrain_cell_at(water_cell_center(
                     &map,
@@ -3507,7 +3624,7 @@ mod tests {
 
         map.terrain_walking_surfaces(cell.center, &mut surfaces);
 
-        assert_eq!(surfaces, vec![cell.elevation_meters]);
+        assert_eq!(elevations(&surfaces), vec![cell.elevation_meters]);
     }
 
     #[test]

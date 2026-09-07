@@ -4,7 +4,9 @@
 //! all ask that same question, so they ask it here instead of each carrying its
 //! own copy of the rule.
 
-use world01_world_data::{GroundSupport, MapRouteSurface, Position, WorldMap, WorldPosition};
+use world01_world_data::{
+    GroundSupport, MapColumnSurface, MapRouteSurface, Position, WorldMap, WorldPosition,
+};
 
 use super::{CharacterTraversalProfile, TraversalCatalog};
 
@@ -16,17 +18,17 @@ pub(crate) fn resolve_terrain_position(
 ) -> Option<WorldPosition> {
     let profile = traversal.character(character)?;
     let horizontal = candidate.horizontal();
-    let cell = map.terrain_cell_at(horizontal)?;
-    if !profile.permits_surface(&cell.surface) {
-        return None;
-    }
+    map.terrain_cell_at(horizontal)?;
     let mut surfaces = Vec::new();
     map.terrain_walking_surfaces(horizontal, &mut surfaces);
-    let elevation_meters = nearest_surface(&surfaces, candidate.elevation_meters)?;
+    let standing_on = nearest_surface(&surfaces, candidate.elevation_meters)?;
+    if !profile.permits_surface(standing_on.surface) {
+        return None;
+    }
     Some(WorldPosition::new(
         candidate.x,
         candidate.y,
-        elevation_meters,
+        standing_on.elevation_meters,
     ))
 }
 
@@ -114,13 +116,14 @@ fn sample_terrain(
     position: Position,
     reference_elevation_meters: f32,
 ) -> Option<GroundSample<'_>> {
-    let cell = map.terrain_cell_at(position)?;
+    map.terrain_cell_at(position)?;
     let mut surfaces = Vec::new();
     map.terrain_walking_surfaces(position, &mut surfaces);
+    let standing_on = nearest_surface(&surfaces, reference_elevation_meters)?;
     Some(GroundSample {
         support: SampleSupport::Terrain,
-        surface: &cell.surface,
-        elevation_meters: nearest_surface(&surfaces, reference_elevation_meters)?,
+        surface: standing_on.surface,
+        elevation_meters: standing_on.elevation_meters,
         grade_percent: None,
     })
 }
@@ -131,16 +134,22 @@ fn sample_terrain(
 /// Actor is on: the floor of a tunnel for whoever walks through it, the ground
 /// above for whoever walks over it. Two equally near surfaces are refused
 /// rather than resolved by order, the same way two reachable Routes are.
-fn nearest_surface(surfaces: &[f32], elevation_meters: f32) -> Option<f32> {
-    let mut nearest: Option<(f32, f32)> = None;
+///
+/// Ground under standing water is not offered at all. Whether an Actor may be
+/// on the water itself is its profile's business, and it is asked afterwards.
+fn nearest_surface<'a>(
+    surfaces: &[MapColumnSurface<'a>],
+    elevation_meters: f32,
+) -> Option<MapColumnSurface<'a>> {
+    let mut nearest: Option<(f32, MapColumnSurface<'a>)> = None;
     let mut ambiguous = false;
-    for surface in surfaces.iter().copied() {
-        let distance = (surface - elevation_meters).abs();
+    for surface in surfaces.iter().filter(|surface| !surface.flooded) {
+        let distance = (surface.elevation_meters - elevation_meters).abs();
         match nearest {
             Some((closest, _)) if distance > closest => continue,
             Some((closest, _)) if distance == closest => ambiguous = true,
             _ => {
-                nearest = Some((distance, surface));
+                nearest = Some((distance, *surface));
                 ambiguous = false;
             }
         }
@@ -280,22 +289,59 @@ pub(super) fn sample_is_usable(
 mod tests {
     use super::*;
 
+    fn column(elevations: &[f32]) -> Vec<MapColumnSurface<'static>> {
+        elevations
+            .iter()
+            .map(|elevation_meters| MapColumnSurface {
+                elevation_meters: *elevation_meters,
+                surface: "land",
+                flooded: false,
+            })
+            .collect()
+    }
+
+    fn standing_at(surfaces: &[MapColumnSurface<'_>], elevation_meters: f32) -> Option<f32> {
+        nearest_surface(surfaces, elevation_meters).map(|surface| surface.elevation_meters)
+    }
+
     #[test]
     fn an_actor_stands_on_the_surface_nearest_its_own_height() {
-        assert_eq!(nearest_surface(&[1.0, 10.0], 1.2), Some(1.0));
-        assert_eq!(nearest_surface(&[1.0, 10.0], 9.6), Some(10.0));
-        assert_eq!(nearest_surface(&[4.0], 0.0), Some(4.0));
-        assert_eq!(nearest_surface(&[], 1.0), None);
+        assert_eq!(standing_at(&column(&[1.0, 10.0]), 1.2), Some(1.0));
+        assert_eq!(standing_at(&column(&[1.0, 10.0]), 9.6), Some(10.0));
+        assert_eq!(standing_at(&column(&[4.0]), 0.0), Some(4.0));
+        assert_eq!(standing_at(&column(&[]), 1.0), None);
     }
 
     #[test]
     fn two_equally_near_surfaces_are_refused_rather_than_ordered() {
-        assert_eq!(nearest_surface(&[1.0, 3.0], 2.0), None);
-        assert_eq!(nearest_surface(&[3.0, 1.0], 2.0), None);
+        assert_eq!(standing_at(&column(&[1.0, 3.0]), 2.0), None);
+        assert_eq!(standing_at(&column(&[3.0, 1.0]), 2.0), None);
         assert_eq!(
-            nearest_surface(&[1.0, 3.0, 3.1], 2.0),
+            standing_at(&column(&[1.0, 3.0, 3.1]), 2.0),
             None,
             "a third surface further away does not resolve the tie"
+        );
+    }
+
+    #[test]
+    fn ground_under_standing_water_is_not_offered_at_all() {
+        let flooded = [
+            MapColumnSurface {
+                elevation_meters: 0.5,
+                surface: "land",
+                flooded: true,
+            },
+            MapColumnSurface {
+                elevation_meters: 1.0,
+                surface: "water",
+                flooded: false,
+            },
+        ];
+
+        assert_eq!(
+            nearest_surface(&flooded, 0.5).map(|surface| surface.surface),
+            Some("water"),
+            "an Actor at the height of the bed is offered the water over it, not the bed"
         );
     }
 
