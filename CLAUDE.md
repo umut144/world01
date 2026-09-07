@@ -36,8 +36,12 @@ The state lives in `.agent-check/`:
     requests/<id>      queued request, oldest served first
     pending/<session>  the id this session waits for
     results/<id>       header with `id`, `exit`, `args`, `duration`, `lines`,
-                       then the output
+                       `protocol`, `head`, `dirty`, then the output
     logs/<id>.log      raw output of that run, also useful for `grep`
+
+`head` and `dirty` are the state the run saw: the short commit and whether the
+worktree carried uncommitted changes, both taken before the wrapper started, so
+a result says what it was actually testing.
 
 Every result also carries the `protocol` of the watcher that wrote it. If the
 runner reports WATCHER-VERALTET, the watcher process is older than its script:
@@ -59,8 +63,10 @@ per sandbox but cannot separate two sessions working from the same path.
 The developer's own manual runs (`check` / `checkt`) write `manual-result` (same
 header, with `id=manual-<epoch>`) and `manual.log`. Before requesting a run,
 `manual-result` is worth a look: the developer may just have run the same thing
-by hand. It is absent until the first manual run in a given clone, and its
-header does not say which state of the tree it ran against — when in doubt,
+by hand. It is absent until the first manual run in a given clone, and
+unlike a watcher result its header carries no `head`, `dirty` or `protocol`: a
+run made by hand says neither which state it saw nor which protocol produced it.
+A missing `protocol` there is not a stale watcher; when the state matters,
 request a fresh run. `manual.log` is captured through a command substitution,
 which strips trailing blank lines, so for one and the same run it can differ
 from the watcher's log by exactly those; compare runs through the header
