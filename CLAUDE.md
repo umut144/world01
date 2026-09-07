@@ -63,7 +63,9 @@ Runner exit codes:
 
 - `0` — the wrapper succeeded.
 - `1` — the wrapper failed; its own exit code is in the `exit=` header line.
-- `2` — `--poll` without a request of this session.
+- `2` — the call itself is wrong: `--poll` without a request of this session,
+  or an argument outside `CHECK_AGENT_ARGS`. Fix the call; do not repeat it
+  unchanged.
 - `3` — no watcher is running. This always needs the developer: state plainly
   that the watcher is off, ask them to type `checkw start` in a terminal tab
   (foreground, so status line and sound stay there), and wait for their

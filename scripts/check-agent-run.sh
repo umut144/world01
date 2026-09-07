@@ -9,7 +9,9 @@
 # Exit codes:
 #   0   run finished, check.sh succeeded
 #   1   run finished, check.sh failed (its exit code is in the header)
-#   2   --poll without a request of this session
+#   2   the call itself is wrong: --poll without a request of this session,
+#       or an argument outside CHECK_AGENT_ARGS. Fix the call, do not repeat
+#       it unchanged.
 #   3   no watcher running (start it with `checkw start`)
 #   4   still running, call again with --poll
 #   5   the request is gone without a result; request again, do not wait
