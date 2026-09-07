@@ -763,7 +763,7 @@ fn spawn_projected_prop_visual_with_contours(
 /// shape on its own centre before rotating it, and to stretch it to a size the
 /// world asks for rather than the one it was drawn at.
 pub fn flat_asset_bounds(manifest: &RuntimeManifest) -> Option<(Vec2, Vec2)> {
-    let (vertices, _) = flat_asset_parts(manifest, [Vec2::ZERO]).ok()?;
+    let (vertices, _) = flat_asset_parts(manifest, [Vec2::ZERO], FlatGeometry::Fill).ok()?;
     let first = Vec2::from_array(*vertices.first()?);
     Some(
         vertices
@@ -779,13 +779,47 @@ pub fn repeated_flat_asset_mesh(
     manifest: &RuntimeManifest,
     offsets: impl IntoIterator<Item = Vec2>,
 ) -> Result<Mesh, PolyToolsAssetError> {
-    let (vertices, indices) = flat_asset_parts(manifest, offsets)?;
+    let (vertices, indices) = flat_asset_parts(manifest, offsets, FlatGeometry::Fill)?;
     Ok(bevy_mesh_from_parts(&vertices, &indices))
+}
+
+/// The flat outline of an Asset that draws itself as a contour - an eyelash, an
+/// eyebrow, a streak of current - centred on itself, with the size it was
+/// authored at.
+///
+/// Centred, because such a mark is turned and scaled around its own middle
+/// rather than around whatever origin it happens to have been drawn at.
+pub fn centred_flat_contour_mesh(
+    manifest: &RuntimeManifest,
+) -> Result<(Mesh, Vec2), PolyToolsAssetError> {
+    let (vertices, indices) = flat_asset_parts(manifest, [Vec2::ZERO], FlatGeometry::Contour)?;
+    let first = Vec2::from_array(vertices[0]);
+    let (minimum, maximum) = vertices
+        .iter()
+        .fold((first, first), |(minimum, maximum), vertex| {
+            let vertex = Vec2::from_array(*vertex);
+            (minimum.min(vertex), maximum.max(vertex))
+        });
+    let centre = (minimum + maximum) * 0.5;
+    let centred = vertices
+        .iter()
+        .map(|vertex| [vertex[0] - centre.x, vertex[1] - centre.y])
+        .collect::<Vec<_>>();
+    Ok((bevy_mesh_from_parts(&centred, &indices), maximum - minimum))
+}
+
+/// Which of an Asset's two kinds of flat geometry is wanted: the surface it
+/// fills, or the line it is drawn with.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FlatGeometry {
+    Fill,
+    Contour,
 }
 
 fn flat_asset_parts(
     manifest: &RuntimeManifest,
     offsets: impl IntoIterator<Item = Vec2>,
+    geometry: FlatGeometry,
 ) -> Result<(Vec<[f32; 2]>, Vec<u32>), PolyToolsAssetError> {
     let offsets = offsets.into_iter().collect::<Vec<_>>();
     let mut vertices = Vec::new();
@@ -794,11 +828,12 @@ fn flat_asset_parts(
         for component in &manifest.components {
             let world = component_world_transform(component, &manifest.components)
                 .unwrap_or_else(|| component_transform(component));
-            if let Some(mesh) = component.mesh.as_ref() {
+            if let Some((mesh_vertices, mesh_indices)) = flat_geometry(component, geometry) {
                 append_repeated_mesh(
                     &mut vertices,
                     &mut indices,
-                    mesh,
+                    mesh_vertices,
+                    mesh_indices,
                     world,
                     component.local_pivot,
                     manifest.asset_pivot,
@@ -806,11 +841,12 @@ fn flat_asset_parts(
                 )?;
             }
             for referenced in &component.referenced_components {
-                if let Some(mesh) = referenced.mesh.as_ref() {
+                if let Some((mesh_vertices, mesh_indices)) = flat_geometry(referenced, geometry) {
                     append_repeated_mesh(
                         &mut vertices,
                         &mut indices,
-                        mesh,
+                        mesh_vertices,
+                        mesh_indices,
                         world.mul_transform(component_transform(referenced)),
                         referenced.local_pivot,
                         manifest.asset_pivot,
@@ -821,18 +857,42 @@ fn flat_asset_parts(
         }
     }
     if vertices.is_empty() || indices.is_empty() {
-        return Err(PolyToolsAssetError::new(format!(
-            "terrain asset '{}' has no visible fill mesh",
-            manifest.asset_key
-        )));
+        return Err(PolyToolsAssetError::new(match geometry {
+            FlatGeometry::Fill => format!(
+                "terrain asset '{}' has no visible fill mesh",
+                manifest.asset_key
+            ),
+            FlatGeometry::Contour => {
+                format!("asset '{}' is drawn with no contour", manifest.asset_key)
+            }
+        }));
     }
     Ok((vertices, indices))
 }
 
+fn flat_geometry(
+    component: &RuntimeComponent,
+    geometry: FlatGeometry,
+) -> Option<(&[[f32; 2]], &[u32])> {
+    match geometry {
+        FlatGeometry::Fill => component
+            .mesh
+            .as_ref()
+            .map(|mesh| (mesh.vertices.as_slice(), mesh.indices.as_slice())),
+        FlatGeometry::Contour => component
+            .contour_stroke_mesh
+            .as_ref()
+            .filter(|stroke| stroke.has_outline)
+            .map(|stroke| (stroke.vertices.as_slice(), stroke.indices.as_slice())),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn append_repeated_mesh(
     vertices: &mut Vec<[f32; 2]>,
     indices: &mut Vec<u32>,
-    mesh: &RuntimeMesh,
+    source_vertices: &[[f32; 2]],
+    source_indices: &[u32],
     transform: Transform,
     local_pivot: Option<[f32; 2]>,
     asset_pivot: [f32; 2],
@@ -842,7 +902,7 @@ fn append_repeated_mesh(
         .map_err(|_| PolyToolsAssetError::new("repeated terrain mesh exceeds u32 indexing"))?;
     let local_pivot = Vec2::from_array(local_pivot.unwrap_or([0.0, 0.0]));
     let asset_pivot = Vec2::from_array(asset_pivot);
-    for vertex in &mesh.vertices {
+    for vertex in source_vertices {
         let transformed = transform
             .transform_point((Vec2::from_array(*vertex) - local_pivot).extend(0.0))
             .truncate()
@@ -850,7 +910,7 @@ fn append_repeated_mesh(
             + offset;
         vertices.push(transformed.to_array());
     }
-    for index in &mesh.indices {
+    for index in source_indices {
         let repeated_index = vertex_offset
             .checked_add(*index)
             .ok_or_else(|| PolyToolsAssetError::new("repeated terrain index overflow"))?;

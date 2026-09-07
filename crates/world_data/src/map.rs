@@ -1280,6 +1280,63 @@ pub struct MapWaterBody {
     pub centerline_samples: Vec<MapRouteCenterlineSample>,
 }
 
+impl MapWaterBody {
+    /// How far the water runs, from the end the author drew first.
+    pub fn length_meters(&self) -> f32 {
+        self.centerline_samples
+            .last()
+            .map(|sample| sample.station_meters)
+            .unwrap_or_default()
+    }
+
+    /// Where the water is at one station of its course, which way it runs
+    /// there, and how wide it is.
+    ///
+    /// This is the frame anything carried by the water is placed in: a station
+    /// down the course and an offset across it.
+    pub fn flow_at(&self, station_meters: f32) -> Option<MapWaterFlow> {
+        if !station_meters.is_finite() || station_meters < 0.0 {
+            return None;
+        }
+        let interval = self
+            .centerline_samples
+            .windows(2)
+            .find(|pair| station_meters <= pair[1].station_meters)?;
+        let (from, to) = (interval[0], interval[1]);
+        let span = to.station_meters - from.station_meters;
+        let factor = if span > 0.0 {
+            ((station_meters - from.station_meters) / span).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let (x, y) = (
+            to.position.x - from.position.x,
+            to.position.y - from.position.y,
+        );
+        let length = x.hypot(y);
+        if !(length > 0.0) {
+            return None;
+        }
+        Some(MapWaterFlow {
+            position: Position::new(from.position.x + factor * x, from.position.y + factor * y),
+            elevation_meters: from.elevation_meters
+                + factor * (to.elevation_meters - from.elevation_meters),
+            direction: [x / length, y / length],
+            width_meters: from.width_meters + factor * (to.width_meters - from.width_meters),
+        })
+    }
+}
+
+/// One place in a body of water, as anything carried by it needs it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MapWaterFlow {
+    pub position: Position,
+    pub elevation_meters: f32,
+    /// The unit direction the water runs in at this station.
+    pub direction: [f32; 2],
+    pub width_meters: f32,
+}
+
 /// One cell of water, on the same finer grid the Path cuts use.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MapWaterCell {
@@ -4848,6 +4905,27 @@ mod tests {
                         .all(|index| (*index as usize) < body.vertices.len())
             );
             assert!(body.centerline_samples.len() >= 2);
+            let length = body.length_meters();
+            assert!(length > 0.0);
+            let start = body.flow_at(0.0).expect("a course starts somewhere");
+            let end = body.flow_at(length).expect("and ends somewhere");
+            assert_eq!(
+                start.position, body.centerline_samples[0].position,
+                "station zero is the end the author drew first"
+            );
+            assert_eq!(
+                end.position,
+                body.centerline_samples[body.centerline_samples.len() - 1].position
+            );
+            assert!(body.flow_at(length + 1.0).is_none(), "a course is finite");
+            for station in [0.0, length * 0.25, length * 0.5, length] {
+                let flow = body.flow_at(station).expect("a station inside the course");
+                assert!(
+                    (flow.direction[0].hypot(flow.direction[1]) - 1.0).abs() < 1.0e-4,
+                    "the direction of the water is a unit vector"
+                );
+                assert!(flow.width_meters > 0.0);
+            }
             assert_eq!(
                 body.centerline_samples
                     .first()

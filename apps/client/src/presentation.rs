@@ -16,7 +16,8 @@ use world01_network::{
 use world01_simulation::WorldRuntimeState;
 use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection, MapBridge,
-    MovementIntent, RunState, SelectedCharacter, WorldMap, WorldPosition,
+    MapWaterBody, MapWaterFlow, MovementIntent, RunState, SelectedCharacter, WorldMap,
+    WorldPosition,
 };
 
 use crate::eyes::EyePupil;
@@ -29,9 +30,9 @@ use crate::input::{
 };
 use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_flat_world_mesh, bevy_pupil_mesh, flat_asset_bounds,
-    repeated_flat_asset_mesh, spawn_ankh_projected_visual, spawn_character_visual,
-    spawn_projected_prop_visual,
+    CharacterAssetLibrary, bevy_flat_world_mesh, bevy_pupil_mesh, centred_flat_contour_mesh,
+    flat_asset_bounds, repeated_flat_asset_mesh, spawn_ankh_projected_visual,
+    spawn_character_visual, spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
@@ -49,6 +50,20 @@ const CORRECTION_HARD_SNAP_DISTANCE_SQUARED: f32 = 1.0;
 const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
 /// Water lies on the Terrain it flooded, and a bridge lies over the water.
 const WATER_PRESENTATION_LAYER: f32 = -9.5;
+/// What flows in the water lies on it.
+const CURRENT_PRESENTATION_LAYER: f32 = -9.4;
+/// How the current shows itself: marks drifting down the course, in lanes
+/// across it. A lane is given as a fraction of the water's half width, so the
+/// current narrows where the water does.
+const CURRENT_LANES: [f32; 3] = [-0.55, 0.0, 0.55];
+const CURRENT_SPACING_METERS: f32 = 2.5;
+const CURRENT_SPEED_METERS_PER_SECOND: f32 = 0.9;
+/// A mark is drawn larger in the middle of the water and smaller towards the
+/// bank. The scale is even in both directions, so the authored line keeps its
+/// weight relative to the mark.
+const CURRENT_MIDDLE_SCALE: f32 = 1.8;
+const CURRENT_BANK_SCALE: f32 = 0.9;
+const CURRENT_COLOR: Color = Color::srgb(0.45, 0.66, 0.85);
 /// A deck lies on the world, not in it: above the Terrain it spans, below
 /// everything that stands on either.
 const BRIDGE_PRESENTATION_LAYER: f32 = -9.0;
@@ -124,6 +139,7 @@ impl Plugin for ClientPresentationPlugin {
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),
                     repick_character.run_if(in_state(ClientScreen::InGame)),
+                    drift_river_markers.run_if(in_state(ClientScreen::InGame)),
                     collect_world_template_debug_input
                         .after(update_client_input_focus)
                         .run_if(in_state(ClientScreen::InGame)),
@@ -171,6 +187,15 @@ impl Plugin for ClientPresentationPlugin {
 
 #[derive(Component)]
 struct RenderedMap;
+
+/// One mark carried by a body of water, at its own place in the course.
+#[derive(Component)]
+struct CurrentMark {
+    body: usize,
+    /// Across the course, as a fraction of the half width.
+    lane: f32,
+    station_meters: f32,
+}
 
 #[derive(Component)]
 struct RenderedAnkh;
@@ -779,6 +804,17 @@ fn setup_map_visuals(
         ));
     }
 
+    for (index, body) in map.water_bodies().iter().enumerate() {
+        spawn_current_marks(
+            &mut commands,
+            index,
+            body,
+            &character_assets,
+            &mut meshes,
+            &mut flat_materials,
+        );
+    }
+
     for bridge in map.bridges() {
         spawn_bridge_visual(
             &mut commands,
@@ -788,6 +824,125 @@ fn setup_map_visuals(
             &mut flat_materials,
             &mut projection_materials,
         );
+    }
+}
+
+/// Fills a body of water with the marks that show its current.
+///
+/// A mark sits at a station down the course and a lane across it, turned onto
+/// the direction the water runs there. Which Asset it shows is a plain function
+/// of its place in the row, so every client fills the river the same way
+/// without anyone sending anything.
+fn spawn_current_marks(
+    commands: &mut Commands,
+    body_index: usize,
+    body: &MapWaterBody,
+    character_assets: &CharacterAssetLibrary,
+    meshes: &mut Assets<Mesh>,
+    flat_materials: &mut Assets<ColorMaterial>,
+) {
+    let length_meters = body.length_meters();
+    if length_meters <= 0.0 {
+        return;
+    }
+    let Some(palette) = character_assets.terrain(&body.asset_key) else {
+        error!(asset_key = %body.asset_key, "cannot show a current: missing PolyTools manifest");
+        return;
+    };
+    let variants = if palette.is_palette() {
+        palette.variants().to_vec()
+    } else {
+        vec![palette.asset_key.clone()]
+    };
+    let mut marks = Vec::new();
+    for variant in &variants {
+        let Some(manifest) = character_assets.terrain(variant) else {
+            error!(asset_key = %variant, "cannot show a current: missing PolyTools manifest");
+            return;
+        };
+        match centred_flat_contour_mesh(manifest) {
+            Ok((mesh, extent)) if extent.y > 0.0 => marks.push(meshes.add(mesh)),
+            Ok(_) => {
+                error!(asset_key = %variant, "cannot show a current: the mark has no length");
+                return;
+            }
+            Err(error) => {
+                error!(asset_key = %variant, %error, "cannot build a current mark");
+                return;
+            }
+        }
+    }
+    if marks.is_empty() {
+        return;
+    }
+
+    let material = flat_materials.add(CURRENT_COLOR);
+    let mut placed = 0usize;
+    for (lane_index, lane) in CURRENT_LANES.iter().copied().enumerate() {
+        // The lanes are staggered so the marks do not stand in rows across the
+        // water.
+        let offset = CURRENT_SPACING_METERS * lane_index as f32 / CURRENT_LANES.len() as f32;
+        let mut station_meters = offset;
+        while station_meters < length_meters {
+            let Some(flow) = body.flow_at(station_meters) else {
+                break;
+            };
+            let mesh = &marks[placed % marks.len()];
+            commands.spawn((
+                RenderedMap,
+                CurrentMark {
+                    body: body_index,
+                    lane,
+                    station_meters,
+                },
+                Mesh2d(mesh.clone()),
+                MeshMaterial2d(material.clone()),
+                current_mark_transform(&flow, lane),
+            ));
+            placed += 1;
+            station_meters += CURRENT_SPACING_METERS;
+        }
+    }
+}
+
+/// Carries every mark down its course and lets it start over at the far end.
+fn drift_river_markers(
+    time: Res<Time>,
+    map: Res<WorldMap>,
+    mut marks: Query<(&mut CurrentMark, &mut Transform)>,
+) {
+    let travelled = CURRENT_SPEED_METERS_PER_SECOND * time.delta_secs();
+    for (mut mark, mut transform) in &mut marks {
+        let Some(body) = map.water_bodies().get(mark.body) else {
+            continue;
+        };
+        let length_meters = body.length_meters();
+        if length_meters <= 0.0 {
+            continue;
+        }
+        mark.station_meters = (mark.station_meters + travelled).rem_euclid(length_meters);
+        let Some(flow) = body.flow_at(mark.station_meters) else {
+            continue;
+        };
+        *transform = current_mark_transform(&flow, mark.lane);
+    }
+}
+
+/// Where one mark stands: across the course by its lane, turned onto the
+/// direction the water runs, and scaled evenly by how far out it sits.
+fn current_mark_transform(flow: &MapWaterFlow, lane: f32) -> Transform {
+    let direction = Vec2::new(flow.direction[0], flow.direction[1]);
+    let across = Vec2::new(-direction.y, direction.x);
+    let position =
+        Vec2::new(flow.position.x, flow.position.y) + across * (lane * flow.width_meters * 0.5);
+    let outwards = lane.abs().min(1.0);
+    Transform {
+        translation: Vec3::new(position.x, position.y, CURRENT_PRESENTATION_LAYER),
+        // The mark is drawn along its own +Y, and it swims along the course.
+        rotation: Quat::from_rotation_z(direction.to_angle() - FRAC_PI_2),
+        scale: Vec3::splat(
+            CURRENT_MIDDLE_SCALE + (CURRENT_BANK_SCALE - CURRENT_MIDDLE_SCALE) * outwards,
+        ),
     }
 }
 
