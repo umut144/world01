@@ -93,8 +93,10 @@ a stale `.git/index.lock` behind that blocks the developer's next Git command.
 Always use `git --no-optional-locks ...` for read-only Git commands from here
 (`status`, `diff --stat`, `grep`); it refreshes nothing and leaves no lock.
 
-Never move or delete anything below `.git/` by hand. If a Git command fails on
-a lock, run `./scripts/git-unlock.sh`; if it refuses, say so and ask.
+Never move or delete anything below `.git/` by hand; the `_to_delete/` rule
+below does not reach in there. A lock that a running Git still holds belongs to
+it, and taking it away destroys its commit. If a Git command fails on a lock,
+run `./scripts/git-unlock.sh`; if it refuses, say so and ask.
 
 ## Tooling wishes go to the developer
 
