@@ -26,7 +26,9 @@
 	"regions": [],
 	"schema_version": 21,
 	"variants": [
-		"river01"
+		"river01",
+		"river02",
+		"river03"
 	],
 	"z_order": {
 		"back_to_front": "ascending",

@@ -213,6 +213,24 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_31",
+			"asset_key": "river02",
+			"asset_type": "terrain",
+			"display_name": "River02",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/river02/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_32",
+			"asset_key": "river03",
+			"asset_type": "terrain",
+			"display_name": "River03",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/river03/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_4",
 			"asset_key": "rogue",
 			"asset_type": "character",
