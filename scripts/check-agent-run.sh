@@ -129,6 +129,7 @@ report() {
     first=$(grep -n -E "$fail_pattern" "$log" 2>/dev/null | head -n 1 | cut -d: -f1 || true)
     case "$first" in ''|*[!0-9]*) first=1 ;; esac
     last=$(( first + fail_lines - 1 ))
+    [ "$total" -gt 0 ] && [ "$last" -gt "$total" ] && last=$total
     printf '(Zeilen %s-%s von %s ab dem ersten Treffer; komplett: %s)\n' \
       "$first" "$last" "$total" "$log"
     sed -n "${first},${last}p" "$log" 2>/dev/null || true
