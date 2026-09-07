@@ -98,24 +98,41 @@ Until then water is simply not walkable, at the bank and everywhere else.
 
 ## Phases
 
-### Phase 1 — one river, no branches
+### Phase 1 — one river, no branches — **done, 2026-09-07**
 
-A river is unwalkable, drawn as a ribbon, and carries flow markers.
+A river is unwalkable, drawn as a band, and carries the marks that show its
+current.
 
-- **World 01**: read `water_bodies` and `water_raster`; enter the raster into
-  the column rule so the river cannot be walked and the bridge above keeps its
-  clearance; draw the ribbon; place `river01` markers by station and lateral
-  offset, oriented on the tangent, drifting with time, scaled continuously —
-  thicker mid-channel, thinner towards the bank.
-- **SceneMaker**: a water bake per water body, in the shape the Path and Bridge
-  bakes already use — vertices with elevation, triangles, boundary edges and
-  centerline samples with station and width.
-- **PolyTools**: whether `river01` is meant to be an outline or to carry a fill
-  mesh; more Palette variants when variety is wanted.
+What it took, and what each part decided:
 
-Everything a marker shows is presentation: the choice of variant and the size
-are functions of station, lane and time, identical on every client, and nothing
+- **The raster is what the simulation reads.** Standing water enters the column
+  the way an excavating Path does: the channel is taken out of the Terrain down
+  to the bed, and the water stands over what is left. A water cell therefore
+  offers two surfaces - the bed, and the water above it. Ground under standing
+  water is marked flooded and is offered to nobody, which is the whole rule
+  that keeps a Character on the bank. In `overworld01` this turned 269 of
+  10 000 Terrain cells into water, and the two authored bridges stopped being
+  decorative.
+- **The band is what the eye reads.** SceneMaker bakes it from the same
+  flattener a Path uses. Unlike a bridge deck it carries no authored interval,
+  so it is not one of the surfaces a Character walks along - where water may be
+  stood on was already decided by the cells.
+- **The centerline is what the current is placed along.** `MapWaterBody::flow_at`
+  answers, for one station of the course, where the water is, which way it runs
+  and how wide it is. That frame - along the course and across it - is what
+  anything the water carries uses, and the first thing it carries is the marks.
+- **A mark is a contour, not a surface.** `river01` is authored as a line with
+  its own thickness, and it is drawn flat the way an eyelash and an eyebrow have
+  always been drawn. It is scaled evenly, larger mid-channel and smaller towards
+  the bank, so the authored line keeps its weight: one authored shape, scaled to
+  what the place asks for, the way a plank is.
+
+Everything a mark shows is presentation: the choice of variant and the size are
+functions of station, lane and time, identical on every client, and nothing
 about them is sent or stored.
+
+Open from this phase: how many variants the `river` Palette should hold. One is
+legal and works; variety is an authoring decision, not a blocked dependency.
 
 ### Phase 2 — one authored branch, switched on in play
 
@@ -168,8 +185,16 @@ river generator.
 
 | To | Question |
 |---|---|
-| SceneMaker | A water bake per water body, in the shape of the Path and Bridge bakes. |
-| SceneMaker | How a branch is expressed, and how an activatable one is marked. |
-| SceneMaker | The curve rule: what `mode` means, how the handles are read, and the flattening tolerance — needed even with a delivered bake, so that a World 01 reader can check what it receives. |
-| PolyTools | Is `river01` an outline or a filled surface? More variants for the Palette. |
+| SceneMaker | How a branch is expressed, and how an activatable one is marked. Held as `WATER-01`. |
+| PolyTools | How many variants the `river` Palette should hold. Not blocking: a Palette of one draws a river already. |
 | World 01 | Is the width cap exactly one half, and is it evaluated per branch point or across nearby stations? |
+
+Answered and closed:
+
+- *A water bake per water body* — delivered as export 16, in the shape asked
+  for, with the height per sample because a river is not level.
+- *The curve rule* — no longer needed. It was asked while World 01 briefly
+  considered flattening the spine itself; with branches authored and the band
+  delivered, nothing here recomputes the curve.
+- *Is `river01` an outline or a filled surface* — an outline, authored with its
+  own thickness, and right for a mark of current.
