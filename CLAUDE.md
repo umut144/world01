@@ -107,11 +107,14 @@ below does not reach in there. A lock that a running Git still holds belongs to
 it, and taking it away destroys its commit. If a Git command fails on a lock,
 run `./scripts/git-unlock.sh`; if it refuses, say so and ask.
 
-Call it as `GIT_UNLOCK_AGE=5 ./scripts/git-unlock.sh`. What actually protects a
-live lock is lsof; the age is only the fallback for a file whose use cannot be
-proven, and five seconds is margin enough for the leftovers of a commit that has
-already returned. A loosened margin belongs in the call, where it is read, not
-in the script's default.
+Run `GIT_UNLOCK_AGE=5 ./scripts/git-unlock.sh` after each of your own commits,
+not only after a Git command has already failed on a lock: every commit leaves
+locks and temp objects behind that this session cannot delete, and they block
+whoever commits next. The script's own default is 15 seconds; 5 is enough at
+this call site because `lsof` is the real check and the age is only its
+fallback, and a loosened margin belongs where it can be read rather than in the
+default. If the script refuses because the leftovers are still too young, wait
+a moment and run it again; if it still refuses, say so and ask.
 
 ## Tooling wishes go to the developer
 
