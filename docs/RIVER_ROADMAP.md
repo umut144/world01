@@ -96,6 +96,27 @@ impossible:
 
 Until then water is simply not walkable, at the bank and everywhere else.
 
+## A bed is entered, never fallen into
+
+A river cannot be crossed, wet or dry. A dry bed can be stood in, but only by a
+way somebody authored into it — a ramp running down the channel, a cave in its
+flank. Falling in was considered on 2026-09-07 and withdrawn the same hour: it
+would have meant an asymmetric step rule, where a drop beyond a Character's step
+height is allowed downwards and refused upwards, and that rule would have made
+every ledge in the world enterable, not just this one.
+
+Two things follow, and both are the reason the decision cost nothing:
+
+- **Nothing has to be built for it.** The step rule is symmetric, so a bed a
+  metre below its bank is refused in both directions already.
+- **A ramp is a Path.** World 01 has read authored Paths with their grade since
+  the Path work, and stepping onto one from Terrain and off it at the far end is
+  the rule that already carries a bridge deck. A ramp into a riverbed is that
+  rule pointing downwards; it is authoring, not code.
+
+Beds are therefore authored deeper than a Character can step - a metre - so that
+the channel is a place one arrives in on purpose.
+
 ## Phases
 
 ### Phase 1 — one river, no branches — **done, 2026-09-07**
@@ -188,6 +209,7 @@ river generator.
 | SceneMaker | How a branch is expressed, and how an activatable one is marked. Held as `WATER-01`. |
 | PolyTools | How many variants the `river` Palette should hold. Not blocking: a Palette of one draws a river already. |
 | World 01 | Is the width cap exactly one half, and is it evaluated per branch point or across nearby stations? |
+| World 01 | What happens to an Actor standing in a dry bed when the water arrives. It is the first case where a state change takes the ground out from under someone: nothing pushes an Actor out of ground that stopped existing, the way separation pushes one out of a collider. Rare, because a bed is only entered by an authored way — washed to the bank, or drowned, are the two candidates. Undecided on purpose; it is a design question, and it waits for the first authored ramp. |
 
 Answered and closed:
 
