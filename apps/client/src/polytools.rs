@@ -1216,6 +1216,16 @@ pub(crate) fn bevy_pupil_mesh(geometry: &PupilGeometry) -> Mesh {
     bevy_mesh_from_parts(&geometry.vertices, &geometry.indices)
 }
 
+/// A flat mesh from geometry that already stands in world coordinates, the way
+/// SceneMaker bakes a body of water.
+pub fn bevy_flat_world_mesh(vertices: &[Vec2], indices: &[u32]) -> Mesh {
+    let vertices = vertices
+        .iter()
+        .map(|vertex| [vertex.x, vertex.y, 0.0])
+        .collect::<Vec<_>>();
+    bevy_mesh_from_parts_3d(&vertices, indices)
+}
+
 fn bevy_mesh_from_parts(vertices: &[[f32; 2]], indices: &[u32]) -> Mesh {
     let vertices = vertices
         .iter()

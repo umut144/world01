@@ -29,8 +29,9 @@ use crate::input::{
 };
 use crate::mage::{apply_mage_eye_charge, sync_mage_beam_visuals};
 use crate::polytools::{
-    CharacterAssetLibrary, bevy_pupil_mesh, flat_asset_bounds, repeated_flat_asset_mesh,
-    spawn_ankh_projected_visual, spawn_character_visual, spawn_projected_prop_visual,
+    CharacterAssetLibrary, bevy_flat_world_mesh, bevy_pupil_mesh, flat_asset_bounds,
+    repeated_flat_asset_mesh, spawn_ankh_projected_visual, spawn_character_visual,
+    spawn_projected_prop_visual,
 };
 use crate::pose::{
     PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
@@ -46,6 +47,8 @@ const CORRECTION_HALF_LIFE_SECONDS: f32 = 0.2;
 const CORRECTION_EPSILON_SQUARED: f32 = 0.000_001;
 const CORRECTION_HARD_SNAP_DISTANCE_SQUARED: f32 = 1.0;
 const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
+/// Water lies on the Terrain it flooded, and a bridge lies over the water.
+const WATER_PRESENTATION_LAYER: f32 = -9.5;
 /// A deck lies on the world, not in it: above the Terrain it spans, below
 /// everything that stands on either.
 const BRIDGE_PRESENTATION_LAYER: f32 = -9.0;
@@ -760,6 +763,22 @@ fn setup_map_visuals(
         }
     }
 
+    for body in map.water_bodies() {
+        // The band arrives in world coordinates already, because SceneMaker
+        // bakes it the way it bakes a Path.
+        let positions = body
+            .vertices
+            .iter()
+            .map(|vertex| Vec2::new(vertex.position.x, vertex.position.y))
+            .collect::<Vec<_>>();
+        commands.spawn((
+            RenderedMap,
+            Mesh2d(meshes.add(bevy_flat_world_mesh(&positions, &body.triangle_indices))),
+            MeshMaterial2d(flat_materials.add(map_asset_color(&body.asset_key))),
+            Transform::from_xyz(0.0, 0.0, WATER_PRESENTATION_LAYER),
+        ));
+    }
+
     for bridge in map.bridges() {
         spawn_bridge_visual(
             &mut commands,
@@ -870,6 +889,7 @@ fn map_asset_color(asset_key: &str) -> Color {
     match asset_key {
         "grass" => Color::srgb(0.34, 0.62, 0.22),
         "tree" => Color::srgb(0.18, 0.46, 0.14),
+        "river" => Color::srgb(0.16, 0.34, 0.55),
         _ => Color::srgb(0.45, 0.45, 0.48),
     }
 }
