@@ -6821,7 +6821,7 @@
 					1.0
 				]
 			},
-			"name": "eyeleash_left01",
+			"name": "eyelash_left02",
 			"parent_component_id": "component_14",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -7214,7 +7214,7 @@
 					1.0
 				]
 			},
-			"name": "eyeleash_left02",
+			"name": "eyelash_left01",
 			"parent_component_id": "component_14",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -7607,7 +7607,7 @@
 					1.0
 				]
 			},
-			"name": "eyeleash_left03",
+			"name": "eyelash_left03",
 			"parent_component_id": "component_14",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -9207,7 +9207,7 @@
 					1.0
 				]
 			},
-			"name": "eyeleash_right01",
+			"name": "eyelash_right01",
 			"parent_component_id": "component_148",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -9600,7 +9600,7 @@
 					1.0
 				]
 			},
-			"name": "eyeleash_right02",
+			"name": "eyelash_right02",
 			"parent_component_id": "component_148",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,
@@ -9993,7 +9993,7 @@
 					0.999999940395355
 				]
 			},
-			"name": "eyeleash_right03",
+			"name": "eyelash_right03",
 			"parent_component_id": "component_148",
 			"projection_depth_corners": [],
 			"projection_depth_meters": 0.1,

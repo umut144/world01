@@ -242,6 +242,15 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_30",
+			"asset_key": "throwing_star",
+			"asset_type": "weapons",
+			"display_name": "Throwing Star",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/throwing_star/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_10",
 			"asset_key": "tree",
 			"asset_type": "props",
