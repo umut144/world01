@@ -293,9 +293,14 @@ water grid: a vote would either promise ground that is solid or refuse ground
 that is open. Which surface supports an Actor follows from the height it
 already has, and two equally near surfaces are refused rather than ordered.
 Derived ground navigation contributes one node per resolved walking surface,
-so a bot can be routed through a hill rather than only over it. Water is not
-modelled yet, so its own cuts do not participate; the water and cut rasters of
-the current Instance do not overlap.
+so a bot can be routed through a hill rather than only over it. Standing water takes the same
+kind of range out of a column that a subtractive Path does - down to the
+authored bed, up to the height that keeps the channel open - and every surface
+the column resolves to reports how deep the water standing over it is. The
+water level is no walking surface of its own. Whether a Character may be where
+water stands is its own `max_wade_depth_meters`, asked exactly the way
+`max_step_height_meters` is, and a move that begins or ends in water is priced
+by the deeper of its two ends at the reduced speed a too-steep Path also costs.
 
 Airborne falling does not yet have a movement rule. On the server, an Actor
 whose current support disappears or becomes unusable therefore uses the Ankh
@@ -468,9 +473,9 @@ Ground navigation is derived with the rest of that transaction, and only by the
 server: a predicting client never runs a bot's decision, so deriving one there
 would cost every world change a representation nothing reads and would put a
 bot's knowledge on a machine that must not have it. A node is one place a
-grounded Actor can stand, carrying horizontal position, physical elevation and
-the identity of its support, so two surfaces at one horizontal place stay
-distinct. Terrain contributes one node per walking surface its column resolves
+grounded Actor can stand, carrying horizontal position, physical elevation, the
+depth of any water over it and the identity of its support, so two surfaces at
+one horizontal place stay distinct. Terrain contributes one node per walking surface its column resolves
 to and Route surfaces one per baked centerline sample. Nodes carry no judgement
 about who may use them: Terrain connects in eight directions with a diagonal
 refused unless both orthogonal cells offer a step of their own, a Path carries

@@ -230,6 +230,10 @@ pub struct CharacterTraversalDesign {
     pub asset_key: String,
     pub surfaces: Vec<String>,
     pub max_step_height_meters: f32,
+    /// How deep the standing water may be that this Character still walks
+    /// through. Deeper water is no place for it, the same way a higher step is
+    /// no step.
+    pub max_wade_depth_meters: f32,
     pub normal_speed_max_abs_grade_percent: u32,
     pub passable_max_abs_grade_percent: u32,
     pub reduced_speed_multiplier: f32,
@@ -267,6 +271,8 @@ impl CharacterTraversalDesign {
             && self.surfaces.iter().collect::<HashSet<_>>().len() == self.surfaces.len()
             && self.max_step_height_meters.is_finite()
             && self.max_step_height_meters >= 0.0
+            && self.max_wade_depth_meters.is_finite()
+            && self.max_wade_depth_meters >= 0.0
             && self.normal_speed_max_abs_grade_percent <= self.passable_max_abs_grade_percent
             && self.passable_max_abs_grade_percent <= 100
             && self.reduced_speed_multiplier.is_finite()

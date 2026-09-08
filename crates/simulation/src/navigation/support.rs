@@ -65,6 +65,10 @@ pub(super) struct GroundSample<'a> {
     pub(super) support: SampleSupport<'a>,
     pub(super) surface: &'a str,
     pub(super) elevation_meters: f32,
+    /// How deep the standing water over this sample is, and zero where there is
+    /// none. A Route carries its own surface over whatever lies below it, so a
+    /// sample on one is never in water.
+    pub(super) water_depth_meters: f32,
     pub(super) grade_percent: Option<i32>,
 }
 
@@ -124,6 +128,7 @@ fn sample_terrain(
         support: SampleSupport::Terrain,
         surface: standing_on.surface,
         elevation_meters: standing_on.elevation_meters,
+        water_depth_meters: standing_on.water_depth_meters,
         grade_percent: None,
     })
 }
@@ -135,15 +140,16 @@ fn sample_terrain(
 /// above for whoever walks over it. Two equally near surfaces are refused
 /// rather than resolved by order, the same way two reachable Routes are.
 ///
-/// Ground under standing water is not offered at all. Whether an Actor may be
-/// on the water itself is its profile's business, and it is asked afterwards.
+/// Ground under standing water is offered like any other, carrying the depth
+/// standing over it. Whether an Actor may wade that deep is its profile's
+/// business, and it is asked afterwards.
 fn nearest_surface<'a>(
     surfaces: &[MapColumnSurface<'a>],
     elevation_meters: f32,
 ) -> Option<MapColumnSurface<'a>> {
     let mut nearest: Option<(f32, MapColumnSurface<'a>)> = None;
     let mut ambiguous = false;
-    for surface in surfaces.iter().filter(|surface| !surface.flooded) {
+    for surface in surfaces {
         let distance = (surface.elevation_meters - elevation_meters).abs();
         match nearest {
             Some((closest, _)) if distance > closest => continue,
@@ -166,6 +172,7 @@ fn sample_route(route: &MapRouteSurface, position: Position) -> Option<GroundSam
         support: SampleSupport::RouteSurface(&route.route_surface_id),
         surface: &route.surface,
         elevation_meters: sample.elevation_meters,
+        water_depth_meters: 0.0,
         grade_percent: Some(sample.grade_percent),
     })
 }
@@ -280,6 +287,7 @@ pub(super) fn sample_is_usable(
     sample: GroundSample<'_>,
 ) -> bool {
     profile.permits_surface(sample.surface)
+        && profile.permits_wade(sample.water_depth_meters)
         && sample
             .grade_percent
             .is_none_or(|grade| profile.speed_for_grade(grade).is_some())
@@ -295,9 +303,28 @@ mod tests {
             .map(|elevation_meters| MapColumnSurface {
                 elevation_meters: *elevation_meters,
                 surface: "land",
-                flooded: false,
+                water_depth_meters: 0.0,
             })
             .collect()
+    }
+
+    fn hammerer() -> CharacterTraversalProfile {
+        let design = world01_design::load_embedded().expect("embedded design loads");
+        TraversalCatalog::from_design(&design.traversal)
+            .expect("embedded traversal profiles are valid")
+            .character(&world01_world_data::CharacterId("hammerer".into()))
+            .expect("the Hammerer has traversal rules")
+            .clone()
+    }
+
+    fn wading(water_depth_meters: f32) -> GroundSample<'static> {
+        GroundSample {
+            support: SampleSupport::Terrain,
+            surface: "land",
+            elevation_meters: 0.0,
+            water_depth_meters,
+            grade_percent: None,
+        }
     }
 
     fn standing_at(surfaces: &[MapColumnSurface<'_>], elevation_meters: f32) -> Option<f32> {
@@ -324,24 +351,40 @@ mod tests {
     }
 
     #[test]
-    fn ground_under_standing_water_is_not_offered_at_all() {
-        let flooded = [
+    fn ground_under_standing_water_is_offered_with_the_water_over_it() {
+        let river = [
             MapColumnSurface {
-                elevation_meters: 0.5,
+                elevation_meters: 0.6,
                 surface: "land",
-                flooded: true,
+                water_depth_meters: 0.4,
             },
             MapColumnSurface {
-                elevation_meters: 1.0,
-                surface: "water",
-                flooded: false,
+                elevation_meters: 3.0,
+                surface: "land",
+                water_depth_meters: 0.0,
             },
         ];
 
+        let standing_on = nearest_surface(&river, 0.6).expect("the bed is a place to be");
+        assert_eq!(standing_on.elevation_meters, 0.6);
         assert_eq!(
-            nearest_surface(&flooded, 0.5).map(|surface| surface.surface),
-            Some("water"),
-            "an Actor at the height of the bed is offered the water over it, not the bed"
+            standing_on.water_depth_meters, 0.4,
+            "the bed is offered, carrying how deep the water over it stands"
+        );
+    }
+
+    #[test]
+    fn water_deeper_than_a_character_wades_makes_the_ground_unusable() {
+        let profile = hammerer();
+
+        assert!(sample_is_usable(&profile, wading(0.0)));
+        assert!(
+            sample_is_usable(&profile, wading(0.4)),
+            "the Hammerer wades to its own authored depth"
+        );
+        assert!(
+            !sample_is_usable(&profile, wading(0.5)),
+            "and the same ground a hand deeper is no place for it at all"
         );
     }
 
@@ -352,12 +395,14 @@ mod tests {
                 support: SampleSupport::RouteSurface("first"),
                 surface: "land",
                 elevation_meters: 1.0,
+                water_depth_meters: 0.0,
                 grade_percent: Some(0),
             },
             GroundSample {
                 support: SampleSupport::RouteSurface("second"),
                 surface: "land",
                 elevation_meters: 1.0,
+                water_depth_meters: 0.0,
                 grade_percent: Some(0),
             },
         ];

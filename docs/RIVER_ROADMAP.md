@@ -1,6 +1,6 @@
 # World 01 — Rivers: authoring, presentation and simulation
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Purpose and authority
 
@@ -81,25 +81,24 @@ dry is meant to open the cave mouths in its flanks. None of that is built, and
 none of it is designed here. What is settled is that the column may not make it
 impossible:
 
-- A water cell offers **two** walking surfaces, the bed and the water standing
-  over it, the same way an excavated column offers the tunnel floor and the
-  ground above it. The bed is never dropped just because water covers it today.
-- A surface under standing water is marked **flooded**, and a flooded surface is
-  offered to nobody. That is what keeps a Character on the bank without any rule
-  about water having to be written into movement.
-- The water level a surface is measured against is the authored one. A world
-  with tides would move that value; the same ground would stop being flooded,
-  and the graph would be rebuilt the way it already is when a map changes.
-- The depth at a place is the difference between the two surfaces of its column,
-  so wading - crossing where the water is shallow - would not need new data
-  either, only a rule in a Character's profile.
-
-Until then water is simply not walkable, at the bank and everywhere else.
+- A water cell offers its **bed** as a walking surface, the same way an
+  excavated column offers the tunnel floor and the ground above it, and reports
+  how deep the water standing over it is. The bed is never dropped just because
+  water covers it today.
+- The water itself is **no surface**. Until 2026-09-08 it was one, so that the
+  ground beneath it could be marked flooded and offered to nobody; wading
+  replaced that rule, and a level on which nobody may stand is a level nobody
+  needs.
+- The level a depth is measured against is the authored one. A world with tides
+  would move that value; the same ground would report a smaller depth, and the
+  graph would be rebuilt the way it already is when a map changes.
+- Wading therefore needed no new data. The depth was already in the column; only
+  the threshold had to be written, and it belongs to the Character.
 
 ## A bed is entered, never fallen into
 
-A river cannot be crossed, wet or dry. A dry bed can be stood in, but only by a
-way somebody authored into it — a ramp running down the channel, a cave in its
+A river deeper than a Character wades cannot be crossed, wet or dry. A dry bed
+can be stood in, but only by a way somebody authored into it — a ramp running down the channel, a cave in its
 flank. Falling in was considered on 2026-09-07 and withdrawn the same hour: it
 would have meant an asymmetric step rule, where a drop beyond a Character's step
 height is allowed downwards and refused upwards, and that rule would have made
@@ -114,8 +113,41 @@ Two things follow, and both are the reason the decision cost nothing:
   the rule that already carries a bridge deck. A ramp into a riverbed is that
   rule pointing downwards; it is authoring, not code.
 
-Beds are therefore authored deeper than a Character can step - a metre - so that
-the channel is a place one arrives in on purpose.
+Beds that are meant to hold somebody are therefore authored deeper than a
+Character can step - a metre - so that the channel is a place one arrives in on
+purpose.
+
+## How deep is too deep
+
+Settled 2026-09-08, at the end of the exchange with SceneMaker held as
+`WATER-01`.
+
+The metre was briefly a rule of its own: every bed authored deeper than any
+Character can step, so that no river could be crossed anywhere. SceneMaker
+withdrew it and asked for the opposite case to stay open - a shallow river
+should be something one walks through - and handed the threshold to World 01,
+because how deep one may wade is a property of a Character and not of a channel.
+
+What stands:
+
+- The column says **how deep** the water over each surface is. It no longer says
+  who may be there.
+- A Character carries `max_wade_depth_meters` beside `max_step_height_meters`.
+  Water deeper than that is no place for it, exactly as a step higher than the
+  other is no step. Both are refused by the same kind of rule, in the same
+  place, which is why neither needs a special case in movement.
+- Every Character wades **0.40 m** today. One number for all eleven until a
+  Character is meant to differ; the field sits per Character so that it can.
+- Wading is **slower than walking**, at the same half a steep Path costs, so
+  crossing water is a decision rather than a shortcut.
+- A move that begins or ends in water is priced as wading, by the deeper of its
+  two ends. Leaving the water costs what entering it costs, so there is no free
+  step back onto the bank.
+
+Nothing in `overworld01` changes yet: its rivers are a metre deep and a metre
+below their banks, and two independent rules refuse them - the depth and the
+step. What changed is that a shallow river is now something SceneMaker can
+author, and it will behave when it arrives.
 
 ## Phases
 
@@ -130,10 +162,11 @@ What it took, and what each part decided:
   the way an excavating Path does: the channel is taken out of the Terrain down
   to the bed, and the water stands over what is left. A water cell therefore
   offers two surfaces - the bed, and the water above it. Ground under standing
-  water is marked flooded and is offered to nobody, which is the whole rule
-  that keeps a Character on the bank. In `overworld01` this turned 269 of
-  10 000 Terrain cells into water, and the two authored bridges stopped being
-  decorative.
+  water was marked flooded and offered to nobody, which was the whole rule that
+  kept a Character on the bank; on 2026-09-08 that was replaced by a depth and a
+  threshold, without the world behaving differently. In `overworld01` this
+  turned 269 of 10 000 Terrain cells into water, and the two authored bridges
+  stopped being decorative.
 - **The band is what the eye reads.** SceneMaker bakes it from the same
   flattener a Path uses. Unlike a bridge deck it carries no authored interval,
   so it is not one of the surfaces a Character walks along - where water may be
@@ -169,6 +202,10 @@ booleans — small enough to replicate and to persist, unlike geometry.
   from "activatable".
 - **World 01**: activation state, and the rule that an inactive body is neither
   drawn nor rasterised.
+
+Accepted when, at one and the same cell, the column offers a walking surface in
+the bed while the branch is `dry`, and while it is `flowing` offers the same
+ground under water deeper than any Character wades.
 
 ### Phase 3 — branches of branches, and the width budget
 

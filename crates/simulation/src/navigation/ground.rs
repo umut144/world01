@@ -187,9 +187,10 @@ pub fn apply_grounded_route_speed(
 
         let displacement = step.step(*velocity);
         let proposed = Position::new(position.x + displacement.x, position.y + displacement.y);
-        let target_grade = resolve_target(&map, profile, current, proposed)
-            .and_then(|target| target.grade_percent);
-        let grade = target_grade.or(current.grade_percent);
+        let target = resolve_target(&map, profile, current, proposed);
+        let grade = target
+            .and_then(|target| target.grade_percent)
+            .or(current.grade_percent);
         if let Some(grade) = grade {
             let Some(speed) = profile.speed_for_grade(grade) else {
                 *velocity = MovementVelocity::ZERO;
@@ -197,6 +198,15 @@ pub fn apply_grounded_route_speed(
             };
             *velocity = velocity.scaled(speed.multiplier());
         }
+        // Wading is slower than walking. A step that begins or ends in water is
+        // priced by the deeper of its two ends, so leaving the water costs what
+        // entering it costs.
+        let water_depth_meters = current.water_depth_meters.max(
+            target
+                .map(|target| target.water_depth_meters)
+                .unwrap_or_default(),
+        );
+        *velocity = velocity.scaled(profile.speed_through_water(water_depth_meters).multiplier());
     }
 }
 

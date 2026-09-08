@@ -54,6 +54,7 @@ pub struct GroundNavigationNode {
     position: Position,
     elevation_meters: f32,
     surface: NavigationSurface,
+    water_depth_meters: f32,
     support: GroundSupport,
     blocked: bool,
 }
@@ -69,6 +70,12 @@ impl GroundNavigationNode {
 
     pub const fn surface(&self) -> NavigationSurface {
         self.surface
+    }
+
+    /// How deep the standing water over this node is, and zero where there is
+    /// none. Whether that is too deep is the Character's own rule.
+    pub const fn water_depth_meters(&self) -> f32 {
+        self.water_depth_meters
     }
 
     pub const fn support(&self) -> &GroundSupport {
@@ -153,10 +160,9 @@ impl GroundNavigationGraph {
         let mut column = Vec::new();
         for cell in map.terrain_cells() {
             map.terrain_walking_surfaces(cell.center, &mut column);
-            // Ground under standing water is no place to stand. It stays in the
-            // world - a falling water level would uncover it - but it is not a
-            // node while the water is over it.
-            column.retain(|surface| !surface.flooded);
+            // Ground under standing water is still ground, and it becomes a
+            // node carrying the depth over it. Whether that depth is walkable
+            // is the profile's rule, asked when a Character is at hand.
             if column.is_empty() {
                 return Err(GroundNavigationError(format!(
                     "Terrain cell ({}, {}) resolves to no walking surface",
@@ -185,6 +191,7 @@ impl GroundNavigationGraph {
                     position: cell.center,
                     elevation_meters: standing_on.elevation_meters,
                     surface,
+                    water_depth_meters: standing_on.water_depth_meters,
                     support: GroundSupport::Terrain,
                     blocked,
                 });
@@ -230,6 +237,9 @@ impl GroundNavigationGraph {
                     position: sample.position,
                     elevation_meters: resolved.elevation_meters,
                     surface,
+                    // A Route carries its own surface over whatever is below
+                    // it, so nothing stands in water on a deck.
+                    water_depth_meters: 0.0,
                     support: GroundSupport::RouteSurface {
                         route_surface_id: route.route_surface_id.clone(),
                     },
@@ -317,7 +327,7 @@ impl GroundNavigationGraph {
                 steps.push(GroundNavigationStep {
                     node: reachable,
                     distance_meters,
-                    speed: TraversalSpeed::Normal,
+                    speed: self.speed_between(from, &self.nodes[reachable], profile),
                 });
             }
         }
@@ -379,7 +389,7 @@ impl GroundNavigationGraph {
             steps.push(GroundNavigationStep {
                 node: index,
                 distance_meters: distance_between(from, &self.nodes[index]),
-                speed: TraversalSpeed::Normal,
+                speed: self.speed_between(from, &self.nodes[index], profile),
             });
         }
     }
@@ -434,7 +444,7 @@ impl GroundNavigationGraph {
                 steps.push(GroundNavigationStep {
                     node: index,
                     distance_meters: distance_between(from, &self.nodes[index]),
-                    speed: TraversalSpeed::Normal,
+                    speed: self.speed_between(from, &self.nodes[index], profile),
                 });
             }
         }
@@ -501,9 +511,24 @@ impl GroundNavigationGraph {
 
     fn is_usable(&self, node: &GroundNavigationNode, profile: &CharacterTraversalProfile) -> bool {
         !node.blocked
+            && profile.permits_wade(node.water_depth_meters)
             && self
                 .surface_name(node.surface())
                 .is_some_and(|surface| profile.permits_surface(surface))
+    }
+
+    /// What a move between two nodes costs a Character in speed.
+    ///
+    /// A move that begins or ends in water is a wading move, priced by the
+    /// deeper of its two ends: leaving the water costs what entering it costs,
+    /// so there is no free step back onto the bank.
+    fn speed_between(
+        &self,
+        from: &GroundNavigationNode,
+        to: &GroundNavigationNode,
+        profile: &CharacterTraversalProfile,
+    ) -> TraversalSpeed {
+        profile.speed_through_water(from.water_depth_meters.max(to.water_depth_meters))
     }
 
     fn offers_a_step(
@@ -730,10 +755,11 @@ mod tests {
             .center
     }
 
-    /// The surfaces of a column a Character could stand on, which is what the
-    /// graph turns into nodes.
-    fn unflooded(column: &[MapColumnSurface<'_>]) -> usize {
-        column.iter().filter(|surface| !surface.flooded).count()
+    /// The surfaces a column offers, which is what the graph turns into nodes.
+    /// Ground under water is one of them; whether a Character may be there is
+    /// asked of the profile, not of the column.
+    fn standing_places(column: &[MapColumnSurface<'_>]) -> usize {
+        column.len()
     }
 
     fn node_at(graph: &GroundNavigationGraph, position: Position) -> &GroundNavigationNode {
@@ -793,7 +819,7 @@ mod tests {
             .iter()
             .map(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                unflooded(&column)
+                standing_places(&column)
             })
             .sum::<usize>();
 
@@ -823,7 +849,7 @@ mod tests {
             .iter()
             .find(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                unflooded(&column) > 1
+                standing_places(&column) > 1
             })
             .expect("the overworld is excavated somewhere");
 
@@ -848,15 +874,11 @@ mod tests {
                     .collect::<Vec<_>>(),
                 column
                     .iter()
-                    .filter(|surface| !surface.flooded)
                     .map(|surface| surface.elevation_meters)
                     .collect::<Vec<_>>(),
                 "a cell offers exactly the places its column resolves to"
             );
-            for (node, standing_on) in standing
-                .iter()
-                .zip(column.iter().filter(|surface| !surface.flooded))
-            {
+            for (node, standing_on) in standing.iter().zip(column.iter()) {
                 assert_eq!(
                     graph.surface_name(node.surface()),
                     Some(standing_on.surface)
@@ -874,10 +896,13 @@ mod tests {
             .first()
             .expect("the overworld carries an excavating Path");
 
+        // Dry, because a river bed also stands below the ground around it and
+        // is not what this test is about.
         let deepest = graph
             .nodes()
             .iter()
             .filter(|node| matches!(node.support(), GroundSupport::Terrain))
+            .filter(|node| node.water_depth_meters() == 0.0)
             .filter(|node| {
                 map.terrain_cell_at(node.position())
                     .is_some_and(|cell| cell.elevation_meters > node.elevation_meters())
@@ -1026,6 +1051,31 @@ mod tests {
             .clone()
     }
 
+    /// A Character built for one question, so a rule can be tested apart from
+    /// whatever the authored Characters happen to allow.
+    fn profile_of(
+        surfaces: &[&str],
+        max_step_height_meters: f32,
+        max_wade_depth_meters: f32,
+    ) -> CharacterTraversalProfile {
+        TraversalCatalog::from_design(&TraversalDesign {
+            schema_version: 1,
+            characters: vec![CharacterTraversalDesign {
+                asset_key: "test_character".into(),
+                surfaces: surfaces.iter().map(|surface| (*surface).into()).collect(),
+                max_step_height_meters,
+                max_wade_depth_meters,
+                normal_speed_max_abs_grade_percent: 25,
+                passable_max_abs_grade_percent: 50,
+                reduced_speed_multiplier: 0.5,
+            }],
+        })
+        .expect("a single explicit profile is valid")
+        .character(&CharacterId("test_character".into()))
+        .expect("that profile was just defined")
+        .clone()
+    }
+
     fn index_at(graph: &GroundNavigationGraph, position: Position, elevation: f32) -> usize {
         graph
             .nodes()
@@ -1125,7 +1175,7 @@ mod tests {
             .find_map(|cell| {
                 let neighbour = map.terrain_cell(cell.x + 1, cell.y)?;
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                (unflooded(&column) == 1
+                (standing_places(&column) == 1
                     && neighbour.elevation_meters - cell.elevation_meters > 0.5)
                     .then_some((cell, neighbour))
             })
@@ -1159,7 +1209,7 @@ mod tests {
             .iter()
             .find(|cell| {
                 map.terrain_walking_surfaces(cell.center, &mut column);
-                unflooded(&column) > 1
+                standing_places(&column) > 1
             })
             .expect("the overworld is excavated somewhere");
         map.terrain_walking_surfaces(excavated.center, &mut column);
@@ -1303,12 +1353,16 @@ mod tests {
     }
 
     /// The nodes standing below ground that reaches above them: the excavation.
+    /// The places an excavation left below the ground still standing above
+    /// them - dry ones, because a river bed lies below its banks too and is not
+    /// a tunnel.
     fn tunnel_nodes(map: &WorldMap, graph: &GroundNavigationGraph) -> Vec<usize> {
         graph
             .nodes()
             .iter()
             .enumerate()
             .filter(|(_, node)| matches!(node.support(), GroundSupport::Terrain))
+            .filter(|(_, node)| node.water_depth_meters() == 0.0)
             .filter(|(_, node)| {
                 map.terrain_cell_at(node.position())
                     .is_some_and(|cell| cell.elevation_meters > node.elevation_meters())
@@ -1378,21 +1432,7 @@ mod tests {
         let map = overworld();
         let graph = without_collision(&map);
         let profile = hammerer();
-        let stranger = TraversalCatalog::from_design(&TraversalDesign {
-            schema_version: 1,
-            characters: vec![CharacterTraversalDesign {
-                asset_key: "swimmer".into(),
-                surfaces: vec!["water".into()],
-                max_step_height_meters: 0.5,
-                normal_speed_max_abs_grade_percent: 25,
-                passable_max_abs_grade_percent: 50,
-                reduced_speed_multiplier: 0.5,
-            }],
-        })
-        .expect("a single explicit profile is valid")
-        .character(&CharacterId("swimmer".into()))
-        .expect("that profile was just defined")
-        .clone();
+        let stranger = profile_of(&["water"], 0.5, 0.4);
 
         let tunnel = tunnel_nodes(&map, &graph);
         let (west, east) = (tunnel[0], tunnel[tunnel.len() - 1]);
@@ -1401,6 +1441,85 @@ mod tests {
         assert!(
             graph.path(west, east, &stranger).is_none(),
             "a Character that crosses none of this world's surfaces goes nowhere"
+        );
+    }
+
+    #[test]
+    fn ground_under_water_is_a_node_carrying_the_depth_over_it() {
+        let map = overworld();
+        let graph = without_collision(&map);
+
+        let wet = graph
+            .nodes()
+            .iter()
+            .filter(|node| matches!(node.support(), GroundSupport::Terrain))
+            .filter(|node| node.water_depth_meters() > 0.0)
+            .collect::<Vec<_>>();
+
+        assert!(!wet.is_empty(), "the overworld carries a river");
+        for node in &wet {
+            let mut column = Vec::new();
+            map.terrain_walking_surfaces(node.position(), &mut column);
+            let bed = column
+                .iter()
+                .find(|surface| surface.elevation_meters == node.elevation_meters())
+                .expect("the node stands where its own column resolves");
+            assert_eq!(node.water_depth_meters(), bed.water_depth_meters);
+            assert_ne!(
+                graph.surface_name(node.surface()),
+                Some("water"),
+                "a node under water stands on the bed, not on the water"
+            );
+        }
+    }
+
+    #[test]
+    fn water_is_crossed_by_whoever_may_wade_that_deep_and_costs_them_speed() {
+        let map = overworld();
+        let graph = without_collision(&map);
+        let mut steps = Vec::new();
+
+        let (standing_in_water, depth) = graph
+            .nodes()
+            .iter()
+            .enumerate()
+            .find_map(|(index, node)| {
+                (matches!(node.support(), GroundSupport::Terrain)
+                    && node.water_depth_meters() > 0.0)
+                    .then(|| (index, node.water_depth_meters()))
+            })
+            .expect("the overworld has a river to stand in");
+        let bed = graph
+            .surface_name(graph.nodes()[standing_in_water].surface())
+            .expect("that node names its surface")
+            .to_owned();
+        // A step height well over the bank, so only the depth decides.
+        let step_height = depth * 2.0;
+
+        graph.steps_from(
+            standing_in_water,
+            &profile_of(&[&bed], step_height, depth / 2.0),
+            &mut steps,
+        );
+        assert!(
+            steps.is_empty(),
+            "a Character that may not wade this deep has no move to make in the water"
+        );
+
+        graph.steps_from(
+            standing_in_water,
+            &profile_of(&[&bed], step_height, depth),
+            &mut steps,
+        );
+        assert!(
+            !steps.is_empty(),
+            "one whose own rule reaches the bed does have moves to make"
+        );
+        assert!(
+            steps
+                .iter()
+                .all(|step| step.speed == TraversalSpeed::Reduced(0.5)),
+            "and every one of them is a wading move, priced below walking"
         );
     }
 

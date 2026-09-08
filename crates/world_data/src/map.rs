@@ -51,7 +51,6 @@ struct WaterColumn {
     bed_meters: f32,
     surface_meters: f32,
     cut_top_meters: f32,
-    surface: String,
 }
 
 impl WorldMap {
@@ -170,6 +169,11 @@ impl WorldMap {
     ///
     /// The column is resolved at the point asked for, never voted on across a
     /// cell, because the authored excavation is finer than one Terrain cell.
+    ///
+    /// Standing water adds no surface of its own. It is reported as a depth
+    /// over the ground it covers, and how much of it a Character may walk
+    /// through is that Character's own rule, the same way the height of a step
+    /// is.
     pub fn terrain_walking_surfaces<'a>(
         &'a self,
         position: Position,
@@ -200,6 +204,15 @@ impl WorldMap {
             });
         }
 
+        // How deep the standing water lies over a surface at this height, and
+        // zero where the water does not reach that high at all.
+        let depth_over = |elevation_meters: f32| match water {
+            Some(water) if elevation_meters < water.surface_meters => {
+                water.surface_meters - elevation_meters
+            }
+            _ => 0.0,
+        };
+
         let mut ceiling = cell.elevation_meters;
         let mut merged: Vec<TerrainCut> = Vec::new();
         for cut in cuts.iter().filter(|cut| cut.floor_meters < ceiling) {
@@ -215,7 +228,7 @@ impl WorldMap {
                 surfaces.push(MapColumnSurface {
                     elevation_meters: ceiling,
                     surface: &cell.surface,
-                    flooded: false,
+                    water_depth_meters: depth_over(ceiling),
                 });
             }
             ceiling = cut.floor_meters;
@@ -223,26 +236,9 @@ impl WorldMap {
         surfaces.push(MapColumnSurface {
             elevation_meters: ceiling,
             surface: &cell.surface,
-            flooded: water.is_some_and(|water| ceiling < water.surface_meters),
+            water_depth_meters: depth_over(ceiling),
         });
         surfaces.reverse();
-
-        // The water itself is the last surface the column offers, standing over
-        // the ground it flooded.
-        if let Some(water) = water {
-            let index = surfaces
-                .iter()
-                .position(|surface| surface.elevation_meters > water.surface_meters)
-                .unwrap_or(surfaces.len());
-            surfaces.insert(
-                index,
-                MapColumnSurface {
-                    elevation_meters: water.surface_meters,
-                    surface: &water.surface,
-                    flooded: false,
-                },
-            );
-        }
     }
 
     fn water_column_at(&self, position: Position) -> Option<&WaterColumn> {
@@ -1265,8 +1261,10 @@ pub struct MapWaterBody {
     /// What kind of water this is, as the author classified it.
     pub water_kind: String,
     pub asset_key: String,
-    /// What the water offers to walk on, from its Asset's profile - which is
-    /// how a Terrain cell gets its surface too.
+    /// What this water names itself, from its Asset's profile - which is how a
+    /// Terrain cell gets its surface too. Water is not something to walk on:
+    /// a column reports it as a depth over the ground it covers, and this token
+    /// is what that water is called.
     pub surface: String,
     pub cells: Vec<MapWaterCell>,
     /// The band this body is drawn as, baked by SceneMaker from the same
@@ -2837,17 +2835,18 @@ fn validate_header(
 /// the same cell and a column must resolve the same way every time.
 /// One walking surface a column offers.
 ///
-/// A surface is `flooded` when standing water covers it. Which water level that
-/// is measured against is the authored one today; a world with tides would move
-/// it, and the same ground would stop being flooded without the column having
-/// to be rebuilt.
+/// The column says where the ground is and how deep the water over it stands.
+/// It does not say who may go there: the water level is the authored one today
+/// and a world with tides would move it, and the same ground would then be
+/// walkable without the column having to be rebuilt.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MapColumnSurface<'a> {
     pub elevation_meters: f32,
-    /// What this surface offers to walk on: the Terrain's own surface, or the
-    /// water's where the surface is the water.
+    /// What this surface offers to walk on, which is the Terrain's own surface.
     pub surface: &'a str,
-    pub flooded: bool,
+    /// How deep the standing water over this surface is, and zero where there
+    /// is none.
+    pub water_depth_meters: f32,
 }
 
 fn index_water_columns(bodies: &[MapWaterBody]) -> HashMap<(u32, u32), WaterColumn> {
@@ -2860,7 +2859,6 @@ fn index_water_columns(bodies: &[MapWaterBody]) -> HashMap<(u32, u32), WaterColu
                     bed_meters: cell.bed_meters,
                     surface_meters: cell.surface_meters,
                     cut_top_meters: cell.cut_top_meters,
-                    surface: body.surface.clone(),
                 },
             );
         }
@@ -3763,6 +3761,61 @@ mod tests {
             ],
             "an excavation that starts at the surface removes nothing"
         );
+    }
+
+    #[test]
+    fn a_column_under_water_offers_its_bed_and_no_surface_of_the_water_itself() {
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
+            .expect("the embedded overworld Instance is valid");
+        let body = map
+            .water_bodies()
+            .first()
+            .expect("the overworld carries water");
+        let mut surfaces = Vec::new();
+        let mut submerged = 0;
+
+        for cell in &body.cells {
+            // A cell two bodies both claim resolves to whichever the index kept,
+            // so this asks only about the ones this body has to itself.
+            if map.water_bodies().iter().any(|other| {
+                other.water_body_id != body.water_body_id
+                    && other
+                        .cells
+                        .iter()
+                        .any(|shared| shared.x == cell.x && shared.y == cell.y)
+            }) {
+                continue;
+            }
+            let center = water_cell_center(&map, cell.x, cell.y);
+            let Some(terrain) = map.terrain_cell_at(center) else {
+                continue;
+            };
+            map.terrain_walking_surfaces(center, &mut surfaces);
+            let Some(bed) = surfaces
+                .iter()
+                .find(|surface| surface.elevation_meters < cell.surface_meters)
+            else {
+                continue;
+            };
+            submerged += 1;
+            assert_eq!(
+                bed.water_depth_meters,
+                cell.surface_meters - bed.elevation_meters,
+                "a surface under water reports how deep the water over it stands"
+            );
+            assert_eq!(
+                bed.surface, terrain.surface,
+                "and it is still the Terrain's own surface"
+            );
+            assert!(
+                surfaces
+                    .iter()
+                    .all(|surface| surface.surface != body.surface),
+                "the water is no surface of its own to stand on"
+            );
+        }
+
+        assert!(submerged > 0, "the water stands over ground somewhere");
     }
 
     #[test]

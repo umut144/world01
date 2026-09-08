@@ -27,6 +27,7 @@ impl TraversalSpeed {
 pub struct CharacterTraversalProfile {
     surfaces: HashSet<String>,
     max_step_height_meters: f32,
+    max_wade_depth_meters: f32,
     normal_speed_max_abs_grade_percent: u32,
     passable_max_abs_grade_percent: u32,
     reduced_speed_multiplier: f32,
@@ -41,6 +42,26 @@ impl CharacterTraversalProfile {
         first_elevation.is_finite()
             && second_elevation.is_finite()
             && (first_elevation - second_elevation).abs() <= self.max_step_height_meters
+    }
+
+    /// Whether a Character may stand on ground with this much water over it.
+    ///
+    /// The world says how deep the water is; how deep it may be is the
+    /// Character's own business, exactly as with the height of a step.
+    pub fn permits_wade(&self, water_depth_meters: f32) -> bool {
+        water_depth_meters.is_finite() && water_depth_meters <= self.max_wade_depth_meters
+    }
+
+    /// Wading is slower than walking, so that crossing shallow water is a
+    /// decision and not a shortcut. It borrows the multiplier a steep Path
+    /// already uses; if the two ever want different numbers, this is where
+    /// they part.
+    pub fn speed_through_water(&self, water_depth_meters: f32) -> TraversalSpeed {
+        if water_depth_meters > 0.0 {
+            TraversalSpeed::Reduced(self.reduced_speed_multiplier)
+        } else {
+            TraversalSpeed::Normal
+        }
     }
 
     pub fn speed_for_grade(&self, grade_percent: i32) -> Option<TraversalSpeed> {
@@ -70,6 +91,7 @@ impl TraversalCatalog {
             let profile = CharacterTraversalProfile {
                 surfaces: authored.surfaces.iter().cloned().collect(),
                 max_step_height_meters: authored.max_step_height_meters,
+                max_wade_depth_meters: authored.max_wade_depth_meters,
                 normal_speed_max_abs_grade_percent: authored.normal_speed_max_abs_grade_percent,
                 passable_max_abs_grade_percent: authored.passable_max_abs_grade_percent,
                 reduced_speed_multiplier: authored.reduced_speed_multiplier,
@@ -130,6 +152,44 @@ mod tests {
             Some(TraversalSpeed::Reduced(0.5))
         );
         assert_eq!(profile.speed_for_grade(51), None);
+    }
+
+    #[test]
+    fn wading_stops_at_the_authored_depth_and_costs_speed_up_to_it() {
+        let catalog = catalog();
+        let profile = catalog
+            .character(&CharacterId("hammerer".into()))
+            .expect("Hammerer has traversal rules");
+
+        assert!(profile.permits_wade(0.0));
+        assert!(profile.permits_wade(0.4));
+        assert!(!profile.permits_wade(0.400_1));
+        assert!(!profile.permits_wade(f32::NAN));
+
+        assert_eq!(profile.speed_through_water(0.0), TraversalSpeed::Normal);
+        assert_eq!(
+            profile.speed_through_water(0.1),
+            TraversalSpeed::Reduced(0.5),
+            "water at all is slower than none, so crossing it is a decision"
+        );
+        assert_eq!(
+            profile.speed_through_water(0.4),
+            TraversalSpeed::Reduced(0.5)
+        );
+    }
+
+    #[test]
+    fn every_authored_character_wades_the_same_depth_for_now() {
+        let design = load_embedded().expect("embedded design loads");
+
+        assert!(
+            design
+                .traversal
+                .characters
+                .iter()
+                .all(|character| character.max_wade_depth_meters == 0.4),
+            "one depth for every Character until a Character is meant to differ"
+        );
     }
 
     #[test]
