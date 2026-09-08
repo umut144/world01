@@ -149,6 +149,15 @@ below their banks, and two independent rules refuse them - the depth and the
 step. What changed is that a shallow river is now something SceneMaker can
 author, and it will behave when it arrives.
 
+SceneMaker takes both numbers as workspace values so that a ford is visible
+while it is drawn - they know the Terrain head, `bed_meters` and
+`surface_meters`, so both differences are theirs already. Two conditions were
+attached and both hold: the values describe a reference Character rather than
+the law, because the fields are per Character; and the editor shows, never
+validates. A river nobody is meant to cross is the normal case, so a check that
+forced a ford would forbid good maps. That is the opposite of the width budget,
+where a rule has to be enforced where it is authored.
+
 ## Phases
 
 ### Phase 1 — one river, no branches — **done, 2026-09-07**
@@ -211,8 +220,24 @@ by the river it leaves, so switching that river off takes everything hanging
 under it, to any depth. Without the rule, "branch on, parent off" would have
 been a case World 01 had to invent an answer for. Three parts follow it:
 
-- The feeder is what a body's junction at its own source names. Two feeders mean
-  water as soon as **either** flows, which is what water does.
+- The feeder is what a body's junction at its own source names, and the export
+  says which end that is: `scene.water_bodies[].junctions[].end == "source"`.
+  The raster carries the same junction with both stations, and every junction
+  appears in both halves, so the two are cross-checked and a disagreement
+  refuses the export - the same discipline `activation` gets, for the same
+  reason. Two feeders mean water as soon as **either** flows, which is what
+  water does.
+
+  The rule was briefly "the entry whose `own_station_meters` is 0", and that was
+  withdrawn on 2026-09-08 because it infers a direction from a position. A body
+  split at its branch point carries a zero for its own source; a further branch
+  leaving it at its very start adds a second zero pointing the other way, and
+  the reader would follow the wrong one into a ring that does not exist. The
+  authored `end` never has two answers. `overworld01` is one branch short of the
+  case. SceneMaker deliberately did **not** raise the export number for the
+  correction: the bytes always meant this, only the instructions for reading
+  them were wrong, and a number that rises for a corrected sentence teaches that
+  a rise can also mean nothing.
 - A ring of bodies feeding each other is refused at export. World 01 refuses one
   too rather than trusting that: a reader that walks forever is a worse failure
   than one that says no, and a rule enforced only upstream breaks silently
@@ -224,6 +249,20 @@ been a case World 01 had to invent an answer for. Three parts follow it:
 Accepted when, at one and the same cell, the column offers a walking surface in
 the bed while the branch is `dry`, and while it is `flowing` offers the same
 ground under water deeper than any Character wades.
+
+The other half of this phase is that a Terrain cell holds the **stacked** fills
+of every body over it instead of only the last one written. In `overworld01` 67
+of 1 554 water cells carry more than one body. The fixture is the mouth of
+`river_0003`, the only activatable body there: 27 cells where it meets water
+that always flows - 16 on `river_0001`, 17 on `river_0002`, 6 on both - in one
+block of x 88-94, y 53-59. Switch the branch off and those 27 cells must stay
+water, because another river runs through them.
+
+Worth knowing why this could not have been caught earlier: every body in that
+map is authored to the same depth, so no overlapping cell has two different
+values and the last writer happens to write what the first one would have. The
+fault is invisible in the geometry today and becomes visible only through
+activation, which is to say exactly here.
 
 ### Phase 3 — branches of branches, and the width budget
 
