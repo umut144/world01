@@ -199,9 +199,27 @@ booleans — small enough to replicate and to persist, unlike geometry.
 
 - **SceneMaker**: how a branch is expressed (an own water body with a reference
   to its parent, or points inside one body), and how "always on" is told apart
-  from "activatable".
+  from "activatable". Settled: an own body, carrying `activation` with the group
+  it listens to, the states it is `active_in`, and what it leaves behind when it
+  is not - `dry_bed` or `absent`.
 - **World 01**: activation state, and the rule that an inactive body is neither
   drawn nor rasterised.
+
+**A body is active only if the body feeding it is active.** Added by SceneMaker
+in export 18, and the reason it is their rule rather than ours: a branch is fed
+by the river it leaves, so switching that river off takes everything hanging
+under it, to any depth. Without the rule, "branch on, parent off" would have
+been a case World 01 had to invent an answer for. Three parts follow it:
+
+- The feeder is what a body's junction at its own source names. Two feeders mean
+  water as soon as **either** flows, which is what water does.
+- A ring of bodies feeding each other is refused at export. World 01 refuses one
+  too rather than trusting that: a reader that walks forever is a worse failure
+  than one that says no, and a rule enforced only upstream breaks silently
+  downstream - the same reasoning the width budget already carries.
+- `inactive` stays the property of the body that carries it. A branch that falls
+  dry because its parent was switched off leaves its bed or no trace by its own
+  authored answer, not its parent's.
 
 Accepted when, at one and the same cell, the column offers a walking surface in
 the bed while the branch is `dry`, and while it is `flowing` offers the same
