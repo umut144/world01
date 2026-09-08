@@ -20,6 +20,15 @@
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_37",
+      "asset_key": "cloud",
+      "asset_type": "props",
+      "display_name": "Cloud",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/cloud/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_28",
       "asset_key": "plank",
       "asset_type": "props",

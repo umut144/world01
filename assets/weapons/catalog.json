@@ -2,12 +2,48 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_33",
+      "asset_key": "bomb",
+      "asset_type": "weapons",
+      "display_name": "Bomb",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/bomb/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_36",
+      "asset_key": "dagger",
+      "asset_type": "weapons",
+      "display_name": "Dagger",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/dagger/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_11",
       "asset_key": "hammer",
       "asset_type": "weapons",
       "display_name": "Hammer",
       "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/hammer/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_34",
+      "asset_key": "needle",
+      "asset_type": "weapons",
+      "display_name": "Needle",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/needle/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_35",
+      "asset_key": "stone",
+      "asset_type": "weapons",
+      "display_name": "Stone",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/stone/manifest.json"
     },
     {
       "asset_category": "single",

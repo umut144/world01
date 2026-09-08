@@ -937,7 +937,7 @@
 					],
 					[
 						-0.0144999995827675,
-						0.00000000000000000099999998377516
+						0.0
 					],
 					[
 						-0.0133962526917458,
@@ -952,7 +952,7 @@
 						-0.0133962526917458
 					],
 					[
-						-0.00000000000000000199999996755032,
+						0.0,
 						-0.0144999995827675
 					],
 					[
@@ -1103,7 +1103,15 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
+	"regions": [
+		{
+			"geometry_source": "component",
+			"name": "attack_region",
+			"region_id": "component_211",
+			"role": "attack",
+			"source_component_id": "component_194"
+		}
+	],
 	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",

@@ -2931,7 +2931,15 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
+	"regions": [
+		{
+			"geometry_source": "component",
+			"name": "attack_region",
+			"region_id": "component_210",
+			"role": "attack",
+			"source_component_id": "component_190"
+		}
+	],
 	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",
