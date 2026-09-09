@@ -1,6 +1,6 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 16,
+  "version": 19,
   "workspace_key": "world01",
   "grid": {
     "terrain_cell_meters": 1.0,
@@ -77,7 +77,7 @@
   "bridge_bakes": [],
   "scene": {
     "schema": "srt.scene_maker_scene",
-    "version": 15,
+    "version": 17,
     "scene_id": "test_template02",
     "scene_kind": "template",
     "coordinate_space": "scene_local_bottom_left_y_up",
@@ -1643,6 +1643,7 @@
         "elevation_meters": 1.0
       }
     ],
+    "switches": [],
     "water_bodies": [],
     "route_surfaces": [],
     "bridges": [],

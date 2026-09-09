@@ -77,14 +77,14 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 16
+    and .version == 19
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.water_cell_meters | type == "number" and isfinite and . > 0)
     and .scene.schema == "srt.scene_maker_scene"
-    and .scene.version == 15
+    and .scene.version == 17
     and (.scene.scene_id | type == "string" and length > 0)
     and (.scene.scene_kind == "instance" or .scene.scene_kind == "template")
     and .scene.coordinate_space == "scene_local_bottom_left_y_up"

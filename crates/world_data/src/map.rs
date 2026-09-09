@@ -10,9 +10,9 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 16;
+const FORMAT_VERSION: u32 = 19;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
-const SCENE_VERSION: u32 = 15;
+const SCENE_VERSION: u32 = 17;
 const WORKSPACE_KEY: &str = "world01";
 const COORDINATE_SPACE: &str = "scene_local_bottom_left_y_up";
 
@@ -32,6 +32,7 @@ pub struct WorldMap {
     bridges: Vec<MapBridge>,
     bridge_decks: Vec<MapRouteSurface>,
     water_bodies: Vec<MapWaterBody>,
+    switches: Vec<MapSwitch>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_columns: HashMap<(u32, u32), WaterColumn>,
     water_cell_meters: f32,
@@ -98,6 +99,7 @@ impl WorldMap {
             bridge_decks: scene.bridge_decks,
             water_columns: index_water_columns(&scene.water_bodies),
             water_bodies: scene.water_bodies,
+            switches: scene.switches,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
             route_surface_cuts: scene.route_surface_cuts,
             water_cell_meters: scene.water_cell_meters,
@@ -312,6 +314,14 @@ impl WorldMap {
     /// The authored water of this map, each body with the cells it occupies.
     pub fn water_bodies(&self) -> &[MapWaterBody] {
         &self.water_bodies
+    }
+
+    /// The switches this map declares, and the position each opens in.
+    ///
+    /// Where a switch stands later is runtime state. The map only says which
+    /// switches exist, so that nothing can be switched that was never authored.
+    pub fn switches(&self) -> &[MapSwitch] {
+        &self.switches
     }
 
     /// Every authored surface a Character walks along rather than over: the
@@ -632,6 +642,7 @@ impl WorldMap {
             // A Template carries no water yet, so composition keeps the water
             // the Instance was authored with.
             water_bodies: self.water_bodies.clone(),
+            switches: self.switches.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
             water_columns: self.water_columns.clone(),
             water_cell_meters: self.water_cell_meters,
@@ -1261,6 +1272,14 @@ pub struct MapWaterBody {
     /// What kind of water this is, as the author classified it.
     pub water_kind: String,
     pub asset_key: String,
+    /// The named switch this body hangs on, and `None` for one that is always
+    /// there. Whether it is on is runtime state; the map only says which.
+    pub switch: Option<String>,
+    /// The bodies this one's source sits on, from the authored `end` of each
+    /// junction. More than one means water as soon as any of them runs.
+    pub feeders: Vec<String>,
+    /// Every junction this body makes, with the station on each side.
+    pub junctions: Vec<MapWaterJunction>,
     /// What this water names itself, from its Asset's profile - which is how a
     /// Terrain cell gets its surface too. Water is not something to walk on:
     /// a column reports it as a depth over the ground it covers, and this token
@@ -1347,6 +1366,28 @@ pub struct MapWaterCell {
     /// The height up to which Terrain is gone, so that the channel keeps the
     /// air the author gave it.
     pub cut_top_meters: f32,
+    /// How far along its own course this cell sits.
+    pub station_meters: f32,
+}
+
+/// Where two bodies of water meet, from the side of the body that carries it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapWaterJunction {
+    pub water_body_id: String,
+    /// The station on this body's own course.
+    pub own_station_meters: f32,
+    /// The station the other body is at.
+    pub other_station_meters: f32,
+}
+
+/// One named switch of a map, and the position the map opens in.
+///
+/// The map says which switches exist and where they start. Where they stand
+/// later is runtime state and belongs to the simulation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapSwitch {
+    pub name: String,
+    pub initially_on: bool,
 }
 
 /// A SceneMaker-authored bridge: a deck laid across a gap, the planks that
@@ -1592,6 +1633,7 @@ struct ConvertedSceneBody {
     bridges: Vec<MapBridge>,
     bridge_decks: Vec<MapRouteSurface>,
     water_bodies: Vec<MapWaterBody>,
+    switches: Vec<MapSwitch>,
     water_cell_meters: f32,
     template_anchors: Vec<MapTemplateAnchor>,
 }
@@ -1617,10 +1659,30 @@ fn convert_scene_body(
         props: source_props,
         route_surfaces: source_route_surfaces,
         bridges: source_bridges,
+        switches: source_switches,
         water_bodies: source_water_bodies,
         template_anchors: source_template_anchors,
         ..
     } = scene;
+
+    let mut switches = Vec::with_capacity(source_switches.len());
+    let mut switch_names = HashSet::with_capacity(source_switches.len());
+    for declared in source_switches {
+        if declared.switch.is_empty() || !switch_names.insert(declared.switch.clone()) {
+            return Err(WorldMapError::new(format!(
+                "switch '{}' is empty or declared twice",
+                declared.switch
+            )));
+        }
+        switches.push(MapSwitch {
+            name: declared.switch,
+            initially_on: declared.initially_on,
+        });
+    }
+    let declared_switches: HashSet<&str> = switches
+        .iter()
+        .map(|declared| declared.name.as_str())
+        .collect();
 
     let width_tiles = size_cells.width;
     let height_tiles = size_cells.height;
@@ -1737,6 +1799,7 @@ fn convert_scene_body(
         height_tiles,
         grid.terrain_cell_meters,
         grid.water_cell_meters,
+        &declared_switches,
     )?;
     let mut anchor_ids = HashSet::new();
     let template_anchors = source_template_anchors
@@ -1795,6 +1858,7 @@ fn convert_scene_body(
         bridges,
         bridge_decks,
         water_bodies,
+        switches,
         water_cell_meters: grid.water_cell_meters,
         template_anchors,
     })
@@ -1817,6 +1881,7 @@ fn convert_water_bodies(
     height_tiles: u32,
     terrain_cell_meters: f32,
     water_cell_meters: f32,
+    declared_switches: &HashSet<&str>,
 ) -> Result<Vec<MapWaterBody>, WorldMapError> {
     if sources.len() != raster.len() || sources.len() != bakes.len() {
         return Err(WorldMapError::new(
@@ -1855,6 +1920,55 @@ fn convert_water_bodies(
                 source.water_body_id
             )));
         }
+        // The switch is carried in both halves of the export so that the two
+        // can disagree loudly rather than quietly.
+        if entry.switch != source.switch {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' hangs on a different switch in the scene than in the raster",
+                source.water_body_id
+            )));
+        }
+        if let Some(name) = &source.switch
+            && !declared_switches.contains(name.as_str())
+        {
+            return Err(WorldMapError::new(format!(
+                "water body '{}' hangs on switch '{name}', which the scene does not declare",
+                source.water_body_id
+            )));
+        }
+        let mut feeders = Vec::new();
+        for junction in &source.junctions {
+            if junction.end.is_empty() || junction.water_body_id.is_empty() {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has a junction that names no end or no other body",
+                    source.water_body_id
+                )));
+            }
+            // Which body feeds which is authored here and inferred nowhere: a
+            // station of zero says where a junction sits, never which way the
+            // water runs through it.
+            if junction.end == "source" {
+                feeders.push(junction.water_body_id.clone());
+            }
+        }
+        let mut junctions = Vec::with_capacity(entry.junctions.len());
+        for junction in &entry.junctions {
+            if !junction.own_station_meters.is_finite()
+                || !junction.station_meters.is_finite()
+                || junction.own_station_meters < 0.0
+                || junction.station_meters < 0.0
+            {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has a junction at no station",
+                    source.water_body_id
+                )));
+            }
+            junctions.push(MapWaterJunction {
+                water_body_id: junction.water_body_id.clone(),
+                own_station_meters: junction.own_station_meters,
+                other_station_meters: junction.station_meters,
+            });
+        }
         let Some(surface) = require_profile(profiles, &source.asset_key)?
             .surface
             .clone()
@@ -1887,12 +2001,19 @@ fn convert_water_bodies(
                     source.water_body_id
                 )));
             }
+            if !cell.station_meters.is_finite() || cell.station_meters < 0.0 {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' has a cell at no station of its own course",
+                    source.water_body_id
+                )));
+            }
             cells.push(MapWaterCell {
                 x: cell.x,
                 y: cell.y,
                 bed_meters: cell.bed_meters,
                 surface_meters: cell.surface_meters,
                 cut_top_meters: cell.cut_top_meters,
+                station_meters: cell.station_meters,
             });
         }
         if cells.is_empty() {
@@ -1968,6 +2089,9 @@ fn convert_water_bodies(
             water_body_id: source.water_body_id,
             water_kind: source.water_kind,
             asset_key: source.asset_key,
+            switch: source.switch,
+            feeders,
+            junctions,
             surface,
             cells,
             vertices,
@@ -1975,7 +2099,103 @@ fn convert_water_bodies(
             centerline_samples,
         });
     }
+    validate_water_topology(&converted)?;
     Ok(converted)
+}
+
+/// Checks what the two halves of the export say about how bodies of water meet.
+///
+/// The scene names a junction only on the side where a body has an end of its
+/// own, and the raster carries both sides with the stations swapped. So the
+/// invariant is not "one entry each way" but this:
+///
+/// - every junction the raster names is mirrored by the body at the other side,
+///   with the two stations exchanged;
+/// - exactly one of the two sides declares the junction as its `source`, which
+///   is what makes the direction of the water unambiguous without reading it
+///   out of a station;
+/// - and a body's own scene junctions are all present in its raster.
+///
+/// Feeding must also reach a beginning: a ring of bodies feeding each other is
+/// refused rather than walked, because a reader that never terminates fails
+/// worse than one that says no.
+fn validate_water_topology(bodies: &[MapWaterBody]) -> Result<(), WorldMapError> {
+    let known: HashMap<&str, &MapWaterBody> = bodies
+        .iter()
+        .map(|body| (body.water_body_id.as_str(), body))
+        .collect();
+    for body in bodies {
+        for junction in &body.junctions {
+            let Some(other) = known.get(junction.water_body_id.as_str()) else {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' meets '{}', which this map does not carry",
+                    body.water_body_id, junction.water_body_id
+                )));
+            };
+            let mirrored = other.junctions.iter().any(|mirror| {
+                mirror.water_body_id == body.water_body_id
+                    && (mirror.own_station_meters - junction.other_station_meters).abs() <= 1.0e-3
+                    && (mirror.other_station_meters - junction.own_station_meters).abs() <= 1.0e-3
+            });
+            if !mirrored {
+                return Err(WorldMapError::new(format!(
+                    "the junction between '{}' and '{}' is not carried from both sides",
+                    body.water_body_id, junction.water_body_id
+                )));
+            }
+            let declares = body
+                .feeders
+                .iter()
+                .any(|fed| fed == &junction.water_body_id);
+            let other_declares = other.feeders.iter().any(|fed| fed == &body.water_body_id);
+            if declares == other_declares {
+                return Err(WorldMapError::new(format!(
+                    "the junction between '{}' and '{}' is claimed as a source by {}",
+                    body.water_body_id,
+                    junction.water_body_id,
+                    if declares {
+                        "both sides"
+                    } else {
+                        "neither side"
+                    }
+                )));
+            }
+        }
+        for feeder in &body.feeders {
+            if !body
+                .junctions
+                .iter()
+                .any(|junction| &junction.water_body_id == feeder)
+            {
+                return Err(WorldMapError::new(format!(
+                    "water body '{}' is fed by '{feeder}', which its raster does not meet",
+                    body.water_body_id
+                )));
+            }
+        }
+    }
+    for body in bodies {
+        let mut walked = HashSet::new();
+        let mut pending = vec![body.water_body_id.as_str()];
+        while let Some(current) = pending.pop() {
+            if !walked.insert(current) {
+                continue;
+            }
+            let Some(current) = known.get(current) else {
+                continue;
+            };
+            for feeder in &current.feeders {
+                if feeder == &body.water_body_id {
+                    return Err(WorldMapError::new(format!(
+                        "water body '{}' is fed, around a ring, by itself",
+                        body.water_body_id
+                    )));
+                }
+                pending.push(feeder.as_str());
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A deck is a Path to whoever walks on it.
@@ -3133,6 +3353,36 @@ struct WaterBodyDocument {
     water_body_id: String,
     water_kind: String,
     asset_key: String,
+    /// The named switch this body hangs on, or `None` for a body that is
+    /// always there.
+    switch: Option<String>,
+    junctions: Vec<BodyJunctionDocument>,
+}
+
+/// A junction as the author made it: which end of *this* body it is, and the
+/// body at the other side.
+///
+/// `end == "source"` is the only thing that says which body feeds which, and it
+/// is authored rather than inferred. The raster carries the same junctions with
+/// their stations, and the two are checked against each other.
+#[derive(Deserialize)]
+struct BodyJunctionDocument {
+    end: String,
+    water_body_id: String,
+}
+
+#[derive(Deserialize)]
+struct RasterJunctionDocument {
+    water_body_id: String,
+    own_station_meters: f32,
+    station_meters: f32,
+}
+
+/// One named switch of a scene, and where the map opens.
+#[derive(Deserialize)]
+struct SwitchDocument {
+    switch: String,
+    initially_on: bool,
 }
 
 #[derive(Deserialize)]
@@ -3146,6 +3396,10 @@ struct WaterBakeDocument {
 #[derive(Deserialize)]
 struct WaterRasterDocument {
     water_body_id: String,
+    /// The same switch the scene names for this body. Carried twice so the two
+    /// halves of the export can be checked against each other.
+    switch: Option<String>,
+    junctions: Vec<RasterJunctionDocument>,
     cells: Vec<WaterCellDocument>,
 }
 
@@ -3156,6 +3410,9 @@ struct WaterCellDocument {
     bed_meters: f32,
     surface_meters: f32,
     cut_top_meters: f32,
+    /// How far along its own course this cell sits, which is what anything
+    /// carried by the water is placed by.
+    station_meters: f32,
 }
 
 #[derive(Deserialize)]
@@ -3198,6 +3455,7 @@ struct SceneDocument {
     coordinate_space: String,
     terrain_cells: Vec<TerrainCellDocument>,
     props: Vec<PropDocument>,
+    switches: Vec<SwitchDocument>,
     water_bodies: Vec<WaterBodyDocument>,
     route_surfaces: Vec<RouteSurfaceDocument>,
     bridges: Vec<BridgeDocument>,
@@ -3377,6 +3635,7 @@ fn export_document(
                 "coordinate_space": "{COORDINATE_SPACE}",
                 "terrain_cells": [{terrain_cells}],
                 "props": [{props}],
+                "switches": [],
                 "water_bodies": [],
                 "route_surfaces": [],
                 "bridges": [],
@@ -4933,11 +5192,65 @@ mod tests {
     }
 
     #[test]
+    fn a_body_hangs_on_a_declared_switch_and_names_the_body_that_feeds_it() {
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let declared = map
+            .switches()
+            .iter()
+            .map(|switch| switch.name.as_str())
+            .collect::<HashSet<_>>();
+
+        assert!(
+            declared.contains("branch_between_bridges") && declared.contains("upper_valley"),
+            "the overworld authors both of its switches"
+        );
+        for switch in map.switches() {
+            assert!(!switch.name.is_empty());
+        }
+        for body in map.water_bodies() {
+            if let Some(switch) = &body.switch {
+                assert!(
+                    declared.contains(switch.as_str()),
+                    "a body may only hang on a switch the map declares"
+                );
+            }
+            for feeder in &body.feeders {
+                assert!(
+                    map.water_bodies()
+                        .iter()
+                        .any(|other| &other.water_body_id == feeder),
+                    "a body is fed by one this map carries"
+                );
+            }
+        }
+
+        // The chain the cascade has to walk: river_0005 reaches the main river
+        // only through two bodies that carry no switch of their own.
+        let feeders_of = |id: &str| {
+            map.water_bodies()
+                .iter()
+                .find(|body| body.water_body_id == id)
+                .map(|body| body.feeders.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(feeders_of("river_0005"), vec!["river_0004".to_owned()]);
+        assert_eq!(feeders_of("river_0004"), vec!["river_0002".to_owned()]);
+        assert_eq!(feeders_of("river_0002"), vec!["river_0001".to_owned()]);
+        assert!(
+            feeders_of("river_0001").is_empty(),
+            "the river the others leave is fed by nothing"
+        );
+    }
+
+    #[test]
     fn the_embedded_world_carries_its_authored_water() {
         let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let bodies = map.water_bodies();
 
-        assert_eq!(bodies.len(), 1);
+        assert!(
+            bodies.len() > 1,
+            "the overworld carries a river and the branches that leave it"
+        );
         for body in bodies {
             assert_eq!(body.water_kind, "river");
             assert_eq!(body.surface, "water");
@@ -4960,6 +5273,12 @@ mod tests {
             assert!(body.centerline_samples.len() >= 2);
             let length = body.length_meters();
             assert!(length > 0.0);
+            assert!(
+                body.cells
+                    .iter()
+                    .all(|cell| cell.station_meters >= 0.0 && cell.station_meters <= length),
+                "every cell sits somewhere on its own course"
+            );
             let start = body.flow_at(0.0).expect("a course starts somewhere");
             let end = body.flow_at(length).expect("and ends somewhere");
             assert_eq!(
