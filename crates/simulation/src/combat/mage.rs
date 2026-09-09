@@ -455,11 +455,8 @@ mod tests {
     use world01_world_data::{CharacterHealth, CharacterId, DashState, StatusEffectState};
 
     fn hurt_geometry(content: &RuntimeContent) -> CharacterHurtGeometryCatalog {
-        CharacterHurtGeometryCatalog::from_content(
-            content,
-            &load_design().expect("embedded design parses").hurt,
-        )
-        .expect("embedded hurt geometry is valid")
+        CharacterHurtGeometryCatalog::from_content(content)
+            .expect("embedded hurt geometry is valid")
     }
 
     fn rules() -> MageAttackRules {

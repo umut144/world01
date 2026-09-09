@@ -7311,7 +7311,29 @@
 	"presentation": {
 		"authored_facing": "neutral"
 	},
-	"regions": [],
+	"regions": [
+		{
+			"geometry_source": "component",
+			"name": "attack_region",
+			"region_id": "component_261",
+			"role": "attack",
+			"source_component_id": "component_66"
+		},
+		{
+			"geometry_source": "component",
+			"name": "attack_region_2",
+			"region_id": "component_262",
+			"role": "attack",
+			"source_component_id": "component_61"
+		},
+		{
+			"geometry_source": "component",
+			"name": "attack_region_3",
+			"region_id": "component_263",
+			"role": "attack",
+			"source_component_id": "component_62"
+		}
+	],
 	"schema_version": 21,
 	"z_order": {
 		"back_to_front": "ascending",

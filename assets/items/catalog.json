@@ -8,6 +8,15 @@
       "display_name": "Potion",
       "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/potion/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_44",
+      "asset_key": "waterpot",
+      "asset_type": "items",
+      "display_name": "Waterpot",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/waterpot/manifest.json"
     }
   ],
   "retired_assets": [],

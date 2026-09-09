@@ -93,7 +93,6 @@ fi
 # any previous_keys entry: a Key another Asset has taken over names that Asset.
 design_asset_keys() {
   jq -r '.characters[].asset_key' "$project_root/crates/design/traversal.json"
-  jq -r '.characters[].asset_key' "$project_root/crates/design/hurt.json"
   jq -r '
     .characters[].asset_key,
     (.characters[].equipped_weapon_asset_keys // [])[],

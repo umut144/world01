@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into());
     }
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
-    let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content, &game_design.hurt)?;
+    let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
     let world_collision =
         WorldCollisionGeometryCatalog::from_content_and_map(&content, &world_map)?;

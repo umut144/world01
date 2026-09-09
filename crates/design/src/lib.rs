@@ -5,13 +5,10 @@ use std::{
     fmt,
     path::Path,
 };
-use world01_world_data::{
-    CharacterId, DensityClass, HurtGeometryDefinition, MassModelDefinition, PlacementRanks,
-};
+use world01_world_data::{CharacterId, DensityClass, MassModelDefinition, PlacementRanks};
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
-const HURT_DESIGN: &str = include_str!("../hurt.json");
 const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
 const MAGE_DESIGN: &str = include_str!("../characters/mage.json");
 const MAGE_EYE_BEAMS_DESIGN: &str = include_str!("../abilities/mage_eye_beams.json");
@@ -205,7 +202,6 @@ pub struct GameDesign {
     pub hammer_strike: HammerStrikeDesign,
     pub hammerer: CharacterDesign,
     /// Which authored parts of each Character can be hit.
-    pub hurt: HurtGeometryDefinition,
     pub mage: MageDesign,
     pub mage_eye_beams: MageEyeBeamsDesign,
     pub mass: MassModelDefinition,
@@ -578,8 +574,6 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         .map_err(|error| DesignError(format!("cannot parse mass design: {error}")))?;
     let traversal: TraversalDesign = serde_json::from_str(TRAVERSAL_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse traversal design: {error}")))?;
-    let hurt: HurtGeometryDefinition = serde_json::from_str(HURT_DESIGN)
-        .map_err(|error| DesignError(format!("cannot parse hurt geometry design: {error}")))?;
     if !hammer.is_valid() {
         return Err(DesignError("Hammer design is invalid".into()));
     }
@@ -602,9 +596,6 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     }
     if !traversal.is_valid_for(&mass) {
         return Err(DesignError("traversal design is invalid".into()));
-    }
-    if !hurt.is_valid() {
-        return Err(DesignError("hurt geometry design is invalid".into()));
     }
     let known_abilities = HashSet::from([
         hammer_strike.name_key.as_str(),
@@ -631,7 +622,6 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         hammer,
         hammer_strike,
         hammerer,
-        hurt,
         mage,
         mage_eye_beams,
         mass,
@@ -678,7 +668,6 @@ mod tests {
         );
         assert_eq!(design.mass.characters.len(), 11);
         assert_eq!(design.traversal.characters.len(), 11);
-        assert_eq!(design.hurt.characters.len(), 11);
         assert_eq!(design.mass.weapons.len(), 1);
         assert!(
             design

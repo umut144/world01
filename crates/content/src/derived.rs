@@ -6,8 +6,7 @@ use std::{
 
 use bevy::prelude::{Resource, Vec2};
 use world01_world_data::{
-    CharacterHurtAssignment, CharacterId, ComponentMassAssignment, DensityClass,
-    HurtGeometryDefinition, MassModelDefinition, Position, WorldMap,
+    CharacterId, ComponentMassAssignment, DensityClass, MassModelDefinition, Position, WorldMap,
 };
 
 use crate::manifest::{
@@ -72,41 +71,41 @@ pub struct CharacterHurtGeometryCatalog {
 }
 
 impl CharacterHurtGeometryCatalog {
-    /// Resolves the declared hurt geometry of every Character in `content`.
+    /// The hurt surfaces every Character authors, one per Region with the
+    /// `hurt` role.
     ///
-    /// There is no default and no fallback. A Character the definition does not
-    /// name, a definition that names a Character the content does not have, and
-    /// a Component or Region name that does not resolve are all errors, so the
-    /// first run after an art or design change reports what went missing.
-    pub fn from_content(
-        content: &RuntimeContent,
-        definition: &HurtGeometryDefinition,
-    ) -> Result<Self, CharacterHurtGeometryError> {
-        if !definition.is_valid() {
-            return Err(CharacterHurtGeometryError(
-                "hurt geometry definition is invalid".into(),
-            ));
-        }
+    /// The Asset decides which parts can be hit; there is no list here and no
+    /// fallback to a Component. A Character that authors no hurt Region simply
+    /// has no entry and cannot be hit, the same way a Character without a
+    /// `collision` Region occupies no space. Adding the Region later is all it
+    /// takes, and a new Character needs no change in this repository at all.
+    pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHurtGeometryError> {
         let mut geometries = HashMap::new();
         for (character_id, manifest) in content.characters() {
-            let assignment = definition.character(&character_id.0).ok_or_else(|| {
-                CharacterHurtGeometryError(format!(
-                    "hurt geometry definition is missing Character {}",
-                    character_id.0
-                ))
-            })?;
+            let components = manifest
+                .regions
+                .iter()
+                .filter(|region| region.role == "hurt")
+                .map(|region| {
+                    let geometry = region_geometry(manifest, region)
+                        .map_err(|error| CharacterHurtGeometryError(error.to_string()))?;
+                    Ok(RuntimeComponentGeometry {
+                        name: region_surface_name(manifest, region)
+                            .map_err(CharacterHurtGeometryError)?,
+                        ..geometry
+                    })
+                })
+                .collect::<Result<Vec<_>, CharacterHurtGeometryError>>()?;
+            if components.is_empty() {
+                continue;
+            }
             geometries.insert(
                 character_id.clone(),
                 CharacterHurtGeometry {
                     authored_facing: manifest.presentation.authored_facing,
-                    components: assigned_hurt_geometry(manifest, assignment)?,
+                    components,
                 },
             );
-        }
-        if definition.characters.len() != geometries.len() {
-            return Err(CharacterHurtGeometryError(
-                "hurt geometry definition names a Character the content does not have".into(),
-            ));
         }
         Ok(Self { geometries })
     }
@@ -498,7 +497,8 @@ impl HammerCombatGeometry {
                 let geometry = region_geometry(hammer, region)
                     .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
                 Ok(RuntimeComponentGeometry {
-                    name: attack_surface_name(hammer, region)?,
+                    name: region_surface_name(hammer, region)
+                        .map_err(HammerCombatGeometryError::new)?,
                     ..geometry
                 })
             })
@@ -705,20 +705,20 @@ impl Error for HammerCombatGeometryError {}
 /// generates when the Region is created. The Component name is the one the
 /// Asset author curated and reads in the Outliner, so a per-surface design
 /// override keys on it and no second set of names has to be maintained.
-fn attack_surface_name(
+fn region_surface_name(
     manifest: &RuntimeManifest,
     region: &RuntimeRegion,
-) -> Result<String, HammerCombatGeometryError> {
+) -> Result<String, String> {
     manifest
         .components
         .iter()
         .find(|component| component.component_id == region.source_component_id)
         .map(|component| component.name.clone())
         .ok_or_else(|| {
-            HammerCombatGeometryError::new(format!(
-                "Hammer attack Region '{}' is attached to Component {}, which the manifest does not have",
-                region.name, region.source_component_id
-            ))
+            format!(
+                "{} {} Region '{}' is attached to Component {}, which the manifest does not have",
+                manifest.asset_key, region.role, region.name, region.source_component_id
+            )
         })
 }
 
@@ -775,42 +775,6 @@ fn placed_component_geometry(
     })
 }
 
-fn character_component_geometry(
-    manifest: &RuntimeManifest,
-    name: &str,
-) -> Result<RuntimeComponentGeometry, CharacterHurtGeometryError> {
-    let component = manifest
-        .components
-        .iter()
-        .find(|component| component.name == name)
-        .ok_or_else(|| {
-            CharacterHurtGeometryError(format!(
-                "{} is missing hurt Component {name}",
-                manifest.asset_key
-            ))
-        })?;
-    let mesh = component.mesh.as_ref().ok_or_else(|| {
-        CharacterHurtGeometryError(format!(
-            "{} hurt Component {name} has no Fill Mesh",
-            manifest.asset_key
-        ))
-    })?;
-    let transform = component_world_transform(component, &manifest.components, &mut HashSet::new())
-        .map_err(|error| CharacterHurtGeometryError(error.to_string()))?;
-    let pivot = finite_vec2(manifest.asset_pivot, "character asset pivot")
-        .map_err(|error| CharacterHurtGeometryError(error.to_string()))?;
-    Ok(RuntimeComponentGeometry {
-        component_id: component.component_id.clone(),
-        name: component.name.clone(),
-        vertices: mesh
-            .vertices
-            .iter()
-            .map(|vertex| transform_point(transform, *vertex) - pivot)
-            .collect(),
-        indices: mesh.indices.clone(),
-    })
-}
-
 fn eye_beam_emitter(
     manifest: &RuntimeManifest,
     name: &str,
@@ -851,48 +815,6 @@ fn eye_beam_emitter(
 }
 
 /// Components or Regions, whichever the Character declared.
-fn assigned_hurt_geometry(
-    manifest: &RuntimeManifest,
-    assignment: &CharacterHurtAssignment,
-) -> Result<Vec<RuntimeComponentGeometry>, CharacterHurtGeometryError> {
-    if !assignment.components.is_empty() {
-        return assignment
-            .components
-            .iter()
-            .map(|name| character_component_geometry(manifest, name))
-            .collect();
-    }
-    assignment
-        .regions
-        .iter()
-        .map(|name| character_hurt_region_geometry(manifest, name))
-        .collect()
-}
-
-fn character_hurt_region_geometry(
-    manifest: &RuntimeManifest,
-    name: &str,
-) -> Result<RuntimeComponentGeometry, CharacterHurtGeometryError> {
-    let region = manifest
-        .regions
-        .iter()
-        .find(|region| region.role == "hurt" && region.name == name)
-        .ok_or_else(|| {
-            CharacterHurtGeometryError(format!(
-                "{} does not author a hurt Region named '{name}'",
-                manifest.asset_key
-            ))
-        })?;
-    region_geometry(manifest, region).map_err(|error| CharacterHurtGeometryError(error.to_string()))
-}
-
-/// The shape of a Region, wherever it keeps it.
-///
-/// An authored Region carries its own vertices. A Component Region points at a
-/// Component and borrows its Fill Mesh, which then has to be placed the same
-/// way any other Component geometry is - through its world transform and minus
-/// the Asset pivot - or a collider drawn from a Component would sit at the
-/// Asset's origin instead of where the Component is.
 fn region_geometry(
     manifest: &RuntimeManifest,
     region: &RuntimeRegion,
@@ -1045,11 +967,25 @@ mod tests {
         assert!(hammer.attack_radius(1.0) > hammer.attack_radius(0.0));
         assert!(hammer.maximum_reach() > hammer.attack_radius(1.0));
 
-        let hurt = CharacterHurtGeometryCatalog::from_content(&content, &hurt_definition(&content))
-            .expect("every Character resolves the Components it declares");
+        // Hurt surfaces are authored, so a Character has an entry exactly when it
+        // authors hurt Regions, and every surface it does author resolves.
+        let hurt = CharacterHurtGeometryCatalog::from_content(&content)
+            .expect("every authored hurt Region resolves");
         assert!(content.ids().iter().all(|character| {
-            hurt.character(character)
-                .is_some_and(|geometry| geometry.components.len() == 2)
+            let authored = content
+                .character(character)
+                .map(|manifest| {
+                    manifest
+                        .regions
+                        .iter()
+                        .filter(|region| region.role == "hurt")
+                        .count()
+                })
+                .unwrap_or_default();
+            match hurt.character(character) {
+                Some(geometry) => geometry.components.len() == authored,
+                None => authored == 0,
+            }
         }));
 
         let character_collision = CharacterCollisionGeometryCatalog::from_content(&content)
@@ -1075,52 +1011,6 @@ mod tests {
                 .iter()
                 .all(|region| !region.component.boundary_edges().is_empty())
         );
-    }
-
-    /// The provisional declaration the shipped design also makes: body and head
-    /// for everyone. Built here rather than read from the design crate so the
-    /// importer is tested against a definition this test controls.
-    fn hurt_definition(content: &RuntimeContent) -> HurtGeometryDefinition {
-        HurtGeometryDefinition {
-            schema_version: 1,
-            characters: content
-                .ids()
-                .iter()
-                .map(|character| CharacterHurtAssignment {
-                    asset_key: character.0.clone(),
-                    components: vec!["body".to_owned(), "head".to_owned()],
-                    regions: Vec::new(),
-                })
-                .collect(),
-        }
-    }
-
-    #[test]
-    fn a_character_the_hurt_definition_forgets_is_rejected() {
-        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let mut definition = hurt_definition(&content);
-        definition.characters.pop();
-
-        assert!(CharacterHurtGeometryCatalog::from_content(&content, &definition).is_err());
-    }
-
-    #[test]
-    fn a_hurt_component_the_content_does_not_have_is_rejected() {
-        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let mut definition = hurt_definition(&content);
-        definition.characters[0].components = vec!["shoulder_pad".to_owned()];
-
-        assert!(CharacterHurtGeometryCatalog::from_content(&content, &definition).is_err());
-    }
-
-    #[test]
-    fn a_hurt_region_no_character_authors_is_rejected() {
-        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let mut definition = hurt_definition(&content);
-        definition.characters[0].components = Vec::new();
-        definition.characters[0].regions = vec!["eye_left".to_owned()];
-
-        assert!(CharacterHurtGeometryCatalog::from_content(&content, &definition).is_err());
     }
 
     fn collision_geometry(vertices: Vec<Vec2>, indices: Vec<u32>) -> RuntimeComponentGeometry {

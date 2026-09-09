@@ -2,6 +2,15 @@
   "assets": [
     {
       "asset_category": "single",
+      "asset_id": "asset_41",
+      "asset_key": "arrow",
+      "asset_type": "weapons",
+      "display_name": "Arrow",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/arrow/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_33",
       "asset_key": "bomb",
       "asset_type": "weapons",
@@ -11,12 +20,30 @@
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_40",
+      "asset_key": "bow",
+      "asset_type": "weapons",
+      "display_name": "Bow",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/bow/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_36",
       "asset_key": "dagger",
       "asset_type": "weapons",
       "display_name": "Dagger",
       "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/dagger/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_39",
+      "asset_key": "fist",
+      "asset_type": "weapons",
+      "display_name": "Fist",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/fist/manifest.json"
     },
     {
       "asset_category": "single",

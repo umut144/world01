@@ -20,6 +20,15 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_41",
+			"asset_key": "arrow",
+			"asset_type": "weapons",
+			"display_name": "Arrow",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/arrow/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_9",
 			"asset_key": "barde",
 			"asset_type": "character",
@@ -35,6 +44,24 @@
 			"display_name": "Bomb",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/bomb/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_40",
+			"asset_key": "bow",
+			"asset_type": "weapons",
+			"display_name": "Bow",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/bow/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_43",
+			"asset_key": "box",
+			"asset_type": "props",
+			"display_name": "Box",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/box/manifest.json"
 		},
 		{
 			"asset_category": "set",
@@ -71,6 +98,15 @@
 			"display_name": "Dagger",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/dagger/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_39",
+			"asset_key": "fist",
+			"asset_type": "weapons",
+			"display_name": "Fist",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/fist/manifest.json"
 		},
 		{
 			"asset_category": "single",
@@ -152,6 +188,15 @@
 			"display_name": "Heart",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/heart/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_38",
+			"asset_key": "lightning_bolt",
+			"asset_type": "props",
+			"display_name": "Lightning Bolt",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/lightning_bolt/manifest.json"
 		},
 		{
 			"asset_category": "single",
@@ -294,6 +339,15 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_42",
+			"asset_key": "the_mirror",
+			"asset_type": "props",
+			"display_name": "The Mirror",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/the_mirror/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_29",
 			"asset_key": "throwing_knife",
 			"asset_type": "weapons",
@@ -329,6 +383,15 @@
 			"display_name": "Warrior",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/warrior/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_44",
+			"asset_key": "waterpot",
+			"asset_type": "items",
+			"display_name": "Waterpot",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/waterpot/manifest.json"
 		},
 		{
 			"asset_category": "single",

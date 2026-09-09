@@ -563,7 +563,7 @@ mod tests {
                 .expect("embedded traversal profiles are valid"),
         )
         .insert_resource(
-            CharacterHurtGeometryCatalog::from_content(&content, &game_design.hurt)
+            CharacterHurtGeometryCatalog::from_content(&content)
                 .expect("embedded hurt geometry is valid"),
         )
         .add_systems(Update, update_character_life);

@@ -19795,6 +19795,13 @@
 			"region_id": "component_167",
 			"role": "collision",
 			"source_component_id": "component_106"
+		},
+		{
+			"geometry_source": "component",
+			"name": "hurt_region",
+			"region_id": "component_285",
+			"role": "hurt",
+			"source_component_id": "component_105"
 		}
 	],
 	"schema_version": 21,
