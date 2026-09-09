@@ -18,11 +18,7 @@ use world01_world_data::CharacterId;
 
 use crate::eyes::{EyeCollider, EyePupil, PupilGeometry};
 use crate::hammer::HammerPresentationState;
-use crate::pose::CharacterHead;
 use crate::projection::ProjectionDepthMaterial;
-
-#[derive(Component)]
-pub struct BodyAnchor;
 
 #[derive(Component, Debug, Clone)]
 pub struct HammerVisual {
@@ -368,14 +364,7 @@ pub fn spawn_character_visual(
     let mut outline_visuals = Vec::new();
     for component in &manifest.components {
         let transform = component_transform(component);
-        let mut entity_commands = commands.spawn((transform, Visibility::default()));
-        if component.name == "body" {
-            entity_commands.insert(BodyAnchor);
-        }
-        if component.name == "head" {
-            entity_commands.insert(CharacterHead::new(root, transform.translation));
-        }
-        let entity = entity_commands.id();
+        let entity = commands.spawn((transform, Visibility::default())).id();
         component_entities.insert(component.component_id.as_str(), entity);
     }
 

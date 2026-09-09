@@ -34,9 +34,7 @@ use crate::polytools::{
     flat_asset_bounds, repeated_flat_asset_mesh, spawn_ankh_projected_visual,
     spawn_character_visual, spawn_projected_prop_visual,
 };
-use crate::pose::{
-    PoseSettings, apply_body_facing, apply_character_status_presentation, apply_neutral_head_motion,
-};
+use crate::pose::{apply_body_facing, apply_character_status_presentation};
 use crate::projection::ProjectionDepthMaterial;
 use crate::session::{ClientScreen, ClientSession};
 
@@ -102,7 +100,6 @@ impl Plugin for ClientPresentationPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.character_assets.clone())
             .init_resource::<ClientInputFocus>()
-            .init_resource::<PoseSettings>()
             .init_resource::<RenderedWorldGeneration>()
             .add_systems(OnEnter(ClientScreen::CharacterSelection), setup_selection)
             .add_systems(OnEnter(ClientScreen::InGame), configure_ingame_camera)
@@ -134,7 +131,7 @@ impl Plugin for ClientPresentationPlugin {
                         collect_death_confirmation_input,
                     )
                         .chain(),
-                    (apply_body_facing, apply_neutral_head_motion),
+                    apply_body_facing,
                     (render_new_players, initialize_local_render_history)
                         .chain()
                         .run_if(in_state(ClientScreen::InGame)),

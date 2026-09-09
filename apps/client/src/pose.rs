@@ -1,42 +1,12 @@
 use bevy::prelude::*;
 use world01_simulation::CharacterLifeRules;
 use world01_world_data::{
-    BodyFacing, CharacterLifeState, DeathConfirmationState, MovementDirection, StatusEffectState,
+    BodyFacing, CharacterLifeState, DeathConfirmationState, StatusEffectState,
 };
 
 use world01_content::AuthoredFacing;
 
 use crate::polytools::{CharacterVisual, CharacterVisualOrientation};
-
-#[derive(Resource, Debug, Clone, Copy, PartialEq)]
-pub struct PoseSettings {
-    pub neutral_head_offset_meters: f32,
-    pub neutral_head_half_life_seconds: f32,
-}
-
-impl Default for PoseSettings {
-    fn default() -> Self {
-        Self {
-            neutral_head_offset_meters: 0.06,
-            neutral_head_half_life_seconds: 0.05,
-        }
-    }
-}
-
-#[derive(Component, Debug, Clone, Copy)]
-pub struct CharacterHead {
-    owner: Entity,
-    rest_translation: Vec3,
-}
-
-impl CharacterHead {
-    pub fn new(owner: Entity, rest_translation: Vec3) -> Self {
-        Self {
-            owner,
-            rest_translation,
-        }
-    }
-}
 
 pub fn apply_body_facing(
     players: Query<(&BodyFacing, &CharacterVisual)>,
@@ -50,40 +20,6 @@ pub fn apply_body_facing(
             continue;
         };
         transform.scale.x = scale_x;
-    }
-}
-
-pub fn apply_neutral_head_motion(
-    time: Res<Time>,
-    settings: Res<PoseSettings>,
-    players: Query<(&MovementDirection, &CharacterVisual)>,
-    mut heads: Query<(&CharacterHead, &mut Transform)>,
-) {
-    let blend =
-        exponential_blend_factor(time.delta_secs(), settings.neutral_head_half_life_seconds);
-
-    for (head, mut transform) in &mut heads {
-        let Ok((direction, visual)) = players.get(head.owner) else {
-            continue;
-        };
-        let Some(target) = neutral_head_target(
-            head.rest_translation.truncate(),
-            visual.authored_facing,
-            *direction,
-            settings.neutral_head_offset_meters,
-        ) else {
-            continue;
-        };
-
-        let current = transform.translation.truncate();
-        let next = current.lerp(target, blend);
-        let next = if next.distance_squared(target) <= f32::EPSILON {
-            target
-        } else {
-            next
-        };
-        transform.translation.x = next.x;
-        transform.translation.y = next.y;
     }
 }
 
@@ -162,36 +98,6 @@ fn directional_pose_scale_x(authored_facing: AuthoredFacing, facing: BodyFacing)
     }
 }
 
-fn neutral_head_target(
-    rest: Vec2,
-    authored_facing: AuthoredFacing,
-    direction: MovementDirection,
-    offset_meters: f32,
-) -> Option<Vec2> {
-    if authored_facing != AuthoredFacing::Neutral {
-        return None;
-    }
-
-    let direction = Vec2::new(direction.x, direction.y);
-    let direction = if direction.is_finite() {
-        direction.clamp_length_max(1.0)
-    } else {
-        Vec2::ZERO
-    };
-    Some(rest + direction * offset_meters.max(0.0))
-}
-
-fn exponential_blend_factor(delta_seconds: f32, half_life_seconds: f32) -> f32 {
-    if !delta_seconds.is_finite() || delta_seconds <= 0.0 {
-        return 0.0;
-    }
-    if !half_life_seconds.is_finite() || half_life_seconds <= 0.0 {
-        return 1.0;
-    }
-
-    1.0 - 2.0_f32.powf(-delta_seconds / half_life_seconds)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -235,59 +141,6 @@ mod tests {
             );
             assert_eq!(
                 directional_pose_scale_x(authored_facing, BodyFacing::Right),
-                None
-            );
-        }
-    }
-
-    #[test]
-    fn neutral_head_target_supports_cardinal_and_diagonal_movement() {
-        let rest = Vec2::new(0.25, 1.0);
-        assert_eq!(
-            neutral_head_target(
-                rest,
-                AuthoredFacing::Neutral,
-                MovementDirection::new(-1.0, 0.0),
-                0.06,
-            ),
-            Some(Vec2::new(0.19, 1.0))
-        );
-
-        let diagonal = neutral_head_target(
-            rest,
-            AuthoredFacing::Neutral,
-            MovementDirection::new(1.0, 1.0),
-            0.06,
-        )
-        .expect("neutral pose has a head target");
-        assert!((diagonal.distance(rest) - 0.06).abs() < EPSILON);
-        assert!(diagonal.x > rest.x && diagonal.y > rest.y);
-    }
-
-    #[test]
-    fn neutral_head_returns_to_rest_when_movement_stops() {
-        let rest = Vec2::new(0.0, 1.25);
-        assert_eq!(
-            neutral_head_target(rest, AuthoredFacing::Neutral, MovementDirection::ZERO, 0.06,),
-            Some(rest)
-        );
-    }
-
-    #[test]
-    fn directional_top_and_down_assets_do_not_receive_neutral_head_motion() {
-        for authored_facing in [
-            AuthoredFacing::Left,
-            AuthoredFacing::Right,
-            AuthoredFacing::Top,
-            AuthoredFacing::Down,
-        ] {
-            assert_eq!(
-                neutral_head_target(
-                    Vec2::ZERO,
-                    authored_facing,
-                    MovementDirection::new(1.0, 0.0),
-                    0.06,
-                ),
                 None
             );
         }
