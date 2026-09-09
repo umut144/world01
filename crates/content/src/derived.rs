@@ -751,6 +751,58 @@ fn finite_vec2(values: [f32; 2], label: &str) -> Result<Vec2, HammerCombatGeomet
 /// authored one would, so the two paths must agree with each other. Every
 /// Asset's pivot is the origin today, which is why the question of what a
 /// non-zero pivot would mean for a Region has not had to be answered yet.
+/// The Fill Meshes of the Asset an outer Reference instances, in the host
+/// Asset's space and merged into one surface.
+///
+/// A Reference owns no Mesh: it names another Asset, whose Components the
+/// content boundary resolves into `referenced_components` on load. Every one
+/// of them is placed by its own transform inside that Asset and then by the
+/// Reference's transform inside this one. They merge into a single geometry
+/// because a Region is one surface — the Barde's belly is an Orb, not a list
+/// of the Orb's parts — and overlap tests run per triangle, so a merged set
+/// of several parts answers exactly like the parts would.
+fn referenced_component_geometry(
+    manifest: &RuntimeManifest,
+    reference: &RuntimeComponent,
+) -> Result<RuntimeComponentGeometry, String> {
+    let reference_world =
+        component_world_transform(reference, &manifest.components, &mut HashSet::new())
+            .map_err(|error| error.to_string())?;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for referenced in &reference.referenced_components {
+        let Some(mesh) = referenced.mesh.as_ref() else {
+            continue;
+        };
+        let inner = component_world_transform(
+            referenced,
+            &reference.referenced_components,
+            &mut HashSet::new(),
+        )
+        .map_err(|error| error.to_string())?;
+        let world = compose(reference_world, inner);
+        let base = vertices.len() as u32;
+        vertices.extend(
+            mesh.vertices
+                .iter()
+                .map(|vertex| transform_point(world, *vertex)),
+        );
+        indices.extend(mesh.indices.iter().map(|index| index + base));
+    }
+    if vertices.is_empty() {
+        return Err(format!(
+            "Reference {} instances an Asset with no Fill Mesh to take geometry from",
+            reference.name
+        ));
+    }
+    Ok(RuntimeComponentGeometry {
+        component_id: reference.component_id.clone(),
+        name: reference.name.clone(),
+        vertices,
+        indices,
+    })
+}
+
 fn placed_component_geometry(
     manifest: &RuntimeManifest,
     component: &RuntimeComponent,
@@ -841,7 +893,12 @@ fn region_geometry(
                 manifest.asset_key, region.name, region.source_component_id
             ))
         })?;
-    let geometry = placed_component_geometry(manifest, component).map_err(|message| {
+    let geometry = if component.source_asset_key.is_some() {
+        referenced_component_geometry(manifest, component)
+    } else {
+        placed_component_geometry(manifest, component)
+    }
+    .map_err(|message| {
         RegionGeometryError(format!(
             "{} Region '{}': {message}",
             manifest.asset_key, region.name
