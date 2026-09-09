@@ -398,10 +398,11 @@ impl WorldMap {
     ///   `rebuild_world_runtime` runs again, whatever walks does so on the nodes
     ///   of the world as it was.
     ///
-    /// So a trigger in play belongs on the rail an occupancy change already
-    /// uses - an ordered request that advances a generation, applied by the
-    /// server - rather than calling this from wherever the trigger is.
-    pub fn set_switch(&mut self, name: &str, on: bool) -> Result<bool, WorldMapError> {
+    /// So this is not the door a trigger uses. It is how a composition applies
+    /// the positions it holds after rebuilding this map from the authored base;
+    /// `WorldComposition::set_switch` is what moves one, and it is the only
+    /// thing outside this crate that can.
+    pub(crate) fn set_switch(&mut self, name: &str, on: bool) -> Result<bool, WorldMapError> {
         let Some(position) = self.switch_positions.get_mut(name) else {
             return Err(WorldMapError::new(format!(
                 "this map declares no switch '{name}'"

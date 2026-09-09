@@ -15,6 +15,66 @@ pub struct AnchorOccupancy {
     occupants: BTreeMap<String, String>,
 }
 
+/// Where each named switch of a world stands.
+///
+/// A sibling of [`AnchorOccupancy`] rather than a part of it: an Anchor
+/// changing its occupant and a switch being thrown are different events, and
+/// giving each its own generation lets either advance without claiming the
+/// other moved.
+#[derive(Component, Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaterSwitchPositions {
+    generation: u64,
+    positions: BTreeMap<String, bool>,
+}
+
+impl WaterSwitchPositions {
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn is_on(&self, name: &str) -> Option<bool> {
+        self.positions.get(name).copied()
+    }
+
+    pub fn positions(&self) -> impl ExactSizeIterator<Item = (&str, bool)> {
+        self.positions.iter().map(|(name, on)| (name.as_str(), *on))
+    }
+
+    fn advance_generation(&mut self) -> Result<(), WorldMapError> {
+        self.generation = self.generation.checked_add(1).ok_or_else(|| {
+            WorldMapError::new("switch generation cannot advance beyond u64::MAX")
+        })?;
+        Ok(())
+    }
+}
+
+/// The newest switch positions offered to the local world runtime, alongside
+/// [`WorldOccupancyRequest`] and answering to the same rule: the runtime
+/// validates a whole derived world before committing a newer generation.
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorldSwitchRequest {
+    latest: Option<WaterSwitchPositions>,
+}
+
+impl WorldSwitchRequest {
+    pub fn latest(&self) -> Option<&WaterSwitchPositions> {
+        self.latest.as_ref()
+    }
+
+    /// Retains only the newest submitted generation.
+    pub fn submit(&mut self, switches: WaterSwitchPositions) -> bool {
+        if self
+            .latest
+            .as_ref()
+            .is_some_and(|latest| latest.generation() >= switches.generation())
+        {
+            return false;
+        }
+        self.latest = Some(switches);
+        true
+    }
+}
+
 /// The newest authority snapshot offered to the local world runtime.
 ///
 /// Transport and event-selection code submit snapshots here. The simulation
@@ -75,6 +135,10 @@ impl AnchorOccupancy {
 pub struct WorldComposition {
     base_map: WorldMap,
     occupancy: AnchorOccupancy,
+    /// Where the switches stand. Kept here rather than on the composed map
+    /// because `compose_map` rebuilds that map from `base_map` every time, and
+    /// state that lives only on the result does not survive being recomposed.
+    switches: WaterSwitchPositions,
     current_map: WorldMap,
 }
 
@@ -93,12 +157,27 @@ impl WorldComposition {
         templates: &WorldTemplateCatalog,
         ranks: &PlacementRanks,
     ) -> Result<Self, WorldMapError> {
-        let current_map = compose_map(&base_map, &occupancy, templates, ranks)?;
+        // The map opens its switches where it declares them, and those are the
+        // positions until somebody moves one.
+        let switches = WaterSwitchPositions {
+            generation: 0,
+            positions: base_map
+                .switches()
+                .iter()
+                .map(|switch| (switch.name.clone(), switch.initially_on))
+                .collect(),
+        };
+        let current_map = compose_map(&base_map, &occupancy, &switches, templates, ranks)?;
         Ok(Self {
             base_map,
             occupancy,
+            switches,
             current_map,
         })
+    }
+
+    pub fn switches(&self) -> &WaterSwitchPositions {
+        &self.switches
     }
 
     pub fn base_map(&self) -> &WorldMap {
@@ -209,9 +288,73 @@ impl WorldComposition {
         templates: &WorldTemplateCatalog,
         ranks: &PlacementRanks,
     ) -> Result<(), WorldMapError> {
-        let current_map = compose_map(&self.base_map, &occupancy, templates, ranks)?;
+        let current_map =
+            compose_map(&self.base_map, &occupancy, &self.switches, templates, ranks)?;
         self.occupancy = occupancy;
         self.current_map = current_map;
+        Ok(())
+    }
+
+    /// Moves a switch and recomposes, or answers `false` when it already stood
+    /// there.
+    ///
+    /// Mutates this protocol-neutral value directly, exactly as `set_occupant`
+    /// does: runtime code clones the installed composition, moves the switch on
+    /// the clone, and submits the result through [`WorldSwitchRequest`], so the
+    /// derived world is validated as a whole before anything is committed.
+    pub fn set_switch(
+        &mut self,
+        name: &str,
+        on: bool,
+        templates: &WorldTemplateCatalog,
+        ranks: &PlacementRanks,
+    ) -> Result<bool, WorldMapError> {
+        if self.base_map.switch_is_on(name).is_none() {
+            return Err(WorldMapError::new(format!(
+                "this map declares no switch '{name}'"
+            )));
+        }
+        if self.switches.positions.get(name).copied() == Some(on) {
+            return Ok(false);
+        }
+        let mut switches = self.switches.clone();
+        switches.positions.insert(name.to_owned(), on);
+        switches.advance_generation()?;
+        let current_map =
+            compose_map(&self.base_map, &self.occupancy, &switches, templates, ranks)?;
+        self.switches = switches;
+        self.current_map = current_map;
+        Ok(true)
+    }
+
+    /// Takes switch positions from an authority snapshot, newest only.
+    pub fn apply_newer_switches(
+        &mut self,
+        switches: WaterSwitchPositions,
+        templates: &WorldTemplateCatalog,
+        ranks: &PlacementRanks,
+    ) -> Result<bool, WorldMapError> {
+        if switches.generation() <= self.switches.generation() {
+            return Ok(false);
+        }
+        let current_map =
+            compose_map(&self.base_map, &self.occupancy, &switches, templates, ranks)?;
+        self.switches = switches;
+        self.current_map = current_map;
+        Ok(true)
+    }
+
+    /// Ensures an authority-created switch snapshot supersedes one already
+    /// offered to the runtime.
+    pub fn ensure_switch_generation_newer_than(
+        &mut self,
+        generation: u64,
+    ) -> Result<(), WorldMapError> {
+        if self.switches.generation <= generation {
+            self.switches.generation = generation.checked_add(1).ok_or_else(|| {
+                WorldMapError::new("switch generation cannot advance beyond u64::MAX")
+            })?;
+        }
         Ok(())
     }
 }
@@ -219,6 +362,7 @@ impl WorldComposition {
 fn compose_map(
     base_map: &WorldMap,
     occupancy: &AnchorOccupancy,
+    switches: &WaterSwitchPositions,
     templates: &WorldTemplateCatalog,
     ranks: &PlacementRanks,
 ) -> Result<WorldMap, WorldMapError> {
@@ -240,6 +384,11 @@ fn compose_map(
         if let Some(placement) = placements.get(anchor.anchor_id.as_str()) {
             current_map = current_map.merged_with(placement, ranks)?;
         }
+    }
+    // Applied last, because everything above rebuilt the map from the authored
+    // base and would otherwise have put every switch back where it opens.
+    for (name, on) in switches.positions() {
+        current_map.set_switch(name, on)?;
     }
     Ok(current_map)
 }
@@ -302,6 +451,104 @@ mod tests {
         let ranks = PlacementRanks::from_entries([("grass", 10)])
             .expect("the synthetic Placement Ranks are valid");
         (map, templates, ranks)
+    }
+
+    /// Ranks covering exactly what this map places, so the fixture cannot
+    /// drift when a Terrain Asset is added to the world.
+    fn ranks_covering(map: &WorldMap) -> PlacementRanks {
+        let mut keys: Vec<&str> = map
+            .terrain_cells()
+            .iter()
+            .map(|cell| cell.asset_key.as_str())
+            .chain(map.props().iter().map(|prop| prop.asset_key.as_str()))
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        PlacementRanks::from_entries(
+            keys.into_iter()
+                .enumerate()
+                .map(|(index, key)| (key, index as u32 * 10 + 10)),
+        )
+        .expect("a rank for every Asset the map places is valid")
+    }
+
+    #[test]
+    fn a_moved_switch_survives_the_next_composition() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates = WorldTemplateCatalog::from_templates([]);
+        let ranks = ranks_covering(&map);
+        let mut composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the embedded composition is valid");
+
+        let switch = composition
+            .base_map()
+            .switches()
+            .first()
+            .expect("the overworld declares a switch")
+            .clone();
+        let moved = !switch.initially_on;
+        assert!(
+            composition
+                .set_switch(&switch.name, moved, &templates, &ranks)
+                .expect("the map declares that switch")
+        );
+        assert_eq!(
+            composition.current_map().switch_is_on(&switch.name),
+            Some(moved)
+        );
+
+        // Anything that recomposes rebuilds the map from the authored base. A
+        // switch position kept only on the composed map would be back where it
+        // opens after this, and nothing would report it.
+        let mut newer = composition.clone();
+        newer
+            .ensure_generation_newer_than(composition.occupancy().generation())
+            .expect("a generation can advance");
+        let newer = newer.occupancy().clone();
+        assert!(
+            composition
+                .apply_newer_occupancy(newer, &templates, &ranks)
+                .expect("an empty occupancy composes")
+        );
+
+        assert_eq!(
+            composition.switches().is_on(&switch.name),
+            Some(moved),
+            "the composition keeps where its switches stand"
+        );
+        assert_eq!(
+            composition.current_map().switch_is_on(&switch.name),
+            Some(moved),
+            "and the recomposed map is given them again"
+        );
+    }
+
+    #[test]
+    fn a_switch_this_map_never_declared_cannot_be_moved() {
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates = WorldTemplateCatalog::from_templates([]);
+        let ranks = ranks_covering(&map);
+        let mut composition = WorldComposition::new(map, &templates, &ranks)
+            .expect("the embedded composition is valid");
+
+        assert!(
+            composition
+                .set_switch("no_such_switch", true, &templates, &ranks)
+                .is_err()
+        );
+        let switch = composition
+            .base_map()
+            .switches()
+            .first()
+            .expect("the overworld declares a switch")
+            .clone();
+        assert!(
+            !composition
+                .set_switch(&switch.name, switch.initially_on, &templates, &ranks)
+                .expect("the map declares that switch"),
+            "moving a switch to where it already stands changes nothing"
+        );
+        assert_eq!(composition.switches().generation(), 0);
     }
 
     #[test]
