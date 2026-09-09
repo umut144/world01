@@ -1,6 +1,6 @@
 # World 01 — Rivers: authoring, presentation and simulation
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 
 ## Purpose and authority
 
@@ -263,6 +263,25 @@ map is authored to the same depth, so no overlapping cell has two different
 values and the last writer happens to write what the first one would have. The
 fault is invisible in the geometry today and becomes visible only through
 activation, which is to say exactly here.
+
+`stack01` is the fixture for the geometry half, authored by SceneMaker on
+2026-09-09 for this purpose: a flat plain at 3 m, three rivers, nothing else.
+`river_0001` fills 0.0-1.0 and cuts to 6.0; `river_0002` fills 0.5-1.5 across
+it, spans overlapping; `river_0003` fills 2.0-2.5 across it, spans disjoint.
+The two crossings are far apart, so the coordinate alone says which case is
+under the reader:
+
+| Where | Cells | The column must resolve to |
+|---|---|---|
+| x 12-19, y 16-23 | 64 | one surface at 0.0 m under **1.5 m** of water: the two spans overlap and merge to `[0.0, 1.5]`, and the two cuts merge to `[0.0, 6.5]` |
+| x 34-45, y 16-23 | 96 | one surface at 0.0 m under **1.0 m** of water. The upper fill stands over no ground at all - it is drawn, and it carries nobody |
+
+The second case is the aqueduct, and it is the sharper test. Keeping only the
+last body written puts the walking surface at 2.0 m, on ground that the deep
+river's cut has taken away, and the river underneath disappears from the column
+entirely. Keeping only the first is accidentally right about where to stand and
+wrong about nothing visible, which is exactly why one authored example beats
+reasoning about the format.
 
 ### Phase 3 — branches of branches, and the width budget
 
