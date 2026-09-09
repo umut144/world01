@@ -208,11 +208,27 @@ booleans — small enough to replicate and to persist, unlike geometry.
 
 - **SceneMaker**: how a branch is expressed (an own water body with a reference
   to its parent, or points inside one body), and how "always on" is told apart
-  from "activatable". Settled: an own body, carrying `activation` with the group
-  it listens to, the states it is `active_in`, and what it leaves behind when it
-  is not - `dry_bed` or `absent`.
-- **World 01**: activation state, and the rule that an inactive body is neither
-  drawn nor rasterised.
+  from "activatable". Settled in export 19: a body of its own, carrying
+  `switch: "<name>"` or nothing, against a scene-level `switches` list of names
+  with an `initially_on`. A switch is a name and a bit; any body may carry one,
+  a main river included.
+- **World 01**: switch state, and the rule that a body whose switch is off
+  carries nothing at all - no fill, no cut, the ground standing as if it had
+  never been authored.
+
+The named states this replaced (`active_in`, `inactive: dry_bed | absent`) were
+withdrawn on 2026-09-09 because nobody could author against them: the word `dry`
+named a state in one field and an aftermath in the next, and in every map ever
+authored the assignment meant "there when on". A model with named states was
+built and used exclusively as on and off.
+
+The dry bed did not go with them, it changed sides. It is not an authoring
+statement but a runtime one - drought, season, a closed weir - and the export
+already carries it, because a cell names `bed_meters`, `surface_meters` and
+`cut_top_meters` separately. Drawing the cut and leaving out the fill *is* the
+dry bed. So two independent runtime ideas replace one authored field: whether a
+body **exists**, which is SceneMaker's switch, and whether it **carries water**,
+which is ours. Existence is authored; weather is not.
 
 **A body is active only if the body feeding it is active.** Added by SceneMaker
 in export 18, and the reason it is their rule rather than ours: a branch is fed
@@ -227,6 +243,11 @@ been a case World 01 had to invent an answer for. Three parts follow it:
   refuses the export - the same discipline `activation` gets, for the same
   reason. Two feeders mean water as soon as **either** flows, which is what
   water does.
+
+  `overworld01` carries the feeding chain four deep - `river_0001` to
+  `river_0002` to `river_0004` to `river_0005` - but the only switch in either
+  map sits on a body with no descendants, so nothing authored yet proves the
+  cascade actually cascades. Asked of SceneMaker on 2026-09-09.
 
   The rule was briefly "the entry whose `own_station_meters` is 0", and that was
   withdrawn on 2026-09-08 because it infers a direction from a position. A body
@@ -246,13 +267,24 @@ been a case World 01 had to invent an answer for. Three parts follow it:
   dry because its parent was switched off leaves its bed or no trace by its own
   authored answer, not its parent's.
 
-Accepted when, at one and the same cell, the column offers a walking surface in
-the bed while the branch is `dry`, and while it is `flowing` offers the same
-ground under water deeper than any Character wades.
+Accepted when one and the same cell answers three ways:
+
+| Switch | Water | The column offers |
+|---|---|---|
+| off | — | whole ground, no channel at all |
+| on | yes | the bed, under water deeper than any Character wades |
+| on | no | the bed, walkable |
+
+The middle and the last are the pair the old wording asked for. The first is new
+and only exists because a switched-off body now leaves no cut behind, so there
+is no bed to stand in - which is why the old sentence, written against `dry` and
+`flowing`, had to be replaced rather than reworded.
 
 The other half of this phase is that a Terrain cell holds the **stacked** fills
-of every body over it instead of only the last one written. In `overworld01` 67
-of 1 554 water cells carry more than one body. The fixture is the mouth of
+of every body over it instead of only the last one written. In `overworld01`
+(export 19) 108 of 1 675 distinct water cells carry more than one body - 102 of
+them twice and 6 of them three times, which is what makes the 1 789 cell entries
+the five bodies contribute. The fixture is the mouth of
 `river_0003`, the only activatable body there: 27 cells where it meets water
 that always flows - 16 on `river_0001`, 17 on `river_0002`, 6 on both - in one
 block of x 88-94, y 53-59. Switch the branch off and those 27 cells must stay
@@ -275,6 +307,9 @@ under the reader:
 |---|---|---|
 | x 12-19, y 16-23 | 64 | one surface at 0.0 m under **1.5 m** of water: the two spans overlap and merge to `[0.0, 1.5]`, and the two cuts merge to `[0.0, 6.5]` |
 | x 34-45, y 16-23 | 96 | one surface at 0.0 m under **1.0 m** of water. The upper fill stands over no ground at all - it is drawn, and it carries nobody |
+
+Its own numbers, for the same reason: 784 distinct water cells, of which 160
+carry two bodies - the 64 and the 96 above - out of 944 cell entries.
 
 The second case is the aqueduct, and it is the sharper test. Keeping only the
 last body written puts the walking surface at 2.0 m, on ground that the deep
