@@ -135,6 +135,15 @@ report() {
     sed -n "${first},${last}p" "$log" 2>/dev/null || true
   fi
 
+  # Last line on purpose. The header is first and the interesting part is last,
+  # so a caller that pipes through `tail` - which is the natural thing to do
+  # with a long log - would otherwise never see whether the run passed.
+  if [ "$rc" -eq 0 ]; then
+    printf '=== PASS check.sh %s ===\n' "$(read_field "$dir/results/$1" args)"
+  else
+    printf '=== FAIL exit=%s === %s\n' "$rc" "$log"
+  fi
+
   [ "$rc" -eq 0 ] && exit 0
   exit 1
 }
