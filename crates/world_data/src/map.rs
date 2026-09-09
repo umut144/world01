@@ -5392,56 +5392,138 @@ mod tests {
             .collect()
     }
 
+    /// Whether a body would have water, worked out the other way round from the
+    /// map's own rule: by walking up the feeders looking for a way to a body
+    /// that is fed by nothing, along which every switch is on.
+    ///
+    /// The map settles this by removing bodies until nothing changes. Asking it
+    /// as a question about paths instead is what makes the answer worth
+    /// comparing rather than a second copy of the same loop.
+    fn reaches_running_water(
+        map: &WorldMap,
+        id: &str,
+        off: &str,
+        walked: &mut Vec<String>,
+    ) -> bool {
+        if walked.iter().any(|seen| seen == id) {
+            return false;
+        }
+        let Some(body) = map
+            .water_bodies()
+            .iter()
+            .find(|body| body.water_body_id == id)
+        else {
+            return false;
+        };
+        if body.switch.as_deref() == Some(off) {
+            return false;
+        }
+        if body.feeders.is_empty() {
+            return true;
+        }
+        walked.push(id.to_owned());
+        let fed = body
+            .feeders
+            .iter()
+            .any(|feeder| reaches_running_water(map, feeder, off, walked));
+        walked.pop();
+        fed
+    }
+
+    /// A switch with something hanging under it that carries no switch of its
+    /// own - which is the only shape in which the cascade is worth anything.
+    fn switch_with_descendants(map: &WorldMap) -> String {
+        map.switches()
+            .iter()
+            .map(|switch| switch.name.as_str())
+            .find(|switch| {
+                map.water_bodies().iter().any(|body| {
+                    body.switch.as_deref() != Some(switch)
+                        && !reaches_running_water(map, &body.water_body_id, switch, &mut Vec::new())
+                })
+            })
+            .map(str::to_owned)
+            .expect("some switch has water hanging under it that carries no switch of its own")
+    }
+
     #[test]
-    fn switching_a_river_off_takes_every_branch_hanging_under_it() {
+    fn every_body_hangs_on_a_declared_switch_and_is_fed_by_one_this_map_carries() {
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let declared = map
+            .switches()
+            .iter()
+            .map(|switch| switch.name.as_str())
+            .collect::<HashSet<_>>();
+
+        assert!(!declared.is_empty(), "the overworld authors switches");
+        assert!(map.switches().iter().all(|switch| !switch.name.is_empty()));
+        assert!(
+            map.water_bodies().iter().any(|body| body.switch.is_some()),
+            "and at least one body hangs on one"
+        );
+
+        for body in map.water_bodies() {
+            if let Some(switch) = &body.switch {
+                assert!(
+                    declared.contains(switch.as_str()),
+                    "a body may only hang on a switch the map declares"
+                );
+            }
+            for feeder in &body.feeders {
+                assert!(
+                    map.water_bodies()
+                        .iter()
+                        .any(|other| &other.water_body_id == feeder),
+                    "a body is fed by one this map carries"
+                );
+            }
+            assert!(
+                reaches_running_water(&map, &body.water_body_id, "", &mut Vec::new()),
+                "with every switch on, every body is fed from somewhere rather than a ring"
+            );
+        }
+    }
+
+    #[test]
+    fn switching_a_river_off_takes_every_body_hanging_under_it() {
         let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
-
-        assert_eq!(map.switch_is_on("upper_valley"), Some(true));
-        assert_eq!(map.switch_is_on("branch_between_bridges"), Some(false));
-        assert_eq!(map.switch_is_on("no_such_switch"), None);
+        for switch in map.switches().to_vec() {
+            map.set_switch(&switch.name, true)
+                .expect("the map declares its own switches");
+        }
+        let everything = present_bodies(&map);
         assert_eq!(
-            present_bodies(&map),
-            ["river_0001", "river_0002", "river_0004", "river_0005"],
-            "the map opens with its upper valley running and its branch shut"
+            everything.len(),
+            map.water_bodies().len(),
+            "with every switch on there is no water missing"
+        );
+
+        let off = switch_with_descendants(&map);
+        let expected = map
+            .water_bodies()
+            .iter()
+            .filter(|body| reaches_running_water(&map, &body.water_body_id, &off, &mut Vec::new()))
+            .map(|body| body.water_body_id.clone())
+            .collect::<Vec<_>>();
+        let carries_it = map
+            .water_bodies()
+            .iter()
+            .filter(|body| body.switch.as_deref() == Some(off.as_str()))
+            .count();
+
+        assert!(
+            everything.len() - expected.len() > carries_it,
+            "switching '{off}' off takes more bodies than the ones that name it"
         );
 
         assert!(
-            map.set_switch("upper_valley", false)
+            map.set_switch(&off, false)
                 .expect("the map declares that switch")
         );
-        assert_eq!(
-            present_bodies(&map),
-            ["river_0001"],
-            "river_0004 and river_0005 carry no switch of their own and go with the river feeding them"
-        );
+        assert_eq!(present_bodies(&map), expected);
 
         assert!(
-            map.set_switch("branch_between_bridges", true)
-                .expect("the map declares that switch")
-        );
-        assert_eq!(
-            present_bodies(&map),
-            ["river_0001", "river_0003"],
-            "the branch hangs on the main river, which never stopped running"
-        );
-
-        assert!(
-            map.set_switch("upper_valley", true)
-                .expect("the map declares that switch")
-        );
-        assert_eq!(
-            present_bodies(&map),
-            [
-                "river_0001",
-                "river_0002",
-                "river_0003",
-                "river_0004",
-                "river_0005"
-            ]
-        );
-
-        assert!(
-            !map.set_switch("upper_valley", true)
+            !map.set_switch(&off, false)
                 .expect("the map declares that switch"),
             "moving a switch to where it already stands changes nothing"
         );
@@ -5449,62 +5531,75 @@ mod tests {
             map.set_switch("no_such_switch", true).is_err(),
             "a switch the map never declared cannot be moved"
         );
+        assert_eq!(map.switch_is_on("no_such_switch"), None);
     }
 
     #[test]
-    fn the_cells_of_a_switched_off_chain_keep_only_the_water_still_running() {
+    fn a_cell_keeps_water_exactly_while_a_body_over_it_still_runs() {
         let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
-        let cells_of = |map: &WorldMap, ids: &[&str]| {
-            map.water_bodies()
-                .iter()
-                .filter(|body| ids.contains(&body.water_body_id.as_str()))
-                .flat_map(|body| body.cells.iter().map(|cell| (cell.x, cell.y)))
-                .collect::<HashSet<_>>()
-        };
-        let chain = cells_of(&map, &["river_0002", "river_0004", "river_0005"]);
-        let still_running = cells_of(&map, &["river_0001"]);
-        assert_eq!(chain.len(), 1101, "the three bodies cover this much ground");
+        for switch in map.switches().to_vec() {
+            map.set_switch(&switch.name, true)
+                .expect("the map declares its own switches");
+        }
+        let off = switch_with_descendants(&map);
+        let gone = map
+            .water_bodies()
+            .iter()
+            .filter(|body| !reaches_running_water(&map, &body.water_body_id, &off, &mut Vec::new()))
+            .flat_map(|body| body.cells.iter().map(|cell| (cell.x, cell.y)))
+            .collect::<HashSet<_>>();
+        let stays = map
+            .water_bodies()
+            .iter()
+            .filter(|body| reaches_running_water(&map, &body.water_body_id, &off, &mut Vec::new()))
+            .flat_map(|body| body.cells.iter().map(|cell| (cell.x, cell.y)))
+            .collect::<HashSet<_>>();
+        assert!(
+            !gone.is_empty(),
+            "switching '{off}' off empties some ground"
+        );
+        assert!(
+            gone.intersection(&stays).next().is_some(),
+            "and some of that ground is shared with water that stays, which is the case worth checking"
+        );
 
-        map.set_switch("upper_valley", false)
+        map.set_switch(&off, false)
             .expect("the map declares that switch");
 
         let mut surfaces = Vec::new();
-        let mut wet = HashSet::new();
-        for (x, y) in &chain {
-            map.terrain_walking_surfaces(water_cell_center(&map, *x, *y), &mut surfaces);
-            if surfaces
+        for at in &gone {
+            map.terrain_walking_surfaces(water_cell_center(&map, at.0, at.1), &mut surfaces);
+            let wet = surfaces
                 .iter()
-                .any(|surface| surface.water_depth_meters > 0.0)
-            {
-                wet.insert((*x, *y));
-            }
+                .any(|surface| surface.water_depth_meters > 0.0);
+            assert_eq!(
+                wet,
+                stays.contains(at),
+                "cell {at:?} carries water only while a body that still runs covers it"
+            );
         }
-
-        assert_eq!(
-            wet.len(),
-            9,
-            "the only cells still carrying water are the ones the river that stayed runs through"
-        );
-        assert!(
-            wet.iter().all(|at| still_running.contains(at)),
-            "and they are exactly those cells"
-        );
     }
 
     #[test]
     fn a_switched_off_body_leaves_the_ground_whole_and_a_running_one_a_bed_under_water() {
         let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
-        let alone = map
+        let switchable = map
             .water_bodies()
             .iter()
-            .find(|body| body.water_body_id == "river_0003")
-            .expect("the overworld carries its switchable branch")
+            .find(|body| body.switch.is_some())
+            .expect("the overworld carries a switchable body");
+        let switch = switchable
+            .switch
+            .clone()
+            .expect("that body names its switch");
+        // Ground this body has to itself, so the reading is about it alone.
+        let alone = switchable
             .cells
             .iter()
             .find(|cell| {
                 map.water_bodies()
                     .iter()
-                    .filter(|other| other.water_body_id != "river_0003")
+                    .filter(|other| other.water_body_id != switchable.water_body_id)
                     .all(|other| {
                         !other
                             .cells
@@ -5513,16 +5608,18 @@ mod tests {
                     })
             })
             .copied()
-            .expect("the branch has ground of its own");
+            .expect("it has ground of its own");
         let at = water_cell_center(&map, alone.x, alone.y);
         let ground = map
             .terrain_cell_at(at)
             .expect("that cell has Terrain")
             .elevation_meters;
+
         // Each reading is taken in its own scope: a resolved column borrows the
         // map it came from, and the switch between them needs it back.
+        map.set_switch(&switch, false)
+            .expect("the map declares that switch");
         {
-            // Shut, which is how the map opens.
             let mut surfaces = Vec::new();
             map.terrain_walking_surfaces(at, &mut surfaces);
             assert_eq!(
@@ -5533,9 +5630,8 @@ mod tests {
             assert_eq!(surfaces[0].water_depth_meters, 0.0);
         }
 
-        map.set_switch("branch_between_bridges", true)
+        map.set_switch(&switch, true)
             .expect("the map declares that switch");
-
         {
             let mut surfaces = Vec::new();
             map.terrain_walking_surfaces(at, &mut surfaces);
@@ -5550,7 +5646,7 @@ mod tests {
             );
             assert!(
                 surfaces[0].water_depth_meters > 0.4,
-                "deeper than any Character wades, so the branch is not crossed"
+                "deeper than any Character wades, so it is not crossed"
             );
         }
     }
@@ -5636,57 +5732,6 @@ mod tests {
         assert_eq!(
             aqueduct.bed_meters, 2.0,
             "keeping only the aqueduct would put the ground two metres up"
-        );
-    }
-
-    #[test]
-    fn a_body_hangs_on_a_declared_switch_and_names_the_body_that_feeds_it() {
-        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
-        let declared = map
-            .switches()
-            .iter()
-            .map(|switch| switch.name.as_str())
-            .collect::<HashSet<_>>();
-
-        assert!(
-            declared.contains("branch_between_bridges") && declared.contains("upper_valley"),
-            "the overworld authors both of its switches"
-        );
-        for switch in map.switches() {
-            assert!(!switch.name.is_empty());
-        }
-        for body in map.water_bodies() {
-            if let Some(switch) = &body.switch {
-                assert!(
-                    declared.contains(switch.as_str()),
-                    "a body may only hang on a switch the map declares"
-                );
-            }
-            for feeder in &body.feeders {
-                assert!(
-                    map.water_bodies()
-                        .iter()
-                        .any(|other| &other.water_body_id == feeder),
-                    "a body is fed by one this map carries"
-                );
-            }
-        }
-
-        // The chain the cascade has to walk: river_0005 reaches the main river
-        // only through two bodies that carry no switch of their own.
-        let feeders_of = |id: &str| {
-            map.water_bodies()
-                .iter()
-                .find(|body| body.water_body_id == id)
-                .map(|body| body.feeders.clone())
-                .unwrap_or_default()
-        };
-        assert_eq!(feeders_of("river_0005"), vec!["river_0004".to_owned()]);
-        assert_eq!(feeders_of("river_0004"), vec!["river_0002".to_owned()]);
-        assert_eq!(feeders_of("river_0002"), vec!["river_0001".to_owned()]);
-        assert!(
-            feeders_of("river_0001").is_empty(),
-            "the river the others leave is fed by nothing"
         );
     }
 

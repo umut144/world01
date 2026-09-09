@@ -60,6 +60,12 @@
       ]
     },
     {
+      "asset_key": "the_mirror",
+      "components": [
+        "frame"
+      ]
+    },
+    {
       "asset_key": "warrior",
       "components": [
         "body"
@@ -67,6 +73,12 @@
     },
     {
       "asset_key": "wizard",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "zafire",
       "components": [
         "body"
       ]

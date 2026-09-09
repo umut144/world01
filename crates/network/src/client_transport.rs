@@ -325,7 +325,7 @@ fn report_client_connected(trigger: On<Add, Connected>, clients: Query<(), With<
 mod tests {
     use super::*;
     use bevy::ecs::world::CommandQueue;
-    use world01_world_data::{PlacementRanks, WorldComposition, WorldMap, WorldTemplateCatalog};
+    use world01_world_data::{WorldComposition, WorldMap, WorldTemplateCatalog};
 
     #[derive(Resource, Default)]
     struct RequestChangeCount(u32);
@@ -449,8 +449,10 @@ mod tests {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Template catalog is valid");
-        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
-            .expect("the current embedded Assets have Placement Ranks");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("the embedded World 01 design parses")
+            .placement_ranks()
+            .expect("the embedded Placement Ranks are valid");
         let mut authority = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the authority composition is valid");
         authority

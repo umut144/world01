@@ -8095,6 +8095,7 @@ dependencies = [
  "bevy",
  "lightyear",
  "serde",
+ "world01-design",
  "world01-world-data",
 ]
 

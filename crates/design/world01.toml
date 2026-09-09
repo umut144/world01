@@ -41,6 +41,12 @@ hammerer_collision_radius_ratio = 0.35
 asset_key = "grass"
 rank = 10
 
+# Cobblestone is laid on purpose, grass is what the ground is otherwise, so a
+# Template bringing grass does not paint over an authored path.
+[[placement_ranks]]
+asset_key = "cobblestone"
+rank = 15
+
 [[placement_ranks]]
 asset_key = "tree"
 rank = 20

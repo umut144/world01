@@ -128,6 +128,16 @@
       "equipped_weapon_asset_keys": []
     },
     {
+      "asset_key": "the_mirror",
+      "components": [
+        { "component_name": "frame", "classification": "medium" },
+        { "component_name": "mirror", "classification": "medium" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
       "asset_key": "warrior",
       "components": [
         { "component_name": "body_side_left", "classification": "medium" },
@@ -153,6 +163,21 @@
         { "component_name": "eye_left", "classification": "excluded" },
         { "component_name": "eye_right", "classification": "excluded" },
         { "component_name": "hat", "classification": "light" }
+      ],
+      "equipped_weapon_asset_keys": []
+    },
+    {
+      "asset_key": "zafire",
+      "components": [
+        { "component_name": "body", "classification": "medium" },
+        { "component_name": "head", "classification": "medium" },
+        { "component_name": "beak", "classification": "light" },
+        { "component_name": "feather_right", "classification": "light" },
+        { "component_name": "feather_left", "classification": "light" },
+        { "component_name": "feather_tip_right", "classification": "very_light" },
+        { "component_name": "feather_tip_left", "classification": "very_light" },
+        { "component_name": "eye_left", "classification": "excluded" },
+        { "component_name": "eye_right", "classification": "excluded" }
       ],
       "equipped_weapon_asset_keys": []
     }

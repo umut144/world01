@@ -25,6 +25,12 @@ server = [
     "lightyear/udp",
 ]
 
+[dev-dependencies]
+# Tests that compose the embedded world need the Placement Ranks the world is
+# actually authored with. Writing them out by hand made a fixture that drifts
+# every time a Terrain Asset is added.
+world01-design = { path = "../design" }
+
 [dependencies]
 bevy = { workspace = true, features = ["std", "bevy_log"] }
 world01-world-data = { path = "../world_data" }
