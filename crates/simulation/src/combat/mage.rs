@@ -717,7 +717,12 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                WorldPosition::new(10.0, -0.3, 0.0),
+                // The Hammerer is authored to be hit at its feet and nowhere
+                // else, so the target stands high enough for the feet to cross
+                // the beam line at the Mage's eye height of about 0.76 m. At the
+                // old height the beam passed over the whole Character, which let
+                // these tests pass without ever reaching a hurt surface.
+                WorldPosition::new(10.0, 0.66, 0.0),
                 BodyFacing::Authored,
                 DashState::default(),
                 CharacterLifeState::Alive,
@@ -784,7 +789,12 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                WorldPosition::new(10.0, -0.3, 0.0),
+                // The Hammerer is authored to be hit at its feet and nowhere
+                // else, so the target stands high enough for the feet to cross
+                // the beam line at the Mage's eye height of about 0.76 m. At the
+                // old height the beam passed over the whole Character, which let
+                // these tests pass without ever reaching a hurt surface.
+                WorldPosition::new(10.0, 0.66, 0.0),
                 BodyFacing::Authored,
                 DashState::default(),
                 CharacterLifeState::Alive,
@@ -835,7 +845,12 @@ mod tests {
             .world_mut()
             .spawn((
                 SelectedCharacter(CharacterId("hammerer".into())),
-                WorldPosition::new(10.0, -0.3, 0.0),
+                // The Hammerer is authored to be hit at its feet and nowhere
+                // else, so the target stands high enough for the feet to cross
+                // the beam line at the Mage's eye height of about 0.76 m. At the
+                // old height the beam passed over the whole Character, which let
+                // these tests pass without ever reaching a hurt surface.
+                WorldPosition::new(10.0, 0.66, 0.0),
                 BodyFacing::Authored,
                 DashState {
                     invulnerable: true,
