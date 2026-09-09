@@ -47,11 +47,46 @@ struct TerrainCut {
 }
 
 /// The water standing in one cell, and the channel it was given.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// More than one body may lie over the same cell - every junction is such a
+/// place, and a river may cross another entirely - so a cell holds all of them
+/// rather than whichever was read last. Fills that meet are one body of water
+/// and merge; fills with air between them stay apart, which is what an aqueduct
+/// over a river is.
+///
+/// The cuts are kept beside the fills instead of inside them, because the two
+/// do not have to line up: in `stack01` the deep river's cut reaches through
+/// the height where the upper fill stands, and that upper fill survives it. A
+/// cut takes Terrain away and never water.
+#[derive(Debug, Clone, PartialEq, Default)]
 struct WaterColumn {
+    fills: Vec<WaterFill>,
+    cuts: Vec<TerrainCut>,
+}
+
+/// One span of standing water, from the bed it lies on to its surface.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct WaterFill {
     bed_meters: f32,
     surface_meters: f32,
-    cut_top_meters: f32,
+}
+
+impl WaterColumn {
+    /// How deep the water over a surface at this height stands, and zero where
+    /// no fill reaches it.
+    ///
+    /// Only the span a fill actually occupies carries water. Ground below a
+    /// bed is dry, not drowned: the export says where the water is, and a hole
+    /// somebody dug under a river is not something the map claims to fill.
+    fn depth_over(&self, elevation_meters: f32) -> f32 {
+        self.fills
+            .iter()
+            .find(|fill| {
+                fill.bed_meters <= elevation_meters && elevation_meters < fill.surface_meters
+            })
+            .map(|fill| fill.surface_meters - elevation_meters)
+            .unwrap_or_default()
+    }
 }
 
 impl WorldMap {
@@ -192,12 +227,10 @@ impl WorldMap {
             .unwrap_or_default();
         // Standing water takes the same kind of range out of the column an
         // excavating Path does: down to the bed it was cut to, up to the height
-        // that keeps the channel open.
+        // that keeps the channel open. Every body over this cell takes its own,
+        // and the merge below unites them.
         if let Some(water) = water {
-            cuts.push(TerrainCut {
-                floor_meters: water.bed_meters,
-                cut_top_meters: water.cut_top_meters,
-            });
+            cuts.extend(water.cuts.iter().copied());
             cuts.sort_by(|first, second| {
                 first
                     .floor_meters
@@ -207,13 +240,9 @@ impl WorldMap {
         }
 
         // How deep the standing water lies over a surface at this height, and
-        // zero where the water does not reach that high at all.
-        let depth_over = |elevation_meters: f32| match water {
-            Some(water) if elevation_meters < water.surface_meters => {
-                water.surface_meters - elevation_meters
-            }
-            _ => 0.0,
-        };
+        // zero where no fill over this cell reaches it.
+        let depth_over =
+            |elevation_meters: f32| water.map_or(0.0, |water| water.depth_over(elevation_meters));
 
         let mut ceiling = cell.elevation_meters;
         let mut merged: Vec<TerrainCut> = Vec::new();
@@ -3070,20 +3099,56 @@ pub struct MapColumnSurface<'a> {
 }
 
 fn index_water_columns(bodies: &[MapWaterBody]) -> HashMap<(u32, u32), WaterColumn> {
-    let mut indexed = HashMap::new();
+    let mut gathered: HashMap<(u32, u32), Vec<&MapWaterCell>> = HashMap::new();
     for body in bodies {
         for cell in &body.cells {
-            indexed.insert(
-                (cell.x, cell.y),
-                WaterColumn {
-                    bed_meters: cell.bed_meters,
-                    surface_meters: cell.surface_meters,
-                    cut_top_meters: cell.cut_top_meters,
-                },
-            );
+            gathered.entry((cell.x, cell.y)).or_default().push(cell);
         }
     }
-    indexed
+    gathered
+        .into_iter()
+        .map(|(at, cells)| {
+            let mut fills: Vec<WaterFill> = cells
+                .iter()
+                .map(|cell| WaterFill {
+                    bed_meters: cell.bed_meters,
+                    surface_meters: cell.surface_meters,
+                })
+                .collect();
+            fills.sort_by(|first, second| {
+                first
+                    .bed_meters
+                    .total_cmp(&second.bed_meters)
+                    .then_with(|| first.surface_meters.total_cmp(&second.surface_meters))
+            });
+            let mut merged: Vec<WaterFill> = Vec::with_capacity(fills.len());
+            for fill in fills {
+                match merged.last_mut() {
+                    // Water that touches is one body of water, so a fill that
+                    // begins where another ends joins it rather than stacking
+                    // on it.
+                    Some(last) if fill.bed_meters <= last.surface_meters => {
+                        last.surface_meters = last.surface_meters.max(fill.surface_meters);
+                    }
+                    _ => merged.push(fill),
+                }
+            }
+            let cuts = cells
+                .iter()
+                .map(|cell| TerrainCut {
+                    floor_meters: cell.bed_meters,
+                    cut_top_meters: cell.cut_top_meters,
+                })
+                .collect();
+            (
+                at,
+                WaterColumn {
+                    fills: merged,
+                    cuts,
+                },
+            )
+        })
+        .collect()
 }
 
 fn index_terrain_cuts(cuts: &[MapRouteSurfaceCut]) -> HashMap<(u32, u32), Vec<TerrainCut>> {
@@ -5189,6 +5254,90 @@ mod tests {
 
         assert!(WorldMap::from_source(&outside, TEST_SCENE_ID).is_err());
         assert!(WorldMap::from_source(&unprofiled, TEST_SCENE_ID).is_err());
+    }
+
+    #[test]
+    fn two_bodies_over_one_cell_stack_instead_of_the_last_one_winning() {
+        let map = WorldMap::load_embedded("stack01").expect("embedded Instance is valid");
+        let mut surfaces = Vec::new();
+
+        // Where the two fills overlap - 0.0 to 1.0 under 0.5 to 1.5 - they are
+        // one body of water from the lower bed to the higher surface, and the
+        // two cuts unite to leave one floor at the bottom.
+        let mut overlapping = 0;
+        for x in 12..=19 {
+            for y in 16..=23 {
+                map.terrain_walking_surfaces(water_cell_center(&map, x, y), &mut surfaces);
+                assert_eq!(
+                    elevations(&surfaces),
+                    vec![0.0],
+                    "the united cut leaves one floor at ({x}, {y})"
+                );
+                assert_eq!(
+                    surfaces[0].water_depth_meters, 1.5,
+                    "the water at ({x}, {y}) stands from the lower bed to the higher surface"
+                );
+                overlapping += 1;
+            }
+        }
+        assert_eq!(overlapping, 64);
+
+        // Where they are disjoint the upper fill is an aqueduct: it survives
+        // the cut that took the Terrain under it away, and it stands over no
+        // ground at all.
+        let mut disjoint = 0;
+        for x in 34..=45 {
+            for y in 16..=23 {
+                map.terrain_walking_surfaces(water_cell_center(&map, x, y), &mut surfaces);
+                assert_eq!(
+                    elevations(&surfaces),
+                    vec![0.0],
+                    "the deep river's cut reaches through the upper fill at ({x}, {y})"
+                );
+                assert_eq!(
+                    surfaces[0].water_depth_meters, 1.0,
+                    "only the fill the ground lies in is standing on it"
+                );
+                disjoint += 1;
+            }
+        }
+        assert_eq!(disjoint, 96);
+    }
+
+    #[test]
+    fn the_last_body_read_would_answer_differently_where_they_stack() {
+        // Guards the test above against passing for the wrong reason: if a cell
+        // kept one body instead of all of them, these are the answers it would
+        // give, and none of them is what the assertions there expect.
+        let map = WorldMap::load_embedded("stack01").expect("embedded Instance is valid");
+        let bodies = map.water_bodies();
+        let cell_of = |id: &str, x: u32, y: u32| {
+            bodies
+                .iter()
+                .find(|body| body.water_body_id == id)
+                .and_then(|body| {
+                    body.cells
+                        .iter()
+                        .find(|cell| cell.x == x && cell.y == y)
+                        .copied()
+                })
+        };
+
+        let deep = cell_of("river_0001", 15, 20).expect("the deep river crosses there");
+        let crossing = cell_of("river_0002", 15, 20).expect("and so does the one over it");
+        assert_ne!(
+            (deep.bed_meters, deep.surface_meters),
+            (crossing.bed_meters, crossing.surface_meters),
+            "the two bodies say different things about the same cell"
+        );
+        assert_ne!(deep.surface_meters - deep.bed_meters, 1.5);
+        assert_ne!(crossing.surface_meters - crossing.bed_meters, 1.5);
+
+        let aqueduct = cell_of("river_0003", 40, 20).expect("the aqueduct crosses there");
+        assert_eq!(
+            aqueduct.bed_meters, 2.0,
+            "keeping only the aqueduct would put the ground two metres up"
+        );
     }
 
     #[test]
