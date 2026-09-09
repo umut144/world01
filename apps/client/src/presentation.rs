@@ -198,7 +198,7 @@ struct CurrentMark {
 struct RenderedAnkh;
 
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
-struct RenderedWorldGeneration(Option<u64>);
+struct RenderedWorldGeneration(Option<(u64, u64)>);
 
 #[derive(Component)]
 struct SelectionVisual;
@@ -1063,10 +1063,12 @@ fn world_visuals_need_rebuild(
     runtime: Res<WorldRuntimeState>,
     rendered: Res<RenderedWorldGeneration>,
 ) -> bool {
-    should_rebuild_world_visuals(runtime.applied_generation(), rendered.0)
+    should_rebuild_world_visuals(runtime.applied_world_generation(), rendered.0)
 }
 
-fn should_rebuild_world_visuals(applied: Option<u64>, rendered: Option<u64>) -> bool {
+/// Both halves of what the derived world represents, because a switch thrown
+/// without an Anchor moving changes what there is to draw just as much.
+fn should_rebuild_world_visuals(applied: Option<(u64, u64)>, rendered: Option<(u64, u64)>) -> bool {
     applied.is_some() && applied != rendered
 }
 
@@ -1074,7 +1076,7 @@ fn record_rendered_world_generation(
     runtime: Res<WorldRuntimeState>,
     mut rendered: ResMut<RenderedWorldGeneration>,
 ) {
-    rendered.0 = runtime.applied_generation();
+    rendered.0 = runtime.applied_world_generation();
 }
 
 fn reset_rendered_world_generation(mut rendered: ResMut<RenderedWorldGeneration>) {
@@ -1421,9 +1423,13 @@ mod tests {
     #[test]
     fn world_visuals_rebuild_once_for_each_applied_generation() {
         assert!(!should_rebuild_world_visuals(None, None));
-        assert!(should_rebuild_world_visuals(Some(0), None));
-        assert!(!should_rebuild_world_visuals(Some(0), Some(0)));
-        assert!(should_rebuild_world_visuals(Some(1), Some(0)));
+        assert!(should_rebuild_world_visuals(Some((0, 0)), None));
+        assert!(!should_rebuild_world_visuals(Some((0, 0)), Some((0, 0))));
+        assert!(should_rebuild_world_visuals(Some((1, 0)), Some((0, 0))));
+        assert!(
+            should_rebuild_world_visuals(Some((0, 1)), Some((0, 0))),
+            "a switch thrown is a world change of its own"
+        );
     }
 
     #[test]

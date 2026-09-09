@@ -4,7 +4,7 @@ use bevy::{ecs::schedule::ScheduleLabel, log::error, prelude::*};
 use world01_content::{RegionGeometryError, RuntimeContent, WorldCollisionGeometryCatalog};
 use world01_world_data::{
     AnkhLayout, PlacementRanks, WorldComposition, WorldMap, WorldOccupancyRequest,
-    WorldTemplateCatalog,
+    WorldSwitchRequest, WorldTemplateCatalog,
 };
 
 use crate::navigation::{GroundNavigationError, GroundNavigationGraph};
@@ -37,12 +37,30 @@ pub enum WorldRuntimeSet {
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WorldRuntimeState {
     applied_generation: Option<u64>,
+    applied_switch_generation: Option<u64>,
     rejected_generation: Option<u64>,
+    rejected_switch_generation: Option<u64>,
 }
 
 impl WorldRuntimeState {
     pub const fn applied_generation(self) -> Option<u64> {
         self.applied_generation
+    }
+
+    pub const fn applied_switch_generation(self) -> Option<u64> {
+        self.applied_switch_generation
+    }
+
+    /// What the derived world currently represents, as one value.
+    ///
+    /// Anything that has to notice a world change - redrawing it, for one -
+    /// asks this rather than either half, because a switch thrown without an
+    /// Anchor moving changes the world just as much.
+    pub const fn applied_world_generation(self) -> Option<(u64, u64)> {
+        match (self.applied_generation, self.applied_switch_generation) {
+            (Some(occupancy), Some(switches)) => Some((occupancy, switches)),
+            _ => None,
+        }
     }
 }
 
@@ -54,6 +72,7 @@ pub fn add_world_runtime_rebuild(
 ) {
     app.insert_resource(navigation)
         .init_resource::<WorldOccupancyRequest>()
+        .init_resource::<WorldSwitchRequest>()
         .init_resource::<WorldRuntimeState>()
         .add_systems(
             schedule,
@@ -127,6 +146,7 @@ impl DerivedWorldResources {
 #[allow(clippy::too_many_arguments)]
 fn rebuild_world_runtime(
     request: Res<WorldOccupancyRequest>,
+    switch_request: Res<WorldSwitchRequest>,
     content: Res<RuntimeContent>,
     templates: Res<WorldTemplateCatalog>,
     ranks: Res<PlacementRanks>,
@@ -143,11 +163,20 @@ fn rebuild_world_runtime(
         occupancy.generation() > composition.occupancy().generation()
             && state.rejected_generation != Some(occupancy.generation())
     });
+    let switches_requested = switch_request.latest().filter(|switches| {
+        switches.generation() > composition.switches().generation()
+            && state.rejected_switch_generation != Some(switches.generation())
+    });
 
+    // Each kind is taken on its own, so an Anchor snapshot that cannot be
+    // composed does not also hold back a switch that moved, and the other way
+    // round.
     let mut candidate = None;
-    let target_generation = if let Some(occupancy) = requested {
+    if requested.is_some() || switches_requested.is_some() {
         let mut next = composition.clone();
-        if let Err(error) = next.apply_newer_occupancy(occupancy.clone(), &templates, &ranks) {
+        if let Some(occupancy) = requested
+            && let Err(error) = next.apply_newer_occupancy(occupancy.clone(), &templates, &ranks)
+        {
             reject_generation(
                 occupancy.generation(),
                 WorldRuntimeBuildError::Composition(error.to_string()),
@@ -155,15 +184,31 @@ fn rebuild_world_runtime(
             );
             return;
         }
-        let generation = next.occupancy().generation();
+        if let Some(switches) = switches_requested
+            && let Err(error) = next.apply_newer_switches(switches.clone(), &templates, &ranks)
+        {
+            error!(%error, generation = switches.generation(), "cannot apply switch positions");
+            state.rejected_switch_generation = Some(switches.generation());
+            return;
+        }
         candidate = Some(next);
-        generation
-    } else {
-        composition.occupancy().generation()
-    };
+    }
 
-    if state.applied_generation == Some(target_generation)
+    let target_generation = candidate
+        .as_ref()
+        .unwrap_or(&composition)
+        .occupancy()
+        .generation();
+    let target_switch_generation = candidate
+        .as_ref()
+        .unwrap_or(&composition)
+        .switches()
+        .generation();
+
+    if (state.applied_generation == Some(target_generation)
+        && state.applied_switch_generation == Some(target_switch_generation))
         || state.rejected_generation == Some(target_generation)
+        || state.rejected_switch_generation == Some(target_switch_generation)
     {
         return;
     }
@@ -188,7 +233,9 @@ fn rebuild_world_runtime(
         **graph = derived;
     }
     state.applied_generation = Some(target_generation);
+    state.applied_switch_generation = Some(target_switch_generation);
     state.rejected_generation = None;
+    state.rejected_switch_generation = None;
 }
 
 fn reject_generation(
@@ -284,6 +331,7 @@ mod tests {
             .insert_resource(navigation)
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
+            .init_resource::<WorldSwitchRequest>()
             .init_resource::<WorldRuntimeState>();
         app
     }
@@ -444,6 +492,7 @@ mod tests {
             .insert_resource(ankhs.clone())
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
+            .init_resource::<WorldSwitchRequest>()
             .init_resource::<WorldRuntimeState>()
             .init_resource::<RuntimeStateChangeCount>()
             .add_systems(
