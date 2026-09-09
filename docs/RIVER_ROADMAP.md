@@ -197,7 +197,7 @@ about them is sent or stored.
 Open from this phase: how many variants the `river` Palette should hold. One is
 legal and works; variety is an authoring decision, not a blocked dependency.
 
-### Phase 2 — one authored branch, switched on in play
+### Phase 2 — one authored branch, switched on in play — **done, 2026-09-09**
 
 A branch is authored in SceneMaker, marked as activatable, and shown there as
 what it is. In play a trigger turns it on: from that moment its raster counts
@@ -341,6 +341,36 @@ river's cut has taken away, and the river underneath disappears from the column
 entirely. Keeping only the first is accidentally right about where to stand and
 wrong about nothing visible, which is exactly why one authored example beats
 reasoning about the format.
+
+What it took, and what each part decided:
+
+- **A cell holds every body over it.** A junction is where two bodies lie over
+  the same ground, so keeping whichever was indexed last was wrong wherever
+  water meets water. Fills that touch are one body of water and merge to the
+  lower bed and the higher surface; fills with air between them stay apart. The
+  cuts unite separately from the fills, because the two need not line up - that
+  is the aqueduct, and `stack01` is the map SceneMaker authored to hold it.
+- **The switch positions are world state, not map state.** They were first put
+  on `WorldMap`, which every recomposition rebuilds from the authored base, so
+  an Anchor change would have reset them all without a word. They live on the
+  composition beside the occupancy, with a generation of their own, and
+  `compose_map` puts them back on last.
+- **A switch is thrown the way an Anchor changes.** The server clones the
+  composition, moves the switch on the clone and submits it; the runtime
+  validates the whole derived world before committing, and only then are the
+  positions replicated. `WorldMap::set_switch` is no longer reachable from
+  outside its crate, so the door that skips all of that is gone rather than
+  documented.
+- **The trigger is provisional and says so.** A Terrain cell painted
+  `cobblestone` is a button; walking onto it registers, walking off throws.
+  Which switch it throws is written down in code, because in `overworld01` both
+  cells lie nearest to the same body of water and distance would answer the same
+  for both. A painted cell nobody wrote down is reported at startup.
+
+Open from this phase: a button is a hand-written pairing and a square drawn from
+two colours. Authoring one - an Asset, and the switch it names - is SceneMaker's
+and PolyTools' to give, and until then moving a cobblestone tile means editing
+`AUTHORED_BUTTONS`.
 
 ### Phase 3 — branches of branches, and the width budget
 
