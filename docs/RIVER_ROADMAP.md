@@ -221,6 +221,15 @@ booleans — small enough to replicate and to persist, unlike geometry.
   derived has to re-derive the navigation graph the way a map change already
   does.
 
+  And the positions are on the wrong object. They were put on `WorldMap`, which
+  is not where mutable world state lives: `compose_map` rebuilds `current_map`
+  from `base_map` on every occupancy change and `rebuild_world_runtime` then
+  replaces the whole `WorldMap` resource, so any Anchor change would silently
+  reset every switch to the position its map opens in. Invisible today because
+  nothing moves a switch yet. They belong beside `AnchorOccupancy` in
+  `WorldComposition`, which is where state that survives a recomposition lives
+  and where replication already has a shape for it.
+
 The named states this replaced (`active_in`, `inactive: dry_bed | absent`) were
 withdrawn on 2026-09-09 because nobody could author against them: the word `dry`
 named a state in one field and an aftermath in the next, and in every map ever
