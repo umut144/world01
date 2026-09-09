@@ -16,7 +16,8 @@ use lightyear::prelude::{
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
     AnchorOccupancy, AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent,
-    MovementIntent, PlayerInput, RunIntent, WorldOccupancyRequest, WorldPosition,
+    MovementIntent, PlayerInput, RunIntent, WaterSwitchPositions, WorldOccupancyRequest,
+    WorldPosition, WorldSwitchRequest,
 };
 
 use crate::protocol::{
@@ -121,10 +122,39 @@ fn send_world_template_debug_request(
 /// system validates and commits the composition and all derived resources in a
 /// single fixed-tick transaction.
 pub fn configure_client_world_state(app: &mut App) {
-    app.init_resource::<WorldOccupancyRequest>().add_systems(
-        PreUpdate,
-        stage_replicated_world_occupancy.after(ReplicationSystems::Receive),
-    );
+    app.init_resource::<WorldOccupancyRequest>()
+        .init_resource::<WorldSwitchRequest>()
+        .add_systems(
+            PreUpdate,
+            (
+                stage_replicated_world_occupancy,
+                stage_replicated_switch_positions,
+            )
+                .after(ReplicationSystems::Receive),
+        );
+}
+
+/// Hands the newest switch positions to the shared runtime transaction, which
+/// validates and commits them the way it does an occupancy snapshot.
+fn stage_replicated_switch_positions(
+    replicated: Query<
+        &WaterSwitchPositions,
+        (With<ReplicatedWorldState>, Changed<WaterSwitchPositions>),
+    >,
+    mut request: ResMut<WorldSwitchRequest>,
+) {
+    if replicated.is_empty() {
+        return;
+    }
+    let Ok(switches) = replicated.single() else {
+        error!(
+            "cannot apply replicated switch positions: expected exactly one changed world-state entity"
+        );
+        return;
+    };
+    if request.bypass_change_detection().submit(switches.clone()) {
+        request.set_changed();
+    }
 }
 
 fn stage_replicated_world_occupancy(

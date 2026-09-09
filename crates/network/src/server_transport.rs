@@ -15,7 +15,7 @@ use lightyear::prelude::{
     server::*,
 };
 use lightyear::{netcode::Key, prelude::*};
-use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput};
+use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput, WaterSwitchPositions};
 
 use crate::protocol::{
     JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
@@ -280,14 +280,19 @@ pub fn configure_replicated_player(player: &mut EntityCommands<'_>, request: &Se
 
 /// Marks the persistent authoritative world-state singleton for all clients.
 ///
-/// Unlike player state, occupancy has no owner, prediction target, or
-/// interpolation target. Keeping the entity alive lets normal replication
+/// Unlike player state, the world's own state has no owner, prediction target,
+/// or interpolation target. Keeping the entity alive lets normal replication
 /// deliver its current component value to late joiners.
 pub fn configure_replicated_world_state(
     world_state: &mut EntityCommands<'_>,
     occupancy: AnchorOccupancy,
+    switches: WaterSwitchPositions,
 ) {
-    world_state.insert((occupancy, Replicate::to_clients(NetworkTarget::All)));
+    world_state.insert((
+        occupancy,
+        switches,
+        Replicate::to_clients(NetworkTarget::All),
+    ));
     world_state.insert(ReplicatedWorldState);
 }
 
@@ -356,12 +361,17 @@ mod tests {
             let mut commands = Commands::new(&mut queue, &world);
             let mut entity = commands.spawn_empty();
             let id = entity.id();
-            configure_replicated_world_state(&mut entity, AnchorOccupancy::default());
+            configure_replicated_world_state(
+                &mut entity,
+                AnchorOccupancy::default(),
+                WaterSwitchPositions::default(),
+            );
             id
         };
         queue.apply(&mut world);
 
         assert!(world.entity(entity).contains::<AnchorOccupancy>());
+        assert!(world.entity(entity).contains::<WaterSwitchPositions>());
         assert!(world.entity(entity).contains::<ReplicatedWorldState>());
         assert!(world.entity(entity).contains::<Replicate>());
         assert!(!world.entity(entity).contains::<PredictionTarget>());

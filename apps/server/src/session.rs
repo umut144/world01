@@ -15,8 +15,8 @@ use world01_world_data::{
     DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
     MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlacementRanks,
     PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
-    StaminaState, StatusEffectState, WorldComposition, WorldMap, WorldOccupancyRequest,
-    WorldPosition, WorldTemplateCatalog,
+    StaminaState, StatusEffectState, WaterSwitchPositions, WorldComposition, WorldMap,
+    WorldOccupancyRequest, WorldPosition, WorldTemplateCatalog,
 };
 
 const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
@@ -159,28 +159,39 @@ fn apply_world_template_debug_preset(
 
 fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands) {
     let mut world_state = commands.spawn(AuthoritativeWorldState);
-    configure_replicated_world_state(&mut world_state, composition.occupancy().clone());
+    configure_replicated_world_state(
+        &mut world_state,
+        composition.occupancy().clone(),
+        composition.switches().clone(),
+    );
 }
 
 fn publish_world_occupancy(
     composition: Res<WorldComposition>,
     runtime: Res<WorldRuntimeState>,
-    mut world_state: Query<&mut AnchorOccupancy, With<AuthoritativeWorldState>>,
+    mut world_state: Query<
+        (&mut AnchorOccupancy, &mut WaterSwitchPositions),
+        With<AuthoritativeWorldState>,
+    >,
 ) {
     if !composition.is_changed() {
         return;
     }
-    if runtime.applied_generation() != Some(composition.occupancy().generation()) {
-        return;
-    }
-    let Ok(mut replicated) = world_state.single_mut() else {
-        warn!(
-            "cannot publish world occupancy: expected exactly one authoritative world-state entity"
-        );
+    let Ok((mut occupancy, mut switches)) = world_state.single_mut() else {
+        warn!("cannot publish world state: expected exactly one authoritative world-state entity");
         return;
     };
-    if *replicated != *composition.occupancy() {
-        *replicated = composition.occupancy().clone();
+    // Each half is published only once the runtime has actually applied it, so
+    // a client is never told about a world its server does not have yet.
+    if runtime.applied_generation() == Some(composition.occupancy().generation())
+        && *occupancy != *composition.occupancy()
+    {
+        *occupancy = composition.occupancy().clone();
+    }
+    if runtime.applied_switch_generation() == Some(composition.switches().generation())
+        && *switches != *composition.switches()
+    {
+        *switches = composition.switches().clone();
     }
 }
 

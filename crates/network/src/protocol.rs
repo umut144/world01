@@ -16,7 +16,7 @@ use world01_world_data::{
     DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState, MageAttackState,
     MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlayerInput, PlayerOwner,
     RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WeaponAimState, WorldPosition,
+    StatusEffectState, WaterSwitchPositions, WeaponAimState, WorldPosition,
 };
 
 pub const MAX_CLIENTS: usize = 5;
@@ -111,6 +111,10 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<ActorId>().replicate_once();
     app.component::<ReplicatedWorldState>().replicate_once();
     app.component::<AnchorOccupancy>().replicate();
+    // Neither predicted nor interpolated, exactly like the occupancy beside it:
+    // a client is told where the switches stand and derives its world from that
+    // afterwards, rather than guessing at a world change of its own.
+    app.component::<WaterSwitchPositions>().replicate();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
     app.component::<CharacterMass>().replicate_once().predict();
