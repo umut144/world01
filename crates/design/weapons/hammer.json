@@ -2,7 +2,6 @@
   "schema_version": 1,
   "asset_key": "hammer",
   "ability_name_keys": ["HammerStrike"],
-  "attack_components": ["head_mid", "head_left", "head_right"],
   "maximum_charge_seconds": 5.0,
   "grip_reach_seconds": 2.0,
   "swing_seconds": 1.15,

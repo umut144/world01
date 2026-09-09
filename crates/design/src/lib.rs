@@ -355,7 +355,6 @@ pub struct HammerDesign {
     pub schema_version: u32,
     pub asset_key: String,
     pub ability_name_keys: Vec<String>,
-    pub attack_components: Vec<String>,
     pub maximum_charge_seconds: f32,
     pub grip_reach_seconds: f32,
     pub swing_seconds: f32,
@@ -376,9 +375,6 @@ impl HammerDesign {
                 .iter()
                 .all(|name_key| !name_key.is_empty())
             && unique_names(&self.ability_name_keys)
-            && !self.attack_components.is_empty()
-            && self.attack_components.iter().all(|name| !name.is_empty())
-            && unique_names(&self.attack_components)
             && self.maximum_charge_seconds.is_finite()
             && self.maximum_charge_seconds > 0.0
             && self.grip_reach_seconds.is_finite()
@@ -433,7 +429,6 @@ impl HammerStrikeDesign {
             && self.charge_step_seconds > 0.0
             && self.charge_damage_percent_per_step.is_finite()
             && self.charge_damage_percent_per_step >= 0.0
-            && !self.component_effects.is_empty()
             && self
                 .component_effects
                 .iter()
@@ -596,17 +591,6 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
             "Hammer abilities must reference HammerStrike exactly once".into(),
         ));
     }
-    let attack_components = hammer.attack_components.iter().collect::<HashSet<_>>();
-    let effect_components = hammer_strike
-        .component_effects
-        .iter()
-        .map(|component| &component.component_name)
-        .collect::<HashSet<_>>();
-    if attack_components != effect_components {
-        return Err(DesignError(
-            "HammerStrike component effects must match Hammer attack components".into(),
-        ));
-    }
     if !hammerer.is_valid("hammerer") {
         return Err(DesignError("Hammerer design is invalid".into()));
     }
@@ -666,10 +650,6 @@ mod tests {
         let design = load_embedded().expect("embedded game design parses");
         assert_eq!(design.hammer.asset_key, "hammer");
         assert_eq!(design.hammer.ability_name_keys, ["HammerStrike"]);
-        assert_eq!(
-            design.hammer.attack_components,
-            ["head_mid", "head_left", "head_right"]
-        );
         assert_eq!(design.hammer_strike.name_key, "HammerStrike");
         assert_eq!(design.hammer_strike.base_damage, 20.0);
         assert_eq!(design.hammer_strike.charge_step_seconds, 0.5);

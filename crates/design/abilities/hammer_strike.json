@@ -6,10 +6,6 @@
   "charge_damage_percent_per_step": 10.0,
   "component_effects": [
     {
-      "component_name": "head_mid",
-      "effects": []
-    },
-    {
       "component_name": "head_left",
       "effects": [
         {

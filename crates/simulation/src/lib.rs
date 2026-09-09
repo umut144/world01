@@ -95,7 +95,7 @@ mod tests {
     fn hammer_geometry() -> HammerCombatGeometry {
         let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
         let design = world01_design::load_embedded().expect("embedded game design parses");
-        HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
+        HammerCombatGeometry::from_content(&content)
             .expect("synced Hammer manifests define valid combat geometry")
     }
 

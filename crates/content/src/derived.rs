@@ -474,10 +474,12 @@ pub struct HammerCombatGeometry {
 }
 
 impl HammerCombatGeometry {
-    pub fn from_content(
-        content: &RuntimeContent,
-        attack_component_names: &[String],
-    ) -> Result<Self, HammerCombatGeometryError> {
+    /// The attack surfaces come only from Regions the Asset authors with the
+    /// `attack` role. There is deliberately no Component-name list in design:
+    /// the Asset is the single place that decides what a weapon hits with, so
+    /// a Hammer without an authored attack Region fails here instead of
+    /// falling back to names a design file would have to enumerate.
+    pub fn from_content(content: &RuntimeContent) -> Result<Self, HammerCombatGeometryError> {
         let hammerer = content
             .character(&CharacterId("hammerer".into()))
             .ok_or_else(|| HammerCombatGeometryError::new("content is missing Hammerer"))?;
@@ -488,21 +490,24 @@ impl HammerCombatGeometry {
         let secondary_grip = unique_frame(hammer, WEAPON_SECONDARY_GRIP_ROLE)?;
         let attack_point = unique_frame(hammer, WEAPON_ATTACK_POINT_ROLE)?;
         let reach_limit = unique_frame(hammer, WEAPON_REACH_LIMIT_ROLE)?;
-        let authored_regions = hammer
+        let attack_components = hammer
             .regions
             .iter()
             .filter(|region| region.role == "attack")
-            .map(|region| region_geometry(hammer, region))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
-        let attack_components = if authored_regions.is_empty() {
-            attack_component_names
-                .iter()
-                .map(|name| component_geometry(hammer, name))
-                .collect::<Result<Vec<_>, _>>()?
-        } else {
-            authored_regions
-        };
+            .map(|region| {
+                let geometry = region_geometry(hammer, region)
+                    .map_err(|error| HammerCombatGeometryError::new(error.to_string()))?;
+                Ok(RuntimeComponentGeometry {
+                    name: attack_surface_name(hammer, region)?,
+                    ..geometry
+                })
+            })
+            .collect::<Result<Vec<_>, HammerCombatGeometryError>>()?;
+        if attack_components.is_empty() {
+            return Err(HammerCombatGeometryError::new(
+                "Hammer authors no attack Region",
+            ));
+        }
         let geometry = Self {
             socket_offset: socket - hammerer_pivot,
             primary_grip,
@@ -693,6 +698,30 @@ impl fmt::Display for HammerCombatGeometryError {
 
 impl Error for HammerCombatGeometryError {}
 
+/// The effect key of one attack surface: the name of the Component its Region
+/// is attached to.
+///
+/// A Region carries its own name too, but that is an editor label PolyTools
+/// generates when the Region is created. The Component name is the one the
+/// Asset author curated and reads in the Outliner, so a per-surface design
+/// override keys on it and no second set of names has to be maintained.
+fn attack_surface_name(
+    manifest: &RuntimeManifest,
+    region: &RuntimeRegion,
+) -> Result<String, HammerCombatGeometryError> {
+    manifest
+        .components
+        .iter()
+        .find(|component| component.component_id == region.source_component_id)
+        .map(|component| component.name.clone())
+        .ok_or_else(|| {
+            HammerCombatGeometryError::new(format!(
+                "Hammer attack Region '{}' is attached to Component {}, which the manifest does not have",
+                region.name, region.source_component_id
+            ))
+        })
+}
+
 fn unique_frame(manifest: &RuntimeManifest, role: &str) -> Result<Vec2, HammerCombatGeometryError> {
     attachment_frame(manifest, role)
         .map_err(content_to_geometry_error)
@@ -713,21 +742,6 @@ fn finite_vec2(values: [f32; 2], label: &str) -> Result<Vec2, HammerCombatGeomet
     value.is_finite().then_some(value).ok_or_else(|| {
         HammerCombatGeometryError::new(format!("{label} must contain finite coordinates"))
     })
-}
-
-fn component_geometry(
-    manifest: &RuntimeManifest,
-    name: &str,
-) -> Result<RuntimeComponentGeometry, HammerCombatGeometryError> {
-    let component = manifest
-        .components
-        .iter()
-        .find(|component| component.name == name)
-        .ok_or_else(|| {
-            HammerCombatGeometryError::new(format!("Hammer is missing attack Component {name}"))
-        })?;
-    placed_component_geometry(manifest, component)
-        .map_err(|message| HammerCombatGeometryError::new(message))
 }
 
 /// A Component's Fill Mesh in Asset space.
@@ -1005,11 +1019,8 @@ mod tests {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let health = CharacterHealthCatalog::from_content(&content)
             .expect("embedded character geometry defines health");
-        let hammer = HammerCombatGeometry::from_content(
-            &content,
-            &["head_mid", "head_left", "head_right"].map(str::to_owned),
-        )
-        .expect("embedded Hammer frames define combat geometry");
+        let hammer = HammerCombatGeometry::from_content(&content)
+            .expect("embedded Hammer frames define combat geometry");
 
         assert_eq!(health.max_hp(&CharacterId("hammerer".into())), Some(140.0));
         assert!(
@@ -1019,20 +1030,18 @@ mod tests {
                 .all(|character| health.max_hp(character).is_some())
         );
         assert!(hammer.socket_offset().is_finite());
-        assert_eq!(
-            hammer
-                .attack_components()
-                .iter()
-                .map(|component| component.name.as_str())
-                .collect::<Vec<_>>(),
-            ["head_mid", "head_left", "head_right"]
-        );
-        assert!(
-            hammer
-                .attack_components()
-                .iter()
-                .all(|component| !component.vertices.is_empty() && !component.indices.is_empty())
-        );
+        let mut attack_surfaces = hammer
+            .attack_components()
+            .iter()
+            .map(|component| component.name.as_str())
+            .collect::<Vec<_>>();
+        attack_surfaces.sort_unstable();
+        assert_eq!(attack_surfaces, ["head_left", "head_mid", "head_right"]);
+        assert!(hammer.attack_components().iter().all(|component| {
+            !component.name.is_empty()
+                && !component.vertices.is_empty()
+                && !component.indices.is_empty()
+        }));
         assert!(hammer.attack_radius(1.0) > hammer.attack_radius(0.0));
         assert!(hammer.maximum_reach() > hammer.attack_radius(1.0));
 

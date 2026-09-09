@@ -746,11 +746,20 @@ force, and returns to its compact form after the attack.
 - The Hammerer's `weapon_socket_primary` and the Hammer's `grip_primary` are
   authored attachment frames. They carry orientation as well as position so
   the Hammer rotates around its grip rather than its visual center.
-- `head_mid`, `head_left`, and `head_right` are the authored polygonal attack
-  Components; no separate AttackRegion is authored.
-- The Hammer defines the named ability `HammerStrike`. Its attack Components
-  remain separate during hit evaluation so each Component can contribute its
-  own gameplay effect.
+- The Hammer authors its attack surfaces as Regions with the `attack` role.
+  The Asset is the single source of truth for what a weapon strikes with:
+  there is no Component-name list in design, and a Hammer without an
+  authored attack Region fails to load rather than falling back to names.
+- The Hammer defines the named ability `HammerStrike`. Its attack Regions
+  remain separate during hit evaluation so each Region can contribute its
+  own gameplay effect. `HammerStrike.component_effects` is an override list,
+  not an inventory: a Region without an entry deals base damage and nothing
+  else. An entry keys on the name of the Component the Region is attached
+  to — `head_left` and `head_right` stun, `head_mid` does not — because that
+  name is authored while a Region name is a generated editor label. An
+  override that matches no authored attack surface is a load-time error, so
+  a Component rename cannot silently drop an effect. A new weapon needs no
+  design-file change at all to be hit with.
 - `grip_primary` is the carried contact aligned to
   `weapon_socket_primary`. The attack regrips the same hand to the separately
   authored weapon-local `grip_secondary`.

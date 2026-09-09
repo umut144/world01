@@ -92,12 +92,30 @@ pub struct HammerStrikeRules {
 }
 
 impl HammerStrikeRules {
+    /// `component_effects` is an override list, not an inventory: an attack
+    /// surface without an entry deals base damage. An entry keys on the name
+    /// of the Component an attack Region is attached to. `geometry` is taken
+    /// so an override that matches no authored attack surface fails here,
+    /// rather than silently never matching during hit evaluation.
     pub fn from_design(
         ticks_per_second: u32,
         hammer: &HammerDesign,
         strike: &HammerStrikeDesign,
+        geometry: &HammerCombatGeometry,
     ) -> Result<Self, HammerStrikeConfigError> {
         if ticks_per_second == 0 || !strike.is_valid() {
+            return Err(HammerStrikeConfigError);
+        }
+        let attack_surfaces = geometry
+            .attack_components()
+            .iter()
+            .map(|component| component.name.as_str())
+            .collect::<HashSet<_>>();
+        if strike
+            .component_effects
+            .iter()
+            .any(|component| !attack_surfaces.contains(component.component_name.as_str()))
+        {
             return Err(HammerStrikeConfigError);
         }
         let charge_step_ticks = (strike.charge_step_seconds * ticks_per_second as f32)
@@ -417,10 +435,14 @@ mod tests {
     fn hammer_strike_damage_reaches_forty_at_full_charge() {
         let config = load_embedded().expect("embedded config parses");
         let design = load_game_design().expect("embedded game design parses");
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let geometry = HammerCombatGeometry::from_content(&content)
+            .expect("embedded Hammer geometry is valid");
         let rules = HammerStrikeRules::from_design(
             config.simulation.ticks_per_second,
             &design.hammer,
             &design.hammer_strike,
+            &geometry,
         )
         .expect("embedded HammerStrike design is valid");
 
@@ -457,9 +479,8 @@ mod tests {
         let rules =
             HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
                 .expect("embedded Hammer attack design is valid");
-        let geometry =
-            HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
-                .expect("embedded Hammer geometry is valid");
+        let geometry = HammerCombatGeometry::from_content(&content)
+            .expect("embedded Hammer geometry is valid");
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(geometry)
@@ -504,9 +525,8 @@ mod tests {
         let rules =
             HammerAttackRules::from_design(config.simulation.ticks_per_second, &design.hammer)
                 .expect("embedded Hammer attack design is valid");
-        let geometry =
-            HammerCombatGeometry::from_content(&content, &design.hammer.attack_components)
-                .expect("embedded Hammer geometry is valid");
+        let geometry = HammerCombatGeometry::from_content(&content)
+            .expect("embedded Hammer geometry is valid");
         let mut app = App::new();
         app.insert_resource(rules)
             .insert_resource(geometry)

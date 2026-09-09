@@ -324,8 +324,7 @@ mod tests {
                     .expect("hammer design is valid"),
             )
             .insert_resource(
-                HammerCombatGeometry::from_content(&content, &game_design.hammer.attack_components)
-                    .expect("hammer geometry is valid"),
+                HammerCombatGeometry::from_content(&content).expect("hammer geometry is valid"),
             )
             .insert_resource(
                 MageAttackRules::from_design(ticks, &game_design.mage, &game_design.mage_eye_beams)

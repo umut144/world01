@@ -534,6 +534,15 @@ fn validate_hammer_manifest(manifest: &RuntimeManifest) -> Result<(), ContentErr
     attachment_frame(manifest, WEAPON_SECONDARY_GRIP_ROLE)?;
     attachment_frame(manifest, WEAPON_ATTACK_POINT_ROLE)?;
     attachment_frame(manifest, WEAPON_REACH_LIMIT_ROLE)?;
+    if !manifest
+        .regions
+        .iter()
+        .any(|region| region.role == "attack")
+    {
+        return Err(ContentError::new(
+            "Hammer must author at least one attack Region",
+        ));
+    }
     Ok(())
 }
 
