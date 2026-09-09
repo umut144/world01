@@ -33,6 +33,15 @@ pub struct WorldMap {
     bridge_decks: Vec<MapRouteSurface>,
     water_bodies: Vec<MapWaterBody>,
     switches: Vec<MapSwitch>,
+    /// Where each switch stands now, which starts at what the map declares.
+    ///
+    /// This is runtime state living on the composed world rather than beside
+    /// it, because the column has to answer with it and every place that asks
+    /// the column would otherwise have to carry it along.
+    switch_positions: HashMap<String, bool>,
+    /// The bodies that exist at those positions, resolved through the feeding
+    /// chain.
+    present_bodies: HashSet<String>,
     terrain_cuts: HashMap<(u32, u32), Vec<TerrainCut>>,
     water_columns: HashMap<(u32, u32), WaterColumn>,
     water_cell_meters: f32,
@@ -121,6 +130,13 @@ impl WorldMap {
             scene.height_tiles,
             &scene.terrain_cells,
         )?;
+        let switch_positions: HashMap<String, bool> = scene
+            .switches
+            .iter()
+            .map(|switch| (switch.name.clone(), switch.initially_on))
+            .collect();
+        let present_bodies = resolve_present_bodies(&scene.water_bodies, &switch_positions);
+        let water_columns = index_water_columns(&scene.water_bodies, &present_bodies);
         Ok(Self {
             scene_id: scene_id.to_owned(),
             width_tiles: scene.width_tiles,
@@ -132,7 +148,9 @@ impl WorldMap {
             route_surfaces: scene.route_surfaces,
             bridges: scene.bridges,
             bridge_decks: scene.bridge_decks,
-            water_columns: index_water_columns(&scene.water_bodies),
+            switch_positions,
+            present_bodies,
+            water_columns,
             water_bodies: scene.water_bodies,
             switches: scene.switches,
             terrain_cuts: index_terrain_cuts(&scene.route_surface_cuts),
@@ -351,6 +369,48 @@ impl WorldMap {
     /// switches exist, so that nothing can be switched that was never authored.
     pub fn switches(&self) -> &[MapSwitch] {
         &self.switches
+    }
+
+    /// Where a switch stands now, or `None` for one this map never declared.
+    pub fn switch_is_on(&self, name: &str) -> Option<bool> {
+        self.switch_positions.get(name).copied()
+    }
+
+    /// Moves a switch, and answers whether anything changed.
+    ///
+    /// Everything that hangs on the switch follows at once: a body whose switch
+    /// went off carries neither its fill nor its cut from here on, and neither
+    /// does anything fed by it. The column therefore has to be re-indexed, which
+    /// is why this is the only way to move one.
+    pub fn set_switch(&mut self, name: &str, on: bool) -> Result<bool, WorldMapError> {
+        let Some(position) = self.switch_positions.get_mut(name) else {
+            return Err(WorldMapError::new(format!(
+                "this map declares no switch '{name}'"
+            )));
+        };
+        if *position == on {
+            return Ok(false);
+        }
+        *position = on;
+        self.present_bodies = resolve_present_bodies(&self.water_bodies, &self.switch_positions);
+        self.water_columns = index_water_columns(&self.water_bodies, &self.present_bodies);
+        Ok(true)
+    }
+
+    /// Whether a body of water is there at the switch positions of the moment.
+    ///
+    /// A body that is not there carries nothing at all: no water to be in, and
+    /// no channel either, so the Terrain stands as though it had never been
+    /// authored.
+    pub fn water_body_is_present(&self, water_body_id: &str) -> bool {
+        self.present_bodies.contains(water_body_id)
+    }
+
+    /// The bodies of water that are there, in authored order.
+    pub fn present_water_bodies(&self) -> impl Iterator<Item = &MapWaterBody> {
+        self.water_bodies
+            .iter()
+            .filter(|body| self.present_bodies.contains(&body.water_body_id))
     }
 
     /// Every authored surface a Character walks along rather than over: the
@@ -672,6 +732,8 @@ impl WorldMap {
             // the Instance was authored with.
             water_bodies: self.water_bodies.clone(),
             switches: self.switches.clone(),
+            switch_positions: self.switch_positions.clone(),
+            present_bodies: self.present_bodies.clone(),
             terrain_cuts: self.terrain_cuts.clone(),
             water_columns: self.water_columns.clone(),
             water_cell_meters: self.water_cell_meters,
@@ -3098,9 +3160,58 @@ pub struct MapColumnSurface<'a> {
     pub water_depth_meters: f32,
 }
 
-fn index_water_columns(bodies: &[MapWaterBody]) -> HashMap<(u32, u32), WaterColumn> {
+/// Which bodies of water exist at these switch positions.
+///
+/// A body is there when its own switch is on **and** a body feeding it is
+/// there. A branch is fed by the river it leaves, so switching that river off
+/// takes everything hanging under it, to any depth.
+///
+/// Resolved by starting with every body its own switch allows and dropping
+/// those whose feeders all fell away, until nothing changes. A ring is already
+/// refused when the map is read; settling to a fixed point rather than walking
+/// the chain means that even a ring that slipped through would end here rather
+/// than run forever.
+fn resolve_present_bodies(
+    bodies: &[MapWaterBody],
+    positions: &HashMap<String, bool>,
+) -> HashSet<String> {
+    let mut present: HashSet<String> = bodies
+        .iter()
+        .filter(|body| {
+            body.switch
+                .as_ref()
+                .is_none_or(|switch| positions.get(switch.as_str()).copied().unwrap_or_default())
+        })
+        .map(|body| body.water_body_id.clone())
+        .collect();
+    loop {
+        let dried = bodies
+            .iter()
+            .filter(|body| present.contains(&body.water_body_id))
+            .filter(|body| {
+                !body.feeders.is_empty()
+                    && !body.feeders.iter().any(|feeder| present.contains(feeder))
+            })
+            .map(|body| body.water_body_id.clone())
+            .collect::<Vec<_>>();
+        if dried.is_empty() {
+            return present;
+        }
+        for body in dried {
+            present.remove(&body);
+        }
+    }
+}
+
+fn index_water_columns(
+    bodies: &[MapWaterBody],
+    present: &HashSet<String>,
+) -> HashMap<(u32, u32), WaterColumn> {
     let mut gathered: HashMap<(u32, u32), Vec<&MapWaterCell>> = HashMap::new();
-    for body in bodies {
+    for body in bodies
+        .iter()
+        .filter(|body| present.contains(&body.water_body_id))
+    {
         for cell in &body.cells {
             gathered.entry((cell.x, cell.y)).or_default().push(cell);
         }
@@ -5254,6 +5365,175 @@ mod tests {
 
         assert!(WorldMap::from_source(&outside, TEST_SCENE_ID).is_err());
         assert!(WorldMap::from_source(&unprofiled, TEST_SCENE_ID).is_err());
+    }
+
+    fn present_bodies(map: &WorldMap) -> Vec<String> {
+        map.present_water_bodies()
+            .map(|body| body.water_body_id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn switching_a_river_off_takes_every_branch_hanging_under_it() {
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+
+        assert_eq!(map.switch_is_on("upper_valley"), Some(true));
+        assert_eq!(map.switch_is_on("branch_between_bridges"), Some(false));
+        assert_eq!(map.switch_is_on("no_such_switch"), None);
+        assert_eq!(
+            present_bodies(&map),
+            ["river_0001", "river_0002", "river_0004", "river_0005"],
+            "the map opens with its upper valley running and its branch shut"
+        );
+
+        assert!(
+            map.set_switch("upper_valley", false)
+                .expect("the map declares that switch")
+        );
+        assert_eq!(
+            present_bodies(&map),
+            ["river_0001"],
+            "river_0004 and river_0005 carry no switch of their own and go with the river feeding them"
+        );
+
+        assert!(
+            map.set_switch("branch_between_bridges", true)
+                .expect("the map declares that switch")
+        );
+        assert_eq!(
+            present_bodies(&map),
+            ["river_0001", "river_0003"],
+            "the branch hangs on the main river, which never stopped running"
+        );
+
+        assert!(
+            map.set_switch("upper_valley", true)
+                .expect("the map declares that switch")
+        );
+        assert_eq!(
+            present_bodies(&map),
+            [
+                "river_0001",
+                "river_0002",
+                "river_0003",
+                "river_0004",
+                "river_0005"
+            ]
+        );
+
+        assert!(
+            !map.set_switch("upper_valley", true)
+                .expect("the map declares that switch"),
+            "moving a switch to where it already stands changes nothing"
+        );
+        assert!(
+            map.set_switch("no_such_switch", true).is_err(),
+            "a switch the map never declared cannot be moved"
+        );
+    }
+
+    #[test]
+    fn the_cells_of_a_switched_off_chain_keep_only_the_water_still_running() {
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let cells_of = |map: &WorldMap, ids: &[&str]| {
+            map.water_bodies()
+                .iter()
+                .filter(|body| ids.contains(&body.water_body_id.as_str()))
+                .flat_map(|body| body.cells.iter().map(|cell| (cell.x, cell.y)))
+                .collect::<HashSet<_>>()
+        };
+        let chain = cells_of(&map, &["river_0002", "river_0004", "river_0005"]);
+        let still_running = cells_of(&map, &["river_0001"]);
+        assert_eq!(chain.len(), 1101, "the three bodies cover this much ground");
+
+        map.set_switch("upper_valley", false)
+            .expect("the map declares that switch");
+
+        let mut surfaces = Vec::new();
+        let mut wet = HashSet::new();
+        for (x, y) in &chain {
+            map.terrain_walking_surfaces(water_cell_center(&map, *x, *y), &mut surfaces);
+            if surfaces
+                .iter()
+                .any(|surface| surface.water_depth_meters > 0.0)
+            {
+                wet.insert((*x, *y));
+            }
+        }
+
+        assert_eq!(
+            wet.len(),
+            9,
+            "the only cells still carrying water are the ones the river that stayed runs through"
+        );
+        assert!(
+            wet.iter().all(|at| still_running.contains(at)),
+            "and they are exactly those cells"
+        );
+    }
+
+    #[test]
+    fn a_switched_off_body_leaves_the_ground_whole_and_a_running_one_a_bed_under_water() {
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let alone = map
+            .water_bodies()
+            .iter()
+            .find(|body| body.water_body_id == "river_0003")
+            .expect("the overworld carries its switchable branch")
+            .cells
+            .iter()
+            .find(|cell| {
+                map.water_bodies()
+                    .iter()
+                    .filter(|other| other.water_body_id != "river_0003")
+                    .all(|other| {
+                        !other
+                            .cells
+                            .iter()
+                            .any(|shared| shared.x == cell.x && shared.y == cell.y)
+                    })
+            })
+            .copied()
+            .expect("the branch has ground of its own");
+        let at = water_cell_center(&map, alone.x, alone.y);
+        let ground = map
+            .terrain_cell_at(at)
+            .expect("that cell has Terrain")
+            .elevation_meters;
+        // Each reading is taken in its own scope: a resolved column borrows the
+        // map it came from, and the switch between them needs it back.
+        {
+            // Shut, which is how the map opens.
+            let mut surfaces = Vec::new();
+            map.terrain_walking_surfaces(at, &mut surfaces);
+            assert_eq!(
+                elevations(&surfaces),
+                vec![ground],
+                "a body that is not there takes no channel out of the Terrain"
+            );
+            assert_eq!(surfaces[0].water_depth_meters, 0.0);
+        }
+
+        map.set_switch("branch_between_bridges", true)
+            .expect("the map declares that switch");
+
+        {
+            let mut surfaces = Vec::new();
+            map.terrain_walking_surfaces(at, &mut surfaces);
+            assert_eq!(
+                elevations(&surfaces),
+                vec![alone.bed_meters],
+                "and running, the same place offers the bed the channel was cut to"
+            );
+            assert_eq!(
+                surfaces[0].water_depth_meters,
+                alone.surface_meters - alone.bed_meters
+            );
+            assert!(
+                surfaces[0].water_depth_meters > 0.4,
+                "deeper than any Character wades, so the branch is not crossed"
+            );
+        }
     }
 
     #[test]

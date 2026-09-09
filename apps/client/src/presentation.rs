@@ -785,7 +785,10 @@ fn setup_map_visuals(
         }
     }
 
-    for body in map.water_bodies() {
+    // Only the water that is there is drawn. A body whose switch is off carries
+    // neither its fill nor its channel, so showing its band would put water
+    // where the simulation says the ground is whole.
+    for body in map.present_water_bodies() {
         // The band arrives in world coordinates already, because SceneMaker
         // bakes it the way it bakes a Path.
         let positions = body
@@ -801,7 +804,12 @@ fn setup_map_visuals(
         ));
     }
 
+    // Enumerated over every body rather than only the present ones, because a
+    // mark carries the index of its body and looks the course up by it.
     for (index, body) in map.water_bodies().iter().enumerate() {
+        if !map.water_body_is_present(&body.water_body_id) {
+            continue;
+        }
         spawn_current_marks(
             &mut commands,
             index,
