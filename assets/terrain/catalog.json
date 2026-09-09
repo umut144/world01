@@ -2,6 +2,24 @@
   "assets": [
     {
       "asset_category": "palette",
+      "asset_id": "asset_46",
+      "asset_key": "cobblestone",
+      "asset_type": "terrain",
+      "display_name": "Cobblestone",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/cobblestone/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_47",
+      "asset_key": "cobblestone01",
+      "asset_type": "terrain",
+      "display_name": "Cobblestone01",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/cobblestone01/manifest.json"
+    },
+    {
+      "asset_category": "palette",
       "asset_id": "asset_18",
       "asset_key": "grass",
       "asset_type": "terrain",

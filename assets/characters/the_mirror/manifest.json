@@ -6,7 +6,7 @@
 		0.0,
 		0.0
 	],
-	"asset_type": "props",
+	"asset_type": "character",
 	"attachment_frames": [],
 	"components": [
 		{
@@ -6416,6 +6416,13 @@
 			"region_id": "component_288",
 			"role": "hurt",
 			"source_component_id": "component_265"
+		},
+		{
+			"geometry_source": "component",
+			"name": "collision_region",
+			"region_id": "component_309",
+			"role": "collision",
+			"source_component_id": "component_264"
 		}
 	],
 	"schema_version": 21,

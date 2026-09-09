@@ -69,15 +69,6 @@
     },
     {
       "asset_category": "single",
-      "asset_id": "asset_42",
-      "asset_key": "the_mirror",
-      "asset_type": "props",
-      "display_name": "The Mirror",
-      "previous_keys": [],
-      "runtime_package": "PolyToolsRuntimeExports/the_mirror/manifest.json"
-    },
-    {
-      "asset_category": "single",
       "asset_id": "asset_10",
       "asset_key": "tree",
       "asset_type": "props",

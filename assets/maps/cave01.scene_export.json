@@ -22,6 +22,12 @@
       }
     },
     {
+      "asset_key": "cobblestone",
+      "surface": "stone",
+      "footprint_meters": null,
+      "anchor_meters": null
+    },
+    {
       "asset_key": "grass",
       "surface": "land",
       "footprint_meters": null,

@@ -4,7 +4,7 @@
 	"asset_key": "bomb",
 	"asset_pivot": [
 		0.0,
-		0.139999997615814
+		0.0
 	],
 	"asset_type": "weapons",
 	"attachment_frames": [],
@@ -13,7 +13,7 @@
 			"component_id": "component_200",
 			"component_pivot": [
 				0.0,
-				-0.279999995231628
+				-0.139999997615814
 			],
 			"contour_stroke_mesh": {
 				"cap": "butt",
@@ -1815,7 +1815,7 @@
 			"component_id": "component_202",
 			"component_pivot": [
 				-0.00000000186264514923096,
-				-0.0300000071525574
+				0.109999990463257
 			],
 			"contour_stroke_mesh": {
 				"cap": "butt",
@@ -3835,7 +3835,7 @@
 			"component_id": "component_204",
 			"component_pivot": [
 				-0.00000000176951289176941,
-				-0.0209699988365173
+				0.119029998779297
 			],
 			"contour_stroke_mesh": {
 				"cap": "butt",
@@ -6668,7 +6668,7 @@
 			"component_id": "component_205",
 			"component_pivot": [
 				0.0257000029087067,
-				0.0797549843788147
+				0.219754981994629
 			],
 			"contour_stroke_mesh": {
 				"cap": "butt",
