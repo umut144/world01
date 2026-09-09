@@ -244,10 +244,14 @@ been a case World 01 had to invent an answer for. Three parts follow it:
   reason. Two feeders mean water as soon as **either** flows, which is what
   water does.
 
-  `overworld01` carries the feeding chain four deep - `river_0001` to
-  `river_0002` to `river_0004` to `river_0005` - but the only switch in either
-  map sits on a body with no descendants, so nothing authored yet proves the
-  cascade actually cascades. Asked of SceneMaker on 2026-09-09.
+  `overworld01` witnesses it since 2026-09-09: the feeding chain runs four deep,
+  `river_0001` to `river_0002` to `river_0004` to `river_0005`, and
+  `upper_valley` sits on `river_0002` and opens on. Switch it off and three
+  bodies go, two of which carry no switch of their own. Of the 1 101 distinct
+  cells those three hold, 9 stay occupied because `river_0001` runs through
+  them and 1 092 fall empty - with `branch_between_bridges` off, which is how
+  the map opens. With that second switch on instead, `river_0003` holds 11 more
+  of them and the split is 20 and 1 081.
 
   The rule was briefly "the entry whose `own_station_meters` is 0", and that was
   withdrawn on 2026-09-08 because it infers a direction from a position. A body
@@ -285,10 +289,16 @@ of every body over it instead of only the last one written. In `overworld01`
 (export 19) 108 of 1 675 distinct water cells carry more than one body - 102 of
 them twice and 6 of them three times, which is what makes the 1 789 cell entries
 the five bodies contribute. The fixture is the mouth of
-`river_0003`, the only activatable body there: 27 cells where it meets water
-that always flows - 16 on `river_0001`, 17 on `river_0002`, 6 on both - in one
-block of x 88-94, y 53-59. Switch the branch off and those 27 cells must stay
-water, because another river runs through them.
+`river_0003`: 27 cells where it meets water that is flowing - 16 on
+`river_0001`, 17 on `river_0002`, 6 on both - in one block of x 88-94, y 53-59.
+Switch `branch_between_bridges` off and those 27 cells must stay water, because
+another river runs through them.
+
+**Run it with `upper_valley` on**, which is how the map opens. Giving
+`river_0002` a switch on 2026-09-09 moved no cell at all, but it took the word
+"always" off 11 of those 27: with `upper_valley` off, only the 16 cells backed
+by `river_0001` still have a second body, and the test quietly shrinks to those
+without failing.
 
 Worth knowing why this could not have been caught earlier: every body in that
 map is authored to the same depth, so no overlapping cell has two different
