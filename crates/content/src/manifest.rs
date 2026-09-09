@@ -841,7 +841,17 @@ mod tests {
     fn embedded_content_loads_every_catalogued_character_and_hammer() {
         let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
 
-        assert_eq!(content.ids().len(), 11);
+        // Counted from the catalogue rather than written down: a Character
+        // added in PolyTools should make this test load one more, not fail.
+        let catalogued = EMBEDDED_ASSET_MANIFESTS
+            .iter()
+            .filter(|(asset_type, _, _)| *asset_type == "character")
+            .count();
+        assert!(
+            catalogued >= 11,
+            "the world carries its authored Characters"
+        );
+        assert_eq!(content.ids().len(), catalogued);
         assert!(content.contains_character(&CharacterId("hammerer".into())));
         assert_eq!(content.hammer().asset_key, HAMMER_ASSET_KEY);
         assert_eq!(

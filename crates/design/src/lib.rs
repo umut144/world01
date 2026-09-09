@@ -677,8 +677,14 @@ mod tests {
             design.mage_eye_beams.projectile_speed_meters_per_second,
             10.0
         );
-        assert_eq!(design.mass.characters.len(), 11);
-        assert_eq!(design.traversal.characters.len(), 11);
+        // Counted against each other rather than written down, because that is
+        // the rule: a Character added in PolyTools needs both, and neither
+        // number is interesting on its own.
+        assert!(design.mass.characters.len() >= 11);
+        assert_eq!(
+            design.traversal.characters.len(),
+            design.mass.characters.len()
+        );
         assert_eq!(design.mass.weapons.len(), 1);
         assert!(
             design
@@ -699,7 +705,8 @@ mod tests {
             .find(|profile| profile.asset_key == "hammerer")
             .expect("Hammerer has an explicit traversal profile");
 
-        assert_eq!(hammerer.surfaces, ["land", "wood"]);
+        assert_eq!(hammerer.surfaces, ["land", "wood", "stone"]);
+        assert_eq!(hammerer.max_wade_depth_meters, 0.4);
         assert_eq!(hammerer.max_step_height_meters, 0.5);
         assert_eq!(hammerer.normal_speed_max_abs_grade_percent, 25);
         assert_eq!(hammerer.passable_max_abs_grade_percent, 50);
