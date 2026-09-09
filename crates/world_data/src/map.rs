@@ -376,12 +376,31 @@ impl WorldMap {
         self.switch_positions.get(name).copied()
     }
 
-    /// Moves a switch, and answers whether anything changed.
+    /// Moves a switch on this map, and answers whether anything changed.
     ///
     /// Everything that hangs on the switch follows at once: a body whose switch
     /// went off carries neither its fill nor its cut from here on, and neither
     /// does anything fed by it. The column therefore has to be re-indexed, which
     /// is why this is the only way to move one.
+    ///
+    /// It moves the switch on *this* map and does nothing else, which is not
+    /// enough to flip one while a world runs. Three things stay with the
+    /// caller, and none of them is visible from here:
+    ///
+    /// - **The server owns the flip.** Server and client each load their own
+    ///   copy of a map, so moving a switch on one side alone leaves water on
+    ///   one machine and whole ground on the other, without anything reporting
+    ///   a disagreement.
+    /// - **The positions have to reach the clients**, or their water and the
+    ///   server's stop being the same world.
+    /// - **The derived world has to be rebuilt.** Collision and the navigation
+    ///   graph come from the column, and the column just changed; until
+    ///   `rebuild_world_runtime` runs again, whatever walks does so on the nodes
+    ///   of the world as it was.
+    ///
+    /// So a trigger in play belongs on the rail an occupancy change already
+    /// uses - an ordered request that advances a generation, applied by the
+    /// server - rather than calling this from wherever the trigger is.
     pub fn set_switch(&mut self, name: &str, on: bool) -> Result<bool, WorldMapError> {
         let Some(position) = self.switch_positions.get_mut(name) else {
             return Err(WorldMapError::new(format!(
