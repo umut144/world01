@@ -508,17 +508,6 @@ fn validate_character_manifest(
     if expected_key == "hammerer" {
         attachment_frame(manifest, WEAPON_SOCKET_ROLE)?;
     }
-    for component in &manifest.components {
-        if expected_key != "barde"
-            && (component.name == "eye_left" || component.name == "eye_right")
-            && component.closed_region_mesh.is_none()
-        {
-            return Err(ContentError::new(format!(
-                "{} is missing its schema-8+ closed eye region",
-                component.component_id
-            )));
-        }
-    }
     Ok(())
 }
 

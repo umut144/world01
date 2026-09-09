@@ -220,10 +220,12 @@ registration API exists yet.
 
 PolyTools schema 16 exposes authored and Component-bound Regions with `attack`,
 `hurt`, or `collision` roles. The content boundary validates both variants and
-converts them into typed geometry. Hammer attack derivation now requires an
-authored `attack` Region and has no Component-name fallback; Character Hurt
-derivation retains its earlier Component-based fallback when the
-corresponding authored Regions are absent. Placed props participate in Mage
+converts them into typed geometry. Hammer attack derivation requires an
+authored `attack` Region and Character Hurt derivation an authored `hurt`
+Region; neither has a Component-name fallback, and a Character that authors
+no hurt Region cannot be hit rather than falling back to a drawn part.
+Nothing in the content boundary requires a Character to draw a Component of
+any particular name. Placed props participate in Mage
 projectile
 collision only when they declare a `collision` Region; visible Component
 geometry is not silently treated as collision geometry.
