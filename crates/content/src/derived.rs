@@ -6,7 +6,8 @@ use std::{
 
 use bevy::prelude::{Resource, Vec2};
 use world01_world_data::{
-    CharacterId, ComponentMassAssignment, DensityClass, MassModelDefinition, Position, WorldMap,
+    CharacterId, ComponentMassAssignment, ComponentMassClass, DensityClass,
+    HealthGeometryDefinition, MassModelDefinition, Position, WorldMap,
 };
 
 use crate::manifest::{
@@ -287,34 +288,82 @@ impl WorldCollisionGeometryCatalog {
 }
 
 impl CharacterHealthCatalog {
-    pub fn from_content(content: &RuntimeContent) -> Result<Self, CharacterHealthError> {
+    /// Maximum health per Character, from the Component areas the design names.
+    ///
+    /// A Character the definition does not name, or names with no Components,
+    /// derives no area and gets [`Self::FALLBACK_MAX_HP`]. That is deliberate: a
+    /// newly authored Character loads and plays without a design edit, and it
+    /// gains real health once someone decides which of its parts count. Only
+    /// closed shapes carry an area, so a named Component that draws an open
+    /// Contour is an error rather than a silent zero.
+    pub const FALLBACK_MAX_HP: f32 = 1.0;
+    const HAMMERER_MAX_HP: f32 = 140.0;
+
+    pub fn from_content(
+        content: &RuntimeContent,
+        definition: &HealthGeometryDefinition,
+    ) -> Result<Self, CharacterHealthError> {
         let mut areas = HashMap::new();
         for (asset_key, manifest) in content.characters() {
+            let Some(assignment) = definition.character(&asset_key.0) else {
+                continue;
+            };
             let mut total = 0.0;
-            for component in &manifest.components {
-                if component.name != "body" && component.name != "feet" {
-                    continue;
+            for name in &assignment.components {
+                let component = manifest
+                    .components
+                    .iter()
+                    .find(|component| component.name == *name)
+                    .ok_or_else(|| {
+                        CharacterHealthError(format!(
+                            "{} health geometry names unknown Component {name}",
+                            asset_key.0
+                        ))
+                    })?;
+                if component.mesh.is_none() {
+                    return Err(CharacterHealthError(format!(
+                        "{} health geometry names Component {name}, which draws an open Contour and has no area",
+                        asset_key.0
+                    )));
                 }
                 total += transformed_mesh_area(component, &manifest.components)?;
             }
+            if assignment.components.is_empty() {
+                continue;
+            }
             if !total.is_finite() || total <= 0.0 {
                 return Err(CharacterHealthError(format!(
-                    "{} is missing a positive body/feet area",
+                    "{} health geometry encloses no positive area",
                     asset_key.0
                 )));
             }
             areas.insert(asset_key.clone(), total);
         }
+        for assignment in &definition.characters {
+            if content
+                .character(&CharacterId(assignment.asset_key.clone()))
+                .is_none()
+            {
+                return Err(CharacterHealthError(format!(
+                    "health geometry names unknown Character {}",
+                    assignment.asset_key
+                )));
+            }
+        }
         let hammerer = areas
             .get(&CharacterId("hammerer".into()))
             .copied()
-            .ok_or_else(|| CharacterHealthError("missing Hammerer body area".into()))?;
-        Ok(Self {
-            max_hp: areas
-                .into_iter()
-                .map(|(id, area)| (id, area / hammerer * 140.0))
-                .collect(),
-        })
+            .ok_or_else(|| CharacterHealthError("missing Hammerer health area".into()))?;
+        let mut max_hp: HashMap<CharacterId, f32> = areas
+            .into_iter()
+            .map(|(id, area)| (id, area / hammerer * Self::HAMMERER_MAX_HP))
+            .collect();
+        for (asset_key, _) in content.characters() {
+            max_hp
+                .entry(asset_key.clone())
+                .or_insert(Self::FALLBACK_MAX_HP);
+        }
+        Ok(Self { max_hp })
     }
 
     pub fn max_hp(&self, character: &CharacterId) -> Option<f32> {
@@ -343,19 +392,22 @@ impl CharacterMassGeometryCatalog {
         let mut body = HashMap::new();
         let mut equipped_weapon = HashMap::new();
         for (character_id, manifest) in content.characters() {
+            // A Character the definition does not name carries the default
+            // classification on every one of its Components, so a newly
+            // authored Character loads without a design edit.
             let assignment = definition
                 .characters
                 .iter()
-                .find(|assignment| assignment.asset_key == character_id.0)
-                .ok_or_else(|| {
-                    CharacterMassGeometryError(format!(
-                        "mass definition is missing Character {}",
-                        character_id.0
-                    ))
-                })?;
-            let body_areas = density_areas_for_manifest(manifest, &assignment.components)?;
+                .find(|assignment| assignment.asset_key == character_id.0);
+            let assigned_components = assignment
+                .map(|assignment| assignment.components.as_slice())
+                .unwrap_or_default();
+            let body_areas = density_areas_for_manifest(manifest, assigned_components)?;
             let mut weapon_areas = DensityAreas::ZERO;
-            for weapon_key in &assignment.equipped_weapon_asset_keys {
+            let equipped = assignment
+                .map(|assignment| assignment.equipped_weapon_asset_keys.as_slice())
+                .unwrap_or_default();
+            for weapon_key in equipped {
                 if weapon_key != HAMMER_ASSET_KEY {
                     return Err(CharacterMassGeometryError(format!(
                         "{} references unsupported equipped weapon {weapon_key}",
@@ -367,10 +419,13 @@ impl CharacterMassGeometryCatalog {
             body.insert(character_id.clone(), body_areas);
             equipped_weapon.insert(character_id.clone(), weapon_areas);
         }
-        if definition.characters.len() != body.len() {
-            return Err(CharacterMassGeometryError(
-                "mass definition contains an unknown Character assignment".into(),
-            ));
+        for assignment in &definition.characters {
+            if !body.contains_key(&CharacterId(assignment.asset_key.clone())) {
+                return Err(CharacterMassGeometryError(format!(
+                    "mass definition names unknown Character {}",
+                    assignment.asset_key
+                )));
+            }
         }
         Ok(Self {
             body,
@@ -390,6 +445,13 @@ impl CharacterMassGeometryCatalog {
         self.body.keys()
     }
 }
+
+/// The class a Component carries when the design names no exception for it.
+///
+/// Medium, because it is the only default that keeps a Character's mass
+/// positive: `weightless` derives density zero, and a Character whose parts
+/// all weigh nothing derives no movement mass and no speed.
+const DEFAULT_COMPONENT_MASS_CLASS: ComponentMassClass = ComponentMassClass::Medium;
 
 fn density_areas_for_manifest(
     manifest: &RuntimeManifest,
@@ -423,15 +485,13 @@ fn density_areas_for_manifest(
         .iter()
         .filter(|component| component.mesh.is_some())
     {
-        let assignment = assignments_by_name
+        // No entry means the default class rather than an error: the design
+        // file states the exceptions, not an inventory of every drawn part.
+        let classification = assignments_by_name
             .get(component.name.as_str())
-            .ok_or_else(|| {
-                CharacterMassGeometryError(format!(
-                    "{} mass assignments are missing Component {}",
-                    manifest.asset_key, component.name
-                ))
-            })?;
-        let Some(class) = assignment.classification.density_class() else {
+            .map(|assignment| assignment.classification)
+            .unwrap_or(DEFAULT_COMPONENT_MASS_CLASS);
+        let Some(class) = classification.density_class() else {
             continue;
         };
         let area = transformed_mesh_area(component, &manifest.components).map_err(|error| {
@@ -991,12 +1051,14 @@ fn transform_point(transform: Affine2, point: [f32; 2]) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use world01_world_data::{ComponentMassAssignment, ComponentMassClass};
+    use world01_world_data::{
+        CharacterHealthAssignment, ComponentMassAssignment, ComponentMassClass,
+    };
 
     #[test]
     fn embedded_content_derives_health_and_hammer_geometry() {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
-        let health = CharacterHealthCatalog::from_content(&content)
+        let health = CharacterHealthCatalog::from_content(&content, &health_geometry())
             .expect("embedded character geometry defines health");
         let hammer = HammerCombatGeometry::from_content(&content)
             .expect("embedded Hammer frames define combat geometry");
@@ -1068,6 +1130,72 @@ mod tests {
                 .iter()
                 .all(|region| !region.component.boundary_edges().is_empty())
         );
+    }
+
+    /// What the shipped design also declares: the body and, where a Character
+    /// draws one, the feet. Built here rather than read from the design crate so
+    /// the importer is tested against a definition this test controls. Not every
+    /// Character draws feet — the Chantres and the Sorcerer do not — and naming a
+    /// part a Character does not have is an error rather than a skipped zero.
+    fn health_geometry() -> HealthGeometryDefinition {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        HealthGeometryDefinition {
+            schema_version: 1,
+            characters: content
+                .ids()
+                .iter()
+                .map(|character| {
+                    let manifest = content
+                        .character(character)
+                        .expect("the roster lists only Characters the content has");
+                    CharacterHealthAssignment {
+                        asset_key: character.0.clone(),
+                        components: ["body", "feet"]
+                            .into_iter()
+                            .filter(|name| {
+                                manifest.components.iter().any(|component| {
+                                    component.name == *name && component.mesh.is_some()
+                                })
+                            })
+                            .map(str::to_owned)
+                            .collect(),
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_character_the_health_geometry_does_not_name_falls_back_to_one_hit_point() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let mut definition = health_geometry();
+        let dropped = definition
+            .characters
+            .iter()
+            .position(|assignment| assignment.asset_key != "hammerer")
+            .expect("the roster has a Character beside the Hammerer");
+        let dropped = definition.characters.remove(dropped);
+        let health = CharacterHealthCatalog::from_content(&content, &definition)
+            .expect("an unnamed Character is not an error");
+
+        assert_eq!(
+            health.max_hp(&CharacterId(dropped.asset_key.clone())),
+            Some(CharacterHealthCatalog::FALLBACK_MAX_HP)
+        );
+        assert_eq!(
+            health.max_hp(&CharacterId("hammerer".into())),
+            Some(140.0),
+            "and the Hammerer stays the reference the others scale against"
+        );
+    }
+
+    #[test]
+    fn health_geometry_rejects_a_component_the_character_does_not_draw() {
+        let content = RuntimeContent::load_embedded().expect("embedded content is valid");
+        let mut definition = health_geometry();
+        definition.characters[0].components = vec!["shoulder_pad".to_owned()];
+
+        assert!(CharacterHealthCatalog::from_content(&content, &definition).is_err());
     }
 
     fn collision_geometry(vertices: Vec<Vec2>, indices: Vec<u32>) -> RuntimeComponentGeometry {

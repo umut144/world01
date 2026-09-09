@@ -2,7 +2,7 @@
 
 mod combat;
 mod composition;
-mod hurt;
+mod health_geometry;
 mod identity;
 mod input;
 mod life;
@@ -14,7 +14,7 @@ mod status;
 
 pub use combat::*;
 pub use composition::*;
-pub use hurt::*;
+pub use health_geometry::*;
 pub use identity::*;
 pub use input::*;
 pub use life::*;

@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "characters": [
+    {
+      "asset_key": "archerf",
+      "components": [
+        "body",
+        "feet"
+      ]
+    },
+    {
+      "asset_key": "barde",
+      "components": [
+        "body",
+        "feet"
+      ]
+    },
+    {
+      "asset_key": "chantres",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "glavier",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "hammerer",
+      "components": [
+        "body",
+        "feet"
+      ]
+    },
+    {
+      "asset_key": "mage",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "monk",
+      "components": [
+        "body",
+        "feet"
+      ]
+    },
+    {
+      "asset_key": "rogue",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "sorcerer",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "warrior",
+      "components": [
+        "body"
+      ]
+    },
+    {
+      "asset_key": "wizard",
+      "components": [
+        "body"
+      ]
+    }
+  ]
+}

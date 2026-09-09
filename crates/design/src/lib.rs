@@ -5,7 +5,9 @@ use std::{
     fmt,
     path::Path,
 };
-use world01_world_data::{CharacterId, DensityClass, MassModelDefinition, PlacementRanks};
+use world01_world_data::{
+    CharacterId, DensityClass, HealthGeometryDefinition, MassModelDefinition, PlacementRanks,
+};
 
 const HAMMER_DESIGN: &str = include_str!("../weapons/hammer.json");
 const HAMMER_STRIKE_DESIGN: &str = include_str!("../abilities/hammer_strike.json");
@@ -13,6 +15,7 @@ const HAMMERER_DESIGN: &str = include_str!("../characters/hammerer.json");
 const MAGE_DESIGN: &str = include_str!("../characters/mage.json");
 const MAGE_EYE_BEAMS_DESIGN: &str = include_str!("../abilities/mage_eye_beams.json");
 const MASS_DESIGN: &str = include_str!("../mass.json");
+const HP_DESIGN: &str = include_str!("../hp.json");
 const TRAVERSAL_DESIGN: &str = include_str!("../traversal.json");
 const WORLD01_TOML: &str = include_str!("../world01.toml");
 
@@ -205,6 +208,8 @@ pub struct GameDesign {
     pub mage: MageDesign,
     pub mage_eye_beams: MageEyeBeamsDesign,
     pub mass: MassModelDefinition,
+    /// Which authored parts of each Character its health is derived from.
+    pub health_geometry: HealthGeometryDefinition,
     /// How every Character may traverse authored world surfaces.
     pub traversal: TraversalDesign,
     /// What each playable character brings into the world, keyed by character.
@@ -572,6 +577,8 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         .map_err(|error| DesignError(format!("cannot parse MageEyeBeams design: {error}")))?;
     let mass: MassModelDefinition = serde_json::from_str(MASS_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse mass design: {error}")))?;
+    let health_geometry: HealthGeometryDefinition = serde_json::from_str(HP_DESIGN)
+        .map_err(|error| DesignError(format!("cannot parse health geometry design: {error}")))?;
     let traversal: TraversalDesign = serde_json::from_str(TRAVERSAL_DESIGN)
         .map_err(|error| DesignError(format!("cannot parse traversal design: {error}")))?;
     if !hammer.is_valid() {
@@ -590,6 +597,9 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
     }
     if !mage.is_valid() || !mage_eye_beams.is_valid() {
         return Err(DesignError("Mage eye-beam design is invalid".into()));
+    }
+    if !health_geometry.is_valid() {
+        return Err(DesignError("health geometry design is invalid".into()));
     }
     if !mass.is_valid() {
         return Err(DesignError("mass design is invalid".into()));
@@ -625,6 +635,7 @@ pub fn load_embedded() -> Result<GameDesign, DesignError> {
         mage,
         mage_eye_beams,
         mass,
+        health_geometry,
         traversal,
         characters,
     })

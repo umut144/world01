@@ -746,6 +746,16 @@ force, and returns to its compact form after the attack.
 - The Hammerer's `weapon_socket_primary` and the Hammer's `grip_primary` are
   authored attachment frames. They carry orientation as well as position so
   the Hammer rotates around its grip rather than its visual center.
+- A Character brings itself into the world. Nothing in this repository names
+  the Components a Character must draw: hurt surfaces come from authored
+  `hurt` Regions, mass carries a default class on every part the design
+  names no exception for, and `hp.json` says which parts a Character's
+  health area is taken from. A Character the health declaration does not
+  name has one hit point, so a newly authored Character loads and plays
+  before anyone has balanced it, and gains real health once someone
+  decides which of its parts count. Only closed shapes carry an area; a
+  named part that draws an open Contour is a load error, because the
+  intent was to count something.
 - The Hammer authors its attack surfaces as Regions with the `attack` role.
   The Asset is the single source of truth for what a weapon strikes with:
   there is no Component-name list in design, and a Hammer without an

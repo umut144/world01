@@ -236,24 +236,13 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
       ))
       and (if $type == "character" then
         (.attachment_frames | type == "array")
-        and ([.components[] | select(
-          (.name == "body" or .name == "head")
-          and (.mesh | type == "object")
-          and (.mesh.vertices | type == "array" and length >= 3)
-          and (.mesh.indices | type == "array" and length >= 3 and length % 3 == 0)
-        )] | length == 2)
       elif $type == "weapons" and $key == "hammer" then
         (.attachment_frames | type == "array")
         and ([.attachment_frames[] | select(.role == "grip_primary")] | length == 1)
         and ([.attachment_frames[] | select(.role == "grip_secondary")] | length == 1)
         and ([.attachment_frames[] | select(.role == "attack_point_primary")] | length == 1)
         and ([.attachment_frames[] | select(.role == "reach_limit_primary")] | length == 1)
-        and ([.components[] | select(
-          (.name == "head_mid" or .name == "head_left" or .name == "head_right")
-          and (.mesh | type == "object")
-          and (.mesh.vertices | type == "array" and length >= 3)
-          and (.mesh.indices | type == "array" and length >= 3 and length % 3 == 0)
-        )] | length == 3)
+        and ([.regions[] | select(.role == "attack")] | length >= 1)
       else true end)
     ' "$manifest_path" >/dev/null; then
     error_message "invalid PolyTools $asset_type manifest: $manifest_path"

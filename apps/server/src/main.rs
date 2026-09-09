@@ -84,7 +84,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         GroundNavigationGraph::from_world(&world_map, &world_collision, &world_collider_grid)?;
     let collision_geometry = CharacterCollisionGeometryCatalog::from_content(&content)?;
     let traversal_catalog = TraversalCatalog::from_design(&game_design.traversal)?;
-    let character_health = CharacterHealthCatalog::from_content(&content)?;
+    let character_health =
+        CharacterHealthCatalog::from_content(&content, &game_design.health_geometry)?;
     let mass_geometry = CharacterMassGeometryCatalog::from_content(&content, &game_design.mass)?;
     let character_mass = CharacterMassCatalog::from_geometry(&world_design, &mass_geometry)?;
     let character_abilities = CharacterAbilityCatalog::from_design(&game_design)?;
