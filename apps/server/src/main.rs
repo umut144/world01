@@ -21,6 +21,7 @@ use world01_simulation::{
     GroundNavigationGraph, HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep,
     SimulationAuthority, SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid,
     WorldNavigation, WorldSeparationStep, add_simulation_step, add_world_runtime_rebuild,
+    switch_buttons::add_switch_buttons,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -133,6 +134,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
     add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
+    add_switch_buttons(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,
         SimulationSet::GameplayStep.after(ServerNetworkSet::PrepareSimulation),

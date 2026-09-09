@@ -13,7 +13,7 @@ use world01_configs::load_file;
 use world01_network::{
     Client, ClientPositionCorrection, RemotePositionExtrapolation, connect_client,
 };
-use world01_simulation::WorldRuntimeState;
+use world01_simulation::{WorldRuntimeState, switch_buttons::switch_buttons};
 use world01_world_data::{
     Ankh, AnkhLayout, CharacterHealth, CharacterId, CharacterLifeState, GazeDirection, MapBridge,
     MapWaterBody, MapWaterFlow, MovementIntent, RunState, SelectedCharacter, WorldMap,
@@ -48,6 +48,9 @@ const CORRECTION_HARD_SNAP_DISTANCE_SQUARED: f32 = 1.0;
 const TERRAIN_PRESENTATION_LAYER: f32 = -10.0;
 /// Water lies on the Terrain it flooded, and a bridge lies over the water.
 const WATER_PRESENTATION_LAYER: f32 = -9.5;
+/// A provisional switch button lies on the Terrain and under the water, so a
+/// button beside a river does not float over it.
+const SWITCH_BUTTON_PRESENTATION_LAYER: f32 = -9.8;
 /// What flows in the water lies on it.
 const CURRENT_PRESENTATION_LAYER: f32 = -9.4;
 /// How the current shows itself: marks drifting down the course, in lanes
@@ -783,6 +786,30 @@ fn setup_map_visuals(
         ) {
             error!(asset_key = %prop.asset_key, %error, "cannot spawn map prop visual");
         }
+    }
+
+    // The provisional switch buttons, lit while the switch they throw is on.
+    // Everything about them is a placeholder: a square the size of the Terrain
+    // cell they are painted on, drawn from two colours rather than an Asset.
+    for button in switch_buttons(&map) {
+        let on = map.switch_is_on(&button.switch).unwrap_or_default();
+        let half = map.terrain_cell_meters() / 2.0;
+        let corners = [
+            Vec2::new(button.position.x - half, button.position.y - half),
+            Vec2::new(button.position.x + half, button.position.y - half),
+            Vec2::new(button.position.x + half, button.position.y + half),
+            Vec2::new(button.position.x - half, button.position.y + half),
+        ];
+        commands.spawn((
+            RenderedMap,
+            Mesh2d(meshes.add(bevy_flat_world_mesh(&corners, &[0, 1, 2, 0, 2, 3]))),
+            MeshMaterial2d(flat_materials.add(if on {
+                Color::srgb(0.95, 0.82, 0.25)
+            } else {
+                Color::srgb(0.32, 0.30, 0.28)
+            })),
+            Transform::from_xyz(0.0, 0.0, SWITCH_BUTTON_PRESENTATION_LAYER),
+        ));
     }
 
     // Only the water that is there is drawn. A body whose switch is off carries

@@ -16,6 +16,7 @@ mod schedule;
 mod separation;
 pub mod spatial;
 pub mod status;
+pub mod switch_buttons;
 mod world_runtime;
 
 pub use ability::{Ability, AbilityError, CharacterAbilityCatalog};
