@@ -214,7 +214,12 @@ booleans — small enough to replicate and to persist, unlike geometry.
   a main river included.
 - **World 01**: switch state, and the rule that a body whose switch is off
   carries nothing at all - no fill, no cut, the ground standing as if it had
-  never been authored.
+  never been authored. **Built 2026-09-09**, together with the cascade and the
+  stacked fills. What is left of this phase is the trigger that moves a switch
+  in play, and replicating the positions to the clients: the rule and the state
+  exist, but only a map opens them today, and a switch moved after the world was
+  derived has to re-derive the navigation graph the way a map change already
+  does.
 
 The named states this replaced (`active_in`, `inactive: dry_bed | absent`) were
 withdrawn on 2026-09-09 because nobody could author against them: the word `dry`
