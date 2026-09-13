@@ -6,8 +6,8 @@ use world01_network::{
     ClientPlayerInput, ClientWorldTemplateDebugRequest, WorldTemplateDebugPreset,
 };
 use world01_world_data::{
-    AttackIntent, DashIntent, DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput,
-    RunIntent,
+    AttackIntent, AttackSecondaryIntent, DashIntent, DeathConfirmIntent, GazeIntent,
+    MovementIntent, PlayerInput, RunIntent,
 };
 
 use crate::controller::ControllerInput;
@@ -99,11 +99,14 @@ pub fn collect_attack_input(
         return;
     }
 
-    let pressed = attack_pressed(
+    input.0.attack = AttackIntent::new(attack_pressed(
         keyboard.pressed(KeyCode::Space),
         controller_input.right_trigger_pressed(),
-    );
-    input.0.attack = AttackIntent::new(pressed);
+    ));
+    input.0.attack_secondary = AttackSecondaryIntent::new(attack_pressed(
+        keyboard.pressed(KeyCode::KeyQ),
+        controller_input.left_trigger_pressed(),
+    ));
 }
 
 pub fn collect_locomotion_input(
@@ -171,8 +174,13 @@ fn world_template_debug_preset(
     }
 }
 
-fn attack_pressed(space: bool, right_trigger: bool) -> bool {
-    space || right_trigger
+/// Both attack inputs read the same way: a key or a trigger, either on its own.
+///
+/// The two slots carry no rank. `attack_secondary` is the second ability's
+/// input, not a weaker attack, and nothing here decides which ability either
+/// one starts.
+fn attack_pressed(key: bool, trigger: bool) -> bool {
+    key || trigger
 }
 
 fn gaze_intent(direction: Vec2) -> GazeIntent {
@@ -255,9 +263,10 @@ mod tests {
     }
 
     #[test]
-    fn attack_accepts_space_and_right_trigger_equally() {
+    fn an_attack_accepts_its_key_and_its_trigger_equally() {
         assert!(attack_pressed(true, false));
         assert!(attack_pressed(false, true));
+        assert!(attack_pressed(true, true));
         assert!(!attack_pressed(false, false));
     }
 

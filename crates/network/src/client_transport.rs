@@ -15,9 +15,9 @@ use lightyear::prelude::{
 };
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
-    AnchorOccupancy, AttackIntent, CharacterId, DashIntent, DeathConfirmIntent, GazeIntent,
-    MovementIntent, PlayerInput, RunIntent, WaterSwitchPositions, WorldOccupancyRequest,
-    WorldPosition, WorldSwitchRequest,
+    AnchorOccupancy, AttackIntent, AttackSecondaryIntent, CharacterId, DashIntent,
+    DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput, RunIntent, WaterSwitchPositions,
+    WorldOccupancyRequest, WorldPosition, WorldSwitchRequest,
 };
 
 use crate::protocol::{
@@ -307,6 +307,7 @@ fn enable_controlled_input(trigger: On<Add, Controlled>, mut commands: Commands)
         MovementIntent::ZERO,
         GazeIntent::ZERO,
         AttackIntent::RELEASED,
+        AttackSecondaryIntent::RELEASED,
         RunIntent::RELEASED,
         DashIntent::RELEASED,
         DeathConfirmIntent::RELEASED,

@@ -41,3 +41,16 @@ pub struct PlayerOwner(pub u64);
 
 #[derive(Component, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelectedCharacter(pub CharacterId);
+
+/// The side an Actor fights for.
+///
+/// Identity and nothing else. A team decides what a game wants it to decide -
+/// which objectives are yours, where you return, what a bot reads as an enemy -
+/// and no rule in this crate or in the simulation reads it. In particular it
+/// grants no damage immunity: World 01 has no friendly-fire category, so a team
+/// is never a reason an otherwise valid collision does not land.
+///
+/// An Actor without one belongs to no side. That is a legal state, not a
+/// missing value, because a game without sides is the ordinary case.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TeamId(pub u8);

@@ -11,12 +11,12 @@ use world01_simulation::{
     WorldRuntimeState,
 };
 use world01_world_data::{
-    ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterLifeState,
-    DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState, GazeDirection, GazeIntent,
-    MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlacementRanks,
-    PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
-    StaminaState, StatusEffectState, WaterSwitchPositions, WorldComposition, WorldMap,
-    WorldOccupancyRequest, WorldPosition, WorldTemplateCatalog,
+    ActorId, AnchorOccupancy, AttackIntent, AttackSecondaryIntent, BodyFacing, CharacterHealth,
+    CharacterLifeState, DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState,
+    GazeDirection, GazeIntent, MovementDirection, MovementIntent, MovementMedium, MovementVelocity,
+    PlacementRanks, PlayerOwner, Position, RespawnState, RevivalState, RunIntent, RunState,
+    SelectedCharacter, StaminaState, StatusEffectState, WaterSwitchPositions, WorldComposition,
+    WorldMap, WorldOccupancyRequest, WorldPosition, WorldTemplateCatalog,
 };
 
 const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
@@ -256,6 +256,7 @@ fn accept_join_requests(
                 MovementIntent::ZERO,
                 GazeIntent::ZERO,
                 AttackIntent::RELEASED,
+                AttackSecondaryIntent::RELEASED,
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
                 DeathConfirmIntent::RELEASED,

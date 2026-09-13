@@ -11,12 +11,12 @@ use lightyear::prelude::{
 };
 use serde::{Deserialize, Serialize};
 use world01_world_data::{
-    ActorId, AnchorOccupancy, AttackIntent, BodyFacing, CharacterHealth, CharacterId,
-    CharacterLifeState, CharacterMass, DashIntent, DashState, DeathConfirmIntent,
+    ActorId, AnchorOccupancy, AttackIntent, AttackSecondaryIntent, BodyFacing, CharacterHealth,
+    CharacterId, CharacterLifeState, CharacterMass, DashIntent, DashState, DeathConfirmIntent,
     DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState, MageAttackState,
     MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlayerInput, PlayerOwner,
     RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, WaterSwitchPositions, WeaponAimState, WorldPosition,
+    StatusEffectState, TeamId, WaterSwitchPositions, WeaponAimState, WorldPosition,
 };
 
 pub const MAX_CLIENTS: usize = 5;
@@ -117,6 +117,9 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     app.component::<WaterSwitchPositions>().replicate();
     app.component::<PlayerOwner>().replicate_once();
     app.component::<SelectedCharacter>().replicate_once();
+    // A side does not change during a session, so it is sent once with the
+    // Actor's other identity rather than every snapshot.
+    app.component::<TeamId>().replicate_once();
     app.component::<CharacterMass>().replicate_once().predict();
     app.component::<MovementDirection>().replicate().predict();
     app.component::<MovementVelocity>().replicate().predict();
@@ -159,17 +162,27 @@ pub fn apply_tick_player_input(
         &mut MovementIntent,
         &mut GazeIntent,
         &mut AttackIntent,
+        &mut AttackSecondaryIntent,
         &mut RunIntent,
         &mut DashIntent,
         &mut DeathConfirmIntent,
     )>,
 ) {
-    for (action_state, mut movement, mut gaze, mut attack, mut run, mut dash, mut death_confirm) in
-        &mut players
+    for (
+        action_state,
+        mut movement,
+        mut gaze,
+        mut attack,
+        mut attack_secondary,
+        mut run,
+        mut dash,
+        mut death_confirm,
+    ) in &mut players
     {
         *movement = action_state.0.movement;
         *gaze = action_state.0.gaze;
         *attack = action_state.0.attack;
+        *attack_secondary = action_state.0.attack_secondary;
         *run = action_state.0.run;
         *dash = action_state.0.dash;
         *death_confirm = action_state.0.death_confirm;
@@ -238,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn tick_input_applies_movement_gaze_and_attack_without_timeout() {
+    fn tick_input_applies_movement_gaze_and_both_attacks_without_timeout() {
         let mut app = App::new();
         app.add_systems(FixedUpdate, apply_tick_player_input);
         let player = app
@@ -248,6 +261,7 @@ mod tests {
                     movement: MovementIntent::new(1.0, 0.0),
                     gaze: GazeIntent::new(-1.0, 0.0),
                     attack: AttackIntent::PRESSED,
+                    attack_secondary: AttackSecondaryIntent::PRESSED,
                     run: RunIntent::PRESSED,
                     dash: DashIntent::PRESSED,
                     death_confirm: DeathConfirmIntent::PRESSED,
@@ -255,6 +269,7 @@ mod tests {
                 MovementIntent::ZERO,
                 GazeIntent::ZERO,
                 AttackIntent::RELEASED,
+                AttackSecondaryIntent::RELEASED,
                 RunIntent::RELEASED,
                 DashIntent::RELEASED,
                 DeathConfirmIntent::RELEASED,
@@ -273,6 +288,10 @@ mod tests {
             app.world().get::<AttackIntent>(player),
             Some(&AttackIntent::PRESSED)
         );
+        assert_eq!(
+            app.world().get::<AttackSecondaryIntent>(player),
+            Some(&AttackSecondaryIntent::PRESSED)
+        );
         app.world_mut()
             .get_mut::<ActionState<PlayerInput>>(player)
             .expect("test player has native action state")
@@ -289,6 +308,10 @@ mod tests {
         assert_eq!(
             app.world().get::<AttackIntent>(player),
             Some(&AttackIntent::RELEASED)
+        );
+        assert_eq!(
+            app.world().get::<AttackSecondaryIntent>(player),
+            Some(&AttackSecondaryIntent::RELEASED)
         );
         assert_eq!(
             app.world().get::<RunIntent>(player),

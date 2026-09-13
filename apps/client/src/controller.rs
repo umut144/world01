@@ -48,6 +48,14 @@ impl ControllerInput {
             .any(|(_, gamepad)| gamepad.is_pressed(Button::RightTrigger2))
     }
 
+    pub fn left_trigger_pressed(&mut self) -> bool {
+        while self.gilrs.next_event().is_some() {}
+
+        self.gilrs
+            .gamepads()
+            .any(|(_, gamepad)| gamepad.is_pressed(Button::LeftTrigger2))
+    }
+
     pub fn run_pressed(&mut self) -> bool {
         self.button_pressed(Button::West)
     }

@@ -52,6 +52,27 @@ impl AttackIntent {
     }
 }
 
+/// The second attack input, beside [`AttackIntent`].
+///
+/// Which ability either intent starts is not decided here and is not sent: a
+/// system runs on the Actors carrying the state its ability needs, so the
+/// archetype decides who hears a press.
+#[derive(
+    Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
+)]
+pub struct AttackSecondaryIntent {
+    pub pressed: bool,
+}
+
+impl AttackSecondaryIntent {
+    pub const RELEASED: Self = Self { pressed: false };
+    pub const PRESSED: Self = Self { pressed: true };
+
+    pub const fn new(pressed: bool) -> Self {
+        Self { pressed }
+    }
+}
+
 #[derive(
     Component, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect, Serialize, Deserialize,
 )]
@@ -105,6 +126,7 @@ pub struct PlayerInput {
     pub movement: MovementIntent,
     pub gaze: GazeIntent,
     pub attack: AttackIntent,
+    pub attack_secondary: AttackSecondaryIntent,
     pub run: RunIntent,
     pub dash: DashIntent,
     pub death_confirm: DeathConfirmIntent,
@@ -115,6 +137,7 @@ impl PlayerInput {
         movement: MovementIntent::ZERO,
         gaze: GazeIntent::ZERO,
         attack: AttackIntent::RELEASED,
+        attack_secondary: AttackSecondaryIntent::RELEASED,
         run: RunIntent::RELEASED,
         dash: DashIntent::RELEASED,
         death_confirm: DeathConfirmIntent::RELEASED,
