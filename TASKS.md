@@ -17,13 +17,30 @@ document contains only Labyrinth-specific context, tuning, scope, and explicit
 overrides. Future agents must read World Design for cross-game work and the
 active game document for that game's deviations.
 
+## The MOBA branch
+
+This is `game/moba`, taken from `main` on 2026-09-13. The game's design lives in
+[`docs/games/moba/GAME_MOBA_DESIGN.md`](docs/games/moba/GAME_MOBA_DESIGN.md) and
+its build order and authoring gates in
+[`docs/games/moba/MOBA_ROADMAP.md`](docs/games/moba/MOBA_ROADMAP.md). Only the
+current phase appears in the table below; the phases beyond it are described in
+the roadmap so the tracker does not become a second plan.
+
+One working rule governs every commit on this branch: **a commit is either
+sandbox-generic or MOBA-owned, never both.** A generic commit compiles and
+passes its tests without anything MOBA-specific, and cherry-picks onto `main` as
+it stands. A mixed commit has to be taken apart later by someone who has
+forgotten which half was which.
+
 | ID | Area | Outcome | Status |
 |---|---|---|---|
+| `MOBA-01` | MOBA / sandbox | Phase 1: add `TeamId` to `world_data` as replicated identity, and `attack_secondary` to `PlayerInput` with its protocol registration, tick-input application, and client bindings. Neither drives behaviour yet; the wire format and the input shape change once, before anything is built on them. | Next |
+| `MOBA-02` | MOBA | Phase 2: the MOBA design overlay, a `TotemLayout` derived beside `AnkhLayout`, destructible Totems, team assignment and team-Ankh spawning, and a match that ends when a Totem of Life falls. | **Blocked on roadmap Gates A, B and C** — six Totem Assets in PolyTools, the map Instance in SceneMaker, and the synced export with its authored Prop IDs |
 | `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 | `WORLD-18` | World rendering | Evaluate a Bevy tilemap crate for the SceneMaker-authored world representation, including compatibility with the current engine-neutral map export and PolyTools asset profiles. | **Deferred for later performance work** |
 | `WORLD-19` | World rendering | Design and implement chunked tilemap rendering/streaming for large maps, with explicit chunk size, culling, update boundaries, and a migration path from the current repeated `Mesh2d` terrain presentation. | **Blocked on `WORLD-18`** |
-| `SBX-25` | Bots | Add an `ai` crate whose data-driven behaviour tree writes only intent components, running in a `SimulationSet::Decision` phase before the gameplay step, with node conditions and actions resolved by name from design files. | Planned |
-| `SBX-26` | Bots | Replicate bots as server-authoritative and interpolated rather than predicted, so `SimulationAuthority::Predicted` skips them and neither the behaviour tree nor pathfinding has to be deterministic on the client. | **Blocked on `SBX-25`** |
+| `SBX-25` | Bots | Add an `ai` crate whose data-driven behaviour tree writes only intent components, running in a `SimulationSet::Decision` phase before the gameplay step, with node conditions and actions resolved by name from design files. | Planned — built as MOBA roadmap Phase 4 |
+| `SBX-26` | Bots | Replicate bots as server-authoritative and interpolated rather than predicted, so `SimulationAuthority::Predicted` skips them and neither the behaviour tree nor pathfinding has to be deterministic on the client. | **Blocked on `SBX-25`** — built beside it in MOBA roadmap Phase 4 |
 | `SBX-27` | Client presentation | Split `presentation.rs` into separate input, character-selection and render-reconciliation plugins, and source character colours from content instead of the two hand-maintained palettes in `polytools.rs` and `presentation.rs`. | Planned |
 | `SBX-28` | Sandbox architecture | Retire the leftovers the architecture review found: the simulation tests living in `lib.rs` instead of beside their modules, the public `CharacterId` field that bypasses its validating constructor, and the server address hard-coded in the network crate. | Planned |
 | `SBX-29` | Sandbox architecture | Move the rules and catalog types out of `simulation` into a `world_rules` crate so they can be queried without the ECS systems. | **Deferred until a second consumer needs the rules without the systems, such as the `ai` crate or a balancing tool** |

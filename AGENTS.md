@@ -8,6 +8,11 @@ sandbox extension contracts. Read
 `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` in full only when the task
 concerns The Labyrinth.
 
+This is the `game/moba` branch. Also read `docs/games/moba/GAME_MOBA_DESIGN.md`
+and `docs/games/moba/MOBA_ROADMAP.md` in full: on this branch they are ordinary
+required reading rather than a per-task exception, because every task here
+either belongs to that game or has to know what it must not break.
+
 `docs/SANDBOX_VISION.md` is the persistent source of truth for sandbox purpose,
 scope boundaries, confirmed decisions, and extension principles.
 `docs/SANDBOX_TECHNICAL.md` is the persistent source of truth for the
@@ -21,7 +26,13 @@ them only when the override is explicit in the game's design document.
 `docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md` is the persistent source of
 truth for The Labyrinth's game-design intent, scope boundaries, confirmed
 decisions, open questions, and game-specific reference-art locations. It is not
-the source for shared World 01 mechanics. Preserve the distinction between
+the source for shared World 01 mechanics.
+`docs/games/moba/GAME_MOBA_DESIGN.md` is the same for the MOBA, and
+`docs/games/moba/MOBA_ROADMAP.md` records that game's build order and the
+authoring gates the developer fulfils before each phase. The design document
+says what the game is; the roadmap says when it arrives. A World-01 mechanic the
+MOBA tunes or replaces is written down as an explicit override in the design
+document, never silently changed in shared data. Preserve the distinction between
 confirmed design and ideas still under discussion. Update the appropriate
 document when the user makes a durable decision.
 
@@ -33,8 +44,9 @@ finished slice as permanent documentation.
 
 `AGENTS.md`, `docs/SANDBOX_VISION.md`, `docs/SANDBOX_TECHNICAL.md`,
 `docs/WORLD_DESIGN.md`, `docs/PLUGIN_GUIDE.md`,
-`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`, and `TASKS.md` are the
-complete canonical project-document set. Do not add
+`docs/games/labyrinth/GAME_LABYRINTH_DESIGN.md`,
+`docs/games/moba/GAME_MOBA_DESIGN.md`, `docs/games/moba/MOBA_ROADMAP.md`, and
+`TASKS.md` are the complete canonical project-document set. Do not add
 further context, planning, design, workflow, test, or architecture documents
 unless the user explicitly requests one; extend the appropriate existing
 document instead. Keep automated behavior in tests, durable sandbox-wide
