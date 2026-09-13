@@ -31,6 +31,13 @@ validation goes through the watcher:
 The developer keeps the watcher running in a terminal tab (`checkw start`). It
 serves one queue, so several sessions can share it, and it runs
 `./scripts/check.sh` on the host with the normal toolchain and warm `target/`.
+
+The wrapper is a forwarding shim: it searches upward for `dotfiles/bin/`, so the
+session needs the `dotfiles` folder connected beside this repo. Only this repo
+was connected on 2026-09-13, the search ran to `/`, and the call ended with
+**127** - not one of the runner's codes, because nothing had been checked. If
+that happens, ask for `~/dotfiles` to be connected as a second folder rather
+than looking for a fault in the repo.
 The state lives in `.agent-check/`:
 
     requests/<id>      queued request, oldest served first
@@ -135,9 +142,9 @@ below. The developer takes care of the shell and dotfiles side.
 
 ### Wishlist
 
-_Nothing open. Earlier entries — manual runs published to `.agent-check/`, a
-`checkw` helper to control the watcher, and the request queue that lets several
-sessions share one watcher — were all built on 2026-09-07._
+_Nothing open. Earlier entries — manual runs published to `.agent-check/`, a `checkw` helper to
+control the watcher, and the request queue that lets several sessions share one
+watcher — were all built on 2026-09-07._
 
 ## Deleting files from the sandbox
 
