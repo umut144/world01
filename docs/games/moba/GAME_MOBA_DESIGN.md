@@ -316,6 +316,28 @@ decision is made in the knowledge that it may be revisited. Two fields for two
 abilities is what the current iteration needs, and the project rule is to build
 that rather than the system the third and fourth ability would want.
 
+Nothing about an ability crosses the network, and it is worth writing down why,
+because it is what makes eight new abilities cheap. What goes up is the bool.
+Which ability it starts is decided by what the Actor *is*: the join handler
+attaches `HammerAttackState` or `MageAttackState` from the character's design
+profile, and `advance_hammer_attacks` and `advance_mage_attacks` query on those
+components, so the archetype decides which system sees the press. No character
+name is compared and no ability identity is sent. What comes back is the
+ability's own state component, replicated and predicted, from which the client
+derives every visible thing.
+
+That routing is also why a second input field is not quite the whole change.
+Both systems read the same `AttackIntent` today, which is unambiguous only
+because no Actor carries two ability states at once. The moment one does, a
+single press would start both. So an `Ability` also has to say which input it
+listens to, and `CharacterAbilityCatalog` attaches that binding along with the
+state - still design data, still one arm in `Ability::from_name_key`, but a
+second thing the catalog knows.
+
+The binding arrives with the abilities that need it, in Phase 5, and not with
+the input field in Phase 1. A binding with one legal value is an abstraction
+with no consumer.
+
 ## Overrides of World 01 baselines
 
 The MOBA's numbers differ from the MMORPG's. Characters move faster, hit

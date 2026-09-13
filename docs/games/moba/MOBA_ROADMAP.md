@@ -71,6 +71,13 @@ What arrives:
   keyboard and controller binding in the client. It drives nothing yet, because
   no Character has a second ability yet.
 
+What it deliberately leaves for Phase 5 is the binding that says *which* input
+an ability listens to. Both existing abilities read `AttackIntent`, which is
+unambiguous only while no Actor carries two ability states at once; the moment
+one does, a single press would start both. That is a real addition to
+`CharacterAbilityCatalog`, and it belongs with the abilities that need it
+rather than here, where it would have exactly one legal value.
+
 What it does not do: assign anyone to a team, or make the new button mean
 anything. Both are deliberate. This phase's value is that the wire format and
 the input shape change once, early, while there is nothing built on top of them
@@ -284,7 +291,10 @@ sync run that embeds them.
 - The eight abilities as data over those shapes, registered through the
   existing `Ability::from_name_key` arm, which is already the one place a
   design name becomes executable behaviour.
-- The second attack input from Phase 1 wired to the second ability.
+- The input binding on `Ability`: which of the two attack intents an ability
+  listens to, attached by `CharacterAbilityCatalog` beside the state it already
+  attaches. This is what stops one press from starting both of a Character's
+  abilities, and it is the reason Phase 1 could add the input field without it.
 - Bots taught that they have two abilities and a crude rule for choosing —
   reach and cost. Choosing well is Phase 7.
 
