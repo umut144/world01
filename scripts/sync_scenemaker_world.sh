@@ -2,7 +2,8 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-source_directory="${SCENEMAKER_EXPORTS:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01/exports}"
+# SceneMaker keeps its Scenes per Game: workspaces/<workspace>/<game>/exports.
+source_directory="${SCENEMAKER_EXPORTS:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01/sandbox/exports}"
 asset_catalog="$project_root/assets/catalog.json"
 destination_directory="$project_root/assets/maps"
 staging_directory=""

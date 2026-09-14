@@ -174,7 +174,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
     --arg type "$asset_type" \
     --slurpfile catalog "$source_catalog" \
     '
-      .schema_version == 21
+      .schema_version == 22
       and .asset_key == $key
       and .asset_type == $type
       and (.asset_id | type == "string" and length > 0)
