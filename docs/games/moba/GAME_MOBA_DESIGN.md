@@ -102,7 +102,11 @@ A Character at the World-01 Hammerer's `0.6 m/s` needs over three minutes to
 cross `135 m`, which is most of why the MOBA overrides the movement
 normalization at all. And fifty Trees over `13 500` cells is sparse cover, so
 what separates the lanes today is mostly the open grass between them rather
-than anything blocking sight or movement.
+than anything blocking sight or movement. That is deliberate for a first
+iteration: the Trees are there to give navigation and bots something to walk
+around while the map is tested. Denser cover, hills, ramps, and tunnels into a
+cave beneath are later authoring, and none of them changes anything written
+here.
 
 ### How the runtime learns what stands where
 
@@ -115,19 +119,52 @@ from a name convention or a position. Three Totem Assets exist -
 `totem_of_life`, `totem_of_mana`, `totem_of_time` - and a map places each twice,
 once per side. The Assets carry no team.
 
-Whose it is comes from the game's design data. `crates/design/games/moba.toml`
-lists, per map and per team, the SceneMaker **`instance_id`** of every Totem and
-Ankh that team owns. That is the identity the runtime already uses for a placed
-Prop: it is unique within a Scene, and Template composition already namespaces
-and collision-checks it as `template.<anchor_id>.<template_scene_id>.<instance_id>`.
+Whose it is comes from the game's design data. One file per map, beside the
+other per-thing design data and in the same shape: `schema_version` and a list,
+as JSON.
+
+```
+crates/design/games/moba/maps/map01.json
+```
+
+It lists only the Props that belong to a side, by SceneMaker **`instance_id`**,
+with a team number. The numbers are `0` and `1` and mean nothing on their own:
+the game maps them onto West and East. A design file should not have to know
+what a side is called.
 
 The file says nothing else. Not the Asset, because the map already says it; not
 the position, because the map already says that too. A coordinate copied into
 design data is a second source of truth that goes stale the first time a Prop
 moves, and a stale coordinate is exactly the kind of forgotten data the
-World-01 no-fallbacks principle exists to keep out of behaviour. Positions do
-appear in the file as **comments**, so the assignment can be read without
-opening a two-megabyte export - and a comment cannot be believed by code.
+World-01 no-fallbacks principle exists to keep out of behaviour. Which Prop a
+line refers to is looked up in SceneMaker, where the author is already standing
+when they decide a side.
+
+### What this asks of an instance_id
+
+The whole arrangement rests on one property, and it is worth stating because it
+is a promise SceneMaker has to make rather than something world01 can check:
+
+**An `instance_id` is never reused.** Once a number has named a Prop, no later
+Prop in that Scene may carry it again, even after the first is deleted.
+
+Uniqueness among living Props is not enough. A reference that lives in another
+repository outlives the Prop it names, and the failure that matters is not a
+dangling reference - that one is loud, and loading refuses it - but a reference
+that silently resolves to a *different* Prop than the one the author meant. A
+Totem of Life that quietly became the other team's is not a crash; it is a game
+that plays wrong.
+
+Non-reuse needs no tombstones and no long identifiers. It needs an allocation
+counter that is stored with the Scene and never counts down - not a scan for the
+lowest free number, and never an index into an array. The width of the number is
+the least important part of it: a four-digit counter that never repeats is safer
+than a ten-digit one that does.
+
+When a reference does dangle, the error names every `instance_id` the map
+actually contains, so the author can see what became of it without opening the
+editor. That is the diagnostic a deletion record would have provided, at no
+standing cost.
 
 Loading fails in both directions: an entry naming an instance the map does not
 contain, and a Totem or Ankh in the map that no entry names. A forgotten Totem
@@ -377,7 +414,7 @@ The file's expected contents, by area:
 
 | Area | What the MOBA overrides |
 |---|---|
-| Movement | The normalization speed the mass curve derives from. The curve itself, the exponent, and the relative ordering of Characters are World 01's and are not touched. |
+| Movement | One multiplier over each Character's World-01 derived normal speed, `2.1` by default for every Character and overridable per Character. The mass curve, its exponent and the relative ordering of Characters stay World 01's. The MOBA is the fastest game in World 01 and the sandbox, which becomes the MMORPG, is the slowest; one factor is what that sentence costs. |
 | Health | The MaxHP normalization reference. The area-based derivation is unchanged, so re-authoring a Character's body still changes its health the same way. |
 | Damage | Per-ability damage values. |
 | Life | Respawn health percentage, minimum and maximum respawn seconds. |
@@ -386,10 +423,15 @@ The file's expected contents, by area:
 | Creeps | Wave cadence, creep health, creep damage, lane waypoints. |
 | Teams | Which authored Prop IDs belong to West and to East. |
 
-Scaling the *reference* rather than each Character's value is deliberate. The
-World-01 mass curve decides that the Rogue is the fastest and the Hammerer the
-slowest; the MOBA decides how fast the whole game is. Overriding one number
-keeps both facts true and keeps them in one place each.
+Multiplying the derived speed rather than restating it per Character is
+deliberate. The World-01 mass curve decides that the Rogue is the fastest and
+the Hammerer the slowest; the MOBA decides how fast the whole game is. A factor
+keeps both facts true, keeps each in one place, and lets a single Character
+deviate later without anyone having to retype the other four.
+
+At `2.1` the Hammerer walks `1.26 m/s`, runs `1.89 m/s` and dashes at
+`2.52 m/s`. Crossing `map01`'s `135 m` takes about `107` seconds at a walk and
+`71` running, against more than three minutes at the World-01 baseline.
 
 ## Bots
 
@@ -549,5 +591,12 @@ hand later, by someone who has forgotten which half was which.
 - **Whether two attack inputs survive.** If the MOBA grows past two abilities
   per Character, `PlayerInput` gains slots and this decision is revisited
   deliberately rather than by accretion.
+- **Whether an Ankh belongs to a team.** The map file names only Totems today,
+  on the reasoning that a Totem is the only Prop a side owns. But respawn has to
+  choose an Ankh, and World 01 chooses the one nearest the death position, which
+  in a MOBA is how a dead Character reappears inside the enemy base. Either the
+  Ankhs join the file - four more lines, the same shape - or the MOBA needs
+  another rule for which Ankh is yours, and every such rule so far has turned
+  out to be a guess about the map.
 - **Whether creeps should be attackable by their own team.** Follows from the
   friendly-fire question and probably does not deserve a separate answer.
