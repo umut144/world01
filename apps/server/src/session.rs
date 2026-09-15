@@ -308,15 +308,17 @@ fn totem_of_life_position(totems: &TotemLayout, team: TeamId) -> Option<WorldPos
     totems
         .totems
         .iter()
-        .find(|(totem, _)| totem.kind == TotemKind::Life && totem.team == team)
-        .map(|(_, position)| *position)
+        .find(|placed| placed.totem.kind == TotemKind::Life && placed.totem.team == team)
+        .map(|placed| placed.position)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use world01_content::WorldCollisionGeometryCatalog;
-    use world01_simulation::moba::{MobaMapOwnership, Totem, TotemLayout};
+    use world01_simulation::moba::{
+        MobaMapOwnership, MobaTotemHealthDesign, PlacedTotem, Totem, TotemLayout,
+    };
     use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
         AnkhLayout, PlacementRanks, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
@@ -349,27 +351,30 @@ mod tests {
     fn a_team_spawns_at_its_own_totem_of_life() {
         let totems = TotemLayout {
             totems: vec![
-                (
-                    Totem {
+                PlacedTotem {
+                    totem: Totem {
                         kind: TotemKind::Life,
                         team: TeamId(0),
                     },
-                    WorldPosition::new(-10.0, 0.0, 1.0),
-                ),
-                (
-                    Totem {
+                    position: WorldPosition::new(-10.0, 0.0, 1.0),
+                    max_hp: 2000.0,
+                },
+                PlacedTotem {
+                    totem: Totem {
                         kind: TotemKind::Mana,
                         team: TeamId(0),
                     },
-                    WorldPosition::new(-8.0, 0.0, 1.0),
-                ),
-                (
-                    Totem {
+                    position: WorldPosition::new(-8.0, 0.0, 1.0),
+                    max_hp: 1000.0,
+                },
+                PlacedTotem {
+                    totem: Totem {
                         kind: TotemKind::Life,
                         team: TeamId(1),
                     },
-                    WorldPosition::new(10.0, 0.0, 1.0),
-                ),
+                    position: WorldPosition::new(10.0, 0.0, 1.0),
+                    max_hp: 2000.0,
+                },
             ],
         };
 
@@ -552,7 +557,9 @@ mod tests {
         let ankhs = AnkhLayout::from_map(&map);
         let moba_ownership =
             MobaMapOwnership::load_embedded().expect("embedded map ownership is valid");
-        let totems = TotemLayout::from_map(&map, &moba_ownership)
+        let moba_totem_health =
+            MobaTotemHealthDesign::load_embedded().expect("embedded Totem health design is valid");
+        let totems = TotemLayout::from_map(&map, &moba_ownership, &moba_totem_health)
             .expect("the embedded overworld places no Totem");
 
         let mut app = App::new();
@@ -561,6 +568,7 @@ mod tests {
             .insert_resource(templates.clone())
             .insert_resource(ranks.clone())
             .insert_resource(moba_ownership)
+            .insert_resource(moba_totem_health)
             .insert_resource(map)
             .insert_resource(collision)
             .insert_resource(grid)

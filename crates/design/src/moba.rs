@@ -161,7 +161,16 @@ pub struct MobaTotemDesign {
 
 impl MobaTotemDesign {
     pub fn load_embedded() -> Result<Self, DesignError> {
-        let design: Self = serde_json::from_str(TOTEM_DESIGN)
+        Self::parse(TOTEM_DESIGN)
+    }
+
+    /// Parses and validates a Totem-health source that is not the embedded
+    /// one.
+    ///
+    /// Public beyond `load_embedded` so a consumer can build a design from
+    /// Totem-health JSON it did not embed itself - a test fixture, today.
+    pub fn parse(source: &str) -> Result<Self, DesignError> {
+        let design: Self = serde_json::from_str(source)
             .map_err(|error| DesignError(format!("cannot parse Totem design: {error}")))?;
         design.validate()?;
         Ok(design)

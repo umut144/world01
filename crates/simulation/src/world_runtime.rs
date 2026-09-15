@@ -7,7 +7,7 @@ use world01_world_data::{
     WorldSwitchRequest, WorldTemplateCatalog,
 };
 
-use crate::moba::{MobaMapOwnership, TotemLayout, TotemLayoutError};
+use crate::moba::{MobaMapOwnership, MobaTotemHealthDesign, TotemLayout, TotemLayoutError};
 use crate::navigation::{GroundNavigationError, GroundNavigationGraph};
 use crate::{SimulationSet, WorldColliderGrid};
 
@@ -123,6 +123,7 @@ impl DerivedWorldResources {
         map: &WorldMap,
         navigation: WorldNavigation,
         moba_ownership: &MobaMapOwnership,
+        moba_totem_health: &MobaTotemHealthDesign,
     ) -> Result<Self, WorldRuntimeBuildError> {
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(content, map)
             .map_err(WorldRuntimeBuildError::Collision)?;
@@ -131,8 +132,8 @@ impl DerivedWorldResources {
         if ankhs.positions.is_empty() {
             return Err(WorldRuntimeBuildError::MissingAnkh);
         }
-        let totems =
-            TotemLayout::from_map(map, moba_ownership).map_err(WorldRuntimeBuildError::Totem)?;
+        let totems = TotemLayout::from_map(map, moba_ownership, moba_totem_health)
+            .map_err(WorldRuntimeBuildError::Totem)?;
         let navigation = match navigation {
             WorldNavigation::Derived => Some(
                 GroundNavigationGraph::from_world(map, &collision, &grid)
@@ -159,6 +160,7 @@ fn rebuild_world_runtime(
     templates: Res<WorldTemplateCatalog>,
     ranks: Res<PlacementRanks>,
     moba_ownership: Res<MobaMapOwnership>,
+    moba_totem_health: Res<MobaTotemHealthDesign>,
     mut composition: ResMut<WorldComposition>,
     mut map: ResMut<WorldMap>,
     mut collision: ResMut<WorldCollisionGeometryCatalog>,
@@ -229,6 +231,7 @@ fn rebuild_world_runtime(
         source.current_map(),
         *navigation,
         &moba_ownership,
+        &moba_totem_health,
     ) {
         Ok(derived) => derived,
         Err(error) => {
@@ -266,7 +269,7 @@ fn reject_generation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::moba::MobaMapOwnership;
+    use crate::moba::{MobaMapOwnership, MobaTotemHealthDesign};
     use crate::{WorldSeparationStep, separate_characters_from_world};
     use world01_configs::load_embedded;
     use world01_content::CharacterCollisionGeometryCatalog;
@@ -275,6 +278,10 @@ mod tests {
 
     fn moba_ownership() -> MobaMapOwnership {
         MobaMapOwnership::load_embedded().expect("embedded map ownership is valid")
+    }
+
+    fn moba_totem_health() -> MobaTotemHealthDesign {
+        MobaTotemHealthDesign::load_embedded().expect("embedded Totem health design is valid")
     }
 
     #[derive(Resource, Debug, Default)]
@@ -325,7 +332,7 @@ mod tests {
             .expect("startup collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
-        let totems = TotemLayout::from_map(&map, &moba_ownership())
+        let totems = TotemLayout::from_map(&map, &moba_ownership(), &moba_totem_health())
             .expect("the embedded overworld places no Totem");
         EmbeddedWorld {
             content,
@@ -349,6 +356,7 @@ mod tests {
             .insert_resource(world.templates)
             .insert_resource(world.ranks)
             .insert_resource(moba_ownership())
+            .insert_resource(moba_totem_health())
             .insert_resource(world.composition)
             .insert_resource(world.map)
             .insert_resource(world.collision)
@@ -506,7 +514,7 @@ mod tests {
             .expect("initial collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
-        let totems = TotemLayout::from_map(&map, &moba_ownership())
+        let totems = TotemLayout::from_map(&map, &moba_ownership(), &moba_totem_health())
             .expect("this synthetic Instance places no Totem");
         let initial_composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the replica composition is valid");
@@ -515,6 +523,7 @@ mod tests {
             .insert_resource(templates)
             .insert_resource(ranks)
             .insert_resource(moba_ownership())
+            .insert_resource(moba_totem_health())
             .insert_resource(initial_composition.clone())
             .insert_resource(map.clone())
             .insert_resource(collision.clone())

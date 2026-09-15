@@ -8,8 +8,10 @@
 //! own because the MOBA has none yet; the boundary this module keeps is
 //! about commits, not about files.
 
+mod health;
 mod ownership;
 mod totem;
 
+pub use health::MobaTotemHealthDesign;
 pub use ownership::MobaMapOwnership;
-pub use totem::{Totem, TotemKind, TotemLayout, TotemLayoutError};
+pub use totem::{PlacedTotem, Totem, TotemKind, TotemLayout, TotemLayoutError};

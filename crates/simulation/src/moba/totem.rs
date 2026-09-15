@@ -1,9 +1,11 @@
-//! Which Totems stand on the composed map, and whose each one is.
+//! Which Totems stand on the composed map, whose each one is, and what it
+//! is worth.
 //!
 //! A Totem's kind comes from the PolyTools Asset it was placed from; whose it
-//! is comes from the MOBA's map-ownership design data. Both facts have to
-//! agree with what the map actually places, which is why building this fails
-//! loudly in both directions - see
+//! is comes from the MOBA's map-ownership design data; what it is worth
+//! comes from the MOBA's Totem-health design data. All three have to agree
+//! with what the map actually places, which is why building this fails
+//! loudly in every direction a stale reference can fail in - see
 //! `docs/games/moba/GAME_MOBA_DESIGN.md#how-the-runtime-learns-what-stands-where`.
 
 use std::{collections::HashSet, error::Error, fmt};
@@ -11,7 +13,7 @@ use std::{collections::HashSet, error::Error, fmt};
 use bevy::prelude::{Component, Resource};
 use world01_world_data::{TeamId, WorldMap, WorldPosition};
 
-use super::MobaMapOwnership;
+use super::{MobaMapOwnership, MobaTotemHealthDesign};
 
 /// The three kinds of Totem the MOBA places, one PolyTools Asset each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,24 +39,34 @@ impl TotemKind {
     }
 }
 
-/// One placed Totem: which kind it is and which side it defends.
+/// One placed Totem's identity: which kind it is and which side it defends.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct Totem {
     pub kind: TotemKind,
     pub team: TeamId,
 }
 
-/// Every Totem on the composed map, positioned and assigned to a side.
+/// One Totem as the composed map and the MOBA's design data agree it stands:
+/// its identity, where it is, and how much it can take.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlacedTotem {
+    pub totem: Totem,
+    pub position: WorldPosition,
+    pub max_hp: f32,
+}
+
+/// Every Totem on the composed map, positioned, assigned to a side, and
+/// given its health.
 ///
 /// Empty for a map that places no Totem at all - an ordinary World-01 map
 /// carries none, and that is not an error. Only once a map places at least
 /// one Totem does this type have anything to check.
 #[derive(Resource, Debug, Clone, Default, PartialEq)]
 pub struct TotemLayout {
-    pub totems: Vec<(Totem, WorldPosition)>,
+    pub totems: Vec<PlacedTotem>,
 }
 
-/// Why a map's Totems and its ownership file disagree.
+/// Why a map's Totems, its ownership file, or its health file disagree.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TotemLayoutError {
     /// The map places a Totem and the MOBA has no ownership file for its
@@ -67,6 +79,12 @@ pub enum TotemLayoutError {
     Dangling {
         instance_id: String,
         placed_totems: Vec<String>,
+    },
+    /// A Totem stands on the map and the Totem-health design names no MaxHP
+    /// for its Asset key.
+    NoHealthForKind {
+        instance_id: String,
+        asset_key: String,
     },
 }
 
@@ -97,6 +115,14 @@ impl fmt::Display for TotemLayoutError {
                     formatter.write_str(&placed_totems.join(", "))
                 }
             }
+            Self::NoHealthForKind {
+                instance_id,
+                asset_key,
+            } => write!(
+                formatter,
+                "Totem '{instance_id}' is placed from Asset '{asset_key}', which the Totem-health \
+                 design names no MaxHP for"
+            ),
         }
     }
 }
@@ -108,12 +134,14 @@ impl TotemLayout {
     /// fixed-tick world transaction that already derives `AnkhLayout`, so a
     /// Totem survives a recomposition the way an Ankh does.
     ///
-    /// Fails in both directions a stale reference can fail in: a Totem the
-    /// map places that the ownership file never names, and an ownership
-    /// entry that names no Totem the map actually places.
+    /// Fails in every direction a stale or incomplete design can fail in: a
+    /// Totem the map places that the ownership file never names, an
+    /// ownership entry that names no Totem the map actually places, and a
+    /// Totem whose Asset the Totem-health design says nothing about.
     pub fn from_map(
         map: &WorldMap,
         ownership: &MobaMapOwnership,
+        health: &MobaTotemHealthDesign,
     ) -> Result<Self, TotemLayoutError> {
         let totem_placements: Vec<_> = map
             .props()
@@ -142,15 +170,22 @@ impl TotemLayout {
                     instance_id: placement.instance_id.clone(),
                 });
             };
+            let Some(max_hp) = health.max_hp(&placement.asset_key) else {
+                return Err(TotemLayoutError::NoHealthForKind {
+                    instance_id: placement.instance_id.clone(),
+                    asset_key: placement.asset_key.clone(),
+                });
+            };
             placed_instances.insert(placement.instance_id.as_str());
-            totems.push((
-                Totem { kind: *kind, team },
-                WorldPosition::new(
+            totems.push(PlacedTotem {
+                totem: Totem { kind: *kind, team },
+                position: WorldPosition::new(
                     placement.position.x,
                     placement.position.y,
                     placement.elevation_meters,
                 ),
-            ));
+                max_hp,
+            });
         }
 
         if let Some(dangling) = design
@@ -255,22 +290,37 @@ mod tests {
             .expect("the synthetic ownership file is valid")
     }
 
+    fn health(body: &str) -> MobaTotemHealthDesign {
+        let source = format!("{{\"schema_version\":1,\"totems\":[{body}]}}");
+        MobaTotemHealthDesign::from_sources(&source).expect("the synthetic health file is valid")
+    }
+
+    fn full_health() -> MobaTotemHealthDesign {
+        health(
+            "{\"asset_key\":\"totem_of_life\",\"max_hp\":2000.0},\
+             {\"asset_key\":\"totem_of_mana\",\"max_hp\":1000.0},\
+             {\"asset_key\":\"totem_of_time\",\"max_hp\":1000.0}",
+        )
+    }
+
     #[test]
-    fn a_map_without_a_totem_needs_no_ownership_file_at_all() {
+    fn a_map_without_a_totem_needs_no_ownership_or_health_file_at_all() {
         let source = synthetic_map(SCENE_ID, "");
         let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
         let ownership = MobaMapOwnership::from_sources([
-            "{\"schema_version\":1,\"scene_id\":\"some_other_map\",\"props\":             [{\"instance_id\":\"totem_of_life_0001\",\"team\":0}]}",
+            "{\"schema_version\":1,\"scene_id\":\"some_other_map\",\"props\":\
+             [{\"instance_id\":\"totem_of_life_0001\",\"team\":0}]}",
         ])
         .expect("the synthetic ownership file is valid");
 
-        let layout = TotemLayout::from_map(&map, &ownership).expect("no Totem, nothing to check");
+        let layout = TotemLayout::from_map(&map, &ownership, &full_health())
+            .expect("no Totem, nothing to check");
 
         assert!(layout.totems.is_empty());
     }
 
     #[test]
-    fn a_totem_the_file_owns_carries_its_kind_team_and_position() {
+    fn a_totem_the_files_own_carries_its_kind_team_position_and_health() {
         let entries = totem("totem_of_life_0001", "totem_of_life", 64, 96);
         let source = synthetic_map(SCENE_ID, &entries);
         let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
@@ -286,28 +336,31 @@ mod tests {
         );
         let ownership = ownership("{\"instance_id\":\"totem_of_life_0001\",\"team\":0}");
 
-        let layout = TotemLayout::from_map(&map, &ownership).expect("the Totem is owned");
+        let layout = TotemLayout::from_map(&map, &ownership, &full_health())
+            .expect("the Totem is owned and priced");
 
         assert_eq!(
             layout.totems,
-            [(
-                Totem {
+            [PlacedTotem {
+                totem: Totem {
                     kind: TotemKind::Life,
                     team: TeamId(0)
                 },
-                expected_position,
-            )]
+                position: expected_position,
+                max_hp: 2000.0,
+            }]
         );
     }
 
     #[test]
-    fn a_totem_the_file_never_names_is_refused() {
+    fn a_totem_the_ownership_file_never_names_is_refused() {
         let entries = totem("totem_of_mana_0001", "totem_of_mana", 64, 96);
         let source = synthetic_map(SCENE_ID, &entries);
         let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
         let ownership = ownership("{\"instance_id\":\"totem_of_time_0001\",\"team\":0}");
 
-        let error = TotemLayout::from_map(&map, &ownership).expect_err("the Totem is unowned");
+        let error = TotemLayout::from_map(&map, &ownership, &full_health())
+            .expect_err("the Totem is unowned");
 
         assert_eq!(
             error,
@@ -318,15 +371,37 @@ mod tests {
     }
 
     #[test]
+    fn a_totem_the_health_file_never_names_is_refused() {
+        let entries = totem("totem_of_mana_0001", "totem_of_mana", 64, 96);
+        let source = synthetic_map(SCENE_ID, &entries);
+        let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
+        let ownership = ownership("{\"instance_id\":\"totem_of_mana_0001\",\"team\":0}");
+        let health = health("{\"asset_key\":\"totem_of_life\",\"max_hp\":2000.0}");
+
+        let error = TotemLayout::from_map(&map, &ownership, &health)
+            .expect_err("the Totem has no listed MaxHP");
+
+        assert_eq!(
+            error,
+            TotemLayoutError::NoHealthForKind {
+                instance_id: "totem_of_mana_0001".to_owned(),
+                asset_key: "totem_of_mana".to_owned(),
+            }
+        );
+    }
+
+    #[test]
     fn a_file_entry_naming_no_placed_totem_is_refused() {
         let entries = totem("totem_of_time_0001", "totem_of_time", 64, 96);
         let source = synthetic_map(SCENE_ID, &entries);
         let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
         let ownership = ownership(
-            "{\"instance_id\":\"totem_of_time_0001\",\"team\":0},             {\"instance_id\":\"totem_of_life_0002\",\"team\":1}",
+            "{\"instance_id\":\"totem_of_time_0001\",\"team\":0},\
+             {\"instance_id\":\"totem_of_life_0002\",\"team\":1}",
         );
 
-        let error = TotemLayout::from_map(&map, &ownership).expect_err("one entry dangles");
+        let error =
+            TotemLayout::from_map(&map, &ownership, &full_health()).expect_err("one entry dangles");
 
         assert_eq!(
             error,
@@ -343,11 +418,13 @@ mod tests {
         let source = synthetic_map(SCENE_ID, &entries);
         let map = WorldMap::from_source(&source, SCENE_ID).expect("the synthetic export is valid");
         let ownership = MobaMapOwnership::from_sources([
-            "{\"schema_version\":1,\"scene_id\":\"some_other_map\",\"props\":             [{\"instance_id\":\"totem_of_life_0001\",\"team\":0}]}",
+            "{\"schema_version\":1,\"scene_id\":\"some_other_map\",\"props\":\
+             [{\"instance_id\":\"totem_of_life_0001\",\"team\":0}]}",
         ])
         .expect("the synthetic ownership file is valid");
 
-        let error = TotemLayout::from_map(&map, &ownership).expect_err("no ownership file");
+        let error =
+            TotemLayout::from_map(&map, &ownership, &full_health()).expect_err("no ownership file");
 
         assert_eq!(
             error,
