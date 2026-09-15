@@ -3,7 +3,14 @@ set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 # SceneMaker keeps its Scenes per Game: workspaces/<workspace>/<game>/exports.
-source_directory="${SCENEMAKER_EXPORTS:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01/sandbox/exports}"
+# A workspace holds several Games - world01 holds sandbox and moba - while the
+# runtime has one embedded map catalog and picks an Instance by its scene ID.
+# So the sync reads every Game of the workspace rather than one named Game:
+# naming one would mean a second Game's Scenes could only arrive by replacing
+# the first Game's, and this script replaces the whole destination directory.
+# SCENEMAKER_EXPORTS overrides the search with an explicit colon-separated list
+# of export directories.
+scenemaker_workspace="${SCENEMAKER_WORKSPACE:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01}"
 asset_catalog="$project_root/assets/catalog.json"
 destination_directory="$project_root/assets/maps"
 staging_directory=""
@@ -29,7 +36,21 @@ cleanup() {
 trap cleanup EXIT
 
 command -v jq >/dev/null 2>&1 || fail 'jq is required.'
-[[ -d "$source_directory" ]] || fail "export directory not found: $source_directory"
+source_directories=()
+if [[ -n "${SCENEMAKER_EXPORTS:-}" ]]; then
+  while IFS= read -r source_directory; do
+    [[ -z "$source_directory" ]] || source_directories+=("$source_directory")
+  done < <(printf '%s\n' "$SCENEMAKER_EXPORTS" | tr ':' '\n')
+else
+  [[ -d "$scenemaker_workspace" ]] || fail "SceneMaker workspace not found: $scenemaker_workspace"
+  while IFS= read -r source_directory; do
+    source_directories+=("$source_directory")
+  done < <(find "$scenemaker_workspace" -mindepth 2 -maxdepth 2 -type d -name exports -print | LC_ALL=C sort)
+fi
+[[ ${#source_directories[@]} -gt 0 ]] || fail "no Game exports directory under: $scenemaker_workspace"
+for source_directory in "${source_directories[@]}"; do
+  [[ -d "$source_directory" ]] || fail "export directory not found: $source_directory"
+done
 [[ -f "$asset_catalog" ]] || fail "world01 asset catalog not found: $asset_catalog"
 
 # The Keys that only exist as members of a Palette. A map names the Palette, so
@@ -48,10 +69,23 @@ while IFS= read -r asset_manifest; do
 done < <(find "$project_root/assets" -type f -name 'manifest.json' | LC_ALL=C sort)
 
 source_exports=()
-while IFS= read -r source_export; do
-  source_exports+=("$source_export")
-done < <(find "$source_directory" -maxdepth 1 -type f -name '*.scene_export.json' -print | LC_ALL=C sort)
-[[ ${#source_exports[@]} -gt 0 ]] || fail "no SceneMaker exports found in: $source_directory"
+for source_directory in "${source_directories[@]}"; do
+  while IFS= read -r source_export; do
+    source_exports+=("$source_export")
+  done < <(find "$source_directory" -maxdepth 1 -type f -name '*.scene_export.json' -print | LC_ALL=C sort)
+done
+[[ ${#source_exports[@]} -gt 0 ]] || fail "no SceneMaker exports found in: ${source_directories[*]}"
+
+# Scenes are staged and later read by their file name, so two Games exporting
+# the same name would silently leave one of them out. The scene-ID check below
+# would not see it: the loser never reaches the staging directory.
+duplicate_export_names="$(
+  for source_export in "${source_exports[@]}"; do
+    basename "$source_export"
+  done | LC_ALL=C sort | uniq -d
+)"
+[[ -z "$duplicate_export_names" ]] \
+  || fail "two Games export the same file name: $duplicate_export_names"
 
 staging_directory="$(mktemp -d "$project_root/assets/.maps.XXXXXX")"
 for source_export in "${source_exports[@]}"; do
@@ -378,4 +412,5 @@ if [[ -n "$backup_directory" ]]; then
 fi
 trap - EXIT
 
-printf 'SCENEMAKER -> WORLD01 SYNC SUCCESS (%s exports)\n' "${#source_exports[@]}"
+printf 'SCENEMAKER -> WORLD01 SYNC SUCCESS (%s exports from %s Games)\n' \
+  "${#source_exports[@]}" "${#source_directories[@]}"
