@@ -795,6 +795,29 @@ impl PlacementRanks {
         self.ranks.get(asset_key).copied()
     }
 
+    /// Adds more entries to this table, refusing to touch any Asset key it
+    /// already ranks.
+    ///
+    /// An overlay may only *add* Placement Ranks, never override a scalar
+    /// value the base table already claims - the base table is what an
+    /// overlay's author cannot see all of, so silently replacing one of its
+    /// entries would be a decision the overlay never actually made.
+    pub fn extended_with<I, S>(mut self, entries: I) -> Result<Self, WorldMapError>
+    where
+        I: IntoIterator<Item = (S, u32)>,
+        S: Into<String>,
+    {
+        for (asset_key, rank) in entries {
+            let asset_key = asset_key.into();
+            if asset_key.is_empty() || self.ranks.insert(asset_key.clone(), rank).is_some() {
+                return Err(WorldMapError::new(format!(
+                    "Placement Rank Asset key '{asset_key}' is empty or duplicated"
+                )));
+            }
+        }
+        Ok(self)
+    }
+
     /// Ensures design ranks cover one Instance and every Template currently
     /// available to it. Extra future-facing rank entries remain valid.
     pub fn validate_for(
@@ -4981,6 +5004,48 @@ mod tests {
                 .expect("the catalog is valid")
                 .rank("grass"),
             Some(10)
+        );
+    }
+
+    #[test]
+    fn extended_with_adds_new_entries_without_disturbing_the_base_table() {
+        let base = PlacementRanks::from_entries([("grass", 10), ("tree", 20)])
+            .expect("the base table is valid");
+
+        let extended = base
+            .extended_with([("totem_of_life", 200)])
+            .expect("adding a new Asset key is allowed");
+
+        assert_eq!(extended.rank("grass"), Some(10));
+        assert_eq!(extended.rank("tree"), Some(20));
+        assert_eq!(extended.rank("totem_of_life"), Some(200));
+    }
+
+    #[test]
+    fn extended_with_refuses_to_override_a_base_entry() {
+        let base = PlacementRanks::from_entries([("grass", 10)]).expect("the base table is valid");
+
+        let error = base
+            .extended_with([("grass", 999)])
+            .expect_err("an overlay may add ranks but never override one");
+
+        assert!(error.to_string().contains("grass"));
+    }
+
+    #[test]
+    fn extended_with_refuses_an_empty_or_duplicated_key() {
+        let base = PlacementRanks::from_entries([("grass", 10)]).expect("the base table is valid");
+
+        assert!(
+            base.clone()
+                .extended_with(std::iter::empty::<(&str, u32)>())
+                .is_ok(),
+            "adding nothing at all is not an error"
+        );
+        assert!(base.clone().extended_with([("", 1)]).is_err());
+        assert!(
+            base.extended_with([("totem_of_life", 1), ("totem_of_life", 2)])
+                .is_err()
         );
     }
 
