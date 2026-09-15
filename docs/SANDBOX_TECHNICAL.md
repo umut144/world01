@@ -50,6 +50,14 @@ sent to the `game_console` target; that target accepts `DEBUG` and higher
 levels. The current startup messages report successful server start, client
 start, and client login.
 
+Which map a local server/client boots into is `runtime.toml`'s `start_map` -
+committed, and shared by whichever branch you are on. To run a different map
+without touching that file, add a `crates/configs/runtime.local.toml`
+(gitignored, `start_map = "..."` only) next to it; `world01_configs::
+local_start_map_override` applies it if present and both apps pick it up the
+same way, so they cannot disagree about which map the server actually has.
+Delete the file to fall back to `runtime.toml`'s own value.
+
 The graphical client starts windowed at a physical `1024 × 640 px`. The window
 remains resizable without a configured maximum, so maximizing may use the full
 available monitor area, including `2880 × 1800 px` where the display permits.
