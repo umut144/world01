@@ -81,10 +81,11 @@ the authoring and the code can be built against the same description.
 - **Five bridges** cross it. Five against three lanes is intentional: two of
   them are off-lane and exist to make a flank a real choice rather than a
   detour with no reward.
-- **Three lanes** run West to East. They are not authored objects. They are
-  the corridors left open by tree cover, and they exist because most of the map
-  is covered in Tree Props. A lane is where you can walk, not a thing the map
-  declares.
+- **Three lanes** run West to East, each joining one of a team's Totems across
+  one of the three wider bridges to a Totem on the far side. They are authored
+  as **cobblestone Terrain** through the grass, so a lane is a thing the map
+  declares and not merely the gap tree cover happens to leave. That makes a lane
+  readable to the eye and to a bot from the same fact.
 - **Four Ankhs**, two on each bank, one pair per team. They are the team's
   respawn points and they use the shared World-01 Ankh.
 - **Six Totems**, three per team, described below.
@@ -93,35 +94,58 @@ The river divides the map, the bridges are where the map narrows, and the
 Totems sit behind each team's own bank. Everything else about the layout is an
 authoring decision and is not fixed here.
 
+`map01`, authored 2026-09-14, is the first such map: `135 x 100` Terrain cells
+at `1 m` each, one water body, five bridges, 4 860 cobblestone cells carrying
+the three lanes through 8 640 of grass, four Ankhs, six Totems and fifty Trees.
+Two numbers follow from its size and are worth knowing before tuning anything.
+A Character at the World-01 Hammerer's `0.6 m/s` needs over three minutes to
+cross `135 m`, which is most of why the MOBA overrides the movement
+normalization at all. And fifty Trees over `13 500` cells is sparse cover, so
+what separates the lanes today is mostly the open grass between them rather
+than anything blocking sight or movement.
+
 ### How the runtime learns what stands where
 
 Two facts have to reach the simulation about a placed Prop: **what kind of
 thing it is**, and **whose it is**.
 
-The kind comes from the PolyTools Asset key. A Prop with the asset key
-`totem_life` is a Totem of Life because that is the Asset that was placed;
-nothing infers it from a name convention or a position.
+The kind comes from the PolyTools Asset key. A Prop placed from `totem_of_life`
+is a Totem of Life because that is the Asset that was placed; nothing infers it
+from a name convention or a position. Three Totem Assets exist -
+`totem_of_life`, `totem_of_mana`, `totem_of_time` - and a map places each twice,
+once per side. The Assets carry no team.
 
-Whose it is comes from the game's design data, which names the authored Prop
-IDs belonging to each team. The map export gives every placed Prop a stable ID,
-and `design/games/moba.toml` lists them per team for both Totems and Ankhs. A
-Prop the list forgets, or a listed Prop the map does not contain, is a load
-error. This follows the World-01 no-fallbacks principle at the place it
-actually matters: a Totem whose side was guessed would look like a working game
-and be the wrong one.
+Whose it is comes from the game's design data. `crates/design/games/moba.toml`
+lists, per map and per team, the SceneMaker **`instance_id`** of every Totem and
+Ankh that team owns. That is the identity the runtime already uses for a placed
+Prop: it is unique within a Scene, and Template composition already namespaces
+and collision-checks it as `template.<anchor_id>.<template_scene_id>.<instance_id>`.
 
-The alternative was deriving the side from which half of the river a Prop
-stands on. It was rejected on 2026-09-13 for exactly that reason - a Totem
-placed on the wrong bank would silently become the enemy's rather than failing
-to load - and because the river is a curve, not an axis, so "which side" is a
-question with no cheap honest answer.
+The file says nothing else. Not the Asset, because the map already says it; not
+the position, because the map already says that too. A coordinate copied into
+design data is a second source of truth that goes stale the first time a Prop
+moves, and a stale coordinate is exactly the kind of forgotten data the
+World-01 no-fallbacks principle exists to keep out of behaviour. Positions do
+appear in the file as **comments**, so the assignment can be read without
+opening a two-megabyte export - and a comment cannot be believed by code.
 
-The cost of the chosen rule is real and is accepted for now: moving a Totem in
-SceneMaker means editing one line of design data. If map iteration makes that
-friction rather than discipline, the better end state is an authored team
-marking on the Prop itself in SceneMaker, after which the design-data list
-disappears. That is a SceneMaker gate and it is listed in the roadmap as a
-later phase, not a blocker.
+Loading fails in both directions: an entry naming an instance the map does not
+contain, and a Totem or Ankh in the map that no entry names. A forgotten Totem
+would otherwise be a neutral objective no one could win by; a mistyped one would
+be an objective that silently is not there.
+
+Two alternatives were rejected. Deriving the side from which half of the map a
+Prop stands on was rejected on 2026-09-13: a Totem placed on the wrong bank
+would silently become the enemy's rather than failing to load, and the river is
+a curve rather than an axis. Authoring the team in SceneMaker was rejected on
+2026-09-15 by the developer's preference, and it is the better call for a
+reason worth recording: a side is a rule of one game, and SceneMaker authors
+World 01 rather than the MOBA. A Totem marked for a team in the editor would
+mean the editor knew about teams.
+
+The cost is that moving a Totem across the river means editing one line. That
+is the right cost, because changing which side an objective belongs to is a
+design decision and should take a deliberate edit.
 
 ## The Totems
 
@@ -512,8 +536,12 @@ hand later, by someone who has forgotten which half was which.
 - **One mana pool or five.** A shared team pool is the current reading and the
   more interesting one. A per-Character pool fed at the same rate is the
   fallback and costs nothing to switch to.
-- **Whether Prop team ownership stays in design data** or becomes an authored
-  marking in SceneMaker. Decided by how often the map moves.
+- **Whether the two teams' Totems need to look different.** They are the same
+  three Assets on both banks today, so across a river the picture does not say
+  whose a Totem is. Deciding to commit is exactly the moment that question gets
+  asked. Team colour applied at spawn, a marker Prop, or three more authored
+  Assets are the candidates; which one waits until ten Actors are on the map and
+  the problem is visible rather than predicted.
 - **Whether Characters need visible team marking**, and whether that is colour,
   a symbol, or something the Ankh does to whoever spawns from it.
 - **What the second ability of each of the five Characters is.** A gate, owned

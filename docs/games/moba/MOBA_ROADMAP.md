@@ -33,7 +33,7 @@ a gate that is worked around silently is a phase built against a guess.
 |---|---|---|---|
 | 0 | The branch and these documents | — | documents only, on merge |
 | 1 | Teams and a second attack button | — | all of it |
-| 2 | The map, the Totems, and a match that ends | A, B, C | nothing |
+| 2 | The map, the Totems, and a match that ends | A, B, C — **met** | nothing |
 | 3 | Mana, timed respawn, and what the support Totems do | — | nothing |
 | 4 | Bots, first iteration — the first playable 5v5 | D | the `ai` crate |
 | 5 | Ten abilities across five Characters | E, F | the two ability shapes |
@@ -93,38 +93,39 @@ Returns to `main`: all of it, as one or two commits that name no MOBA concept.
 The first phase with a game in it. At its end you can walk up to an enemy Totem
 of Life, hit it until it falls, and the match is over.
 
-### Gate A — six Totem Assets (PolyTools)
+### Gate A — the Totem Assets (PolyTools) — **met, 2026-09-14**
 
-Three Totem kinds, two teams, six Assets:
+Three Assets, not six: `totem_of_life`, `totem_of_mana`, `totem_of_time`. A map
+places each twice, once per side, so six Totems stand on the map and the Assets
+themselves carry no team. This gate originally asked for six Assets so that team
+colour would be an art decision; that was overtaken by the authoring and the
+question moved to the design document's open list, where it waits for a match to
+show whether the two banks read apart.
 
-    totem_life_west    totem_mana_west    totem_time_west
-    totem_life_east    totem_mana_east    totem_time_east
+Each carries what it fails to load without, and all three do:
 
-Each needs, and fails to load without:
-
-- an authored **`hurt` Region**, because a Totem that authors none cannot be
-  hit and the match could never end;
+- an authored **`hurt` Region**, because a Totem that authors none cannot be hit
+  and the match could never end;
 - an authored **`collision` Region**, because a Totem is walked around;
-- a **mass classification** for every material-bearing Component, as
-  `crates/design/mass.json` requires of everything else.
-
-The two teams' Assets are separately authored rather than recoloured at
-runtime, because team identity is the strongest thing the picture has to carry
-and it should be an art decision.
+- a **mass classification** for every material-bearing Component.
 
 A Totem's health is **not** derived from its authored area. It is MOBA design
-data, so a Totem does not need an entry in `crates/design/hp.json` and its size
-in PolyTools is free.
+data, so a Totem needs no entry in `crates/design/hp.json` and its size in
+PolyTools is free.
 
-Each of the six also needs a **placement rank**, because a missing rank is a
-load error for any placed Asset. A Totem outranks everything currently in the
-table — grass, cobblestone, tree, Ankh — since no Template may ever paint over
-an objective. The entries belong in the MOBA overlay rather than in
-`world01.toml`, which means the overlay has to be able to *add* placement ranks
-and not only override scalar values. That is a small requirement on the overlay
-loader and it is named here so it is not discovered in the middle of Phase 2.
+Each also needs a **placement rank**, because a missing rank is a load error for
+any placed Asset. A Totem outranks everything currently in the table - grass,
+cobblestone, tree, Ankh - since no Template may ever paint over an objective.
+The entries belong in the MOBA overlay rather than in `world01.toml`, which
+means the overlay has to be able to *add* placement ranks and not only override
+scalar values. **Still owed**: the three ranks are not written yet.
 
-### Gate B — the MOBA map Instance (SceneMaker)
+### Gate B — the MOBA map Instance (SceneMaker) — **met, 2026-09-14**
+
+Authored as `map01`: `135 x 100` Terrain cells at `1 m`, one water body, five
+bridges, three cobblestone lanes through grass, four Ankhs, six Totems and fifty
+Trees. The lanes turned out to be authored Terrain rather than gaps in tree
+cover, which is the better answer and is now what the design document says.
 
 One Instance scene containing:
 
@@ -146,7 +147,19 @@ water. The MOBA map is an Instance, not a Template, so this does not apply to
 it — but it does mean the river cannot arrive inside a Template Anchor. That is
 a constraint on the map, not a task for this phase.
 
-### Gate C — sync and the team lists
+### Gate C — sync and the team lists — **met, 2026-09-15**
+
+Two gates inside the gate had to open first, and both are `main`'s rather than
+the MOBA's. The content boundary still demanded PolyTools Manifest schema 21
+while the sync had already written 22, so the repository was red before any MOBA
+work. And the map sync read one hardcoded SceneMaker Game, while the workspace
+now holds `sandbox` and `moba`; since the sync replaces the whole destination
+directory, the MOBA Scenes could only have arrived by dropping the sandbox maps
+the embedded catalog and the respawn tests stand on.
+
+`crates/design/games/moba.toml` now carries the team lists, keyed by `instance_id`.
+
+
 
 - Run `./scripts/sync_polytools_characters.sh` and
   `./scripts/sync_scenemaker_world.sh`, which validate and embed the new
@@ -324,6 +337,13 @@ needs tuning and tuning wants to start early.
 Three lanes, one ordered waypoint list per lane per team, ending at the enemy
 Totem of Life. Coordinates read off the authored map. This gate can be met any
 time after Gate B.
+
+`map01` makes this easier than expected: the lanes are authored as cobblestone
+Terrain, so the waypoints can be read off the cobblestone rather than guessed
+from where trees are not. Whether they are still written down by hand or derived
+from the three cobblestone runs is an implementation question for Phase 6 -
+derived would be pleasant, but three runs have to be told apart from one
+another, and that is the part authoring answers for free.
 
 Five bridges and three lanes do not agree, which is why the waypoints exist: 
 without them every creep on the map takes the cheapest crossing and the other
