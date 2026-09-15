@@ -479,8 +479,10 @@ mod tests {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
-        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
-            .expect("the current embedded Assets have Placement Ranks");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("embedded World-01 design parses")
+            .placement_ranks()
+            .expect("the embedded design's Placement Ranks are valid");
         let mut composition = WorldComposition::new(map, &templates, &ranks)
             .expect("the initial composition is valid");
 
@@ -537,8 +539,10 @@ mod tests {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
-        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
-            .expect("the current embedded Assets have Placement Ranks");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("embedded World-01 design parses")
+            .placement_ranks()
+            .expect("the embedded design's Placement Ranks are valid");
         let composition = WorldComposition::new(map, &templates, &ranks)
             .expect("the initial composition is valid");
         let mut app = App::new();
@@ -622,8 +626,10 @@ mod tests {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
-        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
-            .expect("the current embedded Assets have Placement Ranks");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("embedded World-01 design parses")
+            .placement_ranks()
+            .expect("the embedded design's Placement Ranks are valid");
         let composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the initial composition is valid");
         let initial_occupancy = composition.occupancy().clone();
@@ -701,8 +707,10 @@ mod tests {
         let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
         let templates =
             WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
-        let ranks = PlacementRanks::from_entries([("grass", 10), ("tree", 20), ("ankh", 100)])
-            .expect("the current embedded Assets have Placement Ranks");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("embedded World-01 design parses")
+            .placement_ranks()
+            .expect("the embedded design's Placement Ranks are valid");
         let composition = WorldComposition::new(map, &templates, &ranks)
             .expect("the initial composition is valid");
         let initial_occupancy = composition.occupancy().clone();
