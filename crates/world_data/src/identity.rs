@@ -54,3 +54,15 @@ pub struct SelectedCharacter(pub CharacterId);
 /// missing value, because a game without sides is the ordinary case.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TeamId(pub u8);
+
+/// Marks an entity as a placed, damageable Prop rather than a Character.
+///
+/// Identity and nothing else, the same as [`TeamId`]: it groups a
+/// [`crate::WorldPosition`] and a [`crate::CharacterHealth`] as belonging to
+/// one placed, destructible thing, so client code can find "the destructible
+/// Props" without also matching every player Character, which carries both of
+/// those components too. No rule in this crate or in the simulation reads it,
+/// and it is never present alongside [`SelectedCharacter`] - a Prop is not a
+/// Character and plays through neither its abilities nor its life state.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct DestructibleProp;

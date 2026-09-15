@@ -20,5 +20,6 @@ pub use protocol::{
 #[cfg(feature = "server")]
 pub use server_transport::{
     ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest,
-    configure_replicated_player, configure_replicated_world_state, configure_server,
+    configure_replicated_destructible_prop, configure_replicated_player,
+    configure_replicated_world_state, configure_server,
 };

@@ -13,10 +13,10 @@ use serde::{Deserialize, Serialize};
 use world01_world_data::{
     ActorId, AnchorOccupancy, AttackIntent, AttackSecondaryIntent, BodyFacing, CharacterHealth,
     CharacterId, CharacterLifeState, CharacterMass, DashIntent, DashState, DeathConfirmIntent,
-    DeathConfirmationState, GazeDirection, GazeIntent, HammerAttackState, MageAttackState,
-    MovementDirection, MovementIntent, MovementMedium, MovementVelocity, PlayerInput, PlayerOwner,
-    RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter, StaminaState,
-    StatusEffectState, TeamId, WaterSwitchPositions, WeaponAimState, WorldPosition,
+    DeathConfirmationState, DestructibleProp, GazeDirection, GazeIntent, HammerAttackState,
+    MageAttackState, MovementDirection, MovementIntent, MovementMedium, MovementVelocity,
+    PlayerInput, PlayerOwner, RespawnState, RevivalState, RunIntent, RunState, SelectedCharacter,
+    StaminaState, StatusEffectState, TeamId, WaterSwitchPositions, WeaponAimState, WorldPosition,
 };
 
 pub const MAX_CLIENTS: usize = 5;
@@ -110,6 +110,10 @@ pub(crate) fn register_game_protocol(app: &mut App) {
     .add_direction(NetworkDirection::ClientToServer);
     app.component::<ActorId>().replicate_once();
     app.component::<ReplicatedWorldState>().replicate_once();
+    // Marks a placed, damageable Prop apart from a Character. Identity and
+    // nothing else, sent once because whether an entity is a Prop never
+    // changes across its lifetime.
+    app.component::<DestructibleProp>().replicate_once();
     app.component::<AnchorOccupancy>().replicate();
     // Neither predicted nor interpolated, exactly like the occupancy beside it:
     // a client is told where the switches stand and derives its world from that

@@ -15,7 +15,10 @@ use lightyear::prelude::{
     server::*,
 };
 use lightyear::{netcode::Key, prelude::*};
-use world01_world_data::{AnchorOccupancy, CharacterId, PlayerInput, WaterSwitchPositions};
+use world01_world_data::{
+    AnchorOccupancy, CharacterHealth, CharacterId, DestructibleProp, PlayerInput,
+    WaterSwitchPositions, WorldPosition,
+};
 
 use crate::protocol::{
     JoinRequest, MAX_CLIENTS, NetworkSimulationProfile, PROTOCOL_ID, ReplicatedWorldState,
@@ -294,6 +297,29 @@ pub fn configure_replicated_world_state(
         Replicate::to_clients(NetworkTarget::All),
     ));
     world_state.insert(ReplicatedWorldState);
+}
+
+/// Marks a placed, damageable Prop entity for replication to every client.
+///
+/// The same shape as [`configure_replicated_world_state`] and for the same
+/// reason: a destructible Prop has no owner, no prediction target, and no
+/// interpolation target, because nothing about it is guessed ahead of the
+/// server - a client simply waits to be told its position and health, the
+/// same way it waits for the world-state singleton. Unlike that singleton
+/// there can be any number of these, one per placed Prop, and each is its own
+/// entity so a query already looking for `(WorldPosition, CharacterHealth)`
+/// finds it for free.
+pub fn configure_replicated_destructible_prop(
+    prop: &mut EntityCommands<'_>,
+    position: WorldPosition,
+    health: CharacterHealth,
+) {
+    prop.insert((
+        DestructibleProp,
+        position,
+        health,
+        Replicate::to_clients(NetworkTarget::All),
+    ));
 }
 
 #[cfg(test)]
