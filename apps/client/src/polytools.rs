@@ -417,6 +417,22 @@ pub fn spawn_character_visual(
                                 })
                             })
                             .flatten()
+                    })
+                    .or_else(|| {
+                        // PolyTools only exports closed_region_mesh for a
+                        // closed Contour. An eye authored as a closed_loop
+                        // Fill instead - The Mirror's, for one - exports a
+                        // regular triangulated `mesh` and no region mesh at
+                        // all, so the collider is built from that fill mesh
+                        // directly.
+                        component.mesh.as_ref().and_then(|mesh| {
+                            EyeCollider::from_region_mesh(
+                                &mesh.vertices,
+                                &mesh.indices,
+                                pupil_area_ratio,
+                                library.pupil_collision_reference_radius,
+                            )
+                        })
                     });
                 collider.map(|collider| match component.contour_stroke_mesh.as_ref() {
                     Some(stroke) => collider.with_visible_outline(
@@ -1366,7 +1382,12 @@ mod tests {
     fn repeated_terrain_mesh_reuses_polytools_fill_geometry_for_each_cell() {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
-        let grass = library.terrain("grass").expect("Grass terrain is present");
+        // grass has been a palette since schema 19 - grass01..grass04, no
+        // components or fill mesh of its own - so a variant is what a placed
+        // cell actually draws.
+        let grass = library
+            .terrain("grass01")
+            .expect("a grass variant is present");
         let source_vertex_count = grass
             .components
             .iter()
@@ -1381,7 +1402,7 @@ mod tests {
             .sum::<usize>();
 
         let mesh = repeated_flat_asset_mesh(grass, [Vec2::ZERO, Vec2::X])
-            .expect("Grass can be repeated as one flat mesh");
+            .expect("a grass variant can be repeated as one flat mesh");
 
         assert_eq!(mesh.count_vertices(), source_vertex_count * 2);
         assert_eq!(
@@ -1395,10 +1416,37 @@ mod tests {
         let library =
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
 
-        let hammerer_pivot = library.body_pivot(&CharacterId("hammerer".to_owned()));
-        let rogue_pivot = library.body_pivot(&CharacterId("rogue".to_owned()));
-        assert!((hammerer_pivot - Vec2::new(0.0, 0.695)).length() < 0.000_001);
-        assert!((rogue_pivot - Vec2::new(0.0, 0.18)).length() < 0.000_001);
+        // Checks the derivation body_pivot itself performs, rather than a
+        // literal snapshot of where the authoring currently places a body -
+        // a value like that goes stale every time an Asset is re-exported,
+        // which is exactly what made the previous 0.18 literal wrong here
+        // (the Rogue's body sits at 0.15 now, and the export is correct).
+        fn expected_pivot(library: &CharacterAssetLibrary, character: &CharacterId) -> Vec2 {
+            let manifest = library
+                .character(character)
+                .expect("Character manifest is present");
+            let body_transform = manifest
+                .components
+                .iter()
+                .find(|component| component.name == "body")
+                .and_then(|component| component_world_transform(component, &manifest.components))
+                .expect("Character has a rendered body Component");
+            Vec2::new(
+                body_transform.translation.x - manifest.asset_pivot[0],
+                body_transform.translation.y - manifest.asset_pivot[1],
+            )
+        }
+
+        let hammerer_id = CharacterId("hammerer".to_owned());
+        let rogue_id = CharacterId("rogue".to_owned());
+        assert_eq!(
+            library.body_pivot(&hammerer_id),
+            expected_pivot(&library, &hammerer_id)
+        );
+        assert_eq!(
+            library.body_pivot(&rogue_id),
+            expected_pivot(&library, &rogue_id)
+        );
     }
 
     #[test]
@@ -1688,25 +1736,44 @@ mod tests {
             CharacterAssetLibrary::load_embedded().expect("embedded PolyTools exports are valid");
         for (character, manifest) in library.content.characters() {
             if character.0 == "barde" {
+                // Barde has no dynamic pupil at all - see
+                // spawn_character_visual's own is_dynamic_eye check - so its
+                // eyes carry neither a region nor a fill mesh worth testing.
                 continue;
             }
             for component in &manifest.components {
                 if component.name != "eye_left" && component.name != "eye_right" {
                     continue;
                 }
-                let region = component
+                // PolyTools only exports closed_region_mesh for a closed
+                // Contour. An eye authored as a closed_loop Fill instead -
+                // The Mirror's - exports a regular fill `mesh` and no region
+                // mesh, so the collider is built from that instead, the same
+                // fallback spawn_character_visual itself falls back to.
+                let collider = component
                     .closed_region_mesh
                     .as_ref()
-                    .expect("eye has a closed region");
+                    .and_then(|region| {
+                        EyeCollider::from_region_mesh(
+                            &region.vertices,
+                            &region.indices,
+                            library.pupil_area_ratio,
+                            library.pupil_collision_reference_radius,
+                        )
+                    })
+                    .or_else(|| {
+                        component.mesh.as_ref().and_then(|mesh| {
+                            EyeCollider::from_region_mesh(
+                                &mesh.vertices,
+                                &mesh.indices,
+                                library.pupil_area_ratio,
+                                library.pupil_collision_reference_radius,
+                            )
+                        })
+                    });
                 assert!(
-                    EyeCollider::from_region_mesh(
-                        &region.vertices,
-                        &region.indices,
-                        library.pupil_area_ratio,
-                        library.pupil_collision_reference_radius,
-                    )
-                    .is_some(),
-                    "{} {} must produce an eye collider",
+                    collider.is_some(),
+                    "{} {} must produce an eye collider from either a region or a fill mesh",
                     character.0,
                     component.name,
                 );
