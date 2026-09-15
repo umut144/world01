@@ -12013,16 +12013,16 @@
 	"regions": [
 		{
 			"geometry_source": "component",
-			"name": "hurt_region",
-			"region_id": "component_398",
-			"role": "hurt",
+			"name": "collision_region",
+			"region_id": "component_399",
+			"role": "collision",
 			"source_component_id": "component_369"
 		},
 		{
 			"geometry_source": "component",
-			"name": "collision_region",
-			"region_id": "component_399",
-			"role": "collision",
+			"name": "destructible_region",
+			"region_id": "component_402",
+			"role": "destructible",
 			"source_component_id": "component_369"
 		}
 	],

@@ -9558,9 +9558,9 @@
 		},
 		{
 			"geometry_source": "component",
-			"name": "hurt_region",
-			"region_id": "component_395",
-			"role": "hurt",
+			"name": "destructible_region",
+			"region_id": "component_400",
+			"role": "destructible",
 			"source_component_id": "component_319"
 		}
 	],
