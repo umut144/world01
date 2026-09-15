@@ -287,6 +287,69 @@ impl WorldCollisionGeometryCatalog {
     }
 }
 
+#[derive(Resource, Debug, Clone, Default, PartialEq)]
+pub struct WorldDestructibleGeometryCatalog {
+    pub regions: Vec<PlacedDestructibleGeometry>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlacedDestructibleGeometry {
+    pub instance_id: String,
+    pub position: Position,
+    pub component: RuntimeComponentGeometry,
+}
+
+impl WorldDestructibleGeometryCatalog {
+    /// The destructible surfaces every placed Prop authors, one per Region
+    /// with the `destructible` role.
+    ///
+    /// Mirrors [`WorldCollisionGeometryCatalog::from_content_and_map`] in
+    /// shape - translation-only, sourced from the map's placed Props, no
+    /// facing applied, because a placed Prop does not turn - but keeps the
+    /// same [`RuntimeComponentGeometry`] shape a Character's `hurt` Region
+    /// already produces, since a destructible Prop is hit-tested the same
+    /// way a Character is, not run through a physics query the way
+    /// `collision` geometry is.
+    ///
+    /// A placed Prop that authors no `destructible` Region simply has no
+    /// entry and cannot be hit, the same graceful absence `collision`
+    /// already has.
+    pub fn from_content_and_map(
+        content: &RuntimeContent,
+        map: &WorldMap,
+    ) -> Result<Self, RegionGeometryError> {
+        let mut regions = Vec::new();
+        for placement in map.props() {
+            // A placement whose Asset is not here is a broken world, not an
+            // empty one, the same reasoning collision geometry uses above.
+            let Some(manifest) = content
+                .prop(&placement.asset_key)
+                .or_else(|| content.terrain(&placement.asset_key))
+            else {
+                return Err(RegionGeometryError(format!(
+                    "'{}' places Asset '{}', which this content does not carry",
+                    placement.instance_id, placement.asset_key
+                )));
+            };
+            for region in &manifest.regions {
+                if region.role != "destructible" {
+                    continue;
+                }
+                let geometry = region_geometry(manifest, region)?;
+                regions.push(PlacedDestructibleGeometry {
+                    instance_id: placement.instance_id.clone(),
+                    position: placement.position,
+                    component: RuntimeComponentGeometry {
+                        name: region_surface_name(manifest, region).map_err(RegionGeometryError)?,
+                        ..geometry
+                    },
+                });
+            }
+        }
+        Ok(Self { regions })
+    }
+}
+
 impl CharacterHealthCatalog {
     /// Maximum health per Character, from the Component areas the design names.
     ///
@@ -1130,6 +1193,15 @@ mod tests {
                 .iter()
                 .all(|region| !region.component.boundary_edges().is_empty())
         );
+
+        // No Prop authors a `destructible` Region yet, so the catalog loads
+        // and is simply empty - the same graceful absence a Prop with no
+        // `collision` Region has, exercised here because nothing else in
+        // this crate covers the role-filtering path until one is authored.
+        let world_destructible =
+            WorldDestructibleGeometryCatalog::from_content_and_map(&content, &map)
+                .expect("a world with nothing destructible authored is still valid");
+        assert!(world_destructible.regions.is_empty());
     }
 
     /// What the shipped design also declares: the body and, where a Character
