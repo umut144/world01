@@ -16,6 +16,7 @@
 				0.465000009536743
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -113,7 +114,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -1993,6 +1994,7 @@
 				0.419999980926514
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -2090,7 +2092,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -3123,6 +3125,7 @@
 				1.075
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -3220,7 +3223,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -4124,6 +4127,7 @@
 				1.13999996185303
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -4164,7 +4168,7 @@
 				},
 				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -4340,6 +4344,7 @@
 				1.13999996185303
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -4380,7 +4385,7 @@
 				},
 				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -4534,6 +4539,7 @@
 				1.275
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -4574,7 +4580,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -4970,7 +4976,7 @@
 			"source_component_id": "component_23"
 		}
 	],
-	"schema_version": 21,
+	"schema_version": 22,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

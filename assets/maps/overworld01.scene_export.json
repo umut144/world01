@@ -64,6 +64,42 @@
       "anchor_meters": null
     },
     {
+      "asset_key": "totem_of_life",
+      "surface": null,
+      "footprint_meters": {
+        "width": 5.3125,
+        "height": 6.46875
+      },
+      "anchor_meters": {
+        "x": 2.65625,
+        "y": 0.03125
+      }
+    },
+    {
+      "asset_key": "totem_of_mana",
+      "surface": null,
+      "footprint_meters": {
+        "width": 7.5625,
+        "height": 6.46875
+      },
+      "anchor_meters": {
+        "x": 3.78125,
+        "y": 0.03125
+      }
+    },
+    {
+      "asset_key": "totem_of_time",
+      "surface": null,
+      "footprint_meters": {
+        "width": 7.8125,
+        "height": 6.46875
+      },
+      "anchor_meters": {
+        "x": 3.90625,
+        "y": 0.03125
+      }
+    },
+    {
       "asset_key": "tree",
       "surface": null,
       "footprint_meters": {

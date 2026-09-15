@@ -16,6 +16,7 @@
 				0.15
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -329,7 +330,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -1661,6 +1662,7 @@
 				0.15
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -1788,7 +1790,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": false,
@@ -2141,6 +2143,7 @@
 				0.440000009536743
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -2460,7 +2463,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -3741,6 +3744,7 @@
 				0.410000038146973
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -3988,7 +3992,7 @@
 				},
 				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -4821,6 +4825,7 @@
 				0.409999942779541
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -5068,7 +5073,7 @@
 				},
 				"outer_offset_meters": 0.00520833333333335,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -5760,6 +5765,7 @@
 				0.410000038146973
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -5779,7 +5785,7 @@
 				},
 				"outer_offset_meters": 0.0078125,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": false,
@@ -5841,6 +5847,7 @@
 				0.409999942779541
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -5860,7 +5867,7 @@
 				},
 				"outer_offset_meters": 0.0078125,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": false,
@@ -5922,6 +5929,7 @@
 				0.440000009536743
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -6187,7 +6195,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": false,
@@ -7207,6 +7215,7 @@
 				0.440000009536743
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -7235,7 +7244,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": false,
@@ -7452,7 +7461,7 @@
 			"source_component_id": "component_27"
 		}
 	],
-	"schema_version": 21,
+	"schema_version": 22,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

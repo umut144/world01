@@ -28,6 +28,7 @@
 				0.0
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -89,7 +90,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -389,6 +390,7 @@
 				0.0
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -480,7 +482,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -869,6 +871,7 @@
 				0.0
 			],
 			"contour_stroke_mesh": {
+				"alignment": "centered",
 				"cap": "butt",
 				"centerline": "original_authored_boundary",
 				"has_outline": true,
@@ -939,7 +942,7 @@
 				},
 				"outer_offset_meters": 0.0104166666666667,
 				"reference_pixels_per_meter": 192.0,
-				"role": "centered_boundary_stroke",
+				"role": "boundary_stroke",
 				"runs": [
 					{
 						"closed": true,
@@ -1364,7 +1367,7 @@
 			"source_component_id": "component_228"
 		}
 	],
-	"schema_version": 21,
+	"schema_version": 22,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

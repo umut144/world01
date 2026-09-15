@@ -16,7 +16,14 @@ pub const WEAPON_GRIP_ROLE: &str = "grip_primary";
 pub const WEAPON_SECONDARY_GRIP_ROLE: &str = "grip_secondary";
 pub const WEAPON_ATTACK_POINT_ROLE: &str = "attack_point_primary";
 pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
-pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 21;
+/// The one PolyTools Manifest schema this boundary reads.
+///
+/// Schema 22 gave a Contour Stroke its `alignment` and made a Hole a drawable
+/// part of its own, carrying `topology_role`. Neither reaches anything here:
+/// the strokes' `role` string is not read, unknown fields are ignored, and
+/// every authored Hole draws a Contour without a Fill Mesh, so none of them
+/// contributes area to mass or health.
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 22;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
