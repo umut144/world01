@@ -7,7 +7,7 @@ use world01_network::{
     configure_replicated_destructible_prop, configure_replicated_player,
     configure_replicated_world_state,
 };
-use world01_simulation::moba::{Totem, TotemKind, TotemLayout};
+use world01_simulation::moba::{TotemKind, TotemLayout};
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
     WorldRuntimeState,
@@ -347,8 +347,7 @@ mod tests {
     };
     use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
-        AnkhLayout, DestructibleProp, PlacementRanks, WorldMap, WorldOccupancyRequest,
-        WorldTemplateCatalog,
+        AnkhLayout, DestructibleProp, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
     };
 
     #[derive(Resource, Default)]
