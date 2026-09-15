@@ -201,11 +201,24 @@ the simulation is allowed to depend on.
   before. This is first join only; respawn after death is still Phase 3's
   concern and still spawns at the team's Ankh, unchanged - the two are
   different moments and were deliberately decided separately.
-- Not yet: Totem entities with health and destructible geometry, taking
-  damage through the existing damage resolution. No new damage rule: a Totem
-  will be hit by the same `HammerStrike` and `MageEyeBeams` evaluation
-  everything else is - blocked on the `destructible` Region from Gate A's
-  correction above being authored and synced.
+- Done: a replicated entity per placed Totem, spawned server-side with real
+  health from `crates/design/games/moba/totems.json`, the same
+  no-owner/no-prediction shape the world-state singleton already uses. The
+  `destructible` Region is authored and synced too, and
+  `WorldDestructibleGeometryCatalog` reads it (see the correction to Gate A
+  above) - but nothing yet connects the two.
+- Not yet: wiring a Totem's destructible geometry into the existing damage
+  resolution, so `HammerStrike` and `MageEyeBeams` actually mutate a Totem
+  entity's health the way they already mutate a Character's. No new damage
+  rule, just a new target-resolution path alongside the Character one, since
+  a Totem carries none of `SelectedCharacter`, `CharacterLifeState`, or the
+  other Character-only components that path keys on.
+- Not yet: the three Totem Assets' Placement Ranks (Gate A's own "still
+  owed"). Without them `WorldComposition::new` refuses map01 outright, so
+  the MOBA map cannot actually run as the server's `start_map` yet. Per Gate
+  A these belong in the MOBA overlay, not `world01.toml` - which means
+  `PlacementRanks` needs a way to be built from the sandbox's ranks *plus*
+  the MOBA's own, not just from one or the other.
 - Not yet: the win condition, a destroyed Totem of Life ending the match,
   stated to the game console.
 
