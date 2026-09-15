@@ -109,6 +109,55 @@ pub fn load_file(path: &Path) -> Result<RuntimeConfig, Box<dyn std::error::Error
     Ok(toml::from_str(&contents)?)
 }
 
+/// Where [`local_start_map_override`] looks, anchored at compile time to this
+/// crate rather than to whatever directory a process happens to be run from.
+const RUNTIME_LOCAL_TOML_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/runtime.local.toml");
+
+#[derive(Debug, Deserialize)]
+struct LocalRuntimeOverride {
+    start_map: String,
+}
+
+/// A developer's own choice of [`WorldConfig::start_map`], read from a file
+/// `runtime.toml` does not carry and git does not track.
+///
+/// `start_map` is a deployment choice, not a design one, and the server's
+/// value is the one that counts - a client reading it independently and
+/// disagreeing is how a client ends up predicting movement through a world
+/// the server does not have (see [`WorldConfig`]'s own doc). A per-process
+/// environment variable would let exactly that happen: set it in one
+/// terminal and forget the other, and the two silently disagree. A file next
+/// to `runtime.toml`, read the same way by both apps, cannot disagree with
+/// itself - so this is a file, not an environment variable, on purpose.
+///
+/// Returns `Ok(None)` when the file does not exist, which is the normal case
+/// for everyone who has not created one: [`load_embedded`]'s own value
+/// stands. When the file exists it must parse and name a real map - the same
+/// "no fallbacks" contract `runtime.toml` itself already has - so a typo
+/// here fails loudly rather than silently starting the wrong map or falling
+/// back to the committed default.
+pub fn local_start_map_override() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    local_start_map_override_from(Path::new(RUNTIME_LOCAL_TOML_PATH))
+}
+
+/// [`local_start_map_override`]'s logic, taking the file's path as an
+/// argument so a test can exercise it without ever touching the one real
+/// developers put their own override in.
+fn local_start_map_override_from(
+    path: &Path,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let local: LocalRuntimeOverride = toml::from_str(&contents)?;
+    if local.start_map.is_empty() {
+        return Err("runtime.local.toml names an empty start_map".into());
+    }
+    Ok(Some(local.start_map))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +173,56 @@ mod tests {
         assert!(runtime.camera.is_valid());
         assert_eq!(runtime.world.start_map, "overworld01");
         assert!(runtime.world.is_valid());
+    }
+
+    fn override_test_path(name: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("world01_configs_test_{name}.toml"))
+    }
+
+    #[test]
+    fn a_missing_local_override_file_is_not_an_error() {
+        let path = override_test_path("missing");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(
+            local_start_map_override_from(&path).expect("a missing file is not an error"),
+            None
+        );
+    }
+
+    #[test]
+    fn a_local_override_file_names_the_start_map() {
+        let path = override_test_path("names_map");
+        std::fs::write(&path, "start_map = \"map01\"\n").expect("the temp file writes");
+
+        let result = local_start_map_override_from(&path);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(
+            result.expect("a valid override file parses"),
+            Some("map01".to_owned())
+        );
+    }
+
+    #[test]
+    fn an_empty_start_map_in_the_override_file_is_refused() {
+        let path = override_test_path("empty_map");
+        std::fs::write(&path, "start_map = \"\"\n").expect("the temp file writes");
+
+        let result = local_start_map_override_from(&path);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn a_malformed_override_file_is_refused_not_ignored() {
+        let path = override_test_path("malformed");
+        std::fs::write(&path, "not valid toml [[[").expect("the temp file writes");
+
+        let result = local_start_map_override_from(&path);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err());
     }
 }

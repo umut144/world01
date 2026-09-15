@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
     state::app::StatesPlugin,
 };
-use world01_configs::load_embedded;
+use world01_configs::{load_embedded, local_start_map_override};
 use world01_content::{
     CharacterCollisionGeometryCatalog, CharacterHealthCatalog, CharacterHurtGeometryCatalog,
     CharacterMassGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
@@ -32,7 +32,14 @@ use crate::session::ServerSessionPlugin;
 mod session;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let config = load_embedded()?;
+    let mut config = load_embedded()?;
+    // A developer's own runtime.local.toml, gitignored, overrides which map
+    // this process starts with - see world01_configs::local_start_map_override
+    // for why this is a file both apps read identically rather than a
+    // per-process environment variable the two could disagree on.
+    if let Some(start_map) = local_start_map_override()? {
+        config.world.start_map = start_map;
+    }
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
