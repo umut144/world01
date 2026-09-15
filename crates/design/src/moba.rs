@@ -5,6 +5,16 @@
 //! game, and the sandbox loads the shared design without ever learning that
 //! teams - or Totems - exist. Nothing in this module is part of the
 //! World-01 baseline.
+//!
+//! **For whoever tunes the numbers**: this file is schema, not content.
+//! Every actual value - a Totem's MaxHP, which side owns which placed Prop -
+//! lives in the JSON under `games/moba/`, the same split `crate::GameDesign`
+//! already uses for the base game (`world01.toml`, `hp.json`, ... read by
+//! `src/lib.rs`, never edited there). Changing a number, or adding another
+//! instance of a shape this file already knows - one more Totem entry, one
+//! more map's ownership file - is a `games/moba/*.json` edit and nothing
+//! here needs to change. This file only needs touching to teach the loader a
+//! *new kind* of design data it cannot parse yet.
 
 use std::collections::HashSet;
 
