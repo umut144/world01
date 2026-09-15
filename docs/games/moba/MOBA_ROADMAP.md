@@ -115,8 +115,9 @@ every runtime system that reads it, not merely unused. A Totem needs its own
 role instead - a `destructible` Region, read the way `collision` already is,
 by `WorldCollisionGeometryCatalog::from_content_and_map`'s translation-only
 pipeline rather than the Character pipeline's facing-and-rotation one. The
-three Totem Assets still need this Region re-authored; until then a Totem
-cannot be hit, the same graceful degradation `collision`'s absence already has.
+three Totem Assets now carry this Region, re-authored and synced (see "What
+is built" below) - though nothing yet connects the geometry it derives to
+damage resolution.
 
 A Totem's health is **not** derived from its authored area. It is MOBA design
 data, so a Totem needs no entry in `crates/design/hp.json` and its size in
@@ -127,7 +128,14 @@ any placed Asset. A Totem outranks everything currently in the table - grass,
 cobblestone, tree, Ankh - since no Template may ever paint over an objective.
 The entries belong in the MOBA overlay rather than in `world01.toml`, which
 means the overlay has to be able to *add* placement ranks and not only override
-scalar values. **Still owed**: the three ranks are not written yet.
+scalar values.
+
+**Done, 2026-09-15**: `crates/design/games/moba/placement_ranks.json` ranks all
+three Totem Assets at `200`, well above the Ankh's `100`. `PlacementRanks` grew
+an `extended_with` that adds entries to an existing table and refuses to touch
+one already there, so both apps now build their table by extending
+`world01.toml`'s own with the overlay's rather than reading `world01.toml`'s
+alone.
 
 ### Gate B — the MOBA map Instance (SceneMaker) — **met, 2026-09-14**
 
@@ -207,18 +215,17 @@ the simulation is allowed to depend on.
   `destructible` Region is authored and synced too, and
   `WorldDestructibleGeometryCatalog` reads it (see the correction to Gate A
   above) - but nothing yet connects the two.
+- Done: the three Totem Assets' Placement Ranks, added by the MOBA overlay
+  rather than written into `world01.toml` (see Gate A above). `map01` no
+  longer fails `WorldComposition::new` on a missing rank for a Totem; the
+  server's `start_map` is still `overworld01`, a separate, deliberate step
+  once the map itself is ready to run.
 - Not yet: wiring a Totem's destructible geometry into the existing damage
   resolution, so `HammerStrike` and `MageEyeBeams` actually mutate a Totem
   entity's health the way they already mutate a Character's. No new damage
   rule, just a new target-resolution path alongside the Character one, since
   a Totem carries none of `SelectedCharacter`, `CharacterLifeState`, or the
   other Character-only components that path keys on.
-- Not yet: the three Totem Assets' Placement Ranks (Gate A's own "still
-  owed"). Without them `WorldComposition::new` refuses map01 outright, so
-  the MOBA map cannot actually run as the server's `start_map` yet. Per Gate
-  A these belong in the MOBA overlay, not `world01.toml` - which means
-  `PlacementRanks` needs a way to be built from the sandbox's ranks *plus*
-  the MOBA's own, not just from one or the other.
 - Not yet: the win condition, a destroyed Totem of Life ending the match,
   stated to the game console.
 
