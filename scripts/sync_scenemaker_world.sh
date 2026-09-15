@@ -112,7 +112,7 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 19
+    and .version == 20
     and .workspace_key == "world01"
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)

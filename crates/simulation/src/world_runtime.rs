@@ -684,7 +684,7 @@ mod tests {
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
-            "version": 19,
+            "version": 20,
             "workspace_key": "world01",
             "grid": {
                 "terrain_cell_meters": 1.0,

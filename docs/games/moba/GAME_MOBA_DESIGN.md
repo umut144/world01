@@ -151,9 +151,8 @@ Prop in that Scene may carry it again, even after the first is deleted.
 SceneMaker guarantees this from **export 20**, allocating from a per-Asset
 counter stored on the Scene document that is never decremented, and showing a
 selected Prop's `instance_id` in the inspector so it can be read and pasted
-straight into the file below. The repository's own exports are still at 19 and
-the importer still requires 19; raising it is one change that waits for the
-re-export.
+straight into the file below. The repository's exports and the importer are
+both at 20 now (`SBX-42`).
 
 Uniqueness among living Props is not enough. A reference that lives in another
 repository outlives the Prop it names, and the failure that matters is not a

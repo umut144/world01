@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 19;
+const FORMAT_VERSION: u32 = 20;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 17;
 const WORKSPACE_KEY: &str = "world01";
