@@ -4,9 +4,10 @@ use bevy::{log::warn, prelude::*};
 use world01_content::{CharacterHealthCatalog, RuntimeContent};
 use world01_network::{
     ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest, WorldTemplateDebugPreset,
-    configure_replicated_player, configure_replicated_world_state,
+    configure_replicated_destructible_prop, configure_replicated_player,
+    configure_replicated_world_state,
 };
-use world01_simulation::moba::{TotemKind, TotemLayout};
+use world01_simulation::moba::{Totem, TotemKind, TotemLayout};
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
     WorldRuntimeState,
@@ -62,7 +63,7 @@ impl Plugin for ServerSessionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NextActorId>()
             .init_resource::<PendingWorldTemplateDebugPreset>()
-            .add_systems(Startup, spawn_world_state)
+            .add_systems(Startup, (spawn_world_state, spawn_totem_entities))
             .add_systems(
                 Update,
                 (accept_join_requests, accept_world_template_debug_requests)
@@ -165,6 +166,31 @@ fn spawn_world_state(composition: Res<WorldComposition>, mut commands: Commands)
         composition.occupancy().clone(),
         composition.switches().clone(),
     );
+}
+
+/// Spawns one replicated entity per Totem the composed world places.
+///
+/// Runs once, at `Startup`, from the [`TotemLayout`] the app already derived
+/// synchronously while building itself - the same moment
+/// [`spawn_world_state`] reads the [`WorldComposition`] it was given, and for
+/// the same reason: both are known before the app's first tick, so neither
+/// system needs to wait on [`WorldRuntimeSet::Rebuild`].
+///
+/// A later change to which Totems exist would need this to run again, but
+/// nothing recomposes the MOBA map during a match today, so that case does
+/// not arise yet and is not handled. A Totem's *health* changing while it
+/// stands is a different, ongoing concern - mutating this entity in place,
+/// the way [`publish_world_occupancy`] already mutates the world-state
+/// singleton - and belongs with the combat system that will deal the damage.
+fn spawn_totem_entities(totems: Res<TotemLayout>, mut commands: Commands) {
+    for placed in &totems.totems {
+        let mut entity = commands.spawn(placed.totem);
+        configure_replicated_destructible_prop(
+            &mut entity,
+            placed.position,
+            CharacterHealth::full(placed.max_hp),
+        );
+    }
 }
 
 fn publish_world_occupancy(
@@ -321,7 +347,8 @@ mod tests {
     };
     use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
-        AnkhLayout, PlacementRanks, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
+        AnkhLayout, DestructibleProp, PlacementRanks, WorldMap, WorldOccupancyRequest,
+        WorldTemplateCatalog,
     };
 
     #[derive(Resource, Default)]
@@ -394,6 +421,57 @@ mod tests {
             totem_of_life_position(&TotemLayout::default(), TeamId(0)),
             None
         );
+    }
+
+    #[test]
+    fn every_placed_totem_becomes_a_replicated_entity() {
+        let totems = TotemLayout {
+            totems: vec![
+                PlacedTotem {
+                    totem: Totem {
+                        kind: TotemKind::Life,
+                        team: TeamId(0),
+                    },
+                    position: WorldPosition::new(-10.0, 0.0, 1.0),
+                    max_hp: 2000.0,
+                },
+                PlacedTotem {
+                    totem: Totem {
+                        kind: TotemKind::Mana,
+                        team: TeamId(1),
+                    },
+                    position: WorldPosition::new(10.0, 0.0, 1.0),
+                    max_hp: 1000.0,
+                },
+            ],
+        };
+
+        let mut app = App::new();
+        app.insert_resource(totems)
+            .add_systems(Startup, spawn_totem_entities);
+        app.world_mut().run_schedule(Startup);
+
+        let mut spawned = app
+            .world_mut()
+            .query::<(&Totem, &WorldPosition, &CharacterHealth, &DestructibleProp)>()
+            .iter(app.world())
+            .map(|(totem, position, health, _)| (*totem, *position, *health))
+            .collect::<Vec<_>>();
+        spawned.sort_by(|(left, ..), (right, ..)| left.team.0.cmp(&right.team.0));
+
+        assert_eq!(spawned.len(), 2);
+        let (totem, position, health) = spawned[0];
+        assert_eq!(totem.kind, TotemKind::Life);
+        assert_eq!(totem.team, TeamId(0));
+        assert_eq!(position, WorldPosition::new(-10.0, 0.0, 1.0));
+        assert_eq!(health.current, 2000.0);
+        assert_eq!(health.maximum, 2000.0);
+        let (totem, position, health) = spawned[1];
+        assert_eq!(totem.kind, TotemKind::Mana);
+        assert_eq!(totem.team, TeamId(1));
+        assert_eq!(position, WorldPosition::new(10.0, 0.0, 1.0));
+        assert_eq!(health.current, 1000.0);
+        assert_eq!(health.maximum, 1000.0);
     }
 
     #[test]
