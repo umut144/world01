@@ -198,8 +198,10 @@ each of the three does something different while it stands.
 
 They are Props rather than Characters. They do not move, they have no
 traversal profile, no stamina, no gaze and no abilities. What they share with a
-Character is health and hurt geometry: a Totem is destroyed by being hit, using
-the same geometry-based damage rule everything else in World 01 uses.
+Character is health, and a hit-detection rule of the same *kind* - geometry
+authored on the Asset decides what can be hit - though not the same pipeline:
+a Totem is destroyed by being hit through its own `destructible` geometry (see
+below), not through a Character's `hurt` Region.
 
 | Totem | While it stands | When it falls |
 |---|---|---|
@@ -245,17 +247,28 @@ The delay is read **at the moment the respawn resolves**, not at the moment of
 death, so destroying a Totem of Time lengthens the wait of everyone already
 lying dead. That is the more dramatic rule and it needs no extra state.
 
-### Totem health and hurt geometry
+### Totem health and destructible geometry
 
 A Totem's MaxHP is MOBA design data rather than derived from its authored fill
 area. The World-01 area-based derivation exists to keep Characters comparable
 to one another; a building is not on that scale, and deriving a Totem's health
 from how large it happens to be drawn would tie a balance value to an art
-decision.
+decision. It lives in `crates/design/games/moba/totems.json`, keyed by Asset
+key rather than by placed instance, since all Totems of one kind share one
+MaxHP; it is a first-iteration placeholder for the developer to tune from
+play, not a considered balance decision.
 
-Its hurt geometry follows the shared rule unchanged: a Totem declares an
-authored `hurt` Region, and a Totem that authors none cannot be hit. It also
-declares a `collision` Region, because a Totem is something you walk around.
+Its hit geometry does **not** reuse the Character `hurt` Region. A Totem is a
+Prop, and `CharacterHurtGeometryCatalog` only ever reads `content.characters()`
+- a `hurt` Region authored on a Prop is invisible to it, not merely unused.
+`hurt_transform`'s facing-and-rotation handling would be meaningless for a
+Totem anyway, since it never turns. Instead a Totem declares an authored
+**`destructible`** Region, read the same translation-only way
+`WorldCollisionGeometryCatalog` already reads `collision` Regions off placed
+Props: by instance, at the placement's position, with no facing applied. A
+Totem that authors no `destructible` Region simply cannot be hit, the same
+graceful absence the `collision` role already has. It also declares a
+`collision` Region, because a Totem is something you walk around.
 
 ## Mana
 

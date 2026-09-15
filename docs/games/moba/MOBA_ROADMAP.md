@@ -104,10 +104,19 @@ show whether the two banks read apart.
 
 Each carries what it fails to load without, and all three do:
 
-- an authored **`hurt` Region**, because a Totem that authors none cannot be hit
-  and the match could never end;
 - an authored **`collision` Region**, because a Totem is walked around;
 - a **mass classification** for every material-bearing Component.
+
+**Correction, 2026-09-15**: this gate originally also asked for an authored
+`hurt` Region, on the assumption a Totem could reuse the Character hurt
+pipeline. It cannot: `CharacterHurtGeometryCatalog::from_content` only ever
+iterates `content.characters()`, so a `hurt` Region on a Prop is invisible to
+every runtime system that reads it, not merely unused. A Totem needs its own
+role instead - a `destructible` Region, read the way `collision` already is,
+by `WorldCollisionGeometryCatalog::from_content_and_map`'s translation-only
+pipeline rather than the Character pipeline's facing-and-rotation one. The
+three Totem Assets still need this Region re-authored; until then a Totem
+cannot be hit, the same graceful degradation `collision`'s absence already has.
 
 A Totem's health is **not** derived from its authored area. It is MOBA design
 data, so a Totem needs no entry in `crates/design/hp.json` and its size in
@@ -157,7 +166,10 @@ now holds `sandbox` and `moba`; since the sync replaces the whole destination
 directory, the MOBA Scenes could only have arrived by dropping the sandbox maps
 the embedded catalog and the respawn tests stand on.
 
-`crates/design/games/moba.toml` now carries the team lists, keyed by `instance_id`.
+`crates/design/games/moba/maps/map01.json` now carries the team lists, keyed by
+`instance_id` - one file per map rather than the single `moba.toml` overlay
+this gate originally named, since ownership is per-map data with nothing in
+`world01.toml` to override.
 
 
 
@@ -173,18 +185,29 @@ the simulation is allowed to depend on.
 
 ### What is built behind those gates
 
-- `design/games/moba.toml` and the overlay loading that puts it over
-  `world01.toml`, holding only the values the MOBA changes.
-- A `TotemLayout` derived from the composed world in the same fixed-tick world
-  transaction that already builds `AnkhLayout`, so a Totem survives a
-  recomposition the way an Ankh does.
-- Totem entities with health and hurt geometry, taking damage through the
-  existing damage resolution. No new damage rule: a Totem is hit by the same
-  `HammerStrike` and `MageEyeBeams` evaluation everything else is.
-- Team assignment on join, and team spawn at the joining team's own Ankhs,
-  replacing the five fixed spawn positions the server uses today.
-- The win condition: a destroyed Totem of Life ends the match, stated to the
-  game console.
+- Done: `crates/design/games/moba/maps/map01.json` for Totem/Ankh ownership by
+  team, and `crates/design/games/moba/totems.json` for each Totem kind's
+  MaxHP - both plain additive design files, not an overlay over
+  `world01.toml`, because neither has anything in the sandbox file to
+  override. The unified overlay-merge machinery this bullet originally
+  implied stays unbuilt until a MOBA value actually needs to change one of
+  `world01.toml`'s own numbers.
+- Done: `TotemLayout` derived from the composed world in the same fixed-tick
+  world transaction that already builds `AnkhLayout`, so a Totem survives a
+  recomposition the way an Ankh does, and fails loudly on an unowned Totem, a
+  dangling ownership entry, or a kind with no health entry.
+- Done: team assignment on join, and team spawn at the joining team's own
+  Totem of Life, replacing the five fixed spawn positions the server used
+  before. This is first join only; respawn after death is still Phase 3's
+  concern and still spawns at the team's Ankh, unchanged - the two are
+  different moments and were deliberately decided separately.
+- Not yet: Totem entities with health and destructible geometry, taking
+  damage through the existing damage resolution. No new damage rule: a Totem
+  will be hit by the same `HammerStrike` and `MageEyeBeams` evaluation
+  everything else is - blocked on the `destructible` Region from Gate A's
+  correction above being authored and synced.
+- Not yet: the win condition, a destroyed Totem of Life ending the match,
+  stated to the game console.
 
 Validation: `--tests`, with focused tests for the overlay resolution, the Totem
 layout derivation, and the win condition.
