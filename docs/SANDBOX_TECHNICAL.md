@@ -219,7 +219,8 @@ rather than parse raw manifests elsewhere. No general asset-contract
 registration API exists yet.
 
 PolyTools schema 16 exposes authored and Component-bound Regions with `attack`,
-`hurt`, or `collision` roles. The content boundary validates both variants and
+`hurt`, or `collision` roles; schema 23 adds `destructible`, the surface
+through which a placed Prop is hit, kept apart from a Character's `hurt`. The content boundary validates both variants and
 converts them into typed geometry. Hammer attack derivation requires an
 authored `attack` Region and Character Hurt derivation an authored `hurt`
 Region; neither has a Component-name fallback, and a Character that authors

@@ -9908,7 +9908,7 @@
 		"authored_facing": "neutral"
 	},
 	"regions": [],
-	"schema_version": 22,
+	"schema_version": 23,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",

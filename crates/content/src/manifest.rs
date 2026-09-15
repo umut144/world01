@@ -23,7 +23,7 @@ pub const WEAPON_REACH_LIMIT_ROLE: &str = "reach_limit_primary";
 /// the strokes' `role` string is not read, unknown fields are ignored, and
 /// every authored Hole draws a Contour without a Fill Mesh, so none of them
 /// contributes area to mass or health.
-pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 22;
+pub const RUNTIME_MANIFEST_SCHEMA_VERSION: u32 = 23;
 pub const REGION_GEOMETRY_AUTHORED: &str = "authored";
 pub const REGION_GEOMETRY_COMPONENT: &str = "component";
 
@@ -615,7 +615,10 @@ fn validate_asset_contents(manifest: &RuntimeManifest) -> Result<(), ContentErro
         || manifest.regions.iter().any(|region| {
             region.region_id.is_empty()
                 || region.name.is_empty()
-                || !matches!(region.role.as_str(), "attack" | "hurt" | "collision")
+                || !matches!(
+                    region.role.as_str(),
+                    "attack" | "hurt" | "collision" | "destructible"
+                )
                 || !matches!(
                     region.geometry_source.as_str(),
                     REGION_GEOMETRY_AUTHORED | REGION_GEOMETRY_COMPONENT

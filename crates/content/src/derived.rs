@@ -1194,14 +1194,16 @@ mod tests {
                 .all(|region| !region.component.boundary_edges().is_empty())
         );
 
-        // No Prop authors a `destructible` Region yet, so the catalog loads
-        // and is simply empty - the same graceful absence a Prop with no
-        // `collision` Region has, exercised here because nothing else in
-        // this crate covers the role-filtering path until one is authored.
+        // Whether the shipped Totems carry their `destructible` Region yet
+        // depends on the last content sync, so this holds either way: the
+        // catalog loads, and whatever it found has usable geometry. A Prop
+        // without the Region has no entry, like one without `collision`.
         let world_destructible =
             WorldDestructibleGeometryCatalog::from_content_and_map(&content, &map)
-                .expect("a world with nothing destructible authored is still valid");
-        assert!(world_destructible.regions.is_empty());
+                .expect("embedded world destructible topology is valid");
+        assert!(world_destructible.regions.iter().all(|region| {
+            !region.component.vertices.is_empty() && !region.component.indices.is_empty()
+        }));
     }
 
     /// What the shipped design also declares: the body and, where a Character

@@ -174,7 +174,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
     --arg type "$asset_type" \
     --slurpfile catalog "$source_catalog" \
     '
-      .schema_version == 22
+      .schema_version == 23
       and .asset_key == $key
       and .asset_type == $type
       and (.asset_id | type == "string" and length > 0)
@@ -191,7 +191,7 @@ while IFS=$'\t' read -r asset_type asset_key package_path; do
       and (.regions | all(.[];
         (.region_id | type == "string" and length > 0)
         and (.name | type == "string" and length > 0)
-        and (.role | . == "attack" or . == "hurt" or . == "collision")
+        and (.role | . == "attack" or . == "hurt" or . == "collision" or . == "destructible")
         and (.geometry_source | . == "authored" or . == "component")
         and (.source_component_id | type == "string" and length > 0)
         and (if .geometry_source == "authored" then

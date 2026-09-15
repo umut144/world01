@@ -19818,7 +19818,7 @@
 			"source_component_id": "component_105"
 		}
 	],
-	"schema_version": 22,
+	"schema_version": 23,
 	"z_order": {
 		"back_to_front": "ascending",
 		"scope": "global",
