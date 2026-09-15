@@ -25,6 +25,7 @@ use crate::DesignError;
 
 const MAP01_DESIGN: &str = include_str!("../games/moba/maps/map01.json");
 const TOTEM_DESIGN: &str = include_str!("../games/moba/totems.json");
+const PLACEMENT_RANKS_DESIGN: &str = include_str!("../games/moba/placement_ranks.json");
 
 const SCHEMA_VERSION: u32 = 1;
 /// The MOBA is played by two sides, so these are the only teams a map may name.
@@ -227,6 +228,83 @@ impl MobaTotemDesign {
     }
 }
 
+/// One Placement Rank the MOBA overlay adds beyond `world01.toml`'s own
+/// table, by the PolyTools Asset key it ranks.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MobaPlacementRank {
+    pub asset_key: String,
+    pub rank: u32,
+}
+
+/// The MOBA's own Placement Ranks, added to the sandbox's table rather than
+/// replacing any of it.
+///
+/// A Totem must outrank every authored Terrain and Prop `world01.toml`
+/// already ranks - no Template may ever paint over an objective - and the
+/// sandbox's own file has no reason to know a Totem exists. This file says
+/// only what the MOBA adds; combining it with the sandbox's own table is
+/// [`world01_world_data::PlacementRanks::extended_with`]'s job, not this
+/// one's.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MobaPlacementRanksDesign {
+    pub schema_version: u32,
+    pub ranks: Vec<MobaPlacementRank>,
+}
+
+impl MobaPlacementRanksDesign {
+    pub fn load_embedded() -> Result<Self, DesignError> {
+        Self::parse(PLACEMENT_RANKS_DESIGN)
+    }
+
+    /// Parses and validates a Placement Rank overlay that is not the
+    /// embedded one.
+    ///
+    /// Public beyond `load_embedded` so a consumer can build an overlay from
+    /// Placement Rank JSON it did not embed itself - a test fixture, today.
+    pub fn parse(source: &str) -> Result<Self, DesignError> {
+        let design: Self = serde_json::from_str(source).map_err(|error| {
+            DesignError(format!("cannot parse Placement Rank overlay: {error}"))
+        })?;
+        design.validate()?;
+        Ok(design)
+    }
+
+    /// This overlay's entries, in the shape
+    /// [`world01_world_data::PlacementRanks::extended_with`] takes.
+    pub fn entries(&self) -> impl Iterator<Item = (String, u32)> + '_ {
+        self.ranks
+            .iter()
+            .map(|entry| (entry.asset_key.clone(), entry.rank))
+    }
+
+    fn validate(&self) -> Result<(), DesignError> {
+        if self.schema_version != SCHEMA_VERSION {
+            return Err(DesignError(format!(
+                "Placement Rank overlay uses unsupported schema {}",
+                self.schema_version
+            )));
+        }
+        if self.ranks.is_empty() {
+            return Err(DesignError("Placement Rank overlay names no Asset".into()));
+        }
+        let mut seen = HashSet::with_capacity(self.ranks.len());
+        for entry in &self.ranks {
+            if entry.asset_key.is_empty() {
+                return Err(DesignError(
+                    "a Placement Rank overlay entry names no Asset".into(),
+                ));
+            }
+            if !seen.insert(entry.asset_key.as_str()) {
+                return Err(DesignError(format!(
+                    "'{}' is ranked twice in the Placement Rank overlay",
+                    entry.asset_key
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,5 +451,85 @@ mod tests {
         .expect("the JSON itself parses");
 
         assert!(design.validate().is_err());
+    }
+
+    fn placement_rank_overlay_source(body: &str) -> String {
+        format!("{{\"schema_version\":1,\"ranks\":[{body}]}}")
+    }
+
+    #[test]
+    fn the_embedded_placement_rank_overlay_names_all_three_totems() {
+        let overlay = MobaPlacementRanksDesign::load_embedded().expect("embedded overlay is valid");
+        let entries: std::collections::HashMap<String, u32> = overlay.entries().collect();
+
+        for asset_key in ["totem_of_life", "totem_of_mana", "totem_of_time"] {
+            assert!(
+                entries.contains_key(asset_key),
+                "{asset_key} should be ranked"
+            );
+        }
+        assert_eq!(
+            entries.len(),
+            3,
+            "the overlay should name only the three Totems"
+        );
+    }
+
+    #[test]
+    fn the_embedded_overlay_outranks_every_sandbox_placement_rank() {
+        let base = crate::load_world01_embedded()
+            .expect("embedded World 01 design parses")
+            .placement_ranks()
+            .expect("embedded Placement Ranks are valid");
+        let overlay = MobaPlacementRanksDesign::load_embedded().expect("embedded overlay is valid");
+
+        let merged = base
+            .extended_with(overlay.entries())
+            .expect("the overlay only adds Assets the sandbox has not ranked");
+
+        for asset_key in ["grass", "cobblestone", "tree", "ankh"] {
+            let sandbox_rank = merged
+                .rank(asset_key)
+                .unwrap_or_else(|| panic!("'{asset_key}' should still be ranked"));
+            for totem_asset_key in ["totem_of_life", "totem_of_mana", "totem_of_time"] {
+                let totem_rank = merged
+                    .rank(totem_asset_key)
+                    .unwrap_or_else(|| panic!("'{totem_asset_key}' should be ranked"));
+                assert!(
+                    totem_rank > sandbox_rank,
+                    "{totem_asset_key} (rank {totem_rank}) should outrank {asset_key} (rank {sandbox_rank})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_placement_rank_named_twice_is_refused() {
+        let duplicated = placement_rank_overlay_source(
+            "{\"asset_key\":\"totem_of_life\",\"rank\":10},             {\"asset_key\":\"totem_of_life\",\"rank\":20}",
+        );
+        let overlay: MobaPlacementRanksDesign =
+            serde_json::from_str(&duplicated).expect("the JSON itself parses");
+
+        assert!(overlay.validate().is_err());
+    }
+
+    #[test]
+    fn a_placement_rank_overlay_naming_nothing_is_refused() {
+        let overlay: MobaPlacementRanksDesign =
+            serde_json::from_str(&placement_rank_overlay_source(""))
+                .expect("the JSON itself parses");
+
+        assert!(overlay.validate().is_err());
+    }
+
+    #[test]
+    fn an_unsupported_placement_rank_overlay_schema_is_refused() {
+        let overlay: MobaPlacementRanksDesign = serde_json::from_str(
+            "{\"schema_version\":2,\"ranks\":             [{\"asset_key\":\"totem_of_life\",\"rank\":10}]}",
+        )
+        .expect("the JSON itself parses");
+
+        assert!(overlay.validate().is_err());
     }
 }

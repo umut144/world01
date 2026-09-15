@@ -12,6 +12,7 @@ use world01_content::{
     CharacterMassGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
     WorldCollisionGeometryCatalog,
 };
+use world01_design::moba::MobaPlacementRanksDesign;
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
@@ -37,7 +38,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let content = RuntimeContent::load_embedded()?;
     let world_map = WorldMap::load_embedded(&config.world.start_map)?;
     let world_templates = WorldTemplateCatalog::load_embedded()?;
-    let placement_ranks = world_design.placement_ranks()?;
+    // A Totem outranks every Terrain and Prop `world01.toml` already ranks -
+    // no Template may ever paint over an objective - so the MOBA's own
+    // overlay adds its ranks to the sandbox's table rather than the sandbox
+    // ever naming a Totem.
+    let placement_ranks = world_design
+        .placement_ranks()?
+        .extended_with(MobaPlacementRanksDesign::load_embedded()?.entries())?;
     let world_composition =
         WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
