@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "totems": [
+    { "asset_key": "totem_of_life", "max_hp": 2000.0 },
+    { "asset_key": "totem_of_mana", "max_hp": 1000.0 },
+    { "asset_key": "totem_of_time", "max_hp": 1000.0 }
+  ]
+}

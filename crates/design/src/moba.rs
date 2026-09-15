@@ -1,8 +1,10 @@
-//! The MOBA's per-map design data: which side an authored Prop belongs to.
+//! The MOBA's own design data: which side an authored Prop belongs to, and
+//! what a Totem is worth.
 //!
-//! Deliberately apart from [`crate::GameDesign`]. A side is a rule of one game,
-//! and the sandbox loads the shared design without ever learning that teams
-//! exist. Nothing in this module is part of the World-01 baseline.
+//! Deliberately apart from [`crate::GameDesign`]. A side is a rule of one
+//! game, and the sandbox loads the shared design without ever learning that
+//! teams - or Totems - exist. Nothing in this module is part of the
+//! World-01 baseline.
 
 use std::collections::HashSet;
 
@@ -12,6 +14,7 @@ use world01_world_data::TeamId;
 use crate::DesignError;
 
 const MAP01_DESIGN: &str = include_str!("../games/moba/maps/map01.json");
+const TOTEM_DESIGN: &str = include_str!("../games/moba/totems.json");
 
 const SCHEMA_VERSION: u32 = 1;
 /// The MOBA is played by two sides, so these are the only teams a map may name.
@@ -135,6 +138,76 @@ impl MobaMapCatalog {
     }
 }
 
+/// One Totem kind's maximum health, by the PolyTools Asset key it is placed
+/// from.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MobaTotemHealth {
+    pub asset_key: String,
+    pub max_hp: f32,
+}
+
+/// Every Totem kind's maximum health.
+///
+/// A Totem's MaxHP is MOBA design data rather than derived from its authored
+/// fill area - the World-01 area-based derivation exists to keep Characters
+/// comparable to one another, and a building is not on that scale. This file
+/// says nothing about which kinds a map actually places or leaves unowned;
+/// that is answered wherever the map and this design meet, not here.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct MobaTotemDesign {
+    pub schema_version: u32,
+    pub totems: Vec<MobaTotemHealth>,
+}
+
+impl MobaTotemDesign {
+    pub fn load_embedded() -> Result<Self, DesignError> {
+        let design: Self = serde_json::from_str(TOTEM_DESIGN)
+            .map_err(|error| DesignError(format!("cannot parse Totem design: {error}")))?;
+        design.validate()?;
+        Ok(design)
+    }
+
+    /// A Totem kind's maximum health, or `None` when this file says nothing
+    /// about the Asset key.
+    pub fn max_hp(&self, asset_key: &str) -> Option<f32> {
+        self.totems
+            .iter()
+            .find(|totem| totem.asset_key == asset_key)
+            .map(|totem| totem.max_hp)
+    }
+
+    fn validate(&self) -> Result<(), DesignError> {
+        if self.schema_version != SCHEMA_VERSION {
+            return Err(DesignError(format!(
+                "Totem design uses unsupported schema {}",
+                self.schema_version
+            )));
+        }
+        if self.totems.is_empty() {
+            return Err(DesignError("Totem design names no Totem kind".into()));
+        }
+        let mut seen = HashSet::with_capacity(self.totems.len());
+        for totem in &self.totems {
+            if totem.asset_key.is_empty() {
+                return Err(DesignError("a Totem design entry names no Asset".into()));
+            }
+            if !totem.max_hp.is_finite() || totem.max_hp <= 0.0 {
+                return Err(DesignError(format!(
+                    "'{}' has a non-positive or non-finite MaxHP",
+                    totem.asset_key
+                )));
+            }
+            if !seen.insert(totem.asset_key.as_str()) {
+                return Err(DesignError(format!(
+                    "'{}' is named twice in the Totem design",
+                    totem.asset_key
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +294,65 @@ mod tests {
         let two = source("{\"instance_id\":\"totem_of_life_0002\",\"team\":1}");
 
         assert!(MobaMapCatalog::parse([one.as_str(), two.as_str()]).is_err());
+    }
+
+    #[test]
+    fn the_embedded_totem_design_names_all_three_kinds() {
+        let design = MobaTotemDesign::load_embedded().expect("embedded Totem design is valid");
+
+        for asset_key in ["totem_of_life", "totem_of_mana", "totem_of_time"] {
+            assert!(
+                design.max_hp(asset_key).is_some_and(|hp| hp > 0.0),
+                "{asset_key} should have positive MaxHP"
+            );
+        }
+        assert_eq!(design.max_hp("totem_of_wisdom"), None);
+    }
+
+    fn totem_source(body: &str) -> String {
+        format!("{{\"schema_version\":1,\"totems\":[{body}]}}")
+    }
+
+    #[test]
+    fn a_totem_named_twice_is_refused() {
+        let design: MobaTotemDesign = serde_json::from_str(&totem_source(
+            "{\"asset_key\":\"totem_of_life\",\"max_hp\":10.0},             {\"asset_key\":\"totem_of_life\",\"max_hp\":20.0}",
+        ))
+        .expect("the JSON itself parses");
+
+        assert!(design.validate().is_err());
+    }
+
+    #[test]
+    fn a_non_positive_max_hp_is_refused() {
+        for max_hp in ["0.0", "-1.0"] {
+            let source = totem_source(&format!(
+                "{{\"asset_key\":\"totem_of_life\",\"max_hp\":{max_hp}}}"
+            ));
+            let design: MobaTotemDesign =
+                serde_json::from_str(&source).expect("the JSON itself parses");
+            assert!(
+                design.validate().is_err(),
+                "max_hp {max_hp} should be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn a_totem_design_naming_nothing_is_refused() {
+        let design: MobaTotemDesign =
+            serde_json::from_str(&totem_source("")).expect("the JSON itself parses");
+
+        assert!(design.validate().is_err());
+    }
+
+    #[test]
+    fn an_unsupported_totem_design_schema_is_refused() {
+        let design: MobaTotemDesign = serde_json::from_str(
+            "{\"schema_version\":2,\"totems\":             [{\"asset_key\":\"totem_of_life\",\"max_hp\":10.0}]}",
+        )
+        .expect("the JSON itself parses");
+
+        assert!(design.validate().is_err());
     }
 }
