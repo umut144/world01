@@ -507,9 +507,22 @@ version, a rare occupancy change during a client prediction rollback may replay
 buffered input against the newest world until normal server reconciliation;
 retaining historical worlds for every rollback tick is deliberately deferred
 unless playtesting shows that short discrepancy to be material.
-The current strict importer accepts export schema 10 and embedded scene schema
-11. It requires their water and route-surface fields so an older snapshot
-cannot masquerade as current. `WorldMap` does not yet model water and Templates
+The current strict importer accepts export version 19 and embedded scene schema
+17. It requires their water and route-surface fields so an older snapshot
+cannot masquerade as current.
+
+A placed Prop's `instance_id` is the identity anything outside the map refers to
+it by. SceneMaker guarantees from export 20 that an `instance_id` is **never
+reused**: it is allocated from a per-Asset counter stored on the Scene document,
+never decremented, and erasing a Prop does not free its number. Uniqueness among
+living Props would not be enough for a reference that outlives the Prop it
+names - a dangling reference is refused at load, but a recycled one would
+silently resolve to a different Prop. Export 20 changes no field; it is a promise
+about `instance_id`, which is why the version is what a reader gates on.
+
+**The importer still requires 19.** The exports in `assets/` have not been
+re-authored at 20 yet, so raising `FORMAT_VERSION` now would reject every map in
+the repository. The two moves are one change and have to happen together. `WorldMap` does not yet model water and Templates
 carrying water are rejected. Instances retain SceneMaker's independently
 elevated Path surfaces as validated, runtime-ready vertices, triangle indices,
 primitive boundary edges, centerline samples and stable authored segments.

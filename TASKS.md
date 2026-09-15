@@ -34,6 +34,7 @@ forgotten which half was which.
 
 | ID | Area | Outcome | Status |
 |---|---|---|---|
+| `SBX-42` | World authoring | Raise the map importer's `FORMAT_VERSION` from 19 to 20 together with a SceneMaker re-export of every map at that version, so the runtime requires the never-reused `instance_id` guarantee rather than assuming it. Neither half works alone: raising it first rejects every map in `assets/`, re-exporting first loads maps whose promise nothing checks. | **Blocked on SceneMaker re-exporting `workspaces/world01/*/exports/` at version 20** |
 | `MOBA-02` | MOBA | Phase 2: the MOBA design overlay, a `TotemLayout` derived beside `AnkhLayout`, destructible Totems, team assignment and team-Ankh spawning, and a match that ends when a Totem of Life falls. | **Blocked on roadmap Gates A, B and C** — six Totem Assets in PolyTools, the map Instance in SceneMaker, and the synced export with its authored Prop IDs |
 | `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 | `WORLD-18` | World rendering | Evaluate a Bevy tilemap crate for the SceneMaker-authored world representation, including compatibility with the current engine-neutral map export and PolyTools asset profiles. | **Deferred for later performance work** |

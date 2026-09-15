@@ -148,6 +148,13 @@ is a promise SceneMaker has to make rather than something world01 can check:
 **An `instance_id` is never reused.** Once a number has named a Prop, no later
 Prop in that Scene may carry it again, even after the first is deleted.
 
+SceneMaker guarantees this from **export 20**, allocating from a per-Asset
+counter stored on the Scene document that is never decremented, and showing a
+selected Prop's `instance_id` in the inspector so it can be read and pasted
+straight into the file below. The repository's own exports are still at 19 and
+the importer still requires 19; raising it is one change that waits for the
+re-export.
+
 Uniqueness among living Props is not enough. A reference that lives in another
 repository outlives the Prop it names, and the failure that matters is not a
 dangling reference - that one is loud, and loading refuses it - but a reference
@@ -280,15 +287,18 @@ What is kept, unchanged:
   body a location that is worth fighting over.
 - The dead Character can reject the revival with its own `A` input and enter
   `DEATH_CONFIRMING`, as in World 01.
+- **The Ankh is the nearest one, not the team's own.** World 01 respawns at the
+  Ankh nearest the death position and the MOBA keeps that unchanged, decided on
+  2026-09-15. It means dying deep on the enemy bank returns you there, which
+  makes how far you push and where you choose to fall a risk you are taking
+  rather than a detail. An Ankh therefore belongs to no team and appears in no
+  design file.
 
 What the MOBA overrides:
 
 - **The respawn is timed.** Completing `DEATH_CONFIRMING` no longer respawns
   immediately. It commits the Character to the queue, and the Ankh spawn
   happens after the Totem-of-Time-derived delay.
-- **The Ankh is the team's.** Respawn selects among the two Ankhs of the dead
-  Character's own team, not the nearest Ankh on the map. The deterministic
-  candidate search around the chosen Ankh is the shared one and is unchanged.
 - **Respawn health** is MOBA design data rather than World 01's `40%`.
 
 ## Creeps
@@ -591,12 +601,9 @@ hand later, by someone who has forgotten which half was which.
 - **Whether two attack inputs survive.** If the MOBA grows past two abilities
   per Character, `PlayerInput` gains slots and this decision is revisited
   deliberately rather than by accretion.
-- **Whether an Ankh belongs to a team.** The map file names only Totems today,
-  on the reasoning that a Totem is the only Prop a side owns. But respawn has to
-  choose an Ankh, and World 01 chooses the one nearest the death position, which
-  in a MOBA is how a dead Character reappears inside the enemy base. Either the
-  Ankhs join the file - four more lines, the same shape - or the MOBA needs
-  another rule for which Ankh is yours, and every such rule so far has turned
-  out to be a guess about the map.
+- **Whether respawning at the nearest Ankh stays fun.** It is now a deliberate
+  rule rather than an open question, and the thing to watch in play is whether
+  returning inside the enemy bank reads as a risk the player took or as a
+  punishment the map handed out.
 - **Whether creeps should be attackable by their own team.** Follows from the
   friendly-fire question and probably does not deserve a separate answer.
