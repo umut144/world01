@@ -159,6 +159,16 @@ One Instance scene containing:
 The map does not need to be final, balanced or pretty. It needs to be
 structurally complete, because every rule in this phase reads it.
 
+**Correction, 2026-09-15**: the map01 export synced today does not load.
+`WorldMap::load_embedded` refuses it - `map instances 'ankh_0002' and
+'tree_0015' have overlapping placement footprints` - the same check that
+would refuse any two authored Props on one Instance, Totem or not. This is a
+SceneMaker placement fix (move one of the two apart), not a runtime one; a
+test at `world01_simulation::moba::totem::tests::
+the_embedded_map01_places_six_totems_three_per_side_with_every_kind` is
+written and ready to confirm the fix once it lands, but is not committed
+while it cannot pass.
+
 Note for authoring: the existing export contract rejects a Template carrying
 water. The MOBA map is an Instance, not a Template, so this does not apply to
 it — but it does mean the river cannot arrive inside a Template Anchor. That is
