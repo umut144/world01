@@ -10,6 +10,7 @@ use world01_content::{
 };
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
+use world01_simulation::moba::{MobaMapOwnership, TotemLayout};
 use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
     TraversalCatalog, WeaponAimRules, WorldColliderGrid,
@@ -59,6 +60,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
+    let moba_ownership = MobaMapOwnership::load_embedded()?;
+    let totem_layout = TotemLayout::from_map(&world_map, &moba_ownership)?;
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
@@ -166,6 +169,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(placement_ranks);
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
+    app.insert_resource(moba_ownership);
+    app.insert_resource(totem_layout);
     app.insert_non_send(controller_input);
     app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientSessionPlugin {

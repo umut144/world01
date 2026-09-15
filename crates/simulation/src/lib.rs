@@ -9,6 +9,7 @@ pub mod damage;
 pub mod exertion;
 pub mod life;
 pub mod mass;
+pub mod moba;
 pub mod movement;
 pub mod navigation;
 pub mod respawn;

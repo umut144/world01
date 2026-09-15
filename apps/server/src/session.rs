@@ -308,6 +308,7 @@ fn spawn_world_position(map: &WorldMap, actor_id: u64) -> Option<WorldPosition> 
 mod tests {
     use super::*;
     use world01_content::WorldCollisionGeometryCatalog;
+    use world01_simulation::moba::{MobaMapOwnership, TotemLayout};
     use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
         AnkhLayout, PlacementRanks, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
@@ -509,16 +510,22 @@ mod tests {
             .expect("embedded world collision is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
+        let moba_ownership =
+            MobaMapOwnership::load_embedded().expect("embedded map ownership is valid");
+        let totems = TotemLayout::from_map(&map, &moba_ownership)
+            .expect("the embedded overworld places no Totem");
 
         let mut app = App::new();
         app.insert_resource(composition)
             .insert_resource(content)
             .insert_resource(templates.clone())
             .insert_resource(ranks.clone())
+            .insert_resource(moba_ownership)
             .insert_resource(map)
             .insert_resource(collision)
             .insert_resource(grid)
             .insert_resource(ankhs)
+            .insert_resource(totems)
             .init_resource::<PublishedOccupancyChanges>()
             .add_systems(Startup, spawn_world_state)
             .add_systems(

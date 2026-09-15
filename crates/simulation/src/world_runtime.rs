@@ -7,6 +7,7 @@ use world01_world_data::{
     WorldSwitchRequest, WorldTemplateCatalog,
 };
 
+use crate::moba::{MobaMapOwnership, TotemLayout, TotemLayoutError};
 use crate::navigation::{GroundNavigationError, GroundNavigationGraph};
 use crate::{SimulationSet, WorldColliderGrid};
 
@@ -88,6 +89,7 @@ enum WorldRuntimeBuildError {
     Collision(RegionGeometryError),
     Navigation(GroundNavigationError),
     MissingAnkh,
+    Totem(TotemLayoutError),
 }
 
 impl fmt::Display for WorldRuntimeBuildError {
@@ -99,6 +101,7 @@ impl fmt::Display for WorldRuntimeBuildError {
             Self::MissingAnkh => {
                 formatter.write_str("composed world requires at least one Ankh placement")
             }
+            Self::Totem(error) => error.fmt(formatter),
         }
     }
 }
@@ -110,6 +113,7 @@ struct DerivedWorldResources {
     collision: WorldCollisionGeometryCatalog,
     grid: WorldColliderGrid,
     ankhs: AnkhLayout,
+    totems: TotemLayout,
     navigation: Option<GroundNavigationGraph>,
 }
 
@@ -118,6 +122,7 @@ impl DerivedWorldResources {
         content: &RuntimeContent,
         map: &WorldMap,
         navigation: WorldNavigation,
+        moba_ownership: &MobaMapOwnership,
     ) -> Result<Self, WorldRuntimeBuildError> {
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(content, map)
             .map_err(WorldRuntimeBuildError::Collision)?;
@@ -126,6 +131,8 @@ impl DerivedWorldResources {
         if ankhs.positions.is_empty() {
             return Err(WorldRuntimeBuildError::MissingAnkh);
         }
+        let totems =
+            TotemLayout::from_map(map, moba_ownership).map_err(WorldRuntimeBuildError::Totem)?;
         let navigation = match navigation {
             WorldNavigation::Derived => Some(
                 GroundNavigationGraph::from_world(map, &collision, &grid)
@@ -138,6 +145,7 @@ impl DerivedWorldResources {
             collision,
             grid,
             ankhs,
+            totems,
             navigation,
         })
     }
@@ -150,11 +158,13 @@ fn rebuild_world_runtime(
     content: Res<RuntimeContent>,
     templates: Res<WorldTemplateCatalog>,
     ranks: Res<PlacementRanks>,
+    moba_ownership: Res<MobaMapOwnership>,
     mut composition: ResMut<WorldComposition>,
     mut map: ResMut<WorldMap>,
     mut collision: ResMut<WorldCollisionGeometryCatalog>,
     mut grid: ResMut<WorldColliderGrid>,
     mut ankhs: ResMut<AnkhLayout>,
+    mut totems: ResMut<TotemLayout>,
     navigation: Res<WorldNavigation>,
     mut graph: Option<ResMut<GroundNavigationGraph>>,
     mut state: ResMut<WorldRuntimeState>,
@@ -214,7 +224,12 @@ fn rebuild_world_runtime(
     }
 
     let source = candidate.as_ref().unwrap_or(&composition);
-    let derived = match DerivedWorldResources::build(&content, source.current_map(), *navigation) {
+    let derived = match DerivedWorldResources::build(
+        &content,
+        source.current_map(),
+        *navigation,
+        &moba_ownership,
+    ) {
         Ok(derived) => derived,
         Err(error) => {
             reject_generation(target_generation, error, &mut state);
@@ -229,6 +244,7 @@ fn rebuild_world_runtime(
     *collision = derived.collision;
     *grid = derived.grid;
     *ankhs = derived.ankhs;
+    *totems = derived.totems;
     if let (Some(derived), Some(graph)) = (derived.navigation, graph.as_mut()) {
         **graph = derived;
     }
@@ -250,11 +266,16 @@ fn reject_generation(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::moba::MobaMapOwnership;
     use crate::{WorldSeparationStep, separate_characters_from_world};
     use world01_configs::load_embedded;
     use world01_content::CharacterCollisionGeometryCatalog;
     use world01_design::load_world01_embedded;
     use world01_world_data::{BodyFacing, CharacterId, SelectedCharacter, WorldPosition};
+
+    fn moba_ownership() -> MobaMapOwnership {
+        MobaMapOwnership::load_embedded().expect("embedded map ownership is valid")
+    }
 
     #[derive(Resource, Debug, Default)]
     struct MapChangeCount(u32);
@@ -286,6 +307,7 @@ mod tests {
         collision: WorldCollisionGeometryCatalog,
         grid: WorldColliderGrid,
         ankhs: AnkhLayout,
+        totems: TotemLayout,
     }
 
     fn embedded_world() -> EmbeddedWorld {
@@ -303,6 +325,8 @@ mod tests {
             .expect("startup collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
+        let totems = TotemLayout::from_map(&map, &moba_ownership())
+            .expect("the embedded overworld places no Totem");
         EmbeddedWorld {
             content,
             templates,
@@ -312,6 +336,7 @@ mod tests {
             collision,
             grid,
             ankhs,
+            totems,
         }
     }
 
@@ -323,11 +348,13 @@ mod tests {
         app.insert_resource(world.content)
             .insert_resource(world.templates)
             .insert_resource(world.ranks)
+            .insert_resource(moba_ownership())
             .insert_resource(world.composition)
             .insert_resource(world.map)
             .insert_resource(world.collision)
             .insert_resource(world.grid)
             .insert_resource(world.ankhs)
+            .insert_resource(world.totems)
             .insert_resource(navigation)
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
@@ -479,17 +506,21 @@ mod tests {
             .expect("initial collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
+        let totems = TotemLayout::from_map(&map, &moba_ownership())
+            .expect("this synthetic Instance places no Totem");
         let initial_composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the replica composition is valid");
         let mut app = App::new();
         app.insert_resource(content)
             .insert_resource(templates)
             .insert_resource(ranks)
+            .insert_resource(moba_ownership())
             .insert_resource(initial_composition.clone())
             .insert_resource(map.clone())
             .insert_resource(collision.clone())
             .insert_resource(grid.clone())
             .insert_resource(ankhs.clone())
+            .insert_resource(totems.clone())
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
             .init_resource::<WorldSwitchRequest>()

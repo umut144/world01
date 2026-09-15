@@ -103,7 +103,12 @@ impl MobaMapCatalog {
         Self::parse([MAP01_DESIGN])
     }
 
-    fn parse<'a>(sources: impl IntoIterator<Item = &'a str>) -> Result<Self, DesignError> {
+    /// Parses and validates a set of map-ownership sources together, refusing
+    /// two files that claim the same scene.
+    ///
+    /// Public beyond `load_embedded` so a consumer can build a catalog from
+    /// map-ownership JSON it did not embed itself - a test fixture, today.
+    pub fn parse<'a>(sources: impl IntoIterator<Item = &'a str>) -> Result<Self, DesignError> {
         let mut maps = Vec::new();
         let mut scenes = HashSet::new();
         for source in sources {

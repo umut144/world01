@@ -16,6 +16,7 @@ use world01_design::{load_embedded as load_game_design, load_world01_embedded};
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
+use world01_simulation::moba::{MobaMapOwnership, TotemLayout};
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     GroundNavigationGraph, HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep,
@@ -47,6 +48,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
+    let moba_ownership = MobaMapOwnership::load_embedded()?;
+    let totem_layout = TotemLayout::from_map(&world_map, &moba_ownership)?;
     let network_simulation = network_simulation_from_env()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -131,7 +134,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_templates)
     .insert_resource(placement_ranks)
     .insert_resource(world_map)
-    .insert_resource(ankh_layout);
+    .insert_resource(ankh_layout)
+    .insert_resource(moba_ownership)
+    .insert_resource(totem_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
     add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
     add_switch_buttons(&mut app, FixedUpdate);
