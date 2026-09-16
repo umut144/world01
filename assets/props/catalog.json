@@ -47,6 +47,15 @@
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_52",
+      "asset_key": "coin",
+      "asset_type": "props",
+      "display_name": "Coin",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/coin/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_38",
       "asset_key": "lightning_bolt",
       "asset_type": "props",

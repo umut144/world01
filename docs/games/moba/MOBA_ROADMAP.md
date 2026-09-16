@@ -159,15 +159,14 @@ One Instance scene containing:
 The map does not need to be final, balanced or pretty. It needs to be
 structurally complete, because every rule in this phase reads it.
 
-**Correction, 2026-09-15**: the map01 export synced today does not load.
-`WorldMap::load_embedded` refuses it - `map instances 'ankh_0002' and
-'tree_0015' have overlapping placement footprints` - the same check that
-would refuse any two authored Props on one Instance, Totem or not. This is a
-SceneMaker placement fix (move one of the two apart), not a runtime one; a
-test at `world01_simulation::moba::totem::tests::
-the_embedded_map01_places_six_totems_three_per_side_with_every_kind` is
-written and ready to confirm the fix once it lands, but is not committed
-while it cannot pass.
+**Correction, 2026-09-15, resolved 2026-09-16**: the map01 export synced on
+2026-09-15 did not load - `ankh_0002` and `tree_0015` overlapped, the same
+same-Instance footprint check that would refuse any two Props, Totem or not.
+Fixed in SceneMaker and re-synced. `world01_simulation::moba::totem::tests::
+the_embedded_map01_places_six_totems_three_per_side_with_every_kind` now
+passes against the real embedded map, confirming it composes with the
+sandbox's ranks extended by the MOBA overlay and that `TotemLayout::from_map`
+finds all six Totems.
 
 Note for authoring: the existing export contract rejects a Template carrying
 water. The MOBA map is an Instance, not a Template, so this does not apply to
@@ -227,9 +226,11 @@ the simulation is allowed to depend on.
   above) - but nothing yet connects the two.
 - Done: the three Totem Assets' Placement Ranks, added by the MOBA overlay
   rather than written into `world01.toml` (see Gate A above). `map01` no
-  longer fails `WorldComposition::new` on a missing rank for a Totem; the
-  server's `start_map` is still `overworld01`, a separate, deliberate step
-  once the map itself is ready to run.
+  longer fails `WorldComposition::new` on a missing rank for a Totem, and now
+  that the export itself loads (see Gate B's correction above), this
+  branch's `runtime.toml` sets `start_map = "map01"` as its own default -
+  `main` keeps `overworld01`, and each branch's own committed value is what
+  a `git checkout` between them actually switches.
 - Not yet: wiring a Totem's destructible geometry into the existing damage
   resolution, so `HammerStrike` and `MageEyeBeams` actually mutate a Totem
   entity's health the way they already mutate a Character's. No new damage

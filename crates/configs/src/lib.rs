@@ -171,7 +171,7 @@ mod tests {
         assert_eq!(runtime.network.remote_interpolation_ratio, 2.0);
         assert_eq!(runtime.camera.effective_view_tiles(), Some((16, 10)));
         assert!(runtime.camera.is_valid());
-        assert_eq!(runtime.world.start_map, "overworld01");
+        assert_eq!(runtime.world.start_map, "map01");
         assert!(runtime.world.is_valid());
     }
 

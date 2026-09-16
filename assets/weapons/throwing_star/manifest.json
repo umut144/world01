@@ -2590,7 +2590,7 @@
 		}
 	],
 	"coordinate_system": {
-		"component_transform": "T(position) * R(rotation) * S(scale) * T(-pivot)",
+		"component_transform": "T(position) * R(rotation) * S(scale); vertices are pivot-relative",
 		"dimensions": 2,
 		"positive_rotation": "counter_clockwise",
 		"rotation_unit": "radian",

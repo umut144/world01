@@ -12,4 +12,4 @@ view_width_tiles = 21
 view_height_tiles = 13
 
 [world]
-start_map = "overworld01"
+start_map = "map01"
