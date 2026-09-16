@@ -433,4 +433,51 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn the_embedded_map01_places_six_totems_three_per_side_with_every_kind() {
+        let map = WorldMap::load_embedded("map01").expect("the embedded map01 export is valid");
+        let templates = world01_world_data::WorldTemplateCatalog::load_embedded()
+            .expect("embedded Templates are valid");
+        let ranks = world01_design::load_world01_embedded()
+            .expect("embedded World 01 design parses")
+            .placement_ranks()
+            .expect("embedded Placement Ranks are valid")
+            .extended_with(
+                world01_design::moba::MobaPlacementRanksDesign::load_embedded()
+                    .expect("embedded Placement Rank overlay is valid")
+                    .entries(),
+            )
+            .expect("the overlay only adds Assets the sandbox has not ranked");
+        world01_world_data::WorldComposition::new(map.clone(), &templates, &ranks)
+            .expect("map01 composes with the sandbox's ranks extended by the MOBA overlay");
+
+        let ownership = MobaMapOwnership::load_embedded().expect("embedded map ownership is valid");
+        let health =
+            MobaTotemHealthDesign::load_embedded().expect("embedded Totem design is valid");
+        let layout = TotemLayout::from_map(&map, &ownership, &health)
+            .expect("map01's Totems, ownership, and health all agree");
+
+        assert_eq!(layout.totems.len(), 6, "three Totems per side");
+        for team in [TeamId(0), TeamId(1)] {
+            let team_totems: Vec<_> = layout
+                .totems
+                .iter()
+                .filter(|placed| placed.totem.team == team)
+                .collect();
+            assert_eq!(
+                team_totems.len(),
+                3,
+                "team {} should have three Totems",
+                team.0
+            );
+            for kind in [TotemKind::Life, TotemKind::Mana, TotemKind::Time] {
+                assert!(
+                    team_totems.iter().any(|placed| placed.totem.kind == kind),
+                    "team {} should have a {kind:?}",
+                    team.0
+                );
+            }
+        }
+    }
 }
