@@ -256,7 +256,12 @@ fn team_from_args() -> Result<Option<TeamId>, Box<dyn Error>> {
 }
 
 fn client_id_from_args() -> Result<u64, Box<dyn Error>> {
-    let Some(value) = env::args().nth(1) else {
+    // A leading flag means no id was given at all: `--team 0` is not a client
+    // id, and parsing it as one would fail for a call that is perfectly valid.
+    let Some(value) = env::args()
+        .nth(1)
+        .filter(|argument| !argument.starts_with("--"))
+    else {
         return Ok(u64::from(std::process::id()));
     };
     let client_id = value.parse::<u64>()?;
