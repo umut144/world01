@@ -219,8 +219,9 @@ mod tests {
         format!(
             r#"{{
                 "format": "scene_maker_scene_export",
-                "version": 20,
+                "version": 21,
                 "workspace_key": "world01",
+                "game_key": "moba",
                 "grid": {{
                     "terrain_cell_meters": 1.0,
                     "authoring_pixels_per_meter": 32.0,
@@ -436,8 +437,9 @@ mod tests {
 
     #[test]
     fn the_embedded_map01_places_six_totems_three_per_side_with_every_kind() {
-        let map = WorldMap::load_embedded("map01").expect("the embedded map01 export is valid");
-        let templates = world01_world_data::WorldTemplateCatalog::load_embedded()
+        let map =
+            WorldMap::load_embedded("moba", "map01").expect("the embedded map01 export is valid");
+        let templates = world01_world_data::WorldTemplateCatalog::load_embedded("moba")
             .expect("embedded Templates are valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("embedded World 01 design parses")

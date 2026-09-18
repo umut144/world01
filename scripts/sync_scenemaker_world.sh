@@ -5,16 +5,22 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 # SceneMaker keeps its Scenes per Game: workspaces/<workspace>/<game>/exports.
 # A workspace holds several Games - world01 holds sandbox and moba - while the
 # runtime has one embedded map catalog and picks an Instance by its scene ID.
-# So the sync reads every Game of the workspace rather than one named Game:
-# naming one would mean a second Game's Scenes could only arrive by replacing
-# the first Game's, and this script replaces the whole destination directory.
+# Since export contract v21 each export names its own Game in `game_key`, and
+# this sync files it under assets/maps/<game_key>/ accordingly. That key is
+# what makes a partial sync safe: only the Games actually present in the
+# sources are replaced, and a Game that was not exported keeps what it had.
+# Before the key existed this script replaced the whole map directory, so
+# exporting one Game deleted every other Game's maps.
 # SCENEMAKER_EXPORTS overrides the search with an explicit colon-separated list
 # of export directories.
 scenemaker_workspace="${SCENEMAKER_WORKSPACE:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01}"
 asset_catalog="$project_root/assets/catalog.json"
 destination_directory="$project_root/assets/maps"
 staging_directory=""
+# The one Game currently being swapped, so an interrupted swap is undone
+# rather than leaving that Game with no Scenes at all.
 backup_directory=""
+backup_destination=""
 
 fail() {
   printf 'SCENEMAKER SYNC FAILED: %s\n' "$1" >&2
@@ -26,8 +32,8 @@ cleanup() {
     rm -rf -- "$staging_directory"
   fi
   if [[ -n "$backup_directory" && -d "$backup_directory" ]]; then
-    if [[ ! -e "$destination_directory" ]]; then
-      mv "$backup_directory" "$destination_directory"
+    if [[ -n "$backup_destination" && ! -e "$backup_destination" ]]; then
+      mv "$backup_directory" "$backup_destination"
     else
       rm -rf -- "$backup_directory"
     fi
@@ -112,8 +118,9 @@ for source_export in "${source_exports[@]}"; do
     | ($root.grid.terrain_cell_meters * $root.grid.authoring_pixels_per_meter) as $terrain_step
     | ($root.grid.terrain_cell_meters / $root.grid.water_cell_meters) as $water_cells
     | .format == "scene_maker_scene_export"
-    and .version == 20
+    and .version == 21
     and .workspace_key == "world01"
+    and (.game_key | type == "string" and length > 0)
     and (.grid.terrain_cell_meters | type == "number" and isfinite and . > 0)
     and (.grid.authoring_pixels_per_meter | type == "number" and isfinite and . > 0)
     and (.grid.game_pixels_per_meter | type == "number" and isfinite and . > 0)
@@ -393,24 +400,50 @@ for source_export in "${source_exports[@]}"; do
     ([.scene.bridges[].anchor_asset_key] | unique | .[] | [., "props"] | @tsv)
   ' "$source_export")
 
-  cp "$source_export" "$staging_directory/$(basename "$source_export")"
+  export_game="$(jq -r '.game_key' "$source_export")" \
+    || fail "cannot read game_key from: $source_export"
+  case "$export_game" in
+    */*|.|..|"") fail "export names an unusable game_key '$export_game': $source_export" ;;
+  esac
+  mkdir -p "$staging_directory/$export_game"
+  cp "$source_export" "$staging_directory/$export_game/$(basename "$source_export")"
 done
 
-duplicate_scene_ids="$(jq -r '.scene.scene_id' "$staging_directory"/*.scene_export.json | LC_ALL=C sort | uniq -d)"
-[[ -z "$duplicate_scene_ids" ]] || fail "duplicate scene IDs: $duplicate_scene_ids"
+# A scene ID identifies a Scene within its own Game. Two Games may each
+# author a "map01"; one Game naming it twice would make a load ambiguous.
+for staged_game in "$staging_directory"/*/; do
+  staged_game_key="$(basename "$staged_game")"
+  duplicate_scene_ids="$(jq -r '.scene.scene_id' "$staged_game"/*.scene_export.json \
+    | LC_ALL=C sort | uniq -d)"
+  [[ -z "$duplicate_scene_ids" ]] \
+    || fail "game '$staged_game_key' duplicates scene IDs: $duplicate_scene_ids"
+done
 
-if [[ -d "$destination_directory" ]]; then
-  backup_directory="$(mktemp -d "$project_root/assets/.maps-backup.XXXXXX")"
-  rmdir "$backup_directory"
-  mv "$destination_directory" "$backup_directory"
-fi
-mv "$staging_directory" "$destination_directory"
+# One Game at a time, and only the Games that were exported. Each swap is
+# its own rename, so a Game either gets its whole new set of Scenes or
+# keeps its old one - never half of each.
+mkdir -p "$destination_directory"
+synced_games=()
+for staged_game in "$staging_directory"/*/; do
+  staged_game_key="$(basename "$staged_game")"
+  game_destination="$destination_directory/$staged_game_key"
+  if [[ -d "$game_destination" ]]; then
+    backup_directory="$(mktemp -d "$project_root/assets/.maps-backup.XXXXXX")"
+    rmdir "$backup_directory"
+    backup_destination="$game_destination"
+    mv "$game_destination" "$backup_directory"
+  fi
+  mv "$staged_game" "$game_destination"
+  if [[ -n "$backup_directory" ]]; then
+    rm -rf -- "$backup_directory"
+    backup_directory=""
+    backup_destination=""
+  fi
+  synced_games+=("$staged_game_key")
+done
+rm -rf -- "$staging_directory"
 staging_directory=""
-if [[ -n "$backup_directory" ]]; then
-  rm -rf -- "$backup_directory"
-  backup_directory=""
-fi
 trap - EXIT
 
-printf 'SCENEMAKER -> WORLD01 SYNC SUCCESS (%s exports from %s Games)\n' \
-  "${#source_exports[@]}" "${#source_directories[@]}"
+printf 'SCENEMAKER -> WORLD01 SYNC SUCCESS (%s exports into: %s)\n' \
+  "${#source_exports[@]}" "${synced_games[*]}"

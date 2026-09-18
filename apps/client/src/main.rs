@@ -55,8 +55,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let world_map = WorldMap::load_embedded(&config.world.start_map)?;
-    let world_templates = WorldTemplateCatalog::load_embedded()?;
+    let world_map =
+        WorldMap::load_embedded(MobaWorldDerivation::GAME_KEY, &config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded(MobaWorldDerivation::GAME_KEY)?;
     // A Totem outranks every Terrain and Prop `world01.toml` already ranks -
     // no Template may ever paint over an objective - so the MOBA's own
     // overlay adds its ranks to the sandbox's table rather than the sandbox

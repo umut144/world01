@@ -823,11 +823,11 @@ mod tests {
         let ranks = design
             .placement_ranks()
             .expect("embedded Placement Ranks are valid");
-        let templates =
-            WorldTemplateCatalog::load_embedded().expect("embedded SceneMaker Templates are valid");
+        let templates = WorldTemplateCatalog::load_embedded("sandbox")
+            .expect("embedded SceneMaker Templates are valid");
         let overworld =
-            WorldMap::load_embedded("overworld01").expect("embedded overworld is valid");
-        let cave = WorldMap::load_embedded("cave01").expect("embedded cave is valid");
+            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded overworld is valid");
+        let cave = WorldMap::load_embedded("sandbox", "cave01").expect("embedded cave is valid");
 
         ranks
             .validate_for(&overworld, &templates)

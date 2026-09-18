@@ -994,7 +994,8 @@ mod tests {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let characters = CharacterCollisionGeometryCatalog::from_content(&content)
             .expect("embedded Character collision geometry is valid");
-        let map = WorldMap::load_embedded("overworld01").expect("embedded world map is valid");
+        let map =
+            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded world map is valid");
         let world = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
             .expect("embedded world collision geometry is valid");
         let tree_position = world

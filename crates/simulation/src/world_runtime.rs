@@ -84,6 +84,12 @@ impl WorldRuntimeState {
 /// rule, not the act: the host calls it to build the first world and calls the
 /// same rule again every time the world changes underneath it.
 pub trait WorldDerivation: 'static + Send + Sync {
+    /// The game this derivation belongs to, as SceneMaker exports name it.
+    ///
+    /// Maps and Templates are filed under it, and a scene ID is only unique
+    /// within it, so every load has to state which game it means.
+    const GAME_KEY: &'static str;
+
     /// Everything the derivation reads besides the map, as one Resource.
     ///
     /// One rather than several so that adding an input to a game is a change
@@ -317,6 +323,8 @@ mod tests {
     struct TestGameDerived;
 
     impl WorldDerivation for TestWorldDerivation {
+        const GAME_KEY: &'static str = "sandbox";
+
         type Source = TestGameSource;
         type Derived = TestGameDerived;
 
@@ -363,12 +371,13 @@ mod tests {
     fn embedded_world() -> EmbeddedWorld {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let templates =
-            WorldTemplateCatalog::load_embedded().expect("embedded Templates are valid");
+            WorldTemplateCatalog::load_embedded("sandbox").expect("embedded Templates are valid");
         let ranks = load_world01_embedded()
             .expect("embedded world design parses")
             .placement_ranks()
             .expect("embedded Placement Ranks are valid");
-        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
+        let map =
+            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
         let composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("startup composition is valid");
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
@@ -535,7 +544,7 @@ mod tests {
     fn a_generation_without_an_ankh_is_rejected_without_partial_changes() {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let templates =
-            WorldTemplateCatalog::load_embedded().expect("embedded Templates are valid");
+            WorldTemplateCatalog::load_embedded("sandbox").expect("embedded Templates are valid");
         let ranks = PlacementRanks::from_entries([("grass", 200), ("tree", 20), ("ankh", 100)])
             .expect("test Placement Ranks are valid");
         let map = WorldMap::from_source(&single_ankh_instance(), "runtime_test")
@@ -728,8 +737,9 @@ mod tests {
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
-            "version": 20,
+            "version": 21,
             "workspace_key": "world01",
+            "game_key": "sandbox",
             "grid": {
                 "terrain_cell_meters": 1.0,
                 "authoring_pixels_per_meter": 32.0,

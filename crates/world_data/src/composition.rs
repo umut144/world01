@@ -474,7 +474,8 @@ mod tests {
 
     #[test]
     fn a_moved_switch_survives_the_next_composition() {
-        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let map = WorldMap::load_embedded("sandbox", "overworld01")
+            .expect("the embedded Instance is valid");
         let templates = WorldTemplateCatalog::from_templates([]);
         let ranks = ranks_covering(&map);
         let mut composition = WorldComposition::new(map, &templates, &ranks)
@@ -525,7 +526,8 @@ mod tests {
 
     #[test]
     fn a_switch_this_map_never_declared_cannot_be_moved() {
-        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let map = WorldMap::load_embedded("sandbox", "overworld01")
+            .expect("the embedded Instance is valid");
         let templates = WorldTemplateCatalog::from_templates([]);
         let ranks = ranks_covering(&map);
         let mut composition = WorldComposition::new(map, &templates, &ranks)

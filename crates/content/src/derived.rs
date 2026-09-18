@@ -1183,7 +1183,8 @@ mod tests {
                 })
         }));
 
-        let map = WorldMap::load_embedded("overworld01").expect("embedded world map is valid");
+        let map =
+            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded world map is valid");
         let world_collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
             .expect("embedded world collision topology is valid");
         assert!(!world_collision.regions.is_empty());

@@ -40,6 +40,8 @@ impl MobaWorldSource {
 pub struct MobaWorldDerivation;
 
 impl WorldDerivation for MobaWorldDerivation {
+    const GAME_KEY: &'static str = "moba";
+
     type Source = MobaWorldSource;
     type Derived = TotemLayout;
 

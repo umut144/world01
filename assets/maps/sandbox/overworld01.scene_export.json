@@ -1,7 +1,8 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 20,
+  "version": 21,
   "workspace_key": "world01",
+  "game_key": "sandbox",
   "grid": {
     "terrain_cell_meters": 1.0,
     "authoring_pixels_per_meter": 32,
@@ -67,36 +68,36 @@
       "asset_key": "totem_of_life",
       "surface": null,
       "footprint_meters": {
-        "width": 5.375,
-        "height": 6.53125
+        "width": 5.3125,
+        "height": 6.46875
       },
       "anchor_meters": {
-        "x": 2.6875,
-        "y": 0.0625
+        "x": 2.65625,
+        "y": 0.03125
       }
     },
     {
       "asset_key": "totem_of_mana",
       "surface": null,
       "footprint_meters": {
-        "width": 7.625,
-        "height": 6.53125
+        "width": 7.5625,
+        "height": 6.46875
       },
       "anchor_meters": {
-        "x": 3.8125,
-        "y": 0.0625
+        "x": 3.78125,
+        "y": 0.03125
       }
     },
     {
       "asset_key": "totem_of_time",
       "surface": null,
       "footprint_meters": {
-        "width": 7.875,
-        "height": 6.53125
+        "width": 7.8125,
+        "height": 6.46875
       },
       "anchor_meters": {
-        "x": 3.9375,
-        "y": 0.0625
+        "x": 3.90625,
+        "y": 0.03125
       }
     },
     {

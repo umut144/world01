@@ -734,7 +734,7 @@ mod tests {
     use world01_world_data::{MapColumnSurface, RouteSegmentOperation};
 
     fn overworld() -> WorldMap {
-        WorldMap::load_embedded("overworld01").expect("embedded Instance is valid")
+        WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid")
     }
 
     fn derive(map: &WorldMap, collision: &WorldCollisionGeometryCatalog) -> GroundNavigationGraph {
