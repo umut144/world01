@@ -15,6 +15,7 @@
 //! shape the schema already knows, is a `data/*.json` edit and nothing in
 //! `src/` needs to change.
 
+mod admission;
 mod derivation;
 mod design;
 mod health;

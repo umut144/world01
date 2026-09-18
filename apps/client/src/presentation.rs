@@ -648,6 +648,7 @@ fn join_selected_character(
         commands,
         session.client_id,
         character,
+        session.team,
         session.remote_interpolation_ratio,
         session.network_simulation,
     )?;

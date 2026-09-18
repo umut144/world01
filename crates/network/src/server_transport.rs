@@ -16,7 +16,7 @@ use lightyear::prelude::{
 };
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
-    AnchorOccupancy, CharacterHealth, CharacterId, DestructibleProp, PlayerInput,
+    AnchorOccupancy, CharacterHealth, CharacterId, DestructibleProp, PlayerInput, TeamId,
     WaterSwitchPositions, WorldPosition,
 };
 
@@ -34,6 +34,9 @@ pub enum ServerNetworkSet {
 #[derive(Component, Debug, Clone)]
 pub struct ServerJoinRequest {
     pub character: CharacterId,
+    /// The side the player brought, exactly as sent - validated by the game,
+    /// never by the transport.
+    pub team: Option<TeamId>,
     owner: u64,
     connection: Entity,
     peer: PeerId,
@@ -262,6 +265,7 @@ fn receive_join_requests(
         };
         commands.spawn(ServerJoinRequest {
             character: request.character,
+            team: request.team,
             owner,
             connection,
             peer: remote.0,

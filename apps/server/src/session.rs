@@ -2,23 +2,23 @@ use std::collections::HashSet;
 
 use bevy::{log::warn, prelude::*};
 use world01_content::{CharacterHealthCatalog, RuntimeContent};
-use world01_moba::{TotemKind, TotemLayout};
+use world01_moba::{MobaWorldDerivation, TotemLayout};
 use world01_network::{
     ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest, WorldTemplateDebugPreset,
     configure_replicated_destructible_prop, configure_replicated_player,
     configure_replicated_world_state,
 };
 use world01_simulation::{
-    CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
-    WorldRuntimeState,
+    CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, JoinedIdentity, SessionRules,
+    SimulationSet, WorldRuntimeSet, WorldRuntimeState,
 };
 use world01_world_data::{
     ActorId, AnchorOccupancy, AttackIntent, AttackSecondaryIntent, BodyFacing, CharacterHealth,
     CharacterLifeState, DashIntent, DashState, DeathConfirmIntent, DeathConfirmationState,
     GazeDirection, GazeIntent, MovementDirection, MovementIntent, MovementMedium, MovementVelocity,
     PlacementRanks, PlayerOwner, RespawnState, RevivalState, RunIntent, RunState,
-    SelectedCharacter, StaminaState, StatusEffectState, TeamId, WaterSwitchPositions,
-    WorldComposition, WorldOccupancyRequest, WorldPosition, WorldTemplateCatalog,
+    SelectedCharacter, StaminaState, StatusEffectState, WaterSwitchPositions, WorldComposition,
+    WorldOccupancyRequest, WorldTemplateCatalog,
 };
 
 const TEST_TEMPLATE_SCENE_ID: &str = "test_template02";
@@ -262,14 +262,16 @@ fn accept_join_requests(
             warn!("actor id space exhausted; ignoring join request");
             continue;
         };
-        let team = assign_team(actor_id);
-        let Some(spawn) = totem_of_life_position(&totems, team) else {
-            warn!(
-                owner = request.owner(),
-                team = team.0,
-                "ignoring join without a Totem of Life to spawn behind"
-            );
-            continue;
+        let brought = JoinedIdentity {
+            character: selected.clone(),
+            team: request.team,
+        };
+        let admission = match MobaWorldDerivation::admit(&brought, &totems) {
+            Ok(admission) => admission,
+            Err(refusal) => {
+                warn!(owner = request.owner(), %refusal, "ignoring inadmissible join");
+                continue;
+            }
         };
         next_actor_id.0 = following_id;
         let mut player = commands.spawn((
@@ -277,7 +279,6 @@ fn accept_join_requests(
                 ActorId(actor_id),
                 PlayerOwner(request.owner()),
                 SelectedCharacter(selected.clone()),
-                team,
             ),
             (
                 MovementIntent::ZERO,
@@ -303,51 +304,35 @@ fn accept_join_requests(
             (
                 BodyFacing::Authored,
                 GazeDirection::RIGHT,
-                spawn,
+                admission.position,
                 MovementMedium::GROUNDED_TERRAIN,
                 CharacterHealth::full(maximum_health),
                 mass,
             ),
         ));
+        // A game with no sides admits players without one, and an Actor then
+        // carries no TeamId at all rather than a placeholder side.
+        if let Some(team) = admission.team {
+            player.insert(team);
+        }
         abilities.insert_ability_state(&selected, &mut player);
         configure_replicated_player(&mut player, request);
     }
-}
-
-/// Which side a joining Actor plays on.
-///
-/// Alternates by join order rather than balancing live counts: Phase 2 has no
-/// bots yet, so "balanced" and "alternating" are the same rule, and the
-/// simpler one is what Phase 4's bot assignment should replace rather than
-/// build on.
-fn assign_team(actor_id: u64) -> TeamId {
-    TeamId(((actor_id.saturating_sub(1)) % 2) as u8)
-}
-
-/// Where a team's Actors join the match: at their own Totem of Life.
-///
-/// Spawning on the objective rather than beside it is deliberate, not an
-/// approximation waiting for an offset - the existing world-separation step
-/// already resolves whatever overlap that causes, the same way it resolves
-/// any other Character spawned inside a collider.
-fn totem_of_life_position(totems: &TotemLayout, team: TeamId) -> Option<WorldPosition> {
-    totems
-        .totems
-        .iter()
-        .find(|placed| placed.totem.kind == TotemKind::Life && placed.totem.team == team)
-        .map(|placed| placed.position)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use world01_content::WorldCollisionGeometryCatalog;
-    use world01_moba::{MobaWorldDerivation, MobaWorldSource, PlacedTotem, Totem, TotemLayout};
+    use world01_moba::{
+        MobaWorldDerivation, MobaWorldSource, PlacedTotem, Totem, TotemKind, TotemLayout,
+    };
     use world01_simulation::{
         WorldColliderGrid, WorldDerivation, WorldNavigation, add_world_runtime_rebuild,
     };
     use world01_world_data::{
-        AnkhLayout, DestructibleProp, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
+        AnkhLayout, DestructibleProp, TeamId, WorldMap, WorldOccupancyRequest, WorldPosition,
+        WorldTemplateCatalog,
     };
 
     #[derive(Resource, Default)]
@@ -363,63 +348,6 @@ mod tests {
         {
             count.0 += 1;
         }
-    }
-
-    #[test]
-    fn team_assignment_alternates_by_join_order() {
-        assert_eq!(assign_team(1), TeamId(0));
-        assert_eq!(assign_team(2), TeamId(1));
-        assert_eq!(assign_team(3), TeamId(0));
-        assert_eq!(assign_team(4), TeamId(1));
-    }
-
-    #[test]
-    fn a_team_spawns_at_its_own_totem_of_life() {
-        let totems = TotemLayout {
-            totems: vec![
-                PlacedTotem {
-                    totem: Totem {
-                        kind: TotemKind::Life,
-                        team: TeamId(0),
-                    },
-                    position: WorldPosition::new(-10.0, 0.0, 1.0),
-                    max_hp: 2000.0,
-                },
-                PlacedTotem {
-                    totem: Totem {
-                        kind: TotemKind::Mana,
-                        team: TeamId(0),
-                    },
-                    position: WorldPosition::new(-8.0, 0.0, 1.0),
-                    max_hp: 1000.0,
-                },
-                PlacedTotem {
-                    totem: Totem {
-                        kind: TotemKind::Life,
-                        team: TeamId(1),
-                    },
-                    position: WorldPosition::new(10.0, 0.0, 1.0),
-                    max_hp: 2000.0,
-                },
-            ],
-        };
-
-        assert_eq!(
-            totem_of_life_position(&totems, TeamId(0)),
-            Some(WorldPosition::new(-10.0, 0.0, 1.0))
-        );
-        assert_eq!(
-            totem_of_life_position(&totems, TeamId(1)),
-            Some(WorldPosition::new(10.0, 0.0, 1.0))
-        );
-    }
-
-    #[test]
-    fn a_team_with_no_totem_of_life_has_nowhere_to_spawn() {
-        assert_eq!(
-            totem_of_life_position(&TotemLayout::default(), TeamId(0)),
-            None
-        );
     }
 
     #[test]

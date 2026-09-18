@@ -15,7 +15,7 @@ use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
     TraversalCatalog, WeaponAimRules, WorldColliderGrid, WorldDerivation,
 };
-use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
+use world01_world_data::{AnkhLayout, TeamId, WorldComposition, WorldMap, WorldTemplateCatalog};
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationRules;
@@ -42,6 +42,7 @@ const INITIAL_WINDOW_PHYSICAL_HEIGHT: u32 = 640;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
+    let team = team_from_args()?;
     let network_simulation = network_simulation_from_env()?;
     let mut config = load_embedded()?;
     // A developer's own runtime.local.toml, gitignored, overrides which map
@@ -190,6 +191,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.add_plugins(ClientPredictionPlugin::<MobaWorldDerivation>::default());
     app.add_plugins(ClientSessionPlugin {
         client_id,
+        team,
         tick_duration,
         snapshot_interval,
         remote_interpolation_ratio,
@@ -228,6 +230,29 @@ fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Err
         )
         .into()
     })
+}
+
+/// The side this client plays on, as `--team <number>` anywhere in the args.
+///
+/// Absent means absent: no side was picked, and the value travels to the
+/// server as `None` rather than as a guess. Whether a join without a side is
+/// admissible is the game's decision, not this function's - a sandbox has no
+/// sides at all, while the MOBA refuses the join. This is where a lobby will
+/// eventually put the player's own choice; until it exists, a developer says
+/// it on the command line so that nothing in between has to invent one.
+fn team_from_args() -> Result<Option<TeamId>, Box<dyn Error>> {
+    let args = env::args().collect::<Vec<_>>();
+    let Some(flag) = args.iter().position(|argument| argument == "--team") else {
+        return Ok(None);
+    };
+    let Some(value) = args.get(flag + 1) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--team must be followed by a side number",
+        )
+        .into());
+    };
+    Ok(Some(TeamId(value.parse::<u8>()?)))
 }
 
 fn client_id_from_args() -> Result<u64, Box<dyn Error>> {

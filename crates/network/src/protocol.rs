@@ -34,6 +34,12 @@ pub(crate) struct ReplicatedWorldState;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct JoinRequest {
     pub character: CharacterId,
+    /// The side the player picked before joining.
+    ///
+    /// `None` means nobody picked one - a game without sides, or a client
+    /// started without the choice. The server does not invent a side from it;
+    /// the game decides whether a join without one is admissible at all.
+    pub team: Option<TeamId>,
 }
 
 /// Temporary manual-acceptance controls for the two authored test Anchors.

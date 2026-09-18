@@ -16,8 +16,8 @@ use lightyear::prelude::{
 use lightyear::{netcode::Key, prelude::*};
 use world01_world_data::{
     AnchorOccupancy, AttackIntent, AttackSecondaryIntent, CharacterId, DashIntent,
-    DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput, RunIntent, WaterSwitchPositions,
-    WorldOccupancyRequest, WorldPosition, WorldSwitchRequest,
+    DeathConfirmIntent, GazeIntent, MovementIntent, PlayerInput, RunIntent, TeamId,
+    WaterSwitchPositions, WorldOccupancyRequest, WorldPosition, WorldSwitchRequest,
 };
 
 use crate::protocol::{
@@ -66,7 +66,10 @@ struct RemoteExtrapolationConfig {
 }
 
 #[derive(Component, Debug, Clone)]
-struct PendingJoin(CharacterId);
+struct PendingJoin {
+    character: CharacterId,
+    team: Option<TeamId>,
+}
 
 pub fn configure_client(app: &mut App, tick_duration: Duration, snapshot_interval: Duration) {
     app.add_plugins(ClientPlugins { tick_duration })
@@ -179,6 +182,7 @@ pub fn connect_client(
     commands: &mut Commands,
     client_id: u64,
     character: CharacterId,
+    team: Option<TeamId>,
     remote_interpolation_ratio: f32,
     network_simulation: NetworkSimulationProfile,
 ) -> Result<Entity> {
@@ -197,7 +201,7 @@ pub fn connect_client(
             ReplicationReceiver,
             PredictionManager::default(),
             InterpolationConfig::default().with_send_interval_ratio(remote_interpolation_ratio),
-            PendingJoin(character),
+            PendingJoin { character, team },
             NetcodeClient::new(authentication, client::NetcodeConfig::default())?,
             UdpIo::default(),
         ))
@@ -323,7 +327,8 @@ fn send_join_when_connected(
         return;
     };
     sender.send::<JoinChannel>(JoinRequest {
-        character: selection.0.clone(),
+        character: selection.character.clone(),
+        team: selection.team,
     });
     commands.entity(trigger.entity).remove::<PendingJoin>();
 }
@@ -386,6 +391,7 @@ mod tests {
                 &mut commands,
                 1,
                 CharacterId::new("wizard").expect("static character id"),
+                Some(TeamId(0)),
                 1.0,
                 NetworkSimulationProfile::Off,
             )
