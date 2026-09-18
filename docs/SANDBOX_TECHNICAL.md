@@ -401,12 +401,19 @@ slice.
 The graphical client implements a configurable orthographic camera,
 aspect-safe viewport calculation, letterboxing, camera follow, and a temporary
 tile-based room presentation. World 01's maps are authored in SceneMaker and
-exported as engine-neutral snapshots. `scripts/sync_scenemaker_world.sh`
-validates and synchronizes the complete export directory, and the
-protocol-neutral `world_data` crate embeds its files as a deterministic catalog.
-Its build script rejects unreadable scene headers, unknown scene kinds, and
-duplicate scene IDs before compiling that catalog.
-Callers select an Instance by its scene ID. Template exports are imported into a
+exported as engine-neutral snapshots. Each export names the Game that authored
+it in `game_key`, and `scripts/sync_scenemaker_world.sh` files it under
+`assets/maps/<game>/`, replacing only the Games it was actually given - a Game
+absent from an export keeps the Scenes it had. The protocol-neutral
+`world_data` crate embeds those files as a deterministic catalog. Its build
+script rejects unreadable scene headers, unknown scene kinds, a `game_key` that
+disagrees with the directory its file sits in, and scene IDs duplicated within
+one Game.
+Callers select an Instance by its Game and scene ID, because a scene ID is
+unique within a Game and not across them: two Games may each author a "map01".
+One Game, [`testbed`](TESTBED_CONTRACT.md), exists only so the shared crates
+can be tested against authored data without depending on a playable game's
+worlds. Template exports are imported into a
 typed catalog grouped by `group_number`; authoritative occupancy can choose and
 compose them into a map while the game runs. A pure geometry projection can
 place one explicitly chosen Template at one matching Instance Anchor: it
