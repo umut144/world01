@@ -8055,6 +8055,7 @@ dependencies = [
  "world01-configs",
  "world01-content",
  "world01-design",
+ "world01-moba",
  "world01-network",
  "world01-simulation",
  "world01-world-data",
@@ -8089,6 +8090,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "world01-moba"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "serde",
+ "serde_json",
+ "world01-design",
+ "world01-simulation",
+ "world01-world-data",
+]
+
+[[package]]
 name = "world01-network"
 version = "0.1.0"
 dependencies = [
@@ -8107,6 +8120,7 @@ dependencies = [
  "world01-configs",
  "world01-content",
  "world01-design",
+ "world01-moba",
  "world01-network",
  "world01-simulation",
  "world01-world-data",

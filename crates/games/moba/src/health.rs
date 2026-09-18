@@ -1,13 +1,12 @@
 //! A Bevy resource around the MOBA's embedded Totem-health design data.
 //!
-//! `world01_design::moba` stays free of Bevy so the sandbox can depend on
-//! `world01-design` without depending on the ECS at all - the same reason
-//! [`super::MobaMapOwnership`] wraps its design type instead of deriving
-//! `Resource` on it directly.
+//! [`crate::design`] stays free of Bevy so the parsing can be read and tested
+//! as plain data - the same reason [`super::MobaMapOwnership`] wraps its
+//! design type instead of deriving `Resource` on it directly.
 
+use crate::design::MobaTotemDesign;
 use bevy::prelude::Resource;
 use world01_design::DesignError;
-use world01_design::moba::MobaTotemDesign;
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct MobaTotemHealthDesign(MobaTotemDesign);

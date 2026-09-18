@@ -9,7 +9,6 @@ pub mod damage;
 pub mod exertion;
 pub mod life;
 pub mod mass;
-pub mod moba;
 pub mod movement;
 pub mod navigation;
 pub mod respawn;
@@ -53,7 +52,7 @@ pub use separation::{
 pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
 pub use world_runtime::{
-    WorldNavigation, WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild,
+    WorldDerivation, WorldNavigation, WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild,
 };
 
 #[cfg(test)]

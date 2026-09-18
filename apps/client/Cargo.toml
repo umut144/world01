@@ -26,6 +26,7 @@ world01-network = { path = "../../crates/network", default-features = false, fea
 world01-configs = { path = "../../crates/configs" }
 world01-content = { path = "../../crates/content" }
 world01-design = { path = "../../crates/design" }
+world01-moba = { path = "../../crates/games/moba" }
 world01-simulation = { path = "../../crates/simulation" }
 world01-world-data = { path = "../../crates/world_data" }
 gilrs = { workspace = true }

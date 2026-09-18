@@ -1,13 +1,16 @@
 use std::{error::Error, fmt};
 
-use bevy::{ecs::schedule::ScheduleLabel, log::error, prelude::*};
+use bevy::{
+    ecs::{component::Mutable, schedule::ScheduleLabel},
+    log::error,
+    prelude::*,
+};
 use world01_content::{RegionGeometryError, RuntimeContent, WorldCollisionGeometryCatalog};
 use world01_world_data::{
     AnkhLayout, PlacementRanks, WorldComposition, WorldMap, WorldOccupancyRequest,
     WorldSwitchRequest, WorldTemplateCatalog,
 };
 
-use crate::moba::{MobaMapOwnership, MobaTotemHealthDesign, TotemLayout, TotemLayoutError};
 use crate::navigation::{GroundNavigationError, GroundNavigationGraph};
 use crate::{SimulationSet, WorldColliderGrid};
 
@@ -66,7 +69,34 @@ impl WorldRuntimeState {
 }
 
 /// Installs the shared server/client world-resource transaction.
-pub fn add_world_runtime_rebuild(
+/// What a game derives from the world the sandbox has composed.
+///
+/// Runs once at startup and again on every accepted rebuild, inside the same
+/// atomic transaction as collision, the collider grid and navigation. That
+/// placement is the whole point: a game's derivation may fail - a Prop the
+/// design names may be gone from the map a Template just painted over - and
+/// when it does, the generation is rejected and *nothing* is applied. A game
+/// that hung its own system behind the rebuild instead would, for one tick,
+/// describe a world the collision geometry beside it no longer agrees with,
+/// and no authority can defend that.
+///
+/// This is also why a game's load step is not a startup step. `derive` is the
+/// rule, not the act: the host calls it to build the first world and calls the
+/// same rule again every time the world changes underneath it.
+pub trait WorldDerivation: 'static + Send + Sync {
+    /// Everything the derivation reads besides the map, as one Resource.
+    ///
+    /// One rather than several so that adding an input to a game is a change
+    /// to that game and not to this signature.
+    type Source: Resource;
+    /// What it produces. Replaced wholesale on every accepted rebuild, which
+    /// is why it has to be a Resource the rebuild may take mutably.
+    type Derived: Resource<Mutability = Mutable>;
+
+    fn derive(map: &WorldMap, source: &Self::Source) -> Result<Self::Derived, Box<dyn Error>>;
+}
+
+pub fn add_world_runtime_rebuild<D: WorldDerivation>(
     app: &mut App,
     schedule: impl ScheduleLabel + Clone,
     navigation: WorldNavigation,
@@ -77,7 +107,7 @@ pub fn add_world_runtime_rebuild(
         .init_resource::<WorldRuntimeState>()
         .add_systems(
             schedule,
-            rebuild_world_runtime
+            rebuild_world_runtime::<D>
                 .in_set(WorldRuntimeSet::Rebuild)
                 .before(SimulationSet::Collision),
         );
@@ -89,7 +119,7 @@ enum WorldRuntimeBuildError {
     Collision(RegionGeometryError),
     Navigation(GroundNavigationError),
     MissingAnkh,
-    Totem(TotemLayoutError),
+    Game(Box<dyn Error>),
 }
 
 impl fmt::Display for WorldRuntimeBuildError {
@@ -101,29 +131,28 @@ impl fmt::Display for WorldRuntimeBuildError {
             Self::MissingAnkh => {
                 formatter.write_str("composed world requires at least one Ankh placement")
             }
-            Self::Totem(error) => error.fmt(formatter),
+            Self::Game(error) => error.fmt(formatter),
         }
     }
 }
 
 impl Error for WorldRuntimeBuildError {}
 
-struct DerivedWorldResources {
+struct DerivedWorldResources<D: WorldDerivation> {
     map: WorldMap,
     collision: WorldCollisionGeometryCatalog,
     grid: WorldColliderGrid,
     ankhs: AnkhLayout,
-    totems: TotemLayout,
+    game: D::Derived,
     navigation: Option<GroundNavigationGraph>,
 }
 
-impl DerivedWorldResources {
+impl<D: WorldDerivation> DerivedWorldResources<D> {
     fn build(
         content: &RuntimeContent,
         map: &WorldMap,
         navigation: WorldNavigation,
-        moba_ownership: &MobaMapOwnership,
-        moba_totem_health: &MobaTotemHealthDesign,
+        source: &D::Source,
     ) -> Result<Self, WorldRuntimeBuildError> {
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(content, map)
             .map_err(WorldRuntimeBuildError::Collision)?;
@@ -132,8 +161,7 @@ impl DerivedWorldResources {
         if ankhs.positions.is_empty() {
             return Err(WorldRuntimeBuildError::MissingAnkh);
         }
-        let totems = TotemLayout::from_map(map, moba_ownership, moba_totem_health)
-            .map_err(WorldRuntimeBuildError::Totem)?;
+        let game = D::derive(map, source).map_err(WorldRuntimeBuildError::Game)?;
         let navigation = match navigation {
             WorldNavigation::Derived => Some(
                 GroundNavigationGraph::from_world(map, &collision, &grid)
@@ -146,27 +174,26 @@ impl DerivedWorldResources {
             collision,
             grid,
             ankhs,
-            totems,
+            game,
             navigation,
         })
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn rebuild_world_runtime(
+fn rebuild_world_runtime<D: WorldDerivation>(
     request: Res<WorldOccupancyRequest>,
     switch_request: Res<WorldSwitchRequest>,
     content: Res<RuntimeContent>,
     templates: Res<WorldTemplateCatalog>,
     ranks: Res<PlacementRanks>,
-    moba_ownership: Res<MobaMapOwnership>,
-    moba_totem_health: Res<MobaTotemHealthDesign>,
+    source: Res<D::Source>,
     mut composition: ResMut<WorldComposition>,
     mut map: ResMut<WorldMap>,
     mut collision: ResMut<WorldCollisionGeometryCatalog>,
     mut grid: ResMut<WorldColliderGrid>,
     mut ankhs: ResMut<AnkhLayout>,
-    mut totems: ResMut<TotemLayout>,
+    mut game: ResMut<D::Derived>,
     navigation: Res<WorldNavigation>,
     mut graph: Option<ResMut<GroundNavigationGraph>>,
     mut state: ResMut<WorldRuntimeState>,
@@ -225,13 +252,12 @@ fn rebuild_world_runtime(
         return;
     }
 
-    let source = candidate.as_ref().unwrap_or(&composition);
-    let derived = match DerivedWorldResources::build(
+    let composed = candidate.as_ref().unwrap_or(&composition);
+    let derived = match DerivedWorldResources::<D>::build(
         &content,
-        source.current_map(),
+        composed.current_map(),
         *navigation,
-        &moba_ownership,
-        &moba_totem_health,
+        &source,
     ) {
         Ok(derived) => derived,
         Err(error) => {
@@ -247,7 +273,7 @@ fn rebuild_world_runtime(
     *collision = derived.collision;
     *grid = derived.grid;
     *ankhs = derived.ankhs;
-    *totems = derived.totems;
+    *game = derived.game;
     if let (Some(derived), Some(graph)) = (derived.navigation, graph.as_mut()) {
         **graph = derived;
     }
@@ -269,19 +295,37 @@ fn reject_generation(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::moba::{MobaMapOwnership, MobaTotemHealthDesign};
     use crate::{WorldSeparationStep, separate_characters_from_world};
     use world01_configs::load_embedded;
     use world01_content::CharacterCollisionGeometryCatalog;
     use world01_design::load_world01_embedded;
     use world01_world_data::{BodyFacing, CharacterId, SelectedCharacter, WorldPosition};
 
-    fn moba_ownership() -> MobaMapOwnership {
-        MobaMapOwnership::load_embedded().expect("embedded map ownership is valid")
-    }
+    /// A game that derives nothing from the world.
+    ///
+    /// These tests are about the transaction - what is applied, what is
+    /// rejected, and that a rejection leaves nothing half-changed - and not
+    /// about any game's derivation. A real one would only be able to hide the
+    /// behaviour under test behind its own failures. The derivation's *own*
+    /// failure path is covered where it belongs, in the game that writes it.
+    struct TestWorldDerivation;
 
-    fn moba_totem_health() -> MobaTotemHealthDesign {
-        MobaTotemHealthDesign::load_embedded().expect("embedded Totem health design is valid")
+    #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+    struct TestGameSource;
+
+    #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
+    struct TestGameDerived;
+
+    impl WorldDerivation for TestWorldDerivation {
+        type Source = TestGameSource;
+        type Derived = TestGameDerived;
+
+        fn derive(
+            _map: &WorldMap,
+            _source: &TestGameSource,
+        ) -> Result<TestGameDerived, Box<dyn Error>> {
+            Ok(TestGameDerived)
+        }
     }
 
     #[derive(Resource, Debug, Default)]
@@ -314,7 +358,6 @@ mod tests {
         collision: WorldCollisionGeometryCatalog,
         grid: WorldColliderGrid,
         ankhs: AnkhLayout,
-        totems: TotemLayout,
     }
 
     fn embedded_world() -> EmbeddedWorld {
@@ -332,8 +375,6 @@ mod tests {
             .expect("startup collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
-        let totems = TotemLayout::from_map(&map, &moba_ownership(), &moba_totem_health())
-            .expect("the embedded overworld places no Totem");
         EmbeddedWorld {
             content,
             templates,
@@ -343,7 +384,6 @@ mod tests {
             collision,
             grid,
             ankhs,
-            totems,
         }
     }
 
@@ -355,14 +395,13 @@ mod tests {
         app.insert_resource(world.content)
             .insert_resource(world.templates)
             .insert_resource(world.ranks)
-            .insert_resource(moba_ownership())
-            .insert_resource(moba_totem_health())
+            .insert_resource(TestGameSource)
             .insert_resource(world.composition)
             .insert_resource(world.map)
             .insert_resource(world.collision)
             .insert_resource(world.grid)
             .insert_resource(world.ankhs)
-            .insert_resource(world.totems)
+            .insert_resource(TestGameDerived)
             .insert_resource(navigation)
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
@@ -386,8 +425,8 @@ mod tests {
         app.init_resource::<MapChangeCount>().add_systems(
             Update,
             (
-                rebuild_world_runtime,
-                count_map_changes.after(rebuild_world_runtime),
+                rebuild_world_runtime::<TestWorldDerivation>,
+                count_map_changes.after(rebuild_world_runtime::<TestWorldDerivation>),
             ),
         );
 
@@ -459,7 +498,11 @@ mod tests {
         let templates = world.templates.clone();
         let ranks = world.ranks.clone();
         let mut app = app_with_world(world);
-        add_world_runtime_rebuild(&mut app, Update, WorldNavigation::Derived);
+        add_world_runtime_rebuild::<TestWorldDerivation>(
+            &mut app,
+            Update,
+            WorldNavigation::Derived,
+        );
         app.update();
         let before = app.world().resource::<GroundNavigationGraph>().clone();
 
@@ -514,22 +557,19 @@ mod tests {
             .expect("initial collision geometry is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
-        let totems = TotemLayout::from_map(&map, &moba_ownership(), &moba_totem_health())
-            .expect("this synthetic Instance places no Totem");
         let initial_composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("the replica composition is valid");
         let mut app = App::new();
         app.insert_resource(content)
             .insert_resource(templates)
             .insert_resource(ranks)
-            .insert_resource(moba_ownership())
-            .insert_resource(moba_totem_health())
+            .insert_resource(TestGameSource)
             .insert_resource(initial_composition.clone())
             .insert_resource(map.clone())
             .insert_resource(collision.clone())
             .insert_resource(grid.clone())
             .insert_resource(ankhs.clone())
-            .insert_resource(totems.clone())
+            .insert_resource(TestGameDerived)
             .insert_resource(WorldNavigation::Derived)
             .init_resource::<WorldOccupancyRequest>()
             .init_resource::<WorldSwitchRequest>()
@@ -538,8 +578,8 @@ mod tests {
             .add_systems(
                 Update,
                 (
-                    rebuild_world_runtime,
-                    count_runtime_state_changes.after(rebuild_world_runtime),
+                    rebuild_world_runtime::<TestWorldDerivation>,
+                    count_runtime_state_changes.after(rebuild_world_runtime::<TestWorldDerivation>),
                 ),
             );
 
@@ -640,7 +680,11 @@ mod tests {
                 Update,
                 separate_characters_from_world.in_set(SimulationSet::Collision),
             );
-        add_world_runtime_rebuild(&mut app, Update, WorldNavigation::Derived);
+        add_world_runtime_rebuild::<TestWorldDerivation>(
+            &mut app,
+            Update,
+            WorldNavigation::Derived,
+        );
         let actor = app
             .world_mut()
             .spawn((

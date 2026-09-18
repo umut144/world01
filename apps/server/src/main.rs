@@ -12,18 +12,17 @@ use world01_content::{
     CharacterMassGeometryCatalog, HammerCombatGeometry, MageEyeGeometry, RuntimeContent,
     WorldCollisionGeometryCatalog,
 };
-use world01_design::moba::MobaPlacementRanksDesign;
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
+use world01_moba::{MobaPlacementRanksDesign, MobaWorldDerivation, MobaWorldSource};
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
-use world01_simulation::moba::{MobaMapOwnership, MobaTotemHealthDesign, TotemLayout};
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     GroundNavigationGraph, HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep,
     SimulationAuthority, SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid,
-    WorldNavigation, WorldSeparationStep, add_simulation_step, add_world_runtime_rebuild,
-    switch_buttons::add_switch_buttons,
+    WorldDerivation, WorldNavigation, WorldSeparationStep, add_simulation_step,
+    add_world_runtime_rebuild, switch_buttons::add_switch_buttons,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -62,9 +61,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    let moba_ownership = MobaMapOwnership::load_embedded()?;
-    let moba_totem_health = MobaTotemHealthDesign::load_embedded()?;
-    let totem_layout = TotemLayout::from_map(&world_map, &moba_ownership, &moba_totem_health)?;
+    // The same rule the world rebuild will call again on every recomposition,
+    // used here to derive the first world - see MobaWorldDerivation.
+    let moba_source = MobaWorldSource::load_embedded()?;
+    let totem_layout = MobaWorldDerivation::derive(&world_map, &moba_source)?;
     let network_simulation = network_simulation_from_env()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -150,11 +150,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(placement_ranks)
     .insert_resource(world_map)
     .insert_resource(ankh_layout)
-    .insert_resource(moba_ownership)
-    .insert_resource(moba_totem_health)
+    .insert_resource(moba_source)
     .insert_resource(totem_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
-    add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
+    add_world_runtime_rebuild::<MobaWorldDerivation>(
+        &mut app,
+        FixedUpdate,
+        WorldNavigation::Derived,
+    );
     add_switch_buttons(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,

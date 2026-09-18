@@ -8,13 +8,12 @@ use world01_content::{
     CharacterCollisionGeometryCatalog, CharacterHurtGeometryCatalog, HammerCombatGeometry,
     MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
 };
-use world01_design::moba::MobaPlacementRanksDesign;
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
+use world01_moba::{MobaPlacementRanksDesign, MobaWorldDerivation, MobaWorldSource};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
-use world01_simulation::moba::{MobaMapOwnership, MobaTotemHealthDesign, TotemLayout};
 use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-    TraversalCatalog, WeaponAimRules, WorldColliderGrid,
+    TraversalCatalog, WeaponAimRules, WorldColliderGrid, WorldDerivation,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -74,9 +73,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    let moba_ownership = MobaMapOwnership::load_embedded()?;
-    let moba_totem_health = MobaTotemHealthDesign::load_embedded()?;
-    let totem_layout = TotemLayout::from_map(&world_map, &moba_ownership, &moba_totem_health)?;
+    // The same rule the world rebuild will call again on every recomposition,
+    // used here to derive the first world - see MobaWorldDerivation.
+    let moba_source = MobaWorldSource::load_embedded()?;
+    let totem_layout = MobaWorldDerivation::derive(&world_map, &moba_source)?;
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
@@ -184,11 +184,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(placement_ranks);
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
-    app.insert_resource(moba_ownership);
-    app.insert_resource(moba_totem_health);
+    app.insert_resource(moba_source);
     app.insert_resource(totem_layout);
     app.insert_non_send(controller_input);
-    app.add_plugins(ClientPredictionPlugin);
+    app.add_plugins(ClientPredictionPlugin::<MobaWorldDerivation>::default());
     app.add_plugins(ClientSessionPlugin {
         client_id,
         tick_duration,

@@ -1,13 +1,12 @@
 //! A Bevy resource around the MOBA's embedded map-ownership data.
 //!
-//! `world01_design::moba` stays free of Bevy so the sandbox can depend on
-//! `world01-design` without depending on the ECS at all - the same reason no
-//! other design type in that crate is a `Resource` either. This wrapper is
-//! where the data becomes something a system can read.
+//! [`crate::design`] stays free of Bevy so the parsing can be read and tested
+//! as plain data - the same reason no other design type there is a `Resource`
+//! either. This wrapper is where the data becomes something a system reads.
 
+use crate::design::{MobaMapCatalog, MobaMapDesign};
 use bevy::prelude::Resource;
 use world01_design::DesignError;
-use world01_design::moba::{MobaMapCatalog, MobaMapDesign};
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct MobaMapOwnership(MobaMapCatalog);

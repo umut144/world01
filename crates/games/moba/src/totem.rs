@@ -444,7 +444,7 @@ mod tests {
             .placement_ranks()
             .expect("embedded Placement Ranks are valid")
             .extended_with(
-                world01_design::moba::MobaPlacementRanksDesign::load_embedded()
+                crate::MobaPlacementRanksDesign::load_embedded()
                     .expect("embedded Placement Rank overlay is valid")
                     .entries(),
             )

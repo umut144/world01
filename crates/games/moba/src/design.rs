@@ -1,31 +1,32 @@
 //! The MOBA's own design data: which side an authored Prop belongs to, and
 //! what a Totem is worth.
 //!
-//! Deliberately apart from [`crate::GameDesign`]. A side is a rule of one
-//! game, and the sandbox loads the shared design without ever learning that
-//! teams - or Totems - exist. Nothing in this module is part of the
-//! World-01 baseline.
+//! Deliberately apart from `world01_design::GameDesign`. A side is a rule of
+//! one game, and the sandbox loads the shared design without ever learning
+//! that teams - or Totems - exist. Since this crate is the one Cargo lets
+//! depend on the sandbox and not the other way round, that separation is now
+//! structural rather than a matter of where a file happens to sit.
 //!
 //! **For whoever tunes the numbers**: this file is schema, not content.
 //! Every actual value - a Totem's MaxHP, which side owns which placed Prop -
-//! lives in the JSON under `games/moba/`, the same split `crate::GameDesign`
-//! already uses for the base game (`world01.toml`, `hp.json`, ... read by
-//! `src/lib.rs`, never edited there). Changing a number, or adding another
-//! instance of a shape this file already knows - one more Totem entry, one
-//! more map's ownership file - is a `games/moba/*.json` edit and nothing
-//! here needs to change. This file only needs touching to teach the loader a
-//! *new kind* of design data it cannot parse yet.
+//! lives in the JSON under `data/`, the same split the sandbox's own design
+//! uses (`world01.toml`, `hp.json`, ... read by `world01_design`, never
+//! edited there). Changing a number, or adding another instance of a shape
+//! this file already knows - one more Totem entry, one more map's ownership
+//! file - is a `data/*.json` edit and nothing here needs to change. This file
+//! only needs touching to teach the loader a *new kind* of design data it
+//! cannot parse yet.
 
 use std::collections::HashSet;
 
 use serde::Deserialize;
 use world01_world_data::TeamId;
 
-use crate::DesignError;
+use world01_design::DesignError;
 
-const MAP01_DESIGN: &str = include_str!("../games/moba/maps/map01.json");
-const TOTEM_DESIGN: &str = include_str!("../games/moba/totems.json");
-const PLACEMENT_RANKS_DESIGN: &str = include_str!("../games/moba/placement_ranks.json");
+const MAP01_DESIGN: &str = include_str!("../data/maps/map01.json");
+const TOTEM_DESIGN: &str = include_str!("../data/totems.json");
+const PLACEMENT_RANKS_DESIGN: &str = include_str!("../data/placement_ranks.json");
 
 const SCHEMA_VERSION: u32 = 1;
 /// The MOBA is played by two sides, so these are the only teams a map may name.
@@ -67,16 +68,16 @@ impl MobaMapDesign {
     /// this crate parses no map and must not pretend to answer them.
     fn validate(&self) -> Result<(), DesignError> {
         if self.schema_version != SCHEMA_VERSION {
-            return Err(DesignError(format!(
+            return Err(DesignError::new(format!(
                 "map ownership for '{}' uses unsupported schema {}",
                 self.scene_id, self.schema_version
             )));
         }
         if self.scene_id.is_empty() {
-            return Err(DesignError("map ownership names no scene".into()));
+            return Err(DesignError::new("map ownership names no scene"));
         }
         if self.props.is_empty() {
-            return Err(DesignError(format!(
+            return Err(DesignError::new(format!(
                 "map ownership for '{}' assigns no Prop to a side",
                 self.scene_id
             )));
@@ -84,19 +85,19 @@ impl MobaMapDesign {
         let mut seen = HashSet::with_capacity(self.props.len());
         for owner in &self.props {
             if owner.instance_id.is_empty() {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "map ownership for '{}' has an entry without an instance",
                     self.scene_id
                 )));
             }
             if !TEAMS.contains(&owner.team) {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "'{}' in '{}' belongs to team {}, and the MOBA has two",
                     owner.instance_id, self.scene_id, owner.team.0
                 )));
             }
             if !seen.insert(owner.instance_id.as_str()) {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "'{}' is assigned twice in '{}'",
                     owner.instance_id, self.scene_id
                 )));
@@ -126,11 +127,12 @@ impl MobaMapCatalog {
         let mut maps = Vec::new();
         let mut scenes = HashSet::new();
         for source in sources {
-            let map: MobaMapDesign = serde_json::from_str(source)
-                .map_err(|error| DesignError(format!("cannot parse map ownership: {error}")))?;
+            let map: MobaMapDesign = serde_json::from_str(source).map_err(|error| {
+                DesignError::new(format!("cannot parse map ownership: {error}"))
+            })?;
             map.validate()?;
             if !scenes.insert(map.scene_id.clone()) {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "two ownership files describe scene '{}'",
                     map.scene_id
                 )));
@@ -182,7 +184,7 @@ impl MobaTotemDesign {
     /// Totem-health JSON it did not embed itself - a test fixture, today.
     pub fn parse(source: &str) -> Result<Self, DesignError> {
         let design: Self = serde_json::from_str(source)
-            .map_err(|error| DesignError(format!("cannot parse Totem design: {error}")))?;
+            .map_err(|error| DesignError::new(format!("cannot parse Totem design: {error}")))?;
         design.validate()?;
         Ok(design)
     }
@@ -198,27 +200,27 @@ impl MobaTotemDesign {
 
     fn validate(&self) -> Result<(), DesignError> {
         if self.schema_version != SCHEMA_VERSION {
-            return Err(DesignError(format!(
+            return Err(DesignError::new(format!(
                 "Totem design uses unsupported schema {}",
                 self.schema_version
             )));
         }
         if self.totems.is_empty() {
-            return Err(DesignError("Totem design names no Totem kind".into()));
+            return Err(DesignError::new("Totem design names no Totem kind"));
         }
         let mut seen = HashSet::with_capacity(self.totems.len());
         for totem in &self.totems {
             if totem.asset_key.is_empty() {
-                return Err(DesignError("a Totem design entry names no Asset".into()));
+                return Err(DesignError::new("a Totem design entry names no Asset"));
             }
             if !totem.max_hp.is_finite() || totem.max_hp <= 0.0 {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "'{}' has a non-positive or non-finite MaxHP",
                     totem.asset_key
                 )));
             }
             if !seen.insert(totem.asset_key.as_str()) {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "'{}' is named twice in the Totem design",
                     totem.asset_key
                 )));
@@ -263,7 +265,7 @@ impl MobaPlacementRanksDesign {
     /// Placement Rank JSON it did not embed itself - a test fixture, today.
     pub fn parse(source: &str) -> Result<Self, DesignError> {
         let design: Self = serde_json::from_str(source).map_err(|error| {
-            DesignError(format!("cannot parse Placement Rank overlay: {error}"))
+            DesignError::new(format!("cannot parse Placement Rank overlay: {error}"))
         })?;
         design.validate()?;
         Ok(design)
@@ -279,23 +281,23 @@ impl MobaPlacementRanksDesign {
 
     fn validate(&self) -> Result<(), DesignError> {
         if self.schema_version != SCHEMA_VERSION {
-            return Err(DesignError(format!(
+            return Err(DesignError::new(format!(
                 "Placement Rank overlay uses unsupported schema {}",
                 self.schema_version
             )));
         }
         if self.ranks.is_empty() {
-            return Err(DesignError("Placement Rank overlay names no Asset".into()));
+            return Err(DesignError::new("Placement Rank overlay names no Asset"));
         }
         let mut seen = HashSet::with_capacity(self.ranks.len());
         for entry in &self.ranks {
             if entry.asset_key.is_empty() {
-                return Err(DesignError(
-                    "a Placement Rank overlay entry names no Asset".into(),
+                return Err(DesignError::new(
+                    "a Placement Rank overlay entry names no Asset",
                 ));
             }
             if !seen.insert(entry.asset_key.as_str()) {
-                return Err(DesignError(format!(
+                return Err(DesignError::new(format!(
                     "'{}' is ranked twice in the Placement Rank overlay",
                     entry.asset_key
                 )));
@@ -477,7 +479,7 @@ mod tests {
 
     #[test]
     fn the_embedded_overlay_outranks_every_sandbox_placement_rank() {
-        let base = crate::load_world01_embedded()
+        let base = world01_design::load_world01_embedded()
             .expect("embedded World 01 design parses")
             .placement_ranks()
             .expect("embedded Placement Ranks are valid");

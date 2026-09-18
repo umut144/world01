@@ -1,5 +1,3 @@
-pub mod moba;
-
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -533,6 +531,17 @@ fn character_profiles(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesignError(String);
+
+impl DesignError {
+    /// Refuse design data, from anywhere.
+    ///
+    /// A game crate parses its own design files and fails the same way the
+    /// sandbox does, so the type is constructible from outside this crate
+    /// while its message stays owned by it.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
 
 impl fmt::Display for DesignError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

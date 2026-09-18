@@ -2,12 +2,12 @@ use std::collections::HashSet;
 
 use bevy::{log::warn, prelude::*};
 use world01_content::{CharacterHealthCatalog, RuntimeContent};
+use world01_moba::{TotemKind, TotemLayout};
 use world01_network::{
     ServerJoinRequest, ServerNetworkSet, ServerWorldTemplateDebugRequest, WorldTemplateDebugPreset,
     configure_replicated_destructible_prop, configure_replicated_player,
     configure_replicated_world_state,
 };
-use world01_simulation::moba::{TotemKind, TotemLayout};
 use world01_simulation::{
     CharacterAbilityCatalog, CharacterMassCatalog, ExertionRules, SimulationSet, WorldRuntimeSet,
     WorldRuntimeState,
@@ -342,10 +342,10 @@ fn totem_of_life_position(totems: &TotemLayout, team: TeamId) -> Option<WorldPos
 mod tests {
     use super::*;
     use world01_content::WorldCollisionGeometryCatalog;
-    use world01_simulation::moba::{
-        MobaMapOwnership, MobaTotemHealthDesign, PlacedTotem, Totem, TotemLayout,
+    use world01_moba::{MobaWorldDerivation, MobaWorldSource, PlacedTotem, Totem, TotemLayout};
+    use world01_simulation::{
+        WorldColliderGrid, WorldDerivation, WorldNavigation, add_world_runtime_rebuild,
     };
-    use world01_simulation::{WorldColliderGrid, WorldNavigation, add_world_runtime_rebuild};
     use world01_world_data::{
         AnkhLayout, DestructibleProp, WorldMap, WorldOccupancyRequest, WorldTemplateCatalog,
     };
@@ -638,11 +638,8 @@ mod tests {
             .expect("embedded world collision is valid");
         let grid = WorldColliderGrid::from_catalog(&collision);
         let ankhs = AnkhLayout::from_map(&map);
-        let moba_ownership =
-            MobaMapOwnership::load_embedded().expect("embedded map ownership is valid");
-        let moba_totem_health =
-            MobaTotemHealthDesign::load_embedded().expect("embedded Totem health design is valid");
-        let totems = TotemLayout::from_map(&map, &moba_ownership, &moba_totem_health)
+        let moba_source = MobaWorldSource::load_embedded().expect("embedded MOBA design is valid");
+        let totems = MobaWorldDerivation::derive(&map, &moba_source)
             .expect("the embedded overworld places no Totem");
 
         let mut app = App::new();
@@ -650,8 +647,7 @@ mod tests {
             .insert_resource(content)
             .insert_resource(templates.clone())
             .insert_resource(ranks.clone())
-            .insert_resource(moba_ownership)
-            .insert_resource(moba_totem_health)
+            .insert_resource(moba_source)
             .insert_resource(map)
             .insert_resource(collision)
             .insert_resource(grid)
@@ -666,7 +662,11 @@ mod tests {
                     count_published_occupancy_changes.after(publish_world_occupancy),
                 ),
             );
-        add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
+        add_world_runtime_rebuild::<MobaWorldDerivation>(
+            &mut app,
+            FixedUpdate,
+            WorldNavigation::Derived,
+        );
 
         app.world_mut().run_schedule(Startup);
         let published = app
