@@ -22,25 +22,48 @@ record:
 - A **game** is data: which rule values apply, which maps belong to it, which
   Realms it contains, how a session starts and ends. Its unit is
   `design/games/<key>/` plus its maps. Never a crate.
-- A **Realm** lives inside a game and decides movement and camera. A
-  room-centred camera in one, follow-player in another; atomic movement as in
-  a tactics game here, continuous there, side-scrolling in a third - all with
-  the same World-01 assets.
+- A **Realm** is a camera model and a movement model together - what a player
+  feels as "this part plays like this". Realms are shared vocabulary rather
+  than a game's property: a game selects the ones it uses, and two games may
+  select the same one.
 
 A mechanic belongs in the engine; a configuration of mechanics is data. When
 something cannot be expressed as data, the engine is missing a mechanic, and
 that mechanic belongs in the engine as a generic one - not beside it in a
 game-shaped crate.
 
-**Realm is one word for two unlike things.** A camera model is client
-presentation: no determinism, no replication, no protocol. A movement model
-sits inside `add_simulation_step` and runs on the server and the predicting
-client alike, so it must be identical on both and both must agree on which
-model is active - a disagreement shows up as rubber-banding, not as an error.
-The Realm assignment is therefore authoritative data, decided here from this
-project's own design files. SceneMaker authors one flat set of Scenes and its
-export says nothing about Realms, because a map editor has no business knowing
-what physics applies.
+**A Realm is one id with two consumers.** Server and client derive the same
+Realm from the same design data; the server reads only its movement model, the
+client reads both. That leaves exactly one value the two sides have to agree
+on, which matters because the halves are unalike: a camera model is pure client
+presentation - no determinism, no replication, no protocol - while a movement
+model sits inside `add_simulation_step` and runs on the server and the
+predicting client alike. A disagreement there shows as rubber-banding, not as
+an error.
+
+The models are engine code and the Realms are data rows that pick one value per
+axis, so two camera models and four movement models are six pieces of code and
+eight Realms - and a further Realm after that costs no code at all.
+
+What this means concretely, using the MMORPG being built: its caves are
+room-centred camera with atomic free movement, flight is follow-player camera
+with analog forced movement, and the cloud layer is follow-player with atomic
+forced. *Free* means the player decides whether to move; *forced* means the
+Actor keeps moving along its last movement vector whether input arrives or not.
+*Analog* means continuous positions, *atomic* discrete steps. A side-scrolling
+jump-and-run is a separate game and uses analog free movement with either
+camera - the same Realm its overworld would use. A game with several Realms is
+the normal case, not a special one.
+
+One axis is deliberately left open: perspective. Side-scrolling is not another
+value beside the models above. `WorldPosition` spans its plane with `x` and `y`
+and carries elevation as a third, gameplay-owned coordinate, while a
+side-scroller wants `x` and elevation as its plane - which reaches collision,
+navigation and ground support. That is a question to answer when it arrives,
+not a cell in the same table.
+
+SceneMaker authors one flat set of Scenes and its export says nothing about
+Realms, because a map editor has no business knowing what physics applies.
 
 None of this exists in code, and none of it is being built ahead of need. Work
 continues on the sandbox itself, mechanic by mechanic, exactly as before. This
