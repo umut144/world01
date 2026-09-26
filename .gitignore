@@ -10,3 +10,4 @@ target/
 /reference_drawings/5 chars/wizard03.JPG
 .agent-check/
 /crates/configs/runtime.local.toml
+/Claude outputs/

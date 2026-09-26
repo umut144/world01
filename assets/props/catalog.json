@@ -87,6 +87,33 @@
     },
     {
       "asset_category": "single",
+      "asset_id": "asset_48",
+      "asset_key": "totem_of_life",
+      "asset_type": "props",
+      "display_name": "Totem of Life",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/totem_of_life/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_49",
+      "asset_key": "totem_of_mana",
+      "asset_type": "props",
+      "display_name": "Totem of Mana",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/totem_of_mana/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_50",
+      "asset_key": "totem_of_time",
+      "asset_type": "props",
+      "display_name": "Totem of Time",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/totem_of_time/manifest.json"
+    },
+    {
+      "asset_category": "single",
       "asset_id": "asset_10",
       "asset_key": "tree",
       "asset_type": "props",

@@ -2,12 +2,41 @@
   "assets": [
     {
       "asset_category": "single",
-      "asset_id": "asset_20",
+      "asset_id": "asset_55",
+      "asset_key": "antidote",
+      "asset_type": "items",
+      "display_name": "Antidote",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/antidote/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_54",
+      "asset_key": "cream",
+      "asset_type": "items",
+      "display_name": "Cream",
+      "previous_keys": [],
+      "runtime_package": "PolyToolsRuntimeExports/cream/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_56",
       "asset_key": "potion",
       "asset_type": "items",
       "display_name": "Potion",
       "previous_keys": [],
       "runtime_package": "PolyToolsRuntimeExports/potion/manifest.json"
+    },
+    {
+      "asset_category": "single",
+      "asset_id": "asset_20",
+      "asset_key": "vial",
+      "asset_type": "items",
+      "display_name": "Vial",
+      "previous_keys": [
+        "vial"
+      ],
+      "runtime_package": "PolyToolsRuntimeExports/vial/manifest.json"
     },
     {
       "asset_category": "single",

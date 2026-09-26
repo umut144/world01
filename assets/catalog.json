@@ -11,6 +11,15 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_55",
+			"asset_key": "antidote",
+			"asset_type": "items",
+			"display_name": "Antidote",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/antidote/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_14",
 			"asset_key": "archerf",
 			"asset_type": "character",
@@ -125,6 +134,15 @@
 			"display_name": "Coin",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/coin/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_54",
+			"asset_key": "cream",
+			"asset_type": "items",
+			"display_name": "Cream",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/cream/manifest.json"
 		},
 		{
 			"asset_category": "single",
@@ -303,7 +321,7 @@
 		},
 		{
 			"asset_category": "single",
-			"asset_id": "asset_20",
+			"asset_id": "asset_56",
 			"asset_key": "potion",
 			"asset_type": "items",
 			"display_name": "Potion",
@@ -404,12 +422,50 @@
 		},
 		{
 			"asset_category": "single",
+			"asset_id": "asset_48",
+			"asset_key": "totem_of_life",
+			"asset_type": "props",
+			"display_name": "Totem of Life",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/totem_of_life/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_49",
+			"asset_key": "totem_of_mana",
+			"asset_type": "props",
+			"display_name": "Totem of Mana",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/totem_of_mana/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_50",
+			"asset_key": "totem_of_time",
+			"asset_type": "props",
+			"display_name": "Totem of Time",
+			"previous_keys": [],
+			"runtime_package": "PolyToolsRuntimeExports/totem_of_time/manifest.json"
+		},
+		{
+			"asset_category": "single",
 			"asset_id": "asset_10",
 			"asset_key": "tree",
 			"asset_type": "props",
 			"display_name": "Tree",
 			"previous_keys": [],
 			"runtime_package": "PolyToolsRuntimeExports/tree/manifest.json"
+		},
+		{
+			"asset_category": "single",
+			"asset_id": "asset_20",
+			"asset_key": "vial",
+			"asset_type": "items",
+			"display_name": "Vial",
+			"previous_keys": [
+				"vial"
+			],
+			"runtime_package": "PolyToolsRuntimeExports/vial/manifest.json"
 		},
 		{
 			"asset_category": "single",
