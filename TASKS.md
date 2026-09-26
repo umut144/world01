@@ -13,6 +13,15 @@ all funmaps - share most of their mechanics and differ in data. The model is
 Warcraft III: one fixed engine, one editor, and the map is the unit that
 carries the game.
 
+A funmap is the small end of that and the real ambition: a minigame that is a
+map plus its data, made in the editor rather than in Rust, the way Warcraft
+III's players built tower defence and Dota without touching the engine. It is
+also the hardest demand on the sandbox, because a map author eventually needs
+behaviour the engine was not built with - events, conditions and actions
+resolved by name from data rather than compiled in. Nothing about that is
+being built now; it is named here so that when it is, it is recognised as the
+same machine and not built twice.
+
 Three levels, and the boundary between them is what this section exists to
 record:
 
