@@ -5,18 +5,6 @@ outcomes. Completed implementation history remains available in Git. Tasks may
 use vertical slices when that helps produce a small, testable result; completed
 slices are not retained here as a permanent project chronicle.
 
-## Documentation routing
-
-Until this slice, no separate World Design document existed and `AGENTS.md`
-identified the Labyrinth document as the only game-design source. As a result,
-Codex naturally used Labyrinth context for shared characters, weapons,
-abilities, and mechanics, even when a request was not Labyrinth-specific.
-
-Shared World 01 design now belongs in `docs/WORLD_DESIGN.md`. The Labyrinth
-document contains only Labyrinth-specific context, tuning, scope, and explicit
-overrides. Future agents must read World Design for cross-game work and the
-active game document for that game's deviations.
-
 ## One world, one game
 
 World 01 is a single game - an MMORPG - built the way it has been built so far:
@@ -44,9 +32,15 @@ No Realm assignment exists in code yet, and that is deliberate: there is one
 Realm, every Scene belongs to it, and the data that says otherwise arrives with
 the second one.
 
+The Labyrinth went the same way on 2026-09-26. It was a 64-player dungeon
+battle royale - the concept this codebase originally grew from, and a second
+game by any reading of the decision above. Its design document is out of the
+tree and in Git history, and the documents no longer route agents to it. What
+it built stays: the characters, weapons, abilities, health and status
+foundations were always World-01's own, and `docs/WORLD_DESIGN.md` owns them.
+
 | ID | Area | Outcome | Status |
 |---|---|---|---|
-| `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 | `WORLD-18` | World rendering | Evaluate a Bevy tilemap crate for the SceneMaker-authored world representation, including compatibility with the current engine-neutral map export and PolyTools asset profiles. | **Deferred for later performance work** |
 | `WORLD-19` | World rendering | Design and implement chunked tilemap rendering/streaming for large maps, with explicit chunk size, culling, update boundaries, and a migration path from the current repeated `Mesh2d` terrain presentation. | **Blocked on `WORLD-18`** |
 | `SBX-25` | Bots | Add an `ai` crate whose data-driven behaviour tree writes only intent components, running in a `SimulationSet::Decision` phase before the gameplay step, with node conditions and actions resolved by name from design files. | Planned |

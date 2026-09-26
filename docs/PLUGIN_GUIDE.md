@@ -32,8 +32,8 @@ for standing up a second game.
 5. Add focused deterministic tests for game simulation and use the project
    validation wrapper after Rust changes.
 
-Use explicit plugin names, for example `LabyrinthPlugin` or
-`TacticsPlugin`; do not name a genre implementation `CorePlugin` or
+Use explicit plugin names, for example `OverworldPlugin` or
+`DungeonPlugin`; do not name an implementation `CorePlugin` or
 `SandboxPlugin`.
 
 ## Required contracts

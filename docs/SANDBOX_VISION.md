@@ -15,11 +15,9 @@ a particular game, genre, ruleset, or player progression.
 games can grow. It does not mean a disposable prototype, a standalone game, or
 an attempt to build a universal engine.
 
-Shared setting, recurring character, weapon, ability, and cross-game gameplay
-design belongs in [`WORLD_DESIGN.md`](WORLD_DESIGN.md). Game-specific rules
-belong in game plugins and their design documents. The Labyrinth reference
-design is deliberately isolated at
-[`games/labyrinth/GAME_LABYRINTH_DESIGN.md`](games/labyrinth/GAME_LABYRINTH_DESIGN.md).
+Setting, recurring characters, weapons, abilities and gameplay design belong
+in [`WORLD_DESIGN.md`](WORLD_DESIGN.md). World 01 is one game, so there is no
+second design document to isolate anything from.
 
 `SANDBOX_TECHNICAL.md` specifies the technical contracts. `PLUGIN_GUIDE.md`
 defines how a game extends those contracts.

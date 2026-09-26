@@ -16,7 +16,8 @@ kinds of statement:
   capability is extracted into the shared `main` foundation. It does not imply
   that a corresponding public API already exists.
 
-The current codebase grew from The Labyrinth and remains partly game-specific.
+The current codebase grew from an earlier game concept and remains partly
+shaped by it.
 The design umbrella, repository, and Rust package namespace now use `world01`.
 Physical separation into crates is not by itself proof that their complete
 contents are already genre-neutral or reusable. This document is neither an
@@ -81,7 +82,7 @@ their final schedule and plugin composition.
 ### Current implementation coupling
 
 The physical boundaries are useful, but their current contents still include
-Labyrinth behavior:
+game-specific behavior:
 
 - `configs` contains technical simulation cadence, network cadence, camera
   framing, and the bounded world-overlap recovery rate in `runtime.toml`.
@@ -100,16 +101,15 @@ Labyrinth behavior:
 - `network` has separate client/server transport modules, but its internal
   protocol registration is fixed to the current join request, `PlayerInput`,
   character state, health, Hammer state, and Mage eye-beam state.
-- `apps/client` and `apps/server` compose a concrete Labyrinth session,
+- `apps/client` and `apps/server` compose a concrete World-01 session,
   including character selection, five-player spawning, room presentation,
   health bars, eyes, Hammer presentation, and Mage eye-beam combat and
   presentation.
 
-These are facts about the starting implementation, not requirements that every
-future multiplayer game must inherit. Several current components embody
-World-01 character and weapon concepts that were first implemented while
-building The Labyrinth; their current code location does not make those design
-concepts Labyrinth-owned.
+These are facts about the starting implementation, not requirements. Several
+current components embody World-01 character and weapon concepts that were
+first implemented under an earlier game concept; their current code location
+says nothing about what owns them.
 
 ## Confirmed dependency and authority boundaries
 
@@ -166,7 +166,8 @@ The existing application uses a server-authoritative model:
   presentation-only;
 - disconnect cleanup and late-join replication are implemented.
 
-Protocol registration is currently internal and Labyrinth-specific. A game
+Protocol registration is currently internal and fixed to what World 01
+replicates today. A game
 plugin cannot yet register arbitrary replicated components, messages,
 ownership checks, or prediction/interpolation policies through a stable public
 sandbox extension point.
@@ -204,7 +205,7 @@ references; there is not yet a generic persistent asset-cache service.
 
 The existing loader is deliberately specific: it recognizes the character
 catalog, requires Hammer content, validates Hammer attachment contracts, and
-exposes Labyrinth-derived health and combat geometry. Asset keys provide
+exposes the health and combat geometry the game needs. Asset keys provide
 stable identity inside this contract, while the set of supported package roles
 is not yet plugin-extensible.
 
@@ -341,7 +342,7 @@ of at most `1.0 m` retain the existing exponential presentation smoothing;
 larger authoritative discontinuities are presented as a hard cut instead of a
 multi-second glide across the map. There is no generic sandbox
 entity-instantiation path today. Server session code currently turns a
-character join request into a Labyrinth player with movement, gaze, health, and
+character join request into a World-01 player with movement, gaze, health, and
 optional Hammer components at one of five fixed spawn positions. The
 presentation root and asset attachment flow are private client-app
 implementation details rather than a public sandbox contract.
@@ -553,7 +554,7 @@ therefore consume the same selected Instance dimensions and gameplay
 placements. SceneMaker stores only PolyTools asset keys and authoring geometry;
 the runtime resolves those keys
 through its synchronized PolyTools content and renders the real runtime
-geometry. These facilities live inside the Labyrinth client application. There
+geometry. These facilities live inside the client application. There
 is no public reusable camera service, room service, map service, or
 camera-target contract today.
 
