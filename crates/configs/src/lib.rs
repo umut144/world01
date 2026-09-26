@@ -171,7 +171,7 @@ mod tests {
         assert_eq!(runtime.network.remote_interpolation_ratio, 2.0);
         assert_eq!(runtime.camera.effective_view_tiles(), Some((16, 10)));
         assert!(runtime.camera.is_valid());
-        assert_eq!(runtime.world.start_map, "map01");
+        assert_eq!(runtime.world.start_map, "overworld01");
         assert!(runtime.world.is_valid());
     }
 
@@ -193,14 +193,16 @@ mod tests {
     #[test]
     fn a_local_override_file_names_the_start_map() {
         let path = override_test_path("names_map");
-        std::fs::write(&path, "start_map = \"map01\"\n").expect("the temp file writes");
+        // Deliberately not the embedded default, so the test cannot pass by
+        // reading runtime.toml instead of the override.
+        std::fs::write(&path, "start_map = \"cave01\"\n").expect("the temp file writes");
 
         let result = local_start_map_override_from(&path);
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(
             result.expect("a valid override file parses"),
-            Some("map01".to_owned())
+            Some("cave01".to_owned())
         );
     }
 

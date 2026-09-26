@@ -2,15 +2,15 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
-# SceneMaker keeps its Scenes per Game: workspaces/<workspace>/<game>/exports.
-# A workspace holds several Games - world01 holds sandbox and moba - while the
-# runtime has one embedded map catalog and picks an Instance by its scene ID.
-# Since export contract v21 each export names its own Game in `game_key`, and
-# this sync files it under assets/maps/<game_key>/ accordingly. That key is
-# what makes a partial sync safe: only the Games actually present in the
-# sources are replaced, and a Game that was not exported keeps what it had.
-# Before the key existed this script replaced the whole map directory, so
-# exporting one Game deleted every other Game's maps.
+# SceneMaker groups its Scenes one level below the workspace:
+# workspaces/<workspace>/<group>/exports. Since export contract v21 each export
+# names its own group in `game_key`, and this sync files it under
+# assets/maps/<group>/ accordingly.
+#
+# That key is what makes a partial sync safe: only the groups actually present
+# in the sources are replaced, and a group that was not exported keeps what it
+# had. Before the key existed this script replaced the whole map directory, so
+# exporting one group deleted every other group's maps.
 # SCENEMAKER_EXPORTS overrides the search with an explicit colon-separated list
 # of export directories.
 scenemaker_workspace="${SCENEMAKER_WORKSPACE:-$project_root/../../GodotProjects/SceneMaker/workspaces/world01}"

@@ -9,13 +9,12 @@ use world01_content::{
     MageEyeGeometry, RuntimeContent, WorldCollisionGeometryCatalog,
 };
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
-use world01_moba::{MobaPlacementRanksDesign, MobaWorldDerivation, MobaWorldSource};
 use world01_network::{NETWORK_SIMULATION_ENV, NetworkSimulationProfile};
 use world01_simulation::{
     CharacterLifeRules, ExertionRules, HammerAttackRules, MageAttackRules, MovementStep,
-    TraversalCatalog, WeaponAimRules, WorldColliderGrid, WorldDerivation,
+    TraversalCatalog, WeaponAimRules, WorldColliderGrid,
 };
-use world01_world_data::{AnkhLayout, TeamId, WorldComposition, WorldMap, WorldTemplateCatalog};
+use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
 use crate::controller::ControllerInput;
 use crate::hammer::HammerPresentationRules;
@@ -42,7 +41,6 @@ const INITIAL_WINDOW_PHYSICAL_HEIGHT: u32 = 640;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let client_id = client_id_from_args()?;
-    let team = team_from_args()?;
     let network_simulation = network_simulation_from_env()?;
     let mut config = load_embedded()?;
     // A developer's own runtime.local.toml, gitignored, overrides which map
@@ -55,16 +53,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let world_map =
-        WorldMap::load_embedded(MobaWorldDerivation::GAME_KEY, &config.world.start_map)?;
-    let world_templates = WorldTemplateCatalog::load_embedded(MobaWorldDerivation::GAME_KEY)?;
-    // A Totem outranks every Terrain and Prop `world01.toml` already ranks -
-    // no Template may ever paint over an objective - so the MOBA's own
-    // overlay adds its ranks to the sandbox's table rather than the sandbox
-    // ever naming a Totem.
-    let placement_ranks = world_design
-        .placement_ranks()?
-        .extended_with(MobaPlacementRanksDesign::load_embedded()?.entries())?;
+    let world_map = WorldMap::load_embedded("sandbox", &config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded("sandbox")?;
+    let placement_ranks = world_design.placement_ranks()?;
     let world_composition =
         WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
@@ -75,10 +66,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    // The same rule the world rebuild will call again on every recomposition,
-    // used here to derive the first world - see MobaWorldDerivation.
-    let moba_source = MobaWorldSource::load_embedded()?;
-    let totem_layout = MobaWorldDerivation::derive(&world_map, &moba_source)?;
     let hammer_geometry = HammerCombatGeometry::from_content(&content)?;
     let hurt_geometry = CharacterHurtGeometryCatalog::from_content(&content)?;
     let mage_eye_geometry = MageEyeGeometry::from_content(&content)?;
@@ -186,13 +173,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     app.insert_resource(placement_ranks);
     app.insert_resource(world_map);
     app.insert_resource(ankh_layout);
-    app.insert_resource(moba_source);
-    app.insert_resource(totem_layout);
     app.insert_non_send(controller_input);
-    app.add_plugins(ClientPredictionPlugin::<MobaWorldDerivation>::default());
+    app.add_plugins(ClientPredictionPlugin);
     app.add_plugins(ClientSessionPlugin {
         client_id,
-        team,
         tick_duration,
         snapshot_interval,
         remote_interpolation_ratio,
@@ -231,29 +215,6 @@ fn network_simulation_from_env() -> Result<NetworkSimulationProfile, Box<dyn Err
         )
         .into()
     })
-}
-
-/// The side this client plays on, as `--team <number>` anywhere in the args.
-///
-/// Absent means absent: no side was picked, and the value travels to the
-/// server as `None` rather than as a guess. Whether a join without a side is
-/// admissible is the game's decision, not this function's - a sandbox has no
-/// sides at all, while the MOBA refuses the join. This is where a lobby will
-/// eventually put the player's own choice; until it exists, a developer says
-/// it on the command line so that nothing in between has to invent one.
-fn team_from_args() -> Result<Option<TeamId>, Box<dyn Error>> {
-    let args = env::args().collect::<Vec<_>>();
-    let Some(flag) = args.iter().position(|argument| argument == "--team") else {
-        return Ok(None);
-    };
-    let Some(value) = args.get(flag + 1) else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "--team must be followed by a side number",
-        )
-        .into());
-    };
-    Ok(Some(TeamId(value.parse::<u8>()?)))
 }
 
 fn client_id_from_args() -> Result<u64, Box<dyn Error>> {

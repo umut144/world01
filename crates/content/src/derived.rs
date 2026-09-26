@@ -1195,10 +1195,10 @@ mod tests {
                 .all(|region| !region.component.boundary_edges().is_empty())
         );
 
-        // Whether the shipped Totems carry their `destructible` Region yet
-        // depends on the last content sync, so this holds either way: the
-        // catalog loads, and whatever it found has usable geometry. A Prop
-        // without the Region has no entry, like one without `collision`.
+        // Whether any shipped Prop carries a `destructible` Region depends on
+        // the last content sync, so this holds either way: the catalog loads,
+        // and whatever it found has usable geometry. A Prop without the Region
+        // has no entry, like one without `collision`.
         let world_destructible =
             WorldDestructibleGeometryCatalog::from_content_and_map(&content, &map)
                 .expect("embedded world destructible topology is valid");

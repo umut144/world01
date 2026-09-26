@@ -13,7 +13,6 @@ use world01_content::{
     WorldCollisionGeometryCatalog,
 };
 use world01_design::{load_embedded as load_game_design, load_world01_embedded};
-use world01_moba::{MobaPlacementRanksDesign, MobaWorldDerivation, MobaWorldSource};
 use world01_network::{
     NETWORK_SIMULATION_ENV, NetworkSimulationProfile, ServerNetworkSet, configure_server,
 };
@@ -21,8 +20,8 @@ use world01_simulation::{
     CharacterAbilityCatalog, CharacterLifeRules, CharacterMassCatalog, ExertionRules,
     GroundNavigationGraph, HammerAttackRules, HammerStrikeRules, MageAttackRules, MovementStep,
     SimulationAuthority, SimulationSet, TraversalCatalog, WeaponAimRules, WorldColliderGrid,
-    WorldDerivation, WorldNavigation, WorldSeparationStep, add_simulation_step,
-    add_world_runtime_rebuild, switch_buttons::add_switch_buttons,
+    WorldNavigation, WorldSeparationStep, add_simulation_step, add_world_runtime_rebuild,
+    switch_buttons::add_switch_buttons,
 };
 use world01_world_data::{AnkhLayout, WorldComposition, WorldMap, WorldTemplateCatalog};
 
@@ -42,16 +41,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let world_map =
-        WorldMap::load_embedded(MobaWorldDerivation::GAME_KEY, &config.world.start_map)?;
-    let world_templates = WorldTemplateCatalog::load_embedded(MobaWorldDerivation::GAME_KEY)?;
-    // A Totem outranks every Terrain and Prop `world01.toml` already ranks -
-    // no Template may ever paint over an objective - so the MOBA's own
-    // overlay adds its ranks to the sandbox's table rather than the sandbox
-    // ever naming a Totem.
-    let placement_ranks = world_design
-        .placement_ranks()?
-        .extended_with(MobaPlacementRanksDesign::load_embedded()?.entries())?;
+    let world_map = WorldMap::load_embedded("sandbox", &config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded("sandbox")?;
+    let placement_ranks = world_design.placement_ranks()?;
     let world_composition =
         WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;
     let ankh_layout = AnkhLayout::from_map(&world_map);
@@ -62,10 +54,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    // The same rule the world rebuild will call again on every recomposition,
-    // used here to derive the first world - see MobaWorldDerivation.
-    let moba_source = MobaWorldSource::load_embedded()?;
-    let totem_layout = MobaWorldDerivation::derive(&world_map, &moba_source)?;
     let network_simulation = network_simulation_from_env()?;
     let tick_duration = config.simulation.tick_duration().ok_or_else(|| {
         io::Error::new(
@@ -150,15 +138,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     .insert_resource(world_templates)
     .insert_resource(placement_ranks)
     .insert_resource(world_map)
-    .insert_resource(ankh_layout)
-    .insert_resource(moba_source)
-    .insert_resource(totem_layout);
+    .insert_resource(ankh_layout);
     add_simulation_step(&mut app, FixedUpdate, SimulationAuthority::Server);
-    add_world_runtime_rebuild::<MobaWorldDerivation>(
-        &mut app,
-        FixedUpdate,
-        WorldNavigation::Derived,
-    );
+    add_world_runtime_rebuild(&mut app, FixedUpdate, WorldNavigation::Derived);
     add_switch_buttons(&mut app, FixedUpdate);
     app.configure_sets(
         FixedUpdate,

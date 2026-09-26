@@ -11,10 +11,13 @@ Read [`SANDBOX_VISION.md`](SANDBOX_VISION.md),
 genre rules; it reuses sandbox services without changing their authority
 boundaries.
 
-A game normally lives on its own branch from the shared `main` baseline. Its
-plugins and genre rules remain on that branch. A capability should return to
-`main` only after its game-specific semantics have been removed and its
-cross-game contract is concrete and stable.
+**Status, 2026-09-26**: World 01 is one game, and there is no second one to
+extend the sandbox beside it. The branch-per-game model this guide once
+described was tried with a MOBA and abandoned - nothing was ever cherry-picked
+back, and the genre leaked into the shared crates anyway. What remains valid
+below is the authority discipline: what a game may own, what the sandbox owns,
+and where state has to be server-decided. Read it as that, not as instructions
+for standing up a second game.
 
 ## Set up a game plugin
 

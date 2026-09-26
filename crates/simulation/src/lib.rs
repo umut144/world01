@@ -1,7 +1,6 @@
 //! Input-, transport-, and presentation-independent game simulation.
 
 pub mod ability;
-pub mod admission;
 pub mod aim;
 pub mod collision;
 pub mod combat;
@@ -21,7 +20,6 @@ pub mod switch_buttons;
 mod world_runtime;
 
 pub use ability::{Ability, AbilityError, CharacterAbilityCatalog};
-pub use admission::{Admission, JoinRefused, JoinedIdentity, SessionRules};
 pub use aim::{WeaponAimConfigError, WeaponAimRules, update_gaze_direction, update_weapon_aim};
 pub use collision::block_colliding_movement;
 pub use combat::hammer::{
@@ -54,7 +52,7 @@ pub use separation::{
 pub use spatial::broadphase::{Aabb, WorldColliderGrid};
 pub use status::tick_status_effects;
 pub use world_runtime::{
-    WorldDerivation, WorldNavigation, WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild,
+    WorldNavigation, WorldRuntimeSet, WorldRuntimeState, add_world_runtime_rebuild,
 };
 
 #[cfg(test)]

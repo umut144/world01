@@ -17,29 +17,34 @@ document contains only Labyrinth-specific context, tuning, scope, and explicit
 overrides. Future agents must read World Design for cross-game work and the
 active game document for that game's deviations.
 
-## The MOBA branch
+## One world, one game
 
-This is `game/moba`, taken from `main` on 2026-09-13. The game's design lives in
-[`docs/games/moba/GAME_MOBA_DESIGN.md`](docs/games/moba/GAME_MOBA_DESIGN.md) and
-its build order and authoring gates in
-[`docs/games/moba/MOBA_ROADMAP.md`](docs/games/moba/MOBA_ROADMAP.md). Only the
-current phase appears in the table below; the phases beyond it are described in
-the roadmap so the tracker does not become a second plan.
+World 01 is a single game - an MMORPG - built the way it has been built so far:
+the sandbox grows asset by asset and system by system, and the game is what it
+grows into. There is no second game and no plugin boundary between a core and a
+genre on top of it.
 
-One working rule governs every commit on this branch: **a commit is either
-sandbox-generic or MOBA-owned, never both.** A generic commit compiles and
-passes its tests without anything MOBA-specific, and cherry-picks onto `main` as
-it stands. A mixed commit has to be taken apart later by someone who has
-forgotten which half was which.
+A MOBA was started on 2026-09-13 and removed on 2026-09-26. What it left behind
+is deliberate: `TeamId` as an identity type without rules attached,
+`PlacementRanks::extended_with`, a publicly constructible `DesignError`, the
+gitignored `runtime.local.toml` start-map override, the authored-footprint
+overlap check, and SceneMaker export contract v21. What went with it is the
+MOBA's own crate, design data, map, documents and Totem assets, along with the
+`WorldDerivation` and `SessionRules` seams - a seam with no second
+implementation is indirection, not architecture.
+
+SceneMaker still groups Scenes one level below the `world01` workspace, and
+world01 still files maps under `assets/maps/<group>/`. What that grouping should
+be called, and whether it eventually carries its own mechanics (a side-scrolling
+area, for instance), is an open question rather than a settled design.
 
 | ID | Area | Outcome | Status |
 |---|---|---|---|
-| `MOBA-02` | MOBA | Phase 2: MOBA design data for Totem ownership and health, a `TotemLayout` derived beside `AnkhLayout`, destructible Totems, team assignment and team-join spawning, and a match that ends when a Totem of Life falls. | Gates A, B and C met. `TotemLayout` is derived in the same fixed-tick transaction as `AnkhLayout` and refuses a Totem the ownership file never names, an ownership entry that names no placed Totem, or a kind with no health entry. Team assignment and join spawn at the team's own Totem of Life are done. A replicated Totem entity per placement, the `destructible` Region (Manifest 23), and the three Totem Assets' Placement Ranks (added by the MOBA overlay, not `world01.toml`) are also done. Remaining: wiring a Totem's destructible geometry into the existing damage resolution, and the win condition |
 | `LAB-17` | The Labyrinth | Add the first authoritative server-side implementation of the shared World-01 Hammer impact contract using configured attack Components and server-owned damage. | **Deferred while sandbox work is prioritized** |
 | `WORLD-18` | World rendering | Evaluate a Bevy tilemap crate for the SceneMaker-authored world representation, including compatibility with the current engine-neutral map export and PolyTools asset profiles. | **Deferred for later performance work** |
 | `WORLD-19` | World rendering | Design and implement chunked tilemap rendering/streaming for large maps, with explicit chunk size, culling, update boundaries, and a migration path from the current repeated `Mesh2d` terrain presentation. | **Blocked on `WORLD-18`** |
-| `SBX-25` | Bots | Add an `ai` crate whose data-driven behaviour tree writes only intent components, running in a `SimulationSet::Decision` phase before the gameplay step, with node conditions and actions resolved by name from design files. | Planned — built as MOBA roadmap Phase 4 |
-| `SBX-26` | Bots | Replicate bots as server-authoritative and interpolated rather than predicted, so `SimulationAuthority::Predicted` skips them and neither the behaviour tree nor pathfinding has to be deterministic on the client. | **Blocked on `SBX-25`** — built beside it in MOBA roadmap Phase 4 |
+| `SBX-25` | Bots | Add an `ai` crate whose data-driven behaviour tree writes only intent components, running in a `SimulationSet::Decision` phase before the gameplay step, with node conditions and actions resolved by name from design files. | Planned |
+| `SBX-26` | Bots | Replicate bots as server-authoritative and interpolated rather than predicted, so `SimulationAuthority::Predicted` skips them and neither the behaviour tree nor pathfinding has to be deterministic on the client. | **Blocked on `SBX-25`** |
 | `SBX-27` | Client presentation | Split `presentation.rs` into separate input, character-selection and render-reconciliation plugins, and source character colours from content instead of the two hand-maintained palettes in `polytools.rs` and `presentation.rs`. | Planned |
 | `SBX-28` | Sandbox architecture | Retire the leftovers the architecture review found: the simulation tests living in `lib.rs` instead of beside their modules, the public `CharacterId` field that bypasses its validating constructor, and the server address hard-coded in the network crate. | Planned |
 | `SBX-29` | Sandbox architecture | Move the rules and catalog types out of `simulation` into a `world_rules` crate so they can be queried without the ECS systems. | **Deferred until a second consumer needs the rules without the systems, such as the `ai` crate or a balancing tool** |

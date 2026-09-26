@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "ranks": [
-    { "asset_key": "totem_of_life", "rank": 200 },
-    { "asset_key": "totem_of_mana", "rank": 200 },
-    { "asset_key": "totem_of_time", "rank": 200 }
-  ]
-}

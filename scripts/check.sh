@@ -44,17 +44,14 @@ cargo check --quiet --package world01-server
 cargo check --quiet --package world01-client --features dev
 
 if [ "$run_tests" -eq 1 ]; then
-  # Library crates carry the simulation, content and protocol behaviour, and
-  # every game crate carries its own rules. A game added under crates/games
-  # has to be named here too - an unnamed crate compiles and is never tested.
+  # Library crates carry the simulation, content and protocol behaviour.
   cargo test --quiet \
     --package world01-configs \
     --package world01-world-data \
     --package world01-design \
     --package world01-content \
     --package world01-network \
-    --package world01-simulation \
-    --package world01-moba
+    --package world01-simulation
 fi
 
 if [ "$run_apps_tests" -eq 1 ]; then

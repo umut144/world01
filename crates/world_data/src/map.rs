@@ -5041,12 +5041,12 @@ mod tests {
             .expect("the base table is valid");
 
         let extended = base
-            .extended_with([("totem_of_life", 200)])
+            .extended_with([("shrine", 200)])
             .expect("adding a new Asset key is allowed");
 
         assert_eq!(extended.rank("grass"), Some(10));
         assert_eq!(extended.rank("tree"), Some(20));
-        assert_eq!(extended.rank("totem_of_life"), Some(200));
+        assert_eq!(extended.rank("shrine"), Some(200));
     }
 
     #[test]
@@ -5071,10 +5071,7 @@ mod tests {
             "adding nothing at all is not an error"
         );
         assert!(base.clone().extended_with([("", 1)]).is_err());
-        assert!(
-            base.extended_with([("totem_of_life", 1), ("totem_of_life", 2)])
-                .is_err()
-        );
+        assert!(base.extended_with([("shrine", 1), ("shrine", 2)]).is_err());
     }
 
     #[test]
