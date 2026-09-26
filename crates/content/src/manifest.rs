@@ -33,6 +33,7 @@ pub struct RuntimeContent {
     props: HashMap<String, RuntimeManifest>,
     terrain: HashMap<String, RuntimeManifest>,
     weapons: HashMap<String, RuntimeManifest>,
+    items: HashMap<String, RuntimeManifest>,
     hammer: RuntimeManifest,
 }
 
@@ -62,7 +63,7 @@ impl RuntimeContent {
         for asset in &catalog.assets {
             if !matches!(
                 asset.asset_type.as_str(),
-                "character" | "props" | "weapons" | "terrain" | "symbols"
+                "character" | "props" | "weapons" | "terrain" | "items" | "symbols"
             ) {
                 continue;
             }
@@ -76,13 +77,25 @@ impl RuntimeContent {
         let mut props = HashMap::new();
         let mut terrain = HashMap::new();
         let mut weapons = HashMap::new();
+        let mut items = HashMap::new();
         let mut hammer = None;
         for asset in &catalog.assets {
-            if !matches!(
-                asset.asset_type.as_str(),
-                "character" | "props" | "weapons" | "terrain"
-            ) {
-                continue;
+            // Every Asset type the catalog may name is decided here, and an
+            // unknown one is refused rather than skipped. A `symbols` Asset
+            // exists only to be referenced by the Assets that name it, so it
+            // is loaded above and never stored on its own; anything else this
+            // boundary has not been taught is a synchronisation that outgrew
+            // the loader. Skipping it silently is how five catalogued items
+            // were compiled into the binary and reached nothing at all.
+            match asset.asset_type.as_str() {
+                "character" | "props" | "weapons" | "terrain" | "items" => {}
+                "symbols" => continue,
+                unknown => {
+                    return Err(ContentError::new(format!(
+                        "catalog names {} as `{unknown}`, an Asset type this content boundary does not know",
+                        asset.asset_key
+                    )));
+                }
             }
             let source = source_cache.get(&asset.asset_key).ok_or_else(|| {
                 ContentError::new(format!("missing loaded source for {}", asset.asset_key))
@@ -115,6 +128,16 @@ impl RuntimeContent {
             } else if asset.asset_type == "weapons" {
                 validate_asset_contents(&manifest)?;
                 weapons.insert(asset.asset_key.clone(), manifest);
+            } else if asset.asset_type == "items" {
+                validate_asset_contents(&manifest)?;
+                items.insert(asset.asset_key.clone(), manifest);
+            } else {
+                // The accepted types above and the stored types here are two
+                // lists, and this is what happens when they drift apart.
+                return Err(ContentError::new(format!(
+                    "{} is catalogued as `{}`, which this loader accepts and then stores nowhere",
+                    asset.asset_key, asset.asset_type
+                )));
             }
         }
 
@@ -125,12 +148,14 @@ impl RuntimeContent {
         }
         validate_palette_variants(&props)?;
         validate_palette_variants(&terrain)?;
+        validate_palette_variants(&items)?;
         let hammer = hammer.ok_or_else(|| ContentError::new("catalog is missing Hammer"))?;
         Ok(Self {
             characters,
             props,
             terrain,
             weapons,
+            items,
             hammer,
         })
     }
@@ -169,6 +194,16 @@ impl RuntimeContent {
     /// because the sandbox binds it by name.
     pub fn weapon(&self, asset_key: &str) -> Option<&RuntimeManifest> {
         self.weapons.get(asset_key)
+    }
+
+    /// A catalogued item.
+    ///
+    /// Items carry geometry and nothing else today - no Regions, no
+    /// attachment frames - because no system picks one up yet. They are
+    /// loaded all the same: an Asset the catalog names is an Asset this
+    /// boundary can hand out, and the alternative was dropping them.
+    pub fn item(&self, asset_key: &str) -> Option<&RuntimeManifest> {
+        self.items.get(asset_key)
     }
 
     /// The terrain Asset that a cell actually draws.
@@ -873,6 +908,48 @@ mod tests {
                 .terrain("grass")
                 .map(|terrain| terrain.asset_key.as_str()),
             Some("grass")
+        );
+    }
+
+    #[test]
+    fn embedded_content_loads_every_catalogued_item() {
+        let content = RuntimeContent::load_embedded().expect("embedded PolyTools content is valid");
+
+        // Counted from the catalogue for the same reason as the Characters
+        // above: drawing another item in PolyTools should make this test load
+        // one more, not fail.
+        let catalogued = EMBEDDED_ASSET_MANIFESTS
+            .iter()
+            .filter(|(asset_type, _, _)| *asset_type == "items")
+            .count();
+        assert!(catalogued >= 5, "the world carries its authored items");
+        for (asset_type, asset_key, _) in EMBEDDED_ASSET_MANIFESTS {
+            if *asset_type != "items" {
+                continue;
+            }
+            assert!(
+                content.item(asset_key).is_some(),
+                "{asset_key} is catalogued and has to be loadable"
+            );
+        }
+    }
+
+    #[test]
+    fn an_asset_type_this_boundary_does_not_know_is_refused_rather_than_skipped() {
+        let catalog = r#"{"assets":[{"asset_key":"cursor","asset_type":"icon"}]}"#;
+
+        // Matched rather than `expect_err`: the Ok side is a loaded world of
+        // Assets and printing it proves nothing.
+        let error = match RuntimeContent::from_source_loader(catalog, |asset_type, asset_key| {
+            panic!("a refused Asset type must not be loaded: {asset_type}/{asset_key}")
+        }) {
+            Ok(_) => panic!("an Asset type the loader does not know has to be refused"),
+            Err(error) => error,
+        };
+
+        assert!(
+            error.to_string().contains("icon") && error.to_string().contains("cursor"),
+            "the refusal names the Asset and its type: {error}"
         );
     }
 
