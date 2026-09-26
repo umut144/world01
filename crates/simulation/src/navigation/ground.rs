@@ -305,7 +305,7 @@ mod tests {
             MovementStep::from_runtime(&runtime).expect("runtime movement step is valid"),
         )
         .insert_resource(
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid"),
+            WorldMap::load_embedded("overworld01").expect("embedded Instance is valid"),
         )
         .insert_resource(traversal)
         .add_systems(
@@ -325,8 +325,7 @@ mod tests {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let game_design = load_game_design().expect("embedded game design is valid");
         let world_design = load_world01_embedded().expect("embedded World 01 design is valid");
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let ankhs = AnkhLayout::from_map(&map);
         let mut app = App::new();
         app.insert_resource(

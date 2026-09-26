@@ -41,8 +41,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let world_design = load_world01_embedded()?;
     let game_design = load_game_design()?;
     let content = RuntimeContent::load_embedded()?;
-    let world_map = WorldMap::load_embedded("sandbox", &config.world.start_map)?;
-    let world_templates = WorldTemplateCatalog::load_embedded("sandbox")?;
+    let world_map = WorldMap::load_embedded(&config.world.start_map)?;
+    let world_templates = WorldTemplateCatalog::load_embedded()?;
     let placement_ranks = world_design.placement_ranks()?;
     let world_composition =
         WorldComposition::new(world_map.clone(), &world_templates, &placement_ranks)?;

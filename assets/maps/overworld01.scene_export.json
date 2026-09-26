@@ -1,8 +1,7 @@
 {
   "format": "scene_maker_scene_export",
-  "version": 21,
+  "version": 22,
   "workspace_key": "world01",
-  "game_key": "sandbox",
   "grid": {
     "terrain_cell_meters": 1.0,
     "authoring_pixels_per_meter": 32,

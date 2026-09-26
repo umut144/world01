@@ -33,10 +33,16 @@ MOBA's own crate, design data, map, documents and Totem assets, along with the
 `WorldDerivation` and `SessionRules` seams - a seam with no second
 implementation is indirection, not architecture.
 
-SceneMaker still groups Scenes one level below the `world01` workspace, and
-world01 still files maps under `assets/maps/<group>/`. What that grouping should
-be called, and whether it eventually carries its own mechanics (a side-scrolling
-area, for instance), is an open question rather than a settled design.
+The world is divided into **Realms**: a Realm carries the mechanics its Scenes
+are played under, so a side-scrolling area is a different Realm from the walked
+overworld. Which Scene belongs to which Realm is decided here, from this
+project's own design data - SceneMaker authors one flat set of Scenes per
+Workspace and its export says nothing about Realms, because a map editor has no
+business knowing what physics applies.
+
+No Realm assignment exists in code yet, and that is deliberate: there is one
+Realm, every Scene belongs to it, and the data that says otherwise arrives with
+the second one.
 
 | ID | Area | Outcome | Status |
 |---|---|---|---|

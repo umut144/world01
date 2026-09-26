@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::{Position, WorldPosition};
 
 const FORMAT: &str = "scene_maker_scene_export";
-const FORMAT_VERSION: u32 = 21;
+const FORMAT_VERSION: u32 = 22;
 const SCENE_SCHEMA: &str = "srt.scene_maker_scene";
 const SCENE_VERSION: u32 = 17;
 const WORKSPACE_KEY: &str = "world01";
@@ -99,16 +99,15 @@ impl WaterColumn {
 }
 
 impl WorldMap {
-    /// Loads the Instance named `scene_id` from the game `game_key` authored
-    /// it in.
+    /// Loads the embedded Instance named `scene_id`.
     ///
     /// Every synchronized SceneMaker export is embedded, including Templates,
-    /// but only an explicitly requested Instance may become a `WorldMap`. The
-    /// game has to be named because a scene ID is unique within a game and not
-    /// across them - two games may each author a "map01", and a lookup that
-    /// took the first match would silently hand out the wrong world.
-    pub fn load_embedded(game_key: &str, scene_id: &str) -> Result<Self, WorldMapError> {
-        Self::from_source(embedded_instance_source(game_key, scene_id)?, scene_id)
+    /// but only an explicitly requested Instance may become a `WorldMap`. A
+    /// scene ID identifies a Scene across the whole authored world: SceneMaker
+    /// authors one flat set of Scenes, and which Realm a Scene is played in is
+    /// a decision this simulation makes, not something the export carries.
+    pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
+        Self::from_source(embedded_instance_source(scene_id)?, scene_id)
     }
 
     pub fn from_source(source: &str, scene_id: &str) -> Result<Self, WorldMapError> {
@@ -887,15 +886,10 @@ pub struct WorldTemplateCatalog {
 }
 
 impl WorldTemplateCatalog {
-    /// Every Template one game authored.
-    ///
-    /// Scoped to a game because a Template belongs to exactly one, and a
-    /// catalog mixing two games' Templates would offer an Anchor occupants
-    /// from a world it is not part of.
-    pub fn load_embedded(game_key: &str) -> Result<Self, WorldMapError> {
+    pub fn load_embedded() -> Result<Self, WorldMapError> {
         let mut groups = BTreeMap::<u32, Vec<WorldTemplate>>::new();
-        for (game, _, scene_id, scene_kind, source) in EMBEDDED_WORLD_EXPORTS {
-            if *game != game_key || *scene_kind != "template" {
+        for (_, scene_id, scene_kind, source) in EMBEDDED_WORLD_EXPORTS {
+            if *scene_kind != "template" {
                 continue;
             }
             let template = import_catalog_template(scene_id, source)?;
@@ -968,9 +962,9 @@ pub struct WorldTemplate {
 }
 
 impl WorldTemplate {
-    pub fn load_embedded(game_key: &str, scene_id: &str) -> Result<Self, WorldMapError> {
+    pub fn load_embedded(scene_id: &str) -> Result<Self, WorldMapError> {
         Self::from_source(
-            embedded_scene_source(game_key, scene_id, "template", "Template")?,
+            embedded_scene_source(scene_id, "template", "Template")?,
             scene_id,
         )
     }
@@ -1075,23 +1069,22 @@ impl WorldTemplate {
     }
 }
 
-fn embedded_instance_source(game_key: &str, scene_id: &str) -> Result<&'static str, WorldMapError> {
-    embedded_scene_source(game_key, scene_id, "instance", "Instance")
+fn embedded_instance_source(scene_id: &str) -> Result<&'static str, WorldMapError> {
+    embedded_scene_source(scene_id, "instance", "Instance")
 }
 
 fn embedded_scene_source(
-    game_key: &str,
     scene_id: &str,
     expected_kind: &str,
     expected_label: &str,
 ) -> Result<&'static str, WorldMapError> {
-    let Some((_, _, _, scene_kind, source)) = EMBEDDED_WORLD_EXPORTS
+    let Some((_, _, scene_kind, source)) = EMBEDDED_WORLD_EXPORTS
         .iter()
-        .find(|entry| entry.0 == game_key && entry.2 == scene_id)
+        .find(|entry| entry.1 == scene_id)
         .copied()
     else {
         return Err(WorldMapError::new(format!(
-            "SceneMaker {expected_label} '{scene_id}' is not embedded for game '{game_key}'"
+            "SceneMaker {expected_label} '{scene_id}' is not embedded"
         )));
     };
     if scene_kind != expected_kind {
@@ -3490,12 +3483,6 @@ struct ExportDocument {
     format: String,
     version: u32,
     workspace_key: String,
-    #[expect(
-        dead_code,
-        reason = "parsed so a v21 export without it is refused; \
-        which game owns a scene is checked in build.rs against its directory"
-    )]
-    game_key: String,
     grid: GridDocument,
     asset_profiles: Vec<AssetProfileDocument>,
     water_raster: Vec<WaterRasterDocument>,
@@ -3845,7 +3832,6 @@ fn export_document(
             "format": "{FORMAT}",
             "version": {version},
             "workspace_key": "{WORKSPACE_KEY}",
-            "game_key": "sandbox",
             "grid": {{
                 "terrain_cell_meters": 1.0,
                 "authoring_pixels_per_meter": 32.0,
@@ -3952,8 +3938,7 @@ mod tests {
     /// whatever scene is currently authored.
     #[test]
     fn the_embedded_scene_still_imports() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
-            .expect("embedded SceneMaker map is valid");
+        let map = WorldMap::load_embedded(TEST_SCENE_ID).expect("embedded SceneMaker map is valid");
 
         let cells = (map.width_tiles() as usize) * (map.height_tiles() as usize);
         assert!(map.width_tiles() > 0 && map.height_tiles() > 0);
@@ -3978,7 +3963,7 @@ mod tests {
 
     #[test]
     fn route_sampling_uses_baked_height_and_authored_grade() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         for route in map.route_surfaces() {
             let expected_grade = route.segments[0].grade_percent;
@@ -4000,7 +3985,7 @@ mod tests {
 
     #[test]
     fn route_sampling_rejects_points_outside_the_baked_surface() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         assert_eq!(
             map.route_surfaces()[0].sample_at(Position::new(10_000.0, 10_000.0)),
@@ -4011,7 +3996,7 @@ mod tests {
 
     #[test]
     fn route_sampling_keeps_each_authored_segment_grade() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         let mut route = map.route_surfaces()[0].clone();
         let grades = [0, 25, 50, -25, -50];
@@ -4035,7 +4020,7 @@ mod tests {
 
     #[test]
     fn route_sampling_is_independent_of_overlapping_triangle_order() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         for route in &map.route_surfaces()[..2] {
             let mut reordered = route.clone();
@@ -4064,10 +4049,9 @@ mod tests {
     /// The embedded directory is a catalog rather than one hard-coded file.
     #[test]
     fn embedded_instances_are_selected_by_scene_id() {
-        let overworld = WorldMap::load_embedded("sandbox", "overworld01")
+        let overworld = WorldMap::load_embedded("overworld01")
             .expect("the embedded overworld Instance is valid");
-        let cave = WorldMap::load_embedded("sandbox", "cave01")
-            .expect("the embedded cave Instance is valid");
+        let cave = WorldMap::load_embedded("cave01").expect("the embedded cave Instance is valid");
 
         assert!(overworld.width_tiles() > cave.width_tiles());
         assert!(overworld.height_tiles() > cave.height_tiles());
@@ -4075,8 +4059,8 @@ mod tests {
 
     #[test]
     fn route_grades_and_baked_indices_are_validated_at_import() {
-        let source = embedded_instance_source("sandbox", TEST_SCENE_ID)
-            .expect("the embedded overworld source exists");
+        let source =
+            embedded_instance_source(TEST_SCENE_ID).expect("the embedded overworld source exists");
         let unsupported_grade = source.replace(r#""grade_percent": 25"#, r#""grade_percent": 49"#);
         let grade_error = WorldMap::from_source(&unsupported_grade, TEST_SCENE_ID)
             .expect_err("an unsupported authored grade must be rejected");
@@ -4095,7 +4079,7 @@ mod tests {
 
     #[test]
     fn authored_segment_operations_reach_the_map() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
 
         let excavating = map
@@ -4119,7 +4103,7 @@ mod tests {
 
     #[test]
     fn an_excavating_path_carries_its_derived_cut_cells() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
 
         assert_eq!(map.water_cell_meters(), 0.5);
@@ -4146,8 +4130,8 @@ mod tests {
 
     #[test]
     fn an_operation_that_disagrees_with_its_clearance_is_rejected() {
-        let source = embedded_instance_source("sandbox", TEST_SCENE_ID)
-            .expect("the embedded overworld source exists");
+        let source =
+            embedded_instance_source(TEST_SCENE_ID).expect("the embedded overworld source exists");
         let mutate = |change: &dyn Fn(&mut serde_json::Value)| {
             let mut document: serde_json::Value =
                 serde_json::from_str(source).expect("the embedded export is JSON");
@@ -4207,7 +4191,7 @@ mod tests {
 
     #[test]
     fn an_excavated_column_presents_the_floor_and_the_ground_still_above_it() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         let cut = &map.route_surface_cuts()[0];
         let mut surfaces = Vec::new();
@@ -4262,7 +4246,7 @@ mod tests {
 
     #[test]
     fn a_column_under_water_offers_its_bed_and_no_surface_of_the_water_itself() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         let body = map
             .water_bodies()
@@ -4317,7 +4301,7 @@ mod tests {
 
     #[test]
     fn ground_no_excavation_reaches_presents_one_surface() {
-        let map = WorldMap::load_embedded("sandbox", TEST_SCENE_ID)
+        let map = WorldMap::load_embedded(TEST_SCENE_ID)
             .expect("the embedded overworld Instance is valid");
         let cell = map.terrain_cell(0, 0).expect("the world has a first cell");
         let mut surfaces = Vec::new();
@@ -4329,47 +4313,38 @@ mod tests {
 
     #[test]
     fn templates_and_unknown_names_are_not_substituted_for_instances() {
-        let template = WorldMap::load_embedded("sandbox", "test_template")
+        let template = WorldMap::load_embedded("test_template")
             .expect_err("an embedded Template is not a WorldMap");
         assert!(template.to_string().contains("not an Instance"));
-        assert!(WorldMap::load_embedded("sandbox", "not_a_scene").is_err());
+        assert!(WorldMap::load_embedded("not_a_scene").is_err());
         assert!(WorldMap::from_source(&test_export(TEST_GRASS_CELL, ""), "elsewhere").is_err());
     }
 
     #[test]
     fn embedded_export_files_are_catalogued_in_stable_order() {
-        // Ordered by game first, then by file name: the build script walks
-        // the game directories in order and each directory's exports in order,
-        // so the embedded order is stable across machines.
         assert!(
             EMBEDDED_WORLD_EXPORTS
                 .windows(2)
-                .all(|pair| (pair[0].0, pair[0].1) < (pair[1].0, pair[1].1))
+                .all(|pair| pair[0].0 < pair[1].0)
         );
     }
 
-    /// A scene ID identifies a scene within its own game and nowhere else.
-    ///
-    /// Two games may each author a "map01"; what may not happen is one game
-    /// carrying the same scene ID twice, because then a load would have to
-    /// pick one of them.
     #[test]
-    fn embedded_export_metadata_is_valid_and_unique_within_each_game() {
-        let mut seen = HashSet::new();
-        for (game, _, scene_id, scene_kind, _) in EMBEDDED_WORLD_EXPORTS {
-            assert!(!game.is_empty());
+    fn embedded_export_metadata_is_valid_and_unique() {
+        let mut scene_ids = HashSet::new();
+        for (_, scene_id, scene_kind, _) in EMBEDDED_WORLD_EXPORTS {
             assert!(!scene_id.is_empty());
             assert!(matches!(*scene_kind, "instance" | "template"));
             assert!(
-                seen.insert((*game, *scene_id)),
-                "game {game} duplicates scene ID: {scene_id}"
+                scene_ids.insert(*scene_id),
+                "duplicate scene ID: {scene_id}"
             );
         }
     }
 
     #[test]
     fn embedded_templates_are_grouped_in_stable_order() {
-        let catalog = WorldTemplateCatalog::load_embedded("sandbox")
+        let catalog = WorldTemplateCatalog::load_embedded()
             .expect("the embedded SceneMaker Templates are valid");
         let group_one = catalog.templates_for_group(1);
 
@@ -5539,8 +5514,7 @@ mod tests {
 
     #[test]
     fn every_body_hangs_on_a_declared_switch_and_is_fed_by_one_this_map_carries() {
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let declared = map
             .switches()
             .iter()
@@ -5578,8 +5552,7 @@ mod tests {
 
     #[test]
     fn switching_a_river_off_takes_every_body_hanging_under_it() {
-        let mut map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         for switch in map.switches().to_vec() {
             map.set_switch(&switch.name, true)
                 .expect("the map declares its own switches");
@@ -5629,8 +5602,7 @@ mod tests {
 
     #[test]
     fn a_cell_keeps_water_exactly_while_a_body_over_it_still_runs() {
-        let mut map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         for switch in map.switches().to_vec() {
             map.set_switch(&switch.name, true)
                 .expect("the map declares its own switches");
@@ -5676,8 +5648,7 @@ mod tests {
 
     #[test]
     fn a_switched_off_body_leaves_the_ground_whole_and_a_running_one_a_bed_under_water() {
-        let mut map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let mut map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let switchable = map
             .water_bodies()
             .iter()
@@ -5748,8 +5719,7 @@ mod tests {
 
     #[test]
     fn two_bodies_over_one_cell_stack_instead_of_the_last_one_winning() {
-        let map =
-            WorldMap::load_embedded("sandbox", "stack01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("stack01").expect("embedded Instance is valid");
         let mut surfaces = Vec::new();
 
         // Where the two fills overlap - 0.0 to 1.0 under 0.5 to 1.5 - they are
@@ -5800,8 +5770,7 @@ mod tests {
         // Guards the test above against passing for the wrong reason: if a cell
         // kept one body instead of all of them, these are the answers it would
         // give, and none of them is what the assertions there expect.
-        let map =
-            WorldMap::load_embedded("sandbox", "stack01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("stack01").expect("embedded Instance is valid");
         let bodies = map.water_bodies();
         let cell_of = |id: &str, x: u32, y: u32| {
             bodies
@@ -5834,8 +5803,7 @@ mod tests {
 
     #[test]
     fn the_embedded_world_carries_its_authored_water() {
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let bodies = map.water_bodies();
 
         assert!(
@@ -5901,8 +5869,7 @@ mod tests {
 
     #[test]
     fn the_embedded_world_carries_its_authored_bridges() {
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let half_width = map.width_meters() * 0.5;
         let half_height = map.height_meters() * 0.5;
 

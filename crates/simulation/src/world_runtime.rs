@@ -292,13 +292,12 @@ mod tests {
     fn embedded_world() -> EmbeddedWorld {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let templates =
-            WorldTemplateCatalog::load_embedded("sandbox").expect("embedded Templates are valid");
+            WorldTemplateCatalog::load_embedded().expect("embedded Templates are valid");
         let ranks = load_world01_embedded()
             .expect("embedded world design parses")
             .placement_ranks()
             .expect("embedded Placement Ranks are valid");
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let composition = WorldComposition::new(map.clone(), &templates, &ranks)
             .expect("startup composition is valid");
         let collision = WorldCollisionGeometryCatalog::from_content_and_map(&content, &map)
@@ -459,7 +458,7 @@ mod tests {
     fn a_generation_without_an_ankh_is_rejected_without_partial_changes() {
         let content = RuntimeContent::load_embedded().expect("embedded content is valid");
         let templates =
-            WorldTemplateCatalog::load_embedded("sandbox").expect("embedded Templates are valid");
+            WorldTemplateCatalog::load_embedded().expect("embedded Templates are valid");
         let ranks = PlacementRanks::from_entries([("grass", 200), ("tree", 20), ("ankh", 100)])
             .expect("test Placement Ranks are valid");
         let map = WorldMap::from_source(&single_ankh_instance(), "runtime_test")
@@ -646,9 +645,8 @@ mod tests {
     fn single_ankh_instance() -> String {
         r#"{
             "format": "scene_maker_scene_export",
-            "version": 21,
+            "version": 22,
             "workspace_key": "world01",
-            "game_key": "sandbox",
             "grid": {
                 "terrain_cell_meters": 1.0,
                 "authoring_pixels_per_meter": 32.0,

@@ -549,8 +549,7 @@ mod tests {
         let design = load_world01_embedded().expect("embedded World 01 design parses");
         let game_design = load_game_design().expect("embedded game design parses");
         let content = RuntimeContent::load_embedded().expect("embedded runtime content is valid");
-        let map =
-            WorldMap::load_embedded("sandbox", "overworld01").expect("embedded Instance is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("embedded Instance is valid");
         let ankhs = AnkhLayout::from_map(&map);
         let mut app = App::new();
         app.insert_resource(

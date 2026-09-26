@@ -477,10 +477,9 @@ mod tests {
 
     #[test]
     fn client_stages_marked_world_state_and_ignores_stale_generation() {
-        let map = WorldMap::load_embedded("sandbox", "overworld01")
-            .expect("the embedded Instance is valid");
-        let templates = WorldTemplateCatalog::load_embedded("sandbox")
-            .expect("the embedded Template catalog is valid");
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Template catalog is valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("the embedded World 01 design parses")
             .placement_ranks()

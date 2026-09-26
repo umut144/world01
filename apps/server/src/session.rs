@@ -334,10 +334,9 @@ mod tests {
 
     #[test]
     fn debug_presets_describe_the_complete_two_anchor_occupancy() {
-        let map = WorldMap::load_embedded("sandbox", "overworld01")
-            .expect("the embedded Instance is valid");
-        let templates = WorldTemplateCatalog::load_embedded("sandbox")
-            .expect("the embedded Templates are valid");
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("embedded World-01 design parses")
             .placement_ranks()
@@ -395,10 +394,9 @@ mod tests {
 
     #[test]
     fn debug_requests_require_a_joined_owner_and_latest_request_wins() {
-        let map = WorldMap::load_embedded("sandbox", "overworld01")
-            .expect("the embedded Instance is valid");
-        let templates = WorldTemplateCatalog::load_embedded("sandbox")
-            .expect("the embedded Templates are valid");
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("embedded World-01 design parses")
             .placement_ranks()
@@ -483,10 +481,9 @@ mod tests {
 
     #[test]
     fn world_state_spawns_current_occupancy_and_publishes_only_real_changes() {
-        let map = WorldMap::load_embedded("sandbox", "overworld01")
-            .expect("the embedded Instance is valid");
-        let templates = WorldTemplateCatalog::load_embedded("sandbox")
-            .expect("the embedded Templates are valid");
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("embedded World-01 design parses")
             .placement_ranks()
@@ -556,10 +553,9 @@ mod tests {
 
     #[test]
     fn world_state_does_not_publish_an_unapplied_composition_generation() {
-        let map = WorldMap::load_embedded("sandbox", "overworld01")
-            .expect("the embedded Instance is valid");
-        let templates = WorldTemplateCatalog::load_embedded("sandbox")
-            .expect("the embedded Templates are valid");
+        let map = WorldMap::load_embedded("overworld01").expect("the embedded Instance is valid");
+        let templates =
+            WorldTemplateCatalog::load_embedded().expect("the embedded Templates are valid");
         let ranks = world01_design::load_world01_embedded()
             .expect("embedded World-01 design parses")
             .placement_ranks()
