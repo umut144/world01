@@ -1051,6 +1051,147 @@ mod tests {
             .clone()
     }
 
+    fn navtest() -> WorldMap {
+        WorldMap::load_embedded("navtest01").expect("the navigation test map is embedded")
+    }
+
+    /// The Terrain node of a cell: the one an Actor stands on when it is not
+    /// on a Path or a bridge deck, which may share the cell's position.
+    fn terrain_node(graph: &GroundNavigationGraph, map: &WorldMap, x: u32, y: u32) -> usize {
+        let center = cell_center(map, x, y);
+        graph
+            .nodes()
+            .iter()
+            .position(|node| {
+                node.position() == center && matches!(node.support(), GroundSupport::Terrain)
+            })
+            .expect("every authored cell carries a Terrain node")
+    }
+
+    #[test]
+    fn navtest01_offers_a_ford_where_the_river_is_shallow_and_nothing_where_it_is_deep() {
+        let map = navtest();
+        let graph = without_collision(&map);
+        let hammerer = hammerer();
+        let mut steps = Vec::new();
+
+        let ford = terrain_node(&graph, &map, 30, 22);
+        let deep = terrain_node(&graph, &map, 30, 5);
+
+        assert!(
+            graph.nodes()[ford].water_depth_meters() > 0.0,
+            "the ford is under water, or it is not a ford"
+        );
+        assert!(hammerer.permits_wade(graph.nodes()[ford].water_depth_meters()));
+        assert!(!hammerer.permits_wade(graph.nodes()[deep].water_depth_meters()));
+
+        graph.steps_from(ford, &hammerer, &mut steps);
+        assert!(!steps.is_empty(), "a wadeable cell leads somewhere");
+        graph.steps_from(deep, &hammerer, &mut steps);
+        assert!(steps.is_empty(), "a cell nobody may stand in leads nowhere");
+    }
+
+    #[test]
+    fn navtest01_seals_its_north_east_corner_behind_a_river_nothing_bridges() {
+        let map = navtest();
+        let graph = without_collision(&map);
+        let hammerer = hammerer();
+
+        let west = terrain_node(&graph, &map, 10, 10);
+        let east_bank = terrain_node(&graph, &map, 40, 30);
+        let sealed = terrain_node(&graph, &map, 60, 46);
+
+        assert!(
+            graph.path(west, east_bank, &hammerer).is_some(),
+            "the east bank is reachable across the ford or a bridge"
+        );
+        assert!(
+            graph.path(west, sealed, &hammerer).is_none(),
+            "the sealed corner has no way in, and the answer is None rather than a wrong path"
+        );
+    }
+
+    #[test]
+    fn navtest01_lets_the_ramp_up_the_hill_that_its_ledge_refuses() {
+        let map = navtest();
+        let graph = without_collision(&map);
+        let hammerer = hammerer();
+        let mut steps = Vec::new();
+
+        let below_the_ledge = terrain_node(&graph, &map, 47, 20);
+        let on_the_ledge = terrain_node(&graph, &map, 48, 20);
+        let ramp_foot = terrain_node(&graph, &map, 55, 2);
+
+        // Two metres in one step, where the profile allows half a metre.
+        graph.steps_from(below_the_ledge, &hammerer, &mut steps);
+        assert!(
+            steps.iter().all(|step| step.node != on_the_ledge),
+            "a two-metre ledge is not a step"
+        );
+
+        // The same plateau, reached the way it was meant to be reached.
+        assert!(
+            graph.path(ramp_foot, on_the_ledge, &hammerer).is_some(),
+            "the ramp is the way up"
+        );
+    }
+
+    #[test]
+    fn navtest01_walks_around_the_ridge_rather_than_over_it() {
+        let map = navtest();
+        let graph = without_collision(&map);
+        let hammerer = hammerer();
+
+        // Cost is time, not distance, and this is where that has to show. Over
+        // the ridge is the short way on a map; around it is the quick way,
+        // because the climb at either end costs eight metres of walking and
+        // the plateau between them is twenty-five metres long.
+        let south = terrain_node(&graph, &map, 52, 3);
+        let north = terrain_node(&graph, &map, 52, 36);
+        let path = graph
+            .path(south, north, &hammerer)
+            .expect("both banks connect");
+        let over = path.iter().any(|index| {
+            matches!(
+                graph.nodes()[*index].support(),
+                GroundSupport::RouteSurface { .. }
+            )
+        });
+
+        assert!(!over, "the flat way around beats the short way over");
+    }
+
+    #[test]
+    fn navtest01_carries_a_bridge_narrower_than_the_body_that_may_cross_it() {
+        let map = navtest();
+        let graph = without_collision(&map);
+        let hammerer = hammerer();
+
+        // Nodes sit on a deck's centerline and carry no width, so the graph
+        // routes a Hammerer across a deck narrower than a Hammerer. That is
+        // what this bridge is on the map for: the body has to refuse what the
+        // graph allows, and until something does, this passes.
+        let narrow = map
+            .bridge_decks()
+            .iter()
+            .find(|deck| deck.route_surface_id == "bridge_0002")
+            .expect("the narrow bridge is authored");
+        assert!(
+            narrow
+                .centerline_samples
+                .iter()
+                .all(|sample| sample.width_meters < 1.5),
+            "bridge_0002 is the narrow one"
+        );
+
+        let west = terrain_node(&graph, &map, 20, 8);
+        let east = terrain_node(&graph, &map, 40, 8);
+        assert!(
+            graph.path(west, east, &hammerer).is_some(),
+            "the graph offers the narrow crossing to a body that will not fit"
+        );
+    }
+
     /// A Character built for one question, so a rule can be tested apart from
     /// whatever the authored Characters happen to allow.
     fn profile_of(
