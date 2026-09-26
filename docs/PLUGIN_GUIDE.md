@@ -11,13 +11,14 @@ Read [`SANDBOX_VISION.md`](SANDBOX_VISION.md),
 genre rules; it reuses sandbox services without changing their authority
 boundaries.
 
-**Status, 2026-09-26**: World 01 is one game, and there is no second one to
-extend the sandbox beside it. The branch-per-game model this guide once
+**Status, 2026-09-26**: no game exists beside the sandbox, and the route this
+guide describes is not the intended one. The branch-per-game model it once
 described was tried with a MOBA and abandoned - nothing was ever cherry-picked
-back, and the genre leaked into the shared crates anyway. What remains valid
-below is the authority discipline: what a game may own, what the sandbox owns,
-and where state has to be server-decided. Read it as that, not as instructions
-for standing up a second game.
+back, and the genre leaked into the shared crates anyway. The target recorded
+in `TASKS.md` goes further: a game is meant to be data, `design/games/<key>/`
+plus its maps, not a crate with a root plugin. Read "Set up a game plugin"
+below as history. What remains valid is the authority discipline: what a game
+may own, what the sandbox owns, and where state has to be server-decided.
 
 ## Set up a game plugin
 

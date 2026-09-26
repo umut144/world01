@@ -16,8 +16,10 @@ games can grow. It does not mean a disposable prototype, a standalone game, or
 an attempt to build a universal engine.
 
 Setting, recurring characters, weapons, abilities and gameplay design belong
-in [`WORLD_DESIGN.md`](WORLD_DESIGN.md). World 01 is one game, so there is no
-second design document to isolate anything from.
+in [`WORLD_DESIGN.md`](WORLD_DESIGN.md). World 01 is a sandbox from which many
+games are meant to grow, and a game is meant to be data rather than a crate;
+`TASKS.md` records that target. No game exists beside the sandbox today, so
+there is no second design document to isolate anything from yet.
 
 `SANDBOX_TECHNICAL.md` specifies the technical contracts. `PLUGIN_GUIDE.md`
 defines how a game extends those contracts.

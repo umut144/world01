@@ -5,39 +5,76 @@ outcomes. Completed implementation history remains available in Git. Tasks may
 use vertical slices when that helps produce a small, testable result; completed
 slices are not retained here as a permanent project chronicle.
 
-## One world, one game
+## One sandbox, many games
 
-World 01 is a single game - an MMORPG - built the way it has been built so far:
-the sandbox grows asset by asset and system by system, and the game is what it
-grows into. There is no second game and no plugin boundary between a core and a
-genre on top of it.
+World 01 is a sandbox: an engine plus one asset library, from which many games
+are built. The ones foreseen - an MMORPG, a MOBA, a battle royale, and above
+all funmaps - share most of their mechanics and differ in data. The model is
+Warcraft III: one fixed engine, one editor, and the map is the unit that
+carries the game.
 
-A MOBA was started on 2026-09-13 and removed on 2026-09-26. What it left behind
-is deliberate: `TeamId` as an identity type without rules attached,
-`PlacementRanks::extended_with`, a publicly constructible `DesignError`, the
-gitignored `runtime.local.toml` start-map override, the authored-footprint
-overlap check, and SceneMaker export contract v21. What went with it is the
-MOBA's own crate, design data, map, documents and Totem assets, along with the
+Three levels, and the boundary between them is what this section exists to
+record:
+
+- The **engine** is the mechanics: the tick, collision, movement, damage,
+  health, navigation, the content pipeline. Rust, shared by everything, and
+  never aware of any game.
+- A **game** is data: which rule values apply, which maps belong to it, which
+  Realms it contains, how a session starts and ends. Its unit is
+  `design/games/<key>/` plus its maps. Never a crate.
+- A **Realm** lives inside a game and decides movement and camera. A
+  room-centred camera in one, follow-player in another; atomic movement as in
+  a tactics game here, continuous there, side-scrolling in a third - all with
+  the same World-01 assets.
+
+A mechanic belongs in the engine; a configuration of mechanics is data. When
+something cannot be expressed as data, the engine is missing a mechanic, and
+that mechanic belongs in the engine as a generic one - not beside it in a
+game-shaped crate.
+
+**Realm is one word for two unlike things.** A camera model is client
+presentation: no determinism, no replication, no protocol. A movement model
+sits inside `add_simulation_step` and runs on the server and the predicting
+client alike, so it must be identical on both and both must agree on which
+model is active - a disagreement shows up as rubber-banding, not as an error.
+The Realm assignment is therefore authoritative data, decided here from this
+project's own design files. SceneMaker authors one flat set of Scenes and its
+export says nothing about Realms, because a map editor has no business knowing
+what physics applies.
+
+None of this exists in code, and none of it is being built ahead of need. Work
+continues on the sandbox itself, mechanic by mechanic, exactly as before. This
+section is the target the work is aimed at, not a plan to execute.
+
+When it is taken up, the intended order is: a second camera model first,
+because it is client-only and proves the data path from map to Realm without
+touching the deterministic step; then the Realm assignment itself; then a
+second movement model, the first real test of the seam; then `SBX-25`, whose
+conditions and actions resolved by name from design files are the same machine
+a funmap's triggers will need.
+
+A MOBA was started on 2026-09-13 and removed on 2026-09-26. The removal stands,
+and the reason is sharper now than it was then: that MOBA was a crate full of
+Rust types - `Totem`, `TotemKind`, `TotemLayout`, its own admission rules -
+which is exactly the shape the picture above rejects. Taken apart, a Totem is a
+destructible Prop with health (engine), owned by a side (`TeamId`, kept), whose
+destruction ends the round (data, plus one generic system). None of it needed a
+game crate. We built one because we thought of games as code.
+
+What the MOBA left behind is deliberate: `TeamId` as an identity type without
+rules attached, `PlacementRanks::extended_with`, a publicly constructible
+`DesignError`, the gitignored `runtime.local.toml` start-map override, and the
+authored-footprint overlap check. What went with it is the crate, its design
+data, its map, its documents and the Totem assets, along with the
 `WorldDerivation` and `SessionRules` seams - a seam with no second
-implementation is indirection, not architecture.
+implementation is indirection, not architecture. When a second real case
+exists, the seam gets cut to two examples instead of one imagined one.
 
-The world is divided into **Realms**: a Realm carries the mechanics its Scenes
-are played under, so a side-scrolling area is a different Realm from the walked
-overworld. Which Scene belongs to which Realm is decided here, from this
-project's own design data - SceneMaker authors one flat set of Scenes per
-Workspace and its export says nothing about Realms, because a map editor has no
-business knowing what physics applies.
-
-No Realm assignment exists in code yet, and that is deliberate: there is one
-Realm, every Scene belongs to it, and the data that says otherwise arrives with
-the second one.
-
-The Labyrinth went the same way on 2026-09-26. It was a 64-player dungeon
-battle royale - the concept this codebase originally grew from, and a second
-game by any reading of the decision above. Its design document is out of the
-tree and in Git history, and the documents no longer route agents to it. What
-it built stays: the characters, weapons, abilities, health and status
-foundations were always World-01's own, and `docs/WORLD_DESIGN.md` owns them.
+The Labyrinth went the same day and for the same reason: a 64-player dungeon
+battle royale is a game, and a game is data and maps, not a design document
+standing beside the engine's. What it built stays - the characters, weapons,
+abilities, health and status foundations were always the engine's own, and
+`docs/WORLD_DESIGN.md` owns them.
 
 | ID | Area | Outcome | Status |
 |---|---|---|---|

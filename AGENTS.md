@@ -13,9 +13,10 @@ genre-neutral technical sandbox contracts. `docs/PLUGIN_GUIDE.md` explains how
 game implementations extend those contracts.
 `docs/WORLD_DESIGN.md` is the persistent source of truth for World 01's shared
 setting, visual language, recurring characters, weapons, abilities, health and
-status foundations, and every other design decision. World 01 is one game, so
-World Design owns canonical behavior and baseline values outright; there is no
-second document that may override it.
+status foundations, and every other shared design decision. World Design owns
+canonical behavior and baseline values. World 01 is a sandbox from which many
+games are meant to grow - the recorded target is in `TASKS.md` - but no game
+exists beside it yet, so nothing overrides World Design today.
 Preserve the distinction between
 confirmed design and ideas still under discussion. Update the appropriate
 document when the user makes a durable decision.
