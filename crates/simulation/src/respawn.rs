@@ -157,7 +157,6 @@ fn unit_interval(value: u64) -> f32 {
 mod tests {
     use super::*;
     use world01_content::{CharacterHurtGeometryCatalog, RuntimeContent};
-    use world01_design::load_embedded as load_game_design;
 
     fn hurt_geometry() -> CharacterHurtGeometryCatalog {
         CharacterHurtGeometryCatalog::from_content(

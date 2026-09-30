@@ -11,3 +11,7 @@ target/
 .agent-check/
 /crates/configs/runtime.local.toml
 /Claude outputs/
+
+# Agent instruction files (local only)
+/AGENTS.md
+/CLAUDE.md
